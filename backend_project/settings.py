@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-
+from mongoengine import connect
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -89,7 +89,9 @@ DATABASES = {
     }
 }
 
-MONGO_URI = os.environ.get('MONGO_URI')
+
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://root:rootpassword@localhost:27017/ecommerce_mongo_db?authSource=admin')
+connect(host=MONGO_URI)
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators

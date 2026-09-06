@@ -22,7 +22,7 @@ from ecommerce.infrastructure.catalogo.urls import catalogo_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('usuarios_urlpatterns')),
-    path('', include('ventas_urlpatterns')),
-    path('', include('catalogo_urlpatterns')),
+    path('', include(usuarios_urlpatterns)),
+    path('', include(ventas_urlpatterns)),
+    path('', include(catalogo_urlpatterns)),
     ]

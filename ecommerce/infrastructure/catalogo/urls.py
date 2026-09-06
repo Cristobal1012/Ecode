@@ -1,5 +1,5 @@
-from django import path
-from catalogo import views
+from django.urls import path
+from . import views
 
 catalogo_urlpatterns = [
 

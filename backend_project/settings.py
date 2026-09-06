@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'ecommerce.infrastructure.usuarios',
-    'ecommerce.infrastructure.ventas'  #agrega la aplicación de ventas
+    'ecommerce.infrastructure.ventas',
+    'ecommerce.infrastructure.catalogo',
 ]
 
 MIDDLEWARE = [

@@ -19,10 +19,19 @@ from django.urls import include, path
 from ecommerce.infrastructure.usuarios.urls import usuarios_urlpatterns
 from ecommerce.infrastructure.ventas.urls import ventas_urlpatterns
 from ecommerce.infrastructure.catalogo.urls import catalogo_urlpatterns
+from django.http import JsonResponse
+
+def bienvenida_api(request):
+    return JsonResponse({
+        "mensaje": "mensaje de prueba, la api esta corriendo correctamente",
+        "estado": "Online",
+        "version": "1.0"
+    })
 
 urlpatterns = [
+    path('', bienvenida_api, name='bienvenida_api'),
     path('admin/', admin.site.urls),
-    path('', include(usuarios_urlpatterns)),
-    path('', include(ventas_urlpatterns)),
-    path('', include(catalogo_urlpatterns)),
+    path('usuarios/', include(usuarios_urlpatterns)),
+    path('ventas/', include(ventas_urlpatterns)),
+    path('catalogo/', include(catalogo_urlpatterns)),
     ]

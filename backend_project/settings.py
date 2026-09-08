@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'rest_framework.authtoken',
     'ecommerce.infrastructure.usuarios',
     'ecommerce.infrastructure.ventas',
     'ecommerce.infrastructure.catalogo',
@@ -144,6 +145,18 @@ MAILERS = {
 }
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
+
+# TokenAuthentication supplies WWW-Authenticate, so anonymous API requests
+# receive 401 instead of SessionAuthentication's default 403.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",

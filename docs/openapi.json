@@ -1,0 +1,822 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Ecode - Contratos de acceso (SCRUM-98)",
+    "version": "0.1.0-proposed",
+    "description": "CONTRATO PROPUESTO: estas rutas NO estan implementadas ni montadas en usuarios/urls.py. No usar como inventario de API disponible. Define sesiones Django, no JWT ni emision de tokens DRF. La capa de seguridad actual admite TokenAuthentication y SessionAuthentication; la emision y el canje de credenciales son trabajo posterior. Los errores estructurados aqui requieren un adaptador futuro: DRF actualmente devuelve detail o errores por campo. Sin restricciones de rol en login/Google; 403 corresponde a CSRF. Solo JSON; strings no vacios, tipos estrictos y campos desconocidos rechazados. Precedencia: CSRF antes de validacion del cuerpo; validacion antes de credenciales. No hay logout, refresh, vinculacion Google ni throttling implementados por este contrato."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Desarrollo; rutas propuestas, aun no disponibles. En produccion usar HTTPS."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Acceso (propuesto)",
+      "description": "Pendiente de implementacion de casos de uso, adaptadores y vistas."
+    }
+  ],
+  "paths": {
+    "/usuarios/api/csrf/": {
+      "get": {
+        "operationId": "obtenerCsrf",
+        "summary": "Obtener cookie y token CSRF antes de autenticar",
+        "tags": [
+          "Acceso (propuesto)"
+        ],
+        "x-implementation-status": "planned",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Devuelve token CSRF y establece csrftoken, sin iniciar sesion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResponse"
+                },
+                "example": {
+                  "csrf_token": "token-csrf-de-ejemplo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "csrftoken; Path=/; SameSite=Lax; Secure en HTTPS"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usuarios/api/login/": {
+      "post": {
+        "operationId": "loginUsuario",
+        "summary": "Iniciar sesion con email y contrasena",
+        "description": "Autentica con Django y crea/rota la sesion. No acepta un rol solicitado por el cliente. Usuarios Google sin password utilizable fallan igual que credenciales erroneas. Cuenta inactiva: 401 generico. Sin JWT ni token DRF en la respuesta.",
+        "tags": [
+          "Acceso (propuesto)"
+        ],
+        "x-implementation-status": "planned",
+        "security": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRFToken",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obtener csrf_token con GET /usuarios/api/csrf/ y conservar su cookie csrftoken. Se exige incluso para login y Google anonimos para evitar login CSRF."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "email": "ana@example.com",
+                "password": "Ejemplo-Seguro-938!"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "405": {
+            "$ref": "#/components/responses/405"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "200": {
+            "description": "Sesion iniciada para ADMIN o COMPRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionResponse"
+                },
+                "example": {
+                  "usuario": {
+                    "id": 1,
+                    "nombre": "Ana",
+                    "apellido_paterno": "Perez",
+                    "apellido_materno": "Soto",
+                    "email": "ana@example.com",
+                    "telefono": "+56912345678",
+                    "rol": "COMPRADOR",
+                    "acepta_cookies": false
+                  },
+                  "csrf_token": "token-csrf-de-ejemplo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Cabeceras Set-Cookie separadas: sessionid (HttpOnly, Secure en HTTPS, SameSite=Lax, Path=/) y csrftoken (Secure en HTTPS, SameSite=Lax, Path=/). La sesion sigue SESSION_COOKIE_AGE: 1209600 segundos por defecto. No devolver el identificador de sesion en JSON.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usuarios/api/registro/": {
+      "post": {
+        "operationId": "registrarComprador",
+        "summary": "Registrar una cuenta COMPRADOR",
+        "description": "Crea con create_user, password hasheada, rol COMPRADOR, is_active=true, is_staff=false e is_superuser=false. google_sso_id=null. Campos no declarados (incluidos rol y privilegios) producen 400. Email duplicado, incluso por carrera de insercion: 400 con errors.email. No inicia sesion automaticamente; continuar con login. No hay campo de confirmacion de password.",
+        "tags": [
+          "Acceso (propuesto)"
+        ],
+        "x-implementation-status": "planned",
+        "security": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRFToken",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obtener csrf_token con GET /usuarios/api/csrf/ y conservar su cookie csrftoken. Se exige incluso para login y Google anonimos para evitar login CSRF."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroRequest"
+              },
+              "example": {
+                "nombre": "Ana",
+                "apellido_paterno": "Perez",
+                "apellido_materno": "Soto",
+                "email": "ana@example.com",
+                "password": "Ejemplo-Seguro-938!",
+                "telefono": "+56912345678",
+                "acepta_cookies": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "405": {
+            "$ref": "#/components/responses/405"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "201": {
+            "description": "Comprador creado; no establece sessionid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroResponse"
+                },
+                "example": {
+                  "usuario": {
+                    "id": 1,
+                    "nombre": "Ana",
+                    "apellido_paterno": "Perez",
+                    "apellido_materno": "Soto",
+                    "email": "ana@example.com",
+                    "telefono": "+56912345678",
+                    "rol": "COMPRADOR",
+                    "acepta_cookies": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usuarios/api/google/": {
+      "post": {
+        "operationId": "loginGoogle",
+        "summary": "Canjear ID token Google por sesion Django",
+        "description": "Verificar mediante biblioteca oficial: firma, aud contra GOOGLE_CLIENT_ID del servidor, iss y exp. Exigir sub y email_verified=true. Buscar por sub (google_sso_id), nunca por email solamente. Si existe una cuenta local con ese email y sin el mismo sub, devolver 400 account_link_required y exigir vinculacion autenticada en un flujo separado; no vincular automaticamente. Nuevo sub requiere perfil: si falta devolver 400 profile_required sin crear usuario. Alta siempre COMPRADOR y password inutilizable. Usuario existente conserva rol y perfil; inactivo devuelve 401. La verificacion fallida, incluido token caducado, devuelve 401 invalid_google_token sin detalles de claims. Emisor y audiencia incorrectos tambien devuelven 401. La implementacion debe asegurar unicidad de google_sso_id y alta atomica; el modelo actual aun no garantiza esa unicidad.",
+        "tags": [
+          "Acceso (propuesto)"
+        ],
+        "x-implementation-status": "planned",
+        "security": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRFToken",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obtener csrf_token con GET /usuarios/api/csrf/ y conservar su cookie csrftoken. Se exige incluso para login y Google anonimos para evitar login CSRF."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleRequest"
+              },
+              "example": {
+                "id_token": "jwt-google-de-ejemplo",
+                "perfil": {
+                  "nombre": "Ana",
+                  "apellido_paterno": "Perez",
+                  "apellido_materno": "Soto",
+                  "telefono": "+56912345678",
+                  "acepta_cookies": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Validacion, profile_required o account_link_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "profile_required",
+                  "detail": "Complete los datos para crear la cuenta.",
+                  "errors": {
+                    "perfil": [
+                      "Este campo es obligatorio para una cuenta nueva."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "ID token invalido/caducado, email no verificado o cuenta inactiva; no crear sesion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "invalid_google_token",
+                  "detail": "Credencial Google no valida."
+                }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "Token"
+                  ]
+                },
+                "description": "Challenge de TokenAuthentication, primer autenticador DRF. El flujo propuesto de acceso establece una sesion, no emite un token DRF."
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "405": {
+            "$ref": "#/components/responses/405"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Sesion iniciada para cuenta Google existente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionResponse"
+                },
+                "example": {
+                  "usuario": {
+                    "id": 1,
+                    "nombre": "Ana",
+                    "apellido_paterno": "Perez",
+                    "apellido_materno": "Soto",
+                    "email": "ana@example.com",
+                    "telefono": "+56912345678",
+                    "rol": "COMPRADOR",
+                    "acepta_cookies": false
+                  },
+                  "csrf_token": "token-csrf-de-ejemplo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Cabeceras Set-Cookie separadas: sessionid (HttpOnly, Secure en HTTPS, SameSite=Lax, Path=/) y csrftoken (Secure en HTTPS, SameSite=Lax, Path=/). La sesion sigue SESSION_COOKIE_AGE: 1209600 segundos por defecto. No devolver el identificador de sesion en JSON.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Nueva cuenta COMPRADOR y sesion creadas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionResponse"
+                },
+                "example": {
+                  "usuario": {
+                    "id": 1,
+                    "nombre": "Ana",
+                    "apellido_paterno": "Perez",
+                    "apellido_materno": "Soto",
+                    "email": "ana@example.com",
+                    "telefono": "+56912345678",
+                    "rol": "COMPRADOR",
+                    "acepta_cookies": false
+                  },
+                  "csrf_token": "token-csrf-de-ejemplo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Cabeceras Set-Cookie separadas: sessionid (HttpOnly, Secure en HTTPS, SameSite=Lax, Path=/) y csrftoken (Secure en HTTPS, SameSite=Lax, Path=/). La sesion sigue SESSION_COOKIE_AGE: 1209600 segundos por defecto. No devolver el identificador de sesion en JSON.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Errores por campo; non_field_errors para reglas entre campos."
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ]
+      },
+      "Usuario": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "apellido_paterno": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "apellido_materno": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\+[1-9][0-9]{7,14}$",
+            "description": "Opcional, por defecto null. Formato internacional: + y entre 8 y 15 digitos; no admite cadena vacia, espacios ni guiones."
+          },
+          "acepta_cookies": {
+            "type": "boolean",
+            "description": "Eleccion explicita de cookies opcionales. Se exige enviar true o false; false NO impide registrarse. No sustituye el consentimiento legal ni deshabilita cookies tecnicas de sesion/CSRF."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Se recortan espacios y se normaliza el dominio con UsuarioManager.normalize_email; no se promete normalizacion del local-part."
+          },
+          "rol": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "COMPRADOR"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "nombre",
+          "apellido_paterno",
+          "apellido_materno",
+          "email",
+          "telefono",
+          "rol",
+          "acepta_cookies"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Se recortan espacios y se normaliza el dominio con UsuarioManager.normalize_email; no se promete normalizacion del local-part."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "No recortar espacios ni aplicar validadores de alta al iniciar sesion."
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RegistroRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "apellido_paterno": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "apellido_materno": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Sin espacios al inicio o al final; no admite solo espacios."
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\+[1-9][0-9]{7,14}$",
+            "description": "Opcional, por defecto null. Formato internacional: + y entre 8 y 15 digitos; no admite cadena vacia, espacios ni guiones."
+          },
+          "acepta_cookies": {
+            "type": "boolean",
+            "description": "Eleccion explicita de cookies opcionales. Se exige enviar true o false; false NO impide registrarse. No sustituye el consentimiento legal ni deshabilita cookies tecnicas de sesion/CSRF."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Se recortan espacios y se normaliza el dominio con UsuarioManager.normalize_email; no se promete normalizacion del local-part."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "minLength": 8,
+            "maxLength": 128,
+            "description": "No se recortan espacios. En registro se aplican los cuatro AUTH_PASSWORD_VALIDATORS de Django, incluyendo similitud con el perfil, contrasenas comunes y enteramente numericas."
+          }
+        },
+        "required": [
+          "nombre",
+          "apellido_paterno",
+          "apellido_materno",
+          "email",
+          "password",
+          "acepta_cookies"
+        ]
+      },
+      "SesionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          },
+          "csrf_token": {
+            "type": "string",
+            "description": "Token CSRF para X-CSRFToken en operaciones posteriores; se rota al iniciar sesion."
+          }
+        },
+        "required": [
+          "usuario",
+          "csrf_token"
+        ]
+      },
+      "RegistroResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          }
+        },
+        "required": [
+          "usuario"
+        ]
+      },
+      "CsrfResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrf_token"
+        ]
+      },
+      "GoogleIdTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "writeOnly": true,
+            "description": "ID token JWT emitido por Google Identity Services. No es access_token ni codigo OAuth."
+          },
+          "perfil": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "apellido_paterno": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "apellido_materno": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "telefono": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "^\\+[1-9][0-9]{7,14}$",
+                "description": "Opcional, por defecto null. Formato internacional: + y entre 8 y 15 digitos; no admite cadena vacia, espacios ni guiones."
+              },
+              "acepta_cookies": {
+                "type": "boolean",
+                "description": "Eleccion explicita de cookies opcionales. Se exige enviar true o false; false NO impide registrarse. No sustituye el consentimiento legal ni deshabilita cookies tecnicas de sesion/CSRF."
+              }
+            },
+            "required": [
+              "nombre",
+              "apellido_paterno",
+              "apellido_materno",
+              "acepta_cookies"
+            ]
+          }
+        },
+        "required": [
+          "id_token"
+        ],
+        "description": "perfil es obligatorio solo al crear una cuenta; en cuentas existentes no modifica el perfil ni los consentimientos. No aceptar email, rol, google_sso_id o flags de privilegio desde el cliente."
+      },
+      "GoogleCredentialRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "writeOnly": true,
+            "description": "ID token JWT emitido por Google Identity Services. No es access_token ni codigo OAuth."
+          },
+          "perfil": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nombre": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "apellido_paterno": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "apellido_materno": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Sin espacios al inicio o al final; no admite solo espacios."
+              },
+              "telefono": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "^\\+[1-9][0-9]{7,14}$",
+                "description": "Opcional, por defecto null. Formato internacional: + y entre 8 y 15 digitos; no admite cadena vacia, espacios ni guiones."
+              },
+              "acepta_cookies": {
+                "type": "boolean",
+                "description": "Eleccion explicita de cookies opcionales. Se exige enviar true o false; false NO impide registrarse. No sustituye el consentimiento legal ni deshabilita cookies tecnicas de sesion/CSRF."
+              }
+            },
+            "required": [
+              "nombre",
+              "apellido_paterno",
+              "apellido_materno",
+              "acepta_cookies"
+            ]
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "description": "perfil es obligatorio solo al crear una cuenta; en cuentas existentes no modifica el perfil ni los consentimientos. No aceptar email, rol, google_sso_id o flags de privilegio desde el cliente."
+      },
+      "GoogleRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GoogleIdTokenRequest"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleCredentialRequest"
+          }
+        ],
+        "description": "Enviar exactamente uno de id_token o credential; ambos juntos se rechazan con 400."
+      }
+    },
+    "responses": {
+      "400": {
+        "description": "JSON malformado, campos desconocidos, tipo incorrecto o validacion de negocio. Error por campo cuando corresponda.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "validation_error",
+              "detail": "Revise los campos enviados.",
+              "errors": {
+                "email": [
+                  "Este campo es obligatorio."
+                ]
+              }
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Credenciales invalidas; misma respuesta para email desconocido, password erronea o cuenta inactiva. En Google incluye token expirado, firma/aud/iss invalidos o email no verificado. No devuelve cookies de sesion.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "invalid_credentials",
+              "detail": "Credenciales no validas."
+            }
+          }
+        },
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Token"
+              ]
+            },
+            "description": "Challenge de TokenAuthentication, primer autenticador DRF. El flujo propuesto de acceso establece una sesion, no emite un token DRF."
+          }
+        }
+      },
+      "403": {
+        "description": "CSRF ausente/invalido u origen rechazado. No utilizar para password incorrecta ni para token Google expirado.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "csrf_failed",
+              "detail": "Verificacion CSRF fallida."
+            }
+          }
+        }
+      },
+      "405": {
+        "description": "Metodo no admitido por esta ruta.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "method_not_allowed",
+              "detail": "Metodo no permitido."
+            }
+          }
+        }
+      },
+      "415": {
+        "description": "Content-Type no admitido.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "unsupported_media_type",
+              "detail": "Utilice application/json."
+            }
+          }
+        }
+      },
+      "503": {
+        "description": "No es posible verificar el proveedor Google por indisponibilidad temporal. Nunca aceptar sin verificar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "identity_provider_unavailable",
+              "detail": "Servicio de identidad temporalmente no disponible."
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,6 @@
-from django.shortcuts import render
 from rest_framework import generics
-from rest_framework.permissions import AllowAny
 from .models import OrdenCompra
+from .permissions import CanCheckout
 from .serializers import OrdenCompraSerializer
 
 
@@ -9,4 +8,4 @@ from .serializers import OrdenCompraSerializer
 class CheckoutAPIView(generics.CreateAPIView):
     queryset = OrdenCompra.objects.all()
     serializer_class = OrdenCompraSerializer
-    permission_classes = [AllowAny]  #esto permite que cualquier usuario, autenticado o no, pueda acceder a esta vista para realizar el checkout.
+    permission_classes = [CanCheckout]

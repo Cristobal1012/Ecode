@@ -166,6 +166,13 @@ Una vez que todos los cambios del Sprint hayan sido integrados, se realizarán l
 
 Cuando el Sprint se encuentre terminado y estable, se podrá integrar a `main` mediante un Pull Request.
 
+## Seguridad y contratos de acceso
+
+La suite de seguridad se ejecuta con `python manage.py test` y PostgreSQL de
+pruebas. Consultar [alcance, configuración y matriz QA](docs/security-qa.md) y
+los [contratos OpenAPI propuestos de autenticación](docs/openapi.json).
+Login, registro y Google SSO todavía no están implementados.
+
 ## Estado del proyecto
 
 En desarrollo — Sprint 0.

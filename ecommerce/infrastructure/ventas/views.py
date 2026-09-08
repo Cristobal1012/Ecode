@@ -16,3 +16,4 @@ class DashboardOperativoView(APIView):
             "mensaje": "bienvendo al panel de Control",
             "emprendedor_id": emprendedor_id
         })
+    

@@ -52,3 +52,6 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return user
+    
+class GoogleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(required=True)

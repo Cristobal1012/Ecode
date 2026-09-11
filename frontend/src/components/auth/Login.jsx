@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import clienteAxios from './axiosConfig';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function Login({ onSwitchToRegister }) {
     const [formData, setFormData] = useState({
@@ -28,6 +29,29 @@ export default function Login({ onSwitchToRegister }) {
             console.error("Axios interceptó un error:", error);
             alert("Axios disparó la petición, pero el servidor no respondió (esperando al backend).");
         }
+    };
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+        // El token viene en credentialResponse.credential
+        const googleToken = credentialResponse.credential;
+        console.log("Token de Google obtenido:", googleToken);
+
+        try {
+            console.log("Enviando token de Google al backend...");
+            // Ajustar ruta ('google-login/') según el backend
+            const respuesta = await clienteAxios.post('google-login/', { token: googleToken });
+            
+            console.log("Respuesta del servidor:", respuesta.data);
+            alert("¡Inicio de sesión con Google exitoso!");
+        } catch (error) {
+            console.error("Axios interceptó un error con Google:", error);
+            alert("Petición enviada, pero el backend de Google aún no está configurado.");
+        }
+    };
+
+    const handleGoogleError = () => {
+        console.error("Error al iniciar sesión con Google");
+        alert("No se pudo completar el acceso con Google.");
     };
 
     return (
@@ -69,13 +93,12 @@ export default function Login({ onSwitchToRegister }) {
             </div>
 
             
-            <button 
-                type="button" 
-                onClick={() => alert("Aquí irá el botón oficial de Google Identity")}
-                style={{ width: '100%', padding: '10px', background: '#fff', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-                Continuar con Google
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                />
+            </div>
 
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
                 <button 

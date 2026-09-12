@@ -1,23 +1,50 @@
 import { useState } from 'react';
-import Login from './components/auth/Login';
-import Register from './components/auth/Register';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
-function App() {
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import Checkout from './components/Checkout';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
+function AuthPage() {
   const [showLogin, setShowLogin] = useState(true);
 
-  //Me falta el ID original de google.
+  return (
+    <div>
+      {showLogin ? (
+        <Login onSwitchToRegister={() => setShowLogin(false)} />
+      ) : (
+        <Register onSwitchToLogin={() => setShowLogin(true)} />
+      )}
+    </div>
+  );
+}
+
+function App() {
+  // Client ID temporal para Google OAuth
   const GOOGLE_CLIENT_ID = "tu-client-id-temporal.apps.googleusercontent.com";
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div>
-        {showLogin ? (
-          <Login onSwitchToRegister={() => setShowLogin(false)} />
-        ) : (
-          <Register onSwitchToLogin={() => setShowLogin(true)} />
-        )}
-      </div>
+      <BrowserRouter>
+        <Routes>
+          {/* Página pública */}
+          <Route path="/" element={<Checkout />} />
+
+          {/* Pantalla de login y registro */}
+          <Route path="/login" element={<AuthPage />} />
+
+          {/* Ruta protegida para ADMIN */}
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+            <Route
+              path="/admin"
+              element={<h1>Panel de Administración</h1>}
+            />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </GoogleOAuthProvider>
   );
 }

@@ -14,4 +14,6 @@ usuarios_urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     #Endpoint para el login con Google
     path('google/', GoogleLoginView.as_view(), name='google_login'),
+    path('me/', views.UsuarioActualAPIView.as_view(), name='usuario_actual'),
+
 ]

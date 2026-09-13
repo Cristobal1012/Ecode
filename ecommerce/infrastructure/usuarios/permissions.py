@@ -1,7 +1,7 @@
 import jwt
 from django.conf import settings
 from rest_framework.permissions import BasePermission
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
 
 class IsEmprendedor(BasePermission):
     """
@@ -12,8 +12,7 @@ class IsEmprendedor(BasePermission):
         # aca extraemos el el header de autoriacion y verificamos que sea un token JWT válido
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            return False
-
+            raise NotAuthenticated('No se proporcionó un token de autenticación.')
         # separamos la palabra Bearer del token real
         token = auth_header.split(' ')[1]
         

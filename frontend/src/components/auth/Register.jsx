@@ -4,9 +4,10 @@ import clienteAxios from './axiosConfig';
 export default function Register({ onSwitchToLogin }) {
     const [formData, setFormData] = useState({
         nombre: '',
+        apellido_paterno: '',
         email: '',
         password: '',
-        confirmPassword: ''
+        password2: ''
     });
 
     const handleChange = (e) => {
@@ -19,16 +20,16 @@ export default function Register({ onSwitchToLogin }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        if (formData.password !== formData.confirmPassword) {
+        if (formData.password !== formData.password2) {
             alert("Las contraseñas no coinciden");
             return;
         }
 
         try {
-            console.log("Enviando petición a la ruta: http://localhost:8000/api/register/");
+            console.log("Enviando petición a la ruta: http://localhost:8000/api/usuarios/registro/");
             
             
-            const respuesta = await clienteAxios.post('register/', formData);
+            const respuesta = await clienteAxios.post('/usuarios/registro/', formData);
             
             console.log("Respuesta del servidor:", respuesta.data);
             alert("¡Registro exitoso!");
@@ -49,11 +50,22 @@ export default function Register({ onSwitchToLogin }) {
             
             <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: '15px' }}>
-                    <label>Nombre completo:</label><br/>
+                    <label>Nombre:</label><br/>
                     <input 
                         type="text" 
                         name="nombre"
                         value={formData.nombre} 
+                        onChange={handleChange} 
+                        required 
+                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
+                    />
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <label>Apellido Paterno:</label><br/>
+                    <input 
+                        type="text" 
+                        name="apellido_paterno"
+                        value={formData.apellido_paterno}
                         onChange={handleChange} 
                         required 
                         style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
@@ -85,8 +97,8 @@ export default function Register({ onSwitchToLogin }) {
                     <label>Confirmar Contraseña:</label><br/>
                     <input 
                         type="password" 
-                        name="confirmPassword"
-                        value={formData.confirmPassword} 
+                        name="password2" 
+                        value={formData.password2} 
                         onChange={handleChange} 
                         required 
                         style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}

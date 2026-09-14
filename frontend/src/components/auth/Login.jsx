@@ -21,7 +21,7 @@ export default function Login({ onSwitchToRegister }) {
         try {
             console.log("Enviando petición a la ruta: http://localhost:8000/api/login/");
             
-            const respuesta = await clienteAxios.post('login/', formData);
+            const respuesta = await clienteAxios.post('usuarios/token/', formData);
             console.log("Respuesta del servidor:", respuesta.data);
             alert("¡Login exitoso!");
         } catch (error) {

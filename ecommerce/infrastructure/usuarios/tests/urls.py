@@ -6,8 +6,13 @@ from rest_framework.views import APIView
 
 from ecommerce.infrastructure.usuarios.permissions import IsAdministrador
 
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 
 class AuthenticatedProbe(APIView):
+    authentication_classes = [
+        TokenAuthentication,
+        SessionAuthentication,
+    ]
     # Inherit the production authentication and permission defaults.
     def get(self, request):
         return Response({'id': request.user.pk})
@@ -15,6 +20,11 @@ class AuthenticatedProbe(APIView):
 
 class AdministratorProbe(APIView):
     permission_classes = [IsAdministrador]
+
+    authentication_classes = [
+        TokenAuthentication,
+        SessionAuthentication,
+    ]
 
     def get(self, request):
         return Response({'id': request.user.pk})

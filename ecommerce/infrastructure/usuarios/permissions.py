@@ -23,7 +23,7 @@ class IsEmprendedor(BasePermission):
             # aca verifico el rol dentro del payload
             rol = payload.get('rol')
             if rol == 'Emprendedor':
-               #Guardamos el payload en el request para que la vista pueda saber que emprendedor consulta el panel
+               
                 request.jwt_payload = payload
                 return True
                 

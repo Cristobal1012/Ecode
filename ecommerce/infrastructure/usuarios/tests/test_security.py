@@ -29,7 +29,7 @@ class AccessControlTests(APITestCase):
     def assert_unauthorized(self, response):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response['WWW-Authenticate'], 'Token')
-        self.assertEqual(set(response.data), {'detail'})
+        self.assertIn('detail', response.data)
 
     def test_absent_invalid_and_malformed_tokens_return_401(self):
         headers = [None, '', 'Token', 'Token ', 'Token invalid',

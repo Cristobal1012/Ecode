@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   db-postgres:
     image: postgres:15
@@ -7,7 +8,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: adminpassword
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
 
   db-mongo:
     image: mongo:6

@@ -1,0 +1,75 @@
+﻿{
+  "info": {
+    "name": "Ecode - Contratos de API Catálogo (MongoDB)",
+    "description": "Especificación de payloads aceptados para crear productos con atributos personalizados (globales y variantes dinámicas), además de respuestas mock para desbloquear el frontend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. POST - Crear Producto Completo (Atributos Dinámicos)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Polera Deportiva Dry-Fit\",\n  \"descripcion\": \"Polera técnica transpirable para entrenamiento de alto impacto.\",\n  \"categoria\": \"Ropa Deportiva\",\n  \"imagenes\": [\n    \"https://storage.ecode.cl/productos/polera-base-1.jpg\"\n  ],\n  \"activo\": true,\n  \"atributos_globales\": {\n    \"material\": \"100% Poliéster reciclado\",\n    \"pais_origen\": \"Chile\",\n    \"garantia_meses\": 3\n  },\n  \"variantes\": [\n    {\n      \"sku\": \"POL-DEP-NEG-M\",\n      \"precio\": 19990.00,\n      \"stock\": 25,\n      \"imagen_especifica\": \"https://storage.ecode.cl/productos/polera-negra-m.jpg\",\n      \"atributos_variables\": {\n        \"color\": \"Negro\",\n        \"talla\": \"M\"\n      }\n    },\n    {\n      \"sku\": \"POL-DEP-AZU-L\",\n      \"precio\": 19990.00,\n      \"stock\": 15,\n      \"imagen_especifica\": \"https://storage.ecode.cl/productos/polera-azul-l.jpg\",\n      \"atributos_variables\": {\n        \"color\": \"Azul Marino\",\n        \"talla\": \"L\"\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/catalogo/productos/",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["catalogo", "productos", ""]
+        }
+      }
+    },
+    {
+      "name": "2. POST - Crear Producto Mínimo Requerido",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Gorra Trucker Ecode\",\n  \"categoria\": \"Accesorios\",\n  \"variantes\": [\n    {\n      \"sku\": \"GOR-TRK-VER-001\",\n      \"precio\": 12990.00,\n      \"stock\": 50,\n      \"atributos_variables\": {\n        \"color_visera\": \"Verde\",\n        \"tipo_cierre\": \"Snapback\"\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/catalogo/productos/",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["catalogo", "productos", ""]
+        }
+      }
+    },
+    {
+      "name": "3. GET - Listar Catálogo (Mock Frontend Filtros)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/catalogo/productos/",
+          "protocol": "http",
+          "host": ["127", "0", "0", "1"],
+          "port": "8000",
+          "path": ["catalogo", "productos", ""]
+        }
+      },
+      "response": [
+        {
+          "name": "Ejemplo 200 OK para Frontend",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": \"66f4b3e8a1c9e2b4d1234567\",\n    \"nombre\": \"Polera Deportiva Dry-Fit\",\n    \"descripcion\": \"Polera técnica transpirable para entrenamiento.\",\n    \"categoria\": \"Ropa Deportiva\",\n    \"imagenes\": [\"https://storage.ecode.cl/productos/polera-base-1.jpg\"],\n    \"activo\": true,\n    \"atributos_globales\": {\n      \"material\": \"100% Poliéster reciclado\",\n      \"pais_origen\": \"Chile\"\n    },\n    \"variantes\": [\n      {\n        \"sku\": \"POL-DEP-NEG-M\",\n        \"precio\": 19990.00,\n        \"stock\": 25,\n        \"imagen_especifica\": \"https://storage.ecode.cl/productos/polera-negra-m.jpg\",\n        \"atributos_variables\": {\n          \"color\": \"Negro\",\n          \"talla\": \"M\"\n        }\n      },\n      {\n        \"sku\": \"POL-DEP-AZU-L\",\n        \"precio\": 19990.00,\n        \"stock\": 15,\n        \"imagen_especifica\": \"https://storage.ecode.cl/productos/polera-azul-l.jpg\",\n        \"atributos_variables\": {\n          \"color\": \"Azul Marino\",\n          \"talla\": \"L\"\n        }\n      }\n    ]\n  }\n]"
+        }
+      ]
+    }
+  ]
+}

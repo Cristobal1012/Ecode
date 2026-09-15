@@ -100,27 +100,20 @@ El workflow queda versionado; su ejecución remota no se ha verificado.
 ## Contrato OpenAPI
 
 [openapi.json](openapi.json) es OpenAPI 3.0.3, importable en Swagger Editor o
-Postman. Su versión `0.1.0-proposed` y cada operación identifican expresamente
-que **son contratos propuestos, no rutas disponibles**.
+Postman, y documenta las rutas que están montadas actualmente bajo `/usuarios/`:
 
-Se comprobó la sintaxis JSON, la resolución de sus 33 referencias internas y
-la compatibilidad básica de 16 ejemplos con campos, tipos y patrones. No se
-ejecutó un validador OpenAPI completo: el índice de paquetes del entorno no
-permitió instalar `openapi-spec-validator`.
+- `POST /usuarios/registro/`: alta y respuesta `201` con `user` y el par JWT
+  dentro de `tokens`.
+- `POST /usuarios/token/`: login tradicional y respuesta `200` con `access` y
+  `refresh` en el nivel superior, según `TokenObtainPairView`.
+- `POST /usuarios/google/`: canje de `id_token`; crea o reutiliza la cuenta y
+  responde `200` con `user` y `tokens`.
+- `POST /usuarios/token/refresh/`: renueva el access a partir del refresh.
 
-Define login, registro, canje de ID token Google y un endpoint auxiliar CSRF.
-Se eligen sesiones Django para estos flujos; no se diseña un JWT casero ni se
-confunde el ID token de Google con una credencial del sistema. Incluye esquemas,
-ejemplos, tipos, obligatoriedad, teléfono internacional, consentimiento booleano,
-cookies técnicas, errores y códigos HTTP. `acepta_cookies=false` es válido.
-
-Los errores propuestos `{code, detail, errors?}` y validaciones estrictas deberán
-implementarse en sus futuros adaptadores; los errores actuales de DRF conservan
-su formato `{detail}` o errores por campo. El contrato contempla `401` para ID
-tokens Google caducados; la suite no afirma probar esa verificación pendiente.
-Antes de implementar SSO se necesita unicidad de `google_sso_id`, verificación
-oficial de tokens y un flujo seguro de vinculación que no una cuentas por email
-sin autenticar a su propietario. Registro no inicia sesión automáticamente.
+El contrato refleja los campos que aceptan los serializers actuales, ejemplos
+de éxito y respuestas `400`/`401`. Estas rutas públicas no requieren CSRF. El ID
+token de Google solo se usa para verificar identidad; después el backend emite
+sus propios JWT SimpleJWT.
 
 Referencias oficiales de las decisiones:
 

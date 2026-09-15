@@ -2,17 +2,10 @@
 
 ## Estado y alcance
 
-La inspección inicial de `eidan` encontró cero tests, URLs vacías en usuarios y
-catálogo, y un único endpoint de negocio: `POST /ventas/api/checkout/`.
-Login, registro, Google SSO y operaciones administrativas todavía no existen.
-El modelo tampoco contiene actualmente campos de auditoría de consentimiento
-ni una restricción única sobre `google_sso_id`.
-
-La suite verifica la política reutilizable de seguridad con vistas de prueba y
-el checkout real contra la base SQL de pruebas. **No demuestra seguridad de
-endpoints administrativos o de autenticación que aún no están implementados.**
-Cuando se incorporen, deben agregarse a la matriz de integración usando sus URLs
-reales y comprobar también que las peticiones denegadas no producen cambios.
+La suite verifica la política reutilizable de seguridad con vistas de prueba,
+el checkout real y el dashboard productivo contra la base SQL de pruebas. El
+dashboard `GET /ventas/api/dashboard/` aplica `IsEmprendedor` y se prueba con
+tokens de acceso firmados por SimpleJWT, sin `force_authenticate` ni mocks.
 
 ## Política implementada
 
@@ -20,10 +13,9 @@ reales y comprobar también que las peticiones denegadas no producen cambios.
   nuevas deben declarar su permiso explícitamente.
 - `TokenAuthentication` precede a `SessionAuthentication`: las peticiones sin
   credenciales a rutas protegidas devuelven `401` con `WWW-Authenticate: Token`.
-- Se admite `Authorization: Token <clave>` de DRF, **no Bearer/JWT**. Los tokens
-  DRF no caducan automáticamente; su eliminación los revoca. No se añade una
-  ruta pública para emitirlos. Ejecutar `python manage.py migrate` para instalar
-  las tablas de `rest_framework.authtoken` antes de usar esta configuración.
+- Las rutas heredadas de QA y checkout admiten `Authorization: Token <clave>`
+  de DRF. Las rutas JWT admiten `Authorization: Bearer <access>` mediante
+  SimpleJWT; el acceso dura 60 minutos y el refresh un día.
 - Las sesiones Django existentes siguen siendo válidas; una petición con sesión
   válida está autenticada aunque no incluya Authorization. Escrituras por sesión
   necesitan CSRF. Un token reconocido pero inválido no recurre a la sesión.
@@ -31,6 +23,11 @@ reales y comprobar también que las peticiones denegadas no producen cambios.
   ni `is_superuser` reemplazan ese rol. Aplicar
   `permission_classes = [IsAdministrador]` a futuras vistas de administración.
   La misma condición se comprueba en permisos de objeto.
+- `IsEmprendedor` exige un Bearer JWT válido cuyo payload contenga exactamente
+  `rol: "Emprendedor"`. El test genera el refresh con `RefreshToken.for_user`,
+  añade el claim firmado y deriva desde él el access. Los emisores actuales de
+  registro, login tradicional y Google todavía no añaden ese claim por defecto;
+  si el dashboard se consume con esos tokens, el permiso devuelve `403`.
 - Checkout permite invitados en `INVITADO`, `MIXTO` y sin configuración. En
   `REGISTRO_OBLIGATORIO`, rechaza anónimos con `401` antes de validar el cuerpo
   (antes devolvía `400` desde el serializer). Ambos roles pueden comprar.
@@ -50,6 +47,9 @@ un administrador independientemente de su validez.
 | Rutas de prueba privadas | Header ausente/vacío, token desconocido, malformado o esquema no admitido | 401 + challenge |
 | Ruta de prueba ADMIN | COMPRADOR en GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS | 403 |
 | Ruta de prueba ADMIN | ADMIN activo, mismos métodos | 200; POST 201 |
+| Dashboard real | Sin `Authorization: Bearer` | 401 |
+| Dashboard real | JWT válido con rol COMPRADOR | 403 |
+| Dashboard real | JWT válido con `rol: "Emprendedor"` | 200 |
 | Autenticación real | Cuenta inactiva/eliminada, token revocado | 401 |
 | Autorización real | ADMIN degradado con token existente | 403 inmediato |
 | Sesiones | Roles, CSRF ausente y presente; token inválido con sesión válida | 200/201, 403 o 401 según política |
@@ -100,27 +100,20 @@ El workflow queda versionado; su ejecución remota no se ha verificado.
 ## Contrato OpenAPI
 
 [openapi.json](openapi.json) es OpenAPI 3.0.3, importable en Swagger Editor o
-Postman. Su versión `0.1.0-proposed` y cada operación identifican expresamente
-que **son contratos propuestos, no rutas disponibles**.
+Postman, y documenta las rutas que están montadas actualmente bajo `/usuarios/`:
 
-Se comprobó la sintaxis JSON, la resolución de sus 33 referencias internas y
-la compatibilidad básica de 16 ejemplos con campos, tipos y patrones. No se
-ejecutó un validador OpenAPI completo: el índice de paquetes del entorno no
-permitió instalar `openapi-spec-validator`.
+- `POST /usuarios/registro/`: alta y respuesta `201` con `user` y el par JWT
+  dentro de `tokens`.
+- `POST /usuarios/token/`: login tradicional y respuesta `200` con `access` y
+  `refresh` en el nivel superior, según `TokenObtainPairView`.
+- `POST /usuarios/google/`: canje de `id_token`; crea o reutiliza la cuenta y
+  responde `200` con `user` y `tokens`.
+- `POST /usuarios/token/refresh/`: renueva el access a partir del refresh.
 
-Define login, registro, canje de ID token Google y un endpoint auxiliar CSRF.
-Se eligen sesiones Django para estos flujos; no se diseña un JWT casero ni se
-confunde el ID token de Google con una credencial del sistema. Incluye esquemas,
-ejemplos, tipos, obligatoriedad, teléfono internacional, consentimiento booleano,
-cookies técnicas, errores y códigos HTTP. `acepta_cookies=false` es válido.
-
-Los errores propuestos `{code, detail, errors?}` y validaciones estrictas deberán
-implementarse en sus futuros adaptadores; los errores actuales de DRF conservan
-su formato `{detail}` o errores por campo. El contrato contempla `401` para ID
-tokens Google caducados; la suite no afirma probar esa verificación pendiente.
-Antes de implementar SSO se necesita unicidad de `google_sso_id`, verificación
-oficial de tokens y un flujo seguro de vinculación que no una cuentas por email
-sin autenticar a su propietario. Registro no inicia sesión automáticamente.
+El contrato refleja los campos que aceptan los serializers actuales, ejemplos
+de éxito y respuestas `400`/`401`. Estas rutas públicas no requieren CSRF. El ID
+token de Google solo se usa para verificar identidad; después el backend emite
+sus propios JWT SimpleJWT.
 
 Referencias oficiales de las decisiones:
 

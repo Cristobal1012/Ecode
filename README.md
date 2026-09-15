@@ -170,8 +170,8 @@ Cuando el Sprint se encuentre terminado y estable, se podrá integrar a `main` m
 
 La suite de seguridad se ejecuta con `python manage.py test` y PostgreSQL de
 pruebas. Consultar [alcance, configuración y matriz QA](docs/security-qa.md) y
-los [contratos OpenAPI propuestos de autenticación](docs/openapi.json).
-Login, registro y Google SSO todavía no están implementados.
+el [contrato OpenAPI de autenticación](docs/openapi.json), que documenta las
+rutas reales de registro, login JWT, renovación de tokens y Google SSO.
 
 ## Estado del proyecto
 

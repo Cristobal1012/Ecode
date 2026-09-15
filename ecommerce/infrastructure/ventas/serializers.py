@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import OrdenCompra, ConfiguracionGlobal
+from .models import OrdenCompra
 
 #esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
 class OrdenCompraSerializer(serializers.ModelSerializer):
@@ -18,14 +18,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         #acá obtenemos el usuario de la petición (request).
         request = self.context.get('request')
         
-        #acá consultamos la configuración global de la tienda (la tabla singleton).
-        config = ConfiguracionGlobal.objects.first()
-
-        #primera validacion: Si la tienda exige registro, se bloquean las compras anónimas.
-        if config and config.modo_autenticacion == 'REGISTRO_OBLIGATORIO':
-            if not request.user.is_authenticated:
-                raise serializers.ValidationError("Esta tienda requiere que inicies sesión para comprar.")
-
         #segunda validacion: Logica de comprador invitado.
         if not request.user.is_authenticated:
             #si no hay sesión, el email_invitado es estrictamente obligatorio.

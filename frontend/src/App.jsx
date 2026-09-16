@@ -6,6 +6,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
+import LandingPage from './pages/LandingPage';
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage() {
@@ -32,6 +33,9 @@ function App() {
         <Routes>
           {/* Página pública */}
           <Route path="/" element={<Checkout />} />
+
+          {/* Landing page */}
+          <Route path='/lan' element={<LandingPage />} />
 
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />

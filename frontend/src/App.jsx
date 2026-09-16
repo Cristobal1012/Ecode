@@ -31,11 +31,9 @@ function App() {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
         <Routes>
-          {/* Página pública */}
-          <Route path="/" element={<Checkout />} />
-
-          {/* Landing page */}
-          <Route path='/lan' element={<LandingPage />} />
+          {/* Vistas públicas */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/catalogo" element={<Checkout />} />
 
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />

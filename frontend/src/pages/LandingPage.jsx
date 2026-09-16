@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import clienteAxios from "../components/auth/axiosConfig";
 
 function LandingPage() {
+  const navigate = useNavigate();
   const [configuracion, setConfiguracion] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +50,7 @@ function LandingPage() {
     <div style={{ fontFamily: 'sans-serif', textAlign: 'center', padding: '20px'}}>
       <h1 style={{ color: "white" }}> {configuracion?.texto_bienvenida} </h1>
       
-      <button onClick={() => alert("Catálogo en construcción")}>
+      <button type="button" onClick={() => navigate("/catalogo")}>
         {configuracion?.texto_boton_ingreso || "Error!"}
       </button>
 

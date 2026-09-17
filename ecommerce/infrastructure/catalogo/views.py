@@ -50,4 +50,4 @@ class ProductoDetailView(APIView):
             return Response({"error": "Producto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
         
         producto.delete()
-        return Response({"mensaje": "Producto eliminado exitosamente"}, status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)

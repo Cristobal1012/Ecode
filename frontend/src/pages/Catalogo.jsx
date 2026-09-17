@@ -1,49 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import axios from 'axios';
 
-//JSON falso temporal 
-const mockProducts = [
-  {
-    _id: "65f1a2b3c4d5e6f7a8b9c001",
-    nombre: "Procesador AMD Ryzen 5 7600X",
-    categoria: "Procesadores",
-    precio: 245000,
-    stock: 15,
-    atributos_tecnicos: { socket: "AM5", nucleos: 6 }
-  },
-  {
-    _id: "65f1a2b3c4d5e6f7a8b9c002",
-    nombre: "Tarjeta de Video AMD Radeon RX 7800 XT",
-    categoria: "Tarjetas Gráficas",
-    precio: 560000,
-    stock: 8,
-    atributos_tecnicos: { vram: "16GB", largo_mm: 320 }
-  },
-
-  {
-    _id: "65f1a2b3c4d5e6f7a8b9c004",
-    nombre: "Tarjeta de Video NVIDIA RTX 4070",
-    categoria: "Tarjetas Gráficas",
-    precio: 650000,
-    stock: 5,
-    atributos_tecnicos: { vram: "12GB", largo_mm: 280 }
-  },
-
-
-  {
-    _id: "65f1a2b3c4d5e6f7a8b9c003",
-    nombre: "Placa Madre Pro Z690",
-    categoria: "Placas Madre",
-    precio: 185000,
-    stock: 22,
-    atributos_tecnicos: { socket: "LGA 1700", formato: "ATX" }
-  }
-];
 
 export default function Catalogo() {
   // 2. Estados de la aplicación
-  const [productos] = useState(mockProducts);
+  const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   const [filtrosActivos, setFiltrosActivos] = useState({});
+
+  useEffect(() => {
+    
+    axios.get('http://localhost:8000/catalogo/productos/') 
+      .then(response => {
+        console.log("Datos recibidos de la API:", response.data);
+        setProductos(response.data); 
+      })
+      .catch(error => {
+        console.error("Hubo un error cargando el catálogo:", error);
+      });
+  }, []);
 
   const handleCategoriaChange = (e) => {
     setCategoriaSeleccionada(e.target.value);

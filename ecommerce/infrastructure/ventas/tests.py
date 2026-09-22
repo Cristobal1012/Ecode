@@ -5,6 +5,80 @@ from rest_framework.test import APITestCase
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, OrdenCompra
+from .serializers import ConfiguracionGlobalSerializer
+
+
+class ConfiguracionGlobalSerializerTests(APITestCase):
+    def test_exposes_only_landing_page_fields(self):
+        configuracion = ConfiguracionGlobal.objects.create(
+            nombre_tienda='Tienda privada',
+            texto_bienvenida='Descubre nuestros productos',
+            texto_boton_ingreso='Ir al catálogo',
+            banner_url='https://example.com/banner.jpg',
+            api_keys_pagos={'secreto': 'no-exponer'},
+        )
+
+        data = ConfiguracionGlobalSerializer(configuracion).data
+
+        self.assertEqual(
+            set(data),
+            {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url'},
+        )
+        self.assertNotIn('api_keys_pagos', data)
+
+    def test_validates_url_and_button_length(self):
+        serializer = ConfiguracionGlobalSerializer(data={
+            'texto_bienvenida': 'Bienvenida',
+            'texto_boton_ingreso': 'x' * 101,
+            'banner_url': 'no-es-una-url',
+        })
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('texto_boton_ingreso', serializer.errors)
+        self.assertIn('banner_url', serializer.errors)
+
+
+class ConfiguracionGlobalAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.configuracion = ConfiguracionGlobal.objects.create(
+            nombre_tienda='Tienda QA',
+            texto_bienvenida='Bienvenido a Tienda QA',
+            texto_boton_ingreso='Ver productos',
+            banner_url='https://example.com/hero.jpg',
+        )
+
+    def test_public_endpoint_matches_frontend_contract(self):
+        url = reverse('configuracion-global')
+
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION='Token credencial-invalida',
+        )
+
+        self.assertEqual(url, '/api/configuracion/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {
+            'texto_bienvenida': 'Bienvenido a Tienda QA',
+            'texto_boton_ingreso': 'Ver productos',
+            'banner_url': 'https://example.com/hero.jpg',
+        })
+
+    def test_returns_not_found_when_configuration_does_not_exist(self):
+        ConfiguracionGlobal.objects.all().delete()
+
+        response = self.client.get(reverse('configuracion-global'))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_endpoint_is_read_only(self):
+        response = self.client.post(
+            reverse('configuracion-global'),
+            {'texto_bienvenida': 'Intento de cambio'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 405)
 
 
 class CheckoutAccessTests(APITestCase):

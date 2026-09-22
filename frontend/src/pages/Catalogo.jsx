@@ -43,9 +43,9 @@ export default function Catalogo() {
     Object.entries(filtrosActivos).forEach(([atributo, valorSeleccionado]) => {
       if (valorSeleccionado) {
         filtrados = filtrados.filter(p => 
-          p.atributos_tecnicos && 
-          p.atributos_tecnicos[atributo] && 
-          p.atributos_tecnicos[atributo].toString() === valorSeleccionado
+          p.atributos_globales && 
+          p.atributos_globales[atributo] && 
+          p.atributos_globales[atributo].toString() === valorSeleccionado
         );
       }
     });
@@ -61,9 +61,9 @@ export default function Catalogo() {
     
     const claves = new Set();
     productosFiltrados.forEach(p => {
-      if (p.atributos_tecnicos) {
+      if (p.atributos_globales) {
         // Lee propiedades como "socket", "vram", "formato"
-        Object.keys(p.atributos_tecnicos).forEach(key => claves.add(key)); 
+        Object.keys(p.atributos_globales).forEach(key => claves.add(key)); 
       }
     });
     return [...claves];
@@ -71,8 +71,8 @@ export default function Catalogo() {
 
   const obtenerOpcionesPorAtributo = (atributo) => {
     const valores = productos
-      .filter(p => p.categoria === categoriaSeleccionada && p.atributos_tecnicos?.[atributo])
-      .map(p => p.atributos_tecnicos[atributo]);
+      .filter(p => p.categoria === categoriaSeleccionada && p.atributos_globales?.[atributo])
+      .map(p => p.atributos_globales[atributo]);
     return [...new Set(valores)]; 
   };
 

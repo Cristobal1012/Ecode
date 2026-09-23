@@ -1,6 +1,14 @@
 from django.urls import path
 from . import views
 
+configuracion_urlpatterns = [
+    path(
+        'api/configuracion/',
+        views.ConfiguracionGlobalAPIView.as_view(),
+        name='configuracion-global',
+    ),
+]
+
 ventas_urlpatterns = [
     path('api/checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
 

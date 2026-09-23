@@ -1,5 +1,15 @@
 from rest_framework import serializers
-from .models import OrdenCompra
+from .models import ConfiguracionGlobal, OrdenCompra
+
+
+class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfiguracionGlobal
+        fields = [
+            'texto_bienvenida',
+            'texto_boton_ingreso',
+            'banner_url',
+        ]
 
 #esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
 class OrdenCompraSerializer(serializers.ModelSerializer):

@@ -6,6 +6,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
+import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
@@ -33,10 +34,13 @@ function App() {
         <Routes>
           {/* Vistas públicas */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/catalogo" element={<Checkout />} />
+          <Route path="/checkout" element={<Checkout />} />
 
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />
+
+          {/* Catálogo con los filtros dinámicos */}
+          <Route path="/catalogo" element={<Catalogo />} />
 
           {/* Ruta protegida para ADMIN */}
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
@@ -52,3 +56,4 @@ function App() {
 }
 
 export default App;
+

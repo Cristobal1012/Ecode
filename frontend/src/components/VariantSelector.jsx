@@ -1,4 +1,4 @@
-
+//datos de prueba
 import { useState } from 'react';
 
 const productoPrueba = {
@@ -47,7 +47,7 @@ function VariantSelector() {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
   const [mensaje, setMensaje] = useState('');
 
-  // Obtiene los nombres de los atributos de forma dinámica.
+  // Obtiene los nombres de los atributos de forma dinamica.
   // Por ejemplo: talla, color, material, peso, etc.
   const nombresAtributos = [
     ...new Set(

@@ -6,6 +6,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
+import VariantSelector from './components/VariantSelector';
 import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 
@@ -35,6 +36,7 @@ function App() {
           {/* Vistas públicas */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/variantes" element={<VariantSelector />} />
 
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />

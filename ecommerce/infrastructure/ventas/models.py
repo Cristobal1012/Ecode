@@ -7,6 +7,12 @@ class ConfiguracionGlobal(models.Model):
         ('REGISTRO_OBLIGATORIO', 'Registro Obligatorio'),
         ('MIXTO', 'Mixto'),
     ]
+
+    TIPOS_LAYOUT = [
+        ('LISTA', 'Lista'),
+        ('GRID_3', 'Cuadrícula de 3'),
+        ('GRID_4', 'Cuadrícula de 4'),
+    ]
     nombre_tienda = models.CharField(max_length=255)
     tema_seleccionado = models.IntegerField(default=1)
     logo_url = models.URLField(max_length=500, blank=True, null=True)
@@ -30,7 +36,7 @@ class ConfiguracionGlobal(models.Model):
     #Django utiliza JSONField, que en PostgreSQL se traduce automáticamente como JSONB
     api_keys_pagos = models.JSONField(default=dict, blank=True)
     api_keys_logistica = models.JSONField(default=dict, blank=True)
-    layout_catalogo = models.CharField(max_length=50, default="GRID") 
+    layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3") 
 
     def __str__(self):
         return self.nombre_tienda

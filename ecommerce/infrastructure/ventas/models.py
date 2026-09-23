@@ -13,6 +13,14 @@ class ConfiguracionGlobal(models.Model):
     favicon_url = models.URLField(max_length=500, blank=True, null=True)
     google_analytics_id = models.CharField(max_length=50, blank=True, null=True)
     meta_pixel_id = models.CharField(max_length=50, blank=True, null=True)
+    texto_bienvenida = models.TextField(
+        default='Bienvenido a nuestra tienda',
+    )
+    texto_boton_ingreso = models.CharField(
+        max_length=100,
+        default='Ver Catálogo',
+    )
+    banner_url = models.URLField(max_length=500, blank=True, null=True)
     modo_autenticacion = models.CharField(
         max_length=25, 
         choices=MODOS_AUTENTICACION, 

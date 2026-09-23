@@ -1,71 +1,55 @@
-//datos de prueba
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-const productoPrueba = {
-  nombre: 'Polera de prueba',
-  variantes: [
-    {
-      sku: 'TEST-M-ROJO',
-      precio: 19990,
-      stock: 5,
-      atributos_variables: {
-        talla: 'M',
-        color: 'Rojo',
-      },
-    },
-    {
-      sku: 'TEST-L-ROJO',
-      precio: 19990,
-      stock: 0,
-      atributos_variables: {
-        talla: 'L',
-        color: 'Rojo',
-      },
-    },
-    {
-      sku: 'TEST-M-AZUL',
-      precio: 19990,
-      stock: 3,
-      atributos_variables: {
-        talla: 'M',
-        color: 'Azul',
-      },
-    },
-    {
-      sku: 'TEST-L-AZUL',
-      precio: 19990,
-      stock: 2,
-      atributos_variables: {
-        talla: 'L',
-        color: 'Azul',
-      },
-    },
-  ],
-};
-
-function VariantSelector() {
+function VariantSelector({ producto }) {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
   const [mensaje, setMensaje] = useState('');
 
-  // Obtiene los nombres de los atributos de forma dinamica.
-  // Por ejemplo: talla, color, material, peso, etc.
+  // Reinicia la selección cuando cambia el producto
+  useEffect(() => {
+    setAtributosSeleccionados({});
+    setMensaje('');
+  }, [producto]);
+
+  // Si todavía no se ha seleccionado un producto
+  if (!producto) {
+    return (
+      <div>
+        <p>No se ha seleccionado ningún producto.</p>
+      </div>
+    );
+  }
+
+  const variantes = producto.variantes || [];
+
+  // Obtiene los nombres de los atributos
   const nombresAtributos = [
     ...new Set(
-      productoPrueba.variantes.flatMap((variante) =>
-        Object.keys(variante.atributos_variables)
+      variantes.flatMap((variante) =>
+        Object.keys(variante.atributos_variables || {})
       )
     ),
   ];
 
-  const obtenerValores = (atributo) => [
-    ...new Set(
-      productoPrueba.variantes.map(
-        (variante) => variante.atributos_variables[atributo]
-      )
-    ),
-  ];
+  const obtenerValores = (atributo) => {
+    return [
+      ...new Set(
+        variantes
+          .map(
+            (variante) =>
+              variante.atributos_variables?.[atributo]
+          )
+          .filter(
+            (valor) => valor !== undefined && valor !== null
+          )
+      ),
+    ];
+  };
 
   const encontrarVariante = (atributos) => {
+    if (variantes.length === 0 || nombresAtributos.length === 0) {
+      return null;
+    }
+
     const todosSeleccionados = nombresAtributos.every(
       (atributo) => atributos[atributo] !== undefined
     );
@@ -75,10 +59,10 @@ function VariantSelector() {
     }
 
     return (
-      productoPrueba.variantes.find((variante) =>
+      variantes.find((variante) =>
         nombresAtributos.every(
           (atributo) =>
-            variante.atributos_variables[atributo] ===
+            variante.atributos_variables?.[atributo] ===
             atributos[atributo]
         )
       ) || null
@@ -100,7 +84,7 @@ function VariantSelector() {
       return;
     }
 
-    if (variante.stock === 0) {
+    if (Number(variante.stock) === 0) {
       setMensaje('Esta variante se encuentra agotada.');
       return;
     }
@@ -118,7 +102,7 @@ function VariantSelector() {
       return;
     }
 
-    if (varianteSeleccionada.stock === 0) {
+    if (Number(varianteSeleccionada.stock) === 0) {
       setMensaje('Esta variante se encuentra agotada.');
       return;
     }
@@ -128,14 +112,25 @@ function VariantSelector() {
     );
   };
 
+  if (variantes.length === 0) {
+    return (
+      <div>
+        <h2>{producto.nombre}</h2>
+        <p>Este producto no tiene variantes disponibles.</p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <h2>{productoPrueba.nombre}</h2>
+      <h2>{producto.nombre}</h2>
 
       {nombresAtributos.map((atributo) => (
         <div key={atributo}>
           <h3>
-            {atributo.charAt(0).toUpperCase() + atributo.slice(1)}:
+            {atributo.charAt(0).toUpperCase() +
+              atributo.slice(1)}
+            :
           </h3>
 
           {obtenerValores(atributo).map((valor) => {
@@ -145,7 +140,9 @@ function VariantSelector() {
             return (
               <button
                 key={valor}
-                onClick={() => seleccionarAtributo(atributo, valor)}
+                onClick={() =>
+                  seleccionarAtributo(atributo, valor)
+                }
                 style={{
                   marginRight: '8px',
                   marginBottom: '8px',
@@ -163,7 +160,9 @@ function VariantSelector() {
         <div>
           <p>
             Precio: $
-            {varianteSeleccionada.precio.toLocaleString('es-CL')}
+            {Number(varianteSeleccionada.precio).toLocaleString(
+              'es-CL'
+            )}
           </p>
 
           <p>
@@ -180,7 +179,7 @@ function VariantSelector() {
         onClick={agregarAlCarrito}
         disabled={
           !varianteSeleccionada ||
-          varianteSeleccionada.stock === 0
+          Number(varianteSeleccionada.stock) === 0
         }
       >
         Agregar al carrito

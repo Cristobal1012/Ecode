@@ -1,87 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { PALETTES } from '../constants/palettes';
 
-const PALETTES = [
-  {
-    id: 1,
-    name: 'Eco Natural',
-    colors: {
-      primary: '#2E7D32',
-      secondary: '#81C784',
-      accent: '#FFB74D',
-      background: '#F1F8E9',
-      text: '#1B5E20'
-    }
-  },
-  {
-    id: 2,
-    name: 'Dark Emerald',
-    colors: {
-      primary: '#004D40',
-      secondary: '#00796B',
-      accent: '#80CBC4',
-      background: '#E0F2F1',
-      text: '#00251A'
-    }
-  },
-  {
-    id: 3,
-    name: 'Ocean Breeze',
-    colors: {
-      primary: '#1565C0',
-      secondary: '#64B5F6',
-      accent: '#FFD54F',
-      background: '#E3F2FD',
-      text: '#0D47A1'
-    }
-  },
-  {
-    id: 4,
-    name: 'Warm Amber',
-    colors: {
-      primary: '#D84315',
-      secondary: '#FF8A65',
-      accent: '#FFE082',
-      background: '#FBE9E7',
-      text: '#4E342E'
-    }
-  }
-];
+const applyColorsToRoot = (colors) => {
+  if (!colors) return;
+  const root = document.documentElement;
+  root.style.setProperty('--color-primary', colors.primary);
+  root.style.setProperty('--color-secondary', colors.secondary);
+  root.style.setProperty('--color-accent', colors.accent);
+  root.style.setProperty('--color-background', colors.background);
+  root.style.setProperty('--color-text', colors.text);
+};
 
 export default function PaletteSelector() {
-  const [selectedId, setSelectedId] = useState(1);
+  // Inicialización síncrona sin parpadeos
+  const [selectedId, setSelectedId] = useState(() => {
+    const saved = localStorage.getItem('ecommerce_palette');
+    const initialId = saved ? Number(saved) : 1;
+    const initialPalette = PALETTES.find((p) => p.id === initialId) || PALETTES[0];
+    applyColorsToRoot(initialPalette.colors);
+    return initialId;
+  });
+
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  const applyColorsToRoot = (colors) => {
-    if (!colors) return;
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', colors.primary);
-    root.style.setProperty('--color-secondary', colors.secondary);
-    root.style.setProperty('--color-accent', colors.accent);
-    root.style.setProperty('--color-background', colors.background);
-    root.style.setProperty('--color-text', colors.text);
-  };
-
-  // 1. Al cargar la pantalla, consultar a Django cuál tema está guardado
+  // Sincronizar selección actual con Django al montar
   useEffect(() => {
     const fetchTema = async () => {
       try {
         const response = await axios.get('http://127.0.0.1:8000/api/configuracion/');
-        // Django puede devolver un objeto o una lista según la vista
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
-        const temaId = Number(config?.tema_seleccionado) || 1;
-
-        setSelectedId(temaId);
-        const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-        applyColorsToRoot(palette.colors);
+        if (config && config.tema_seleccionado !== undefined) {
+          const temaId = Number(config.tema_seleccionado);
+          setSelectedId(temaId);
+          localStorage.setItem('ecommerce_palette', temaId.toString());
+          const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
+          applyColorsToRoot(palette.colors);
+        }
       } catch (error) {
-        console.error('Error al obtener la configuración del backend:', error);
-        // Fallback local si falla la red
-        const saved = Number(localStorage.getItem('ecommerce_palette')) || 1;
-        setSelectedId(saved);
-        const palette = PALETTES.find((p) => p.id === saved) || PALETTES[0];
-        applyColorsToRoot(palette.colors);
+        console.error('Error al sincronizar configuración con backend:', error);
       }
     };
 
@@ -91,6 +49,14 @@ export default function PaletteSelector() {
   const handleSelect = (palette) => {
     setSelectedId(palette.id);
     applyColorsToRoot(palette.colors);
+
+    // 1. Guarda de inmediato en localStorage para activar el evento 'storage' en la otra pestaña
+    localStorage.setItem('ecommerce_palette', palette.id.toString());
+
+    // 2. Notifica a componentes dentro de la misma pestaña
+    window.dispatchEvent(
+      new CustomEvent('themeChanged', { detail: { temaId: palette.id } })
+    );
   };
 
   const handleSave = async () => {
@@ -110,8 +76,13 @@ export default function PaletteSelector() {
         }
       );
 
+      // Asegurar sincronización en localStorage y emitir eventos
       localStorage.setItem('ecommerce_palette', selectedId.toString());
       setFeedback({ type: 'success', message: 'Configuración guardada exitosamente en el servidor.' });
+
+      window.dispatchEvent(
+        new CustomEvent('themeChanged', { detail: { temaId: selectedId } })
+      );
     } catch (error) {
       console.error('Error al guardar paleta en backend:', error);
       localStorage.setItem('ecommerce_palette', selectedId.toString());

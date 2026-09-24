@@ -38,14 +38,12 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/variantes" element={<VariantSelector />} />
+          <Route path="/catalogo" element={<Catalogo />} />
 
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />
 
-          {/* Catálogo con los filtros dinámicos */}
-          <Route path="/catalogo" element={<Catalogo />} />
-
-          {/* Rutas protegidas para usuarios autenticados */}
+          {/* Rutas exclusivas para administradores */}
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
             <Route path="/admin" element={<Admin />} />
           </Route>

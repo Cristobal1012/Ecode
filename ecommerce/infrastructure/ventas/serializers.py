@@ -5,9 +5,12 @@ from .models import ConfiguracionGlobal, OrdenCompra
 
 
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
+    banner_url = serializers.CharField(required=False, allow_blank=True, default='')
+
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'id',
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',

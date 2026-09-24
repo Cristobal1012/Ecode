@@ -13,7 +13,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'logo',               
             'favicon',
             'tema_seleccionado',
-            'banner_url',
+            'banner',
         ]
 #esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
 class OrdenCompraSerializer(serializers.ModelSerializer):

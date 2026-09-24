@@ -21,7 +21,6 @@ class ConfiguracionGlobal(models.Model):
         default='Ver Catálogo',
     )
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
-    banner_url = models.URLField(max_length=500, blank=True, null=True)
     modo_autenticacion = models.CharField(
         max_length=25, 
         choices=MODOS_AUTENTICACION, 

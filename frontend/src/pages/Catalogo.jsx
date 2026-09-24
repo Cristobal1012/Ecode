@@ -8,7 +8,7 @@ export default function Catalogo() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   const [filtrosActivos, setFiltrosActivos] = useState({});
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-  
+  const [layoutCatalogo, setLayoutCatalogo] = useState('GRID_3');
   useEffect(() => {
     
     axios.get('http://localhost:8000/catalogo/productos/') 
@@ -21,6 +21,40 @@ export default function Catalogo() {
       });
   }, []);
 
+  useEffect(() => {
+  axios.get('http://localhost:8000/api/configuracion/')
+    .then(response => {
+      console.log("Configuración recibida:", response.data);
+      setLayoutCatalogo(response.data.layout_catalogo || 'GRID_3');
+    })
+    .catch(error => {
+      console.error("Hubo un error cargando la configuración:", error);
+    });
+}, []);
+
+const obtenerEstiloCatalogo = () => {
+  if (layoutCatalogo === 'GRID_4') {
+    return {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+      gap: '20px',
+    };
+  }
+
+  if (layoutCatalogo === 'LISTA') {
+    return {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '15px',
+    };
+  }
+
+  return {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: '20px',
+  };
+};
   const handleCategoriaChange = (e) => {
     setCategoriaSeleccionada(e.target.value);
     setFiltrosActivos({}); 
@@ -130,8 +164,7 @@ export default function Catalogo() {
       {/* --- LISTA DE PRODUCTOS --- */}
       <main style={{ flex: 1 }}>
         <h2>Catálogo</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
-          
+      <div style={obtenerEstiloCatalogo()}>
           {productosFiltrados.map(prod => (
             <div key={prod.id} style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' }}>
               <h4 style={{ margin: '0 0 10px 0' }}>{prod.nombre}</h4>

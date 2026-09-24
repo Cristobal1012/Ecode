@@ -10,8 +10,10 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
+            'tema_seleccionado',
         ]
-#esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
+
+# esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
 class OrdenCompraSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenCompra
@@ -25,12 +27,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        #acá obtenemos el usuario de la petición (request).
+        # acá obtenemos el usuario de la petición (request).
         request = self.context.get('request')
         
-        #segunda validacion: Logica de comprador invitado.
+        # segunda validacion: Logica de comprador invitado.
         if not request.user.is_authenticated:
-            #si no hay sesión, el email_invitado es estrictamente obligatorio.
+            # si no hay sesión, el email_invitado es estrictamente obligatorio.
             if not data.get('email_invitado'):
                 raise serializers.ValidationError({"email_invitado": "Debe proporcionar un correo electrónico para comprar como invitado."})
         
@@ -39,10 +41,10 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get('request')
         
-        #si el usuario está autenticado, se asocia a la orden.
+        # si el usuario está autenticado, se asocia a la orden.
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user
-            #opcional: limpiar el email_invitado ya que tenemos el usuario real.
+            # opcional: limpiar el email_invitado ya que tenemos el usuario real.
             validated_data['email_invitado'] = '' 
 
         return super().create(validated_data)

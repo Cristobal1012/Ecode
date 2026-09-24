@@ -20,7 +20,7 @@ class CheckoutAPIView(generics.CreateAPIView):
     permission_classes = [CanCheckout]
 
 
-class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
+class ConfiguracionGlobalAPIView(generics.RetrieveUpdateAPIView):
     serializer_class = ConfiguracionGlobalSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -42,4 +42,3 @@ class DashboardOperativoView(APIView):
             "mensaje": "bienvendo al panel de Control",
             "emprendedor_id": emprendedor_id
         })
-    

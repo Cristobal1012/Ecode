@@ -9,10 +9,18 @@ class ConfiguracionGlobal(models.Model):
     ]
     nombre_tienda = models.CharField(max_length=255)
     tema_seleccionado = models.IntegerField(default=1)
-    logo_url = models.URLField(max_length=500, blank=True, null=True)
-    favicon_url = models.URLField(max_length=500, blank=True, null=True)
+    logo = models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
+    favicon = models.ImageField(upload_to='negocio/favicons/', blank=True, null=True)
     google_analytics_id = models.CharField(max_length=50, blank=True, null=True)
     meta_pixel_id = models.CharField(max_length=50, blank=True, null=True)
+    texto_bienvenida = models.TextField(
+        default='Bienvenido a nuestra tienda',
+    )
+    texto_boton_ingreso = models.CharField(
+        max_length=100,
+        default='Ver Catálogo',
+    )
+    banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(
         max_length=25, 
         choices=MODOS_AUTENTICACION, 

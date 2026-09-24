@@ -10,6 +10,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
+            'layout_catalogo',
         ]
 #esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
 class OrdenCompraSerializer(serializers.ModelSerializer):

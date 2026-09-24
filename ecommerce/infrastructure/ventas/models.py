@@ -9,8 +9,8 @@ class ConfiguracionGlobal(models.Model):
     ]
     nombre_tienda = models.CharField(max_length=255)
     tema_seleccionado = models.IntegerField(default=1)
-    logo_url = models.URLField(max_length=500, blank=True, null=True)
-    favicon_url = models.URLField(max_length=500, blank=True, null=True)
+    logo = models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
+    favicon = models.ImageField(upload_to='negocio/favicons/', blank=True, null=True)
     google_analytics_id = models.CharField(max_length=50, blank=True, null=True)
     meta_pixel_id = models.CharField(max_length=50, blank=True, null=True)
     texto_bienvenida = models.TextField(
@@ -20,14 +20,15 @@ class ConfiguracionGlobal(models.Model):
         max_length=100,
         default='Ver Catálogo',
     )
+    # Campo restaurado para pasar los tests y soportar URL directa del banner
     banner_url = models.URLField(max_length=500, blank=True, null=True)
+    banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(
         max_length=25, 
         choices=MODOS_AUTENTICACION, 
         default='MIXTO'
     )
     
-    #Django utiliza JSONField, que en PostgreSQL se traduce automáticamente como JSONB
     api_keys_pagos = models.JSONField(default=dict, blank=True)
     api_keys_logistica = models.JSONField(default=dict, blank=True)
     layout_catalogo = models.CharField(max_length=50, default="GRID") 
@@ -81,7 +82,6 @@ class OrdenCompra(models.Model):
         ('TRANSFERENCIA', 'Transferencia'),
     ]
 
-    #null=True y blank=True permiten que sea nulo si el usuario compra como invitado
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
@@ -94,8 +94,6 @@ class OrdenCompra(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=50, choices=ESTADOS_PEDIDO, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=50, choices=METODOS_PAGO)
-    
-    #JSONField guarda el Snapshot de la dirección de envío al momento de la compra. Esto es útil si el usuario cambia su dirección después.
     direccion_envio_snapshot = models.JSONField()
 
     id_transaccion_pasarela = models.CharField(max_length=255, blank=True, null=True)

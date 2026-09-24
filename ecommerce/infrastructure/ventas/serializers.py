@@ -9,7 +9,6 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
         fields = [
             'texto_bienvenida',
             'texto_boton_ingreso',
-            'banner',
             'logo',               
             'favicon',
             'tema_seleccionado',

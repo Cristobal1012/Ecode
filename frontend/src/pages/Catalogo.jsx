@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import VariantSelector from '../components/VariantSelector';
+import ProductCardGrid from '../components/ProductCardGrid';
+import ProductCardList from '../components/ProductCardList';
 
 export default function Catalogo() {
   // 2. Estados de la aplicación
@@ -9,6 +11,7 @@ export default function Catalogo() {
   const [filtrosActivos, setFiltrosActivos] = useState({});
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [layoutCatalogo, setLayoutCatalogo] = useState('GRID_3');
+  
   useEffect(() => {
     
     axios.get('http://localhost:8000/catalogo/productos/') 
@@ -25,7 +28,7 @@ export default function Catalogo() {
   axios.get('http://localhost:8000/api/configuracion/')
     .then(response => {
       console.log("Configuración recibida:", response.data);
-      setLayoutCatalogo(response.data.layout_catalogo || 'GRID_3');
+      setLayoutCatalogo(response.data.layout_catalogo);
     })
     .catch(error => {
       console.error("Hubo un error cargando la configuración:", error);
@@ -165,54 +168,21 @@ const obtenerEstiloCatalogo = () => {
       <main style={{ flex: 1 }}>
         <h2>Catálogo</h2>
       <div style={obtenerEstiloCatalogo()}>
-          {productosFiltrados.map(prod => (
-            <div key={prod.id} style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' }}>
-              <h4 style={{ margin: '0 0 10px 0' }}>{prod.nombre}</h4>
-              <button
-                onClick={() => setProductoSeleccionado(prod)}
-                style={{ marginTop: '10px', padding: '8px 12px', cursor: 'pointer'}}>
-                Seleccionar variante
-              </button>
-
-              {prod.atributos_globales &&
-                Object.keys(prod.atributos_globales)
-                  .length > 0 && (
-                  <div
-                    style={{
-                      marginTop: '15px',
-                      padding: '10px',
-                      backgroundColor: '#f9f9f9',
-                      borderRadius: '5px',
-                    }}
-                  >
-                    <strong
-                      style={{ fontSize: '12px' }}
-                    >
-                      Ficha Técnica:
-                    </strong>
-
-                    <ul
-                      style={{
-                        margin: '5px 0 0 0',
-                        paddingLeft: '20px',
-                        fontSize: '13px',
-                      }}
-                    >
-                      {Object.entries(
-                        prod.atributos_globales
-                      ).map(([key, val]) => (
-                        <li key={key}>
-                          <b>
-                            {key.replace('_', ' ')}:
-                          </b>{' '}
-                          {val}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-            </div>
-          ))}
+          {productosFiltrados.map(prod =>
+  layoutCatalogo === 'LISTA' ? (
+    <ProductCardList
+      key={prod.id}
+      producto={prod}
+      onSeleccionarVariante={setProductoSeleccionado}
+    />
+  ) : (
+    <ProductCardGrid
+      key={prod.id}
+      producto={prod}
+      onSeleccionarVariante={setProductoSeleccionado}
+    />
+  )
+)}
         </div>
 
         {productoSeleccionado && (

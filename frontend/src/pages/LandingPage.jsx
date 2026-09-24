@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import clienteAxios from "../components/auth/axiosConfig";
+import { PALETTES } from "../constants/palettes";
 
 const DEFAULT_BANNER = "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
 
@@ -9,11 +10,41 @@ function LandingPage() {
   const [configuracion, setConfiguracion] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Asegurar que las variables de la paleta activa estén sincronizadas al montar la página
+  useEffect(() => {
+    const savedPaletteId = Number(localStorage.getItem("ecommerce_palette")) || 1;
+    const activePalette = PALETTES.find((p) => p.id === savedPaletteId) || PALETTES[0];
+
+    if (activePalette) {
+      const root = document.documentElement;
+      root.style.setProperty("--color-primary", activePalette.colors.primary);
+      root.style.setProperty("--color-secondary", activePalette.colors.secondary);
+      root.style.setProperty("--color-accent", activePalette.colors.accent);
+      root.style.setProperty("--color-background", activePalette.colors.background);
+      root.style.setProperty("--color-text", activePalette.colors.text);
+    }
+  }, []);
+
   useEffect(() => {
     const obtenerConfiguracion = async () => {
       try {
         const response = await clienteAxios.get("/api/configuracion/");
         setConfiguracion(response.data);
+
+        // Si el backend entrega el id de la paleta, sincroniza también con este
+        const paletaId = response.data?.paleta_id || response.data?.paleta;
+        if (paletaId) {
+          const paletaBackend = PALETTES.find((p) => p.id === Number(paletaId));
+          if (paletaBackend) {
+            const root = document.documentElement;
+            root.style.setProperty("--color-primary", paletaBackend.colors.primary);
+            root.style.setProperty("--color-secondary", paletaBackend.colors.secondary);
+            root.style.setProperty("--color-accent", paletaBackend.colors.accent);
+            root.style.setProperty("--color-background", paletaBackend.colors.background);
+            root.style.setProperty("--color-text", paletaBackend.colors.text);
+            localStorage.setItem("ecommerce_palette", paletaBackend.id.toString());
+          }
+        }
       } catch (error) {
         console.error("Error al obtener la configuración:", error);
         setConfiguracion({
@@ -33,7 +64,6 @@ function LandingPage() {
     return <p style={{ textAlign: "center", padding: "2rem" }}>Cargando...</p>;
   }
 
-  // Usa la imagen de la BD si viene; si viene vacía o null, usa el fallback
   const bannerFondo = configuracion?.banner_url?.trim() ? configuracion.banner_url : DEFAULT_BANNER;
 
   return (
@@ -66,7 +96,7 @@ function LandingPage() {
             borderRadius: "8px",
             cursor: "pointer",
             boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
-            transition: "all 0.2s ease"
+            transition: "background-color 0.2s ease"
           }}
         >
           {configuracion?.texto_boton_ingreso || "Ver Catálogo"}

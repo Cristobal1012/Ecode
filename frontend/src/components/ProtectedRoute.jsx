@@ -17,7 +17,7 @@ export default function ProtectedRoute({ allowedRoles }) {
 
         axios.get('http://127.0.0.1:8000/usuarios/me/', {
             headers: {
-                Authorization: `Token ${token}`,
+                Authorization: `Bearer ${token}`,
             },
         })
         .then((respuesta) => {

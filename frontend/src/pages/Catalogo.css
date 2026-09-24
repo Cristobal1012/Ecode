@@ -1,6 +1,7 @@
 .catalogo {
   display: flex;
   flex: 1;
+  width: 100%;
   gap: 30px;
   padding: 20px;
   box-sizing: border-box;
@@ -159,4 +160,10 @@
     border-right: 0;
     border-bottom: 1px solid var(--catalogo-border, #CBD5E1);
   }
+}
+
+.catalogo-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }

@@ -1,9 +1,24 @@
 .header {
   width: 100%;
-  background-color: #1e3a4f;
-  color: white;
+  background-color: #FFFFFF;
+  color: var(--catalogo-text, #0F172A);
   box-sizing: border-box;
+  border-bottom: 1px solid #E2E8F0;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
 }
+
+.header-nav a {
+  color: var(--catalogo-text, #0F172A);
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.header-nav a:hover {
+  color: var(--catalogo-primary, #1D4ED8);
+}
+
 
 .header-content {
   max-width: 1200px;
@@ -29,7 +44,7 @@
 }
 
 .header-nav a {
-  color: white;
+  color: black;
   text-decoration: none;
   font-size: 16px;
   font-weight: 500;

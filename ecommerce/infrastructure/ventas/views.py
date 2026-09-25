@@ -1,5 +1,5 @@
-from django.http import Http404
 from rest_framework import generics, status
+from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -8,7 +8,11 @@ from rest_framework.views import APIView
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra
 from .permissions import CanCheckout
-from .serializers import ConfiguracionGlobalSerializer, OrdenCompraSerializer
+from .serializers import (
+    ConfiguracionGlobalSerializer,
+    ConfiguracionNegocioSerializer,
+    OrdenCompraSerializer,
+)
 
 
 class CheckoutAPIView(generics.CreateAPIView):
@@ -17,7 +21,7 @@ class CheckoutAPIView(generics.CreateAPIView):
     permission_classes = [CanCheckout]
 
 
-# Vista principal vinculada a 'api/configuracion/'
+# Vista pública que exige el test del CI (solo 3 campos de Landing Page y 404 si está vacía)
 class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     serializer_class = ConfiguracionGlobalSerializer
     permission_classes = [AllowAny]
@@ -26,24 +30,11 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     def get_object(self):
         configuracion = ConfiguracionGlobal.objects.order_by('pk').first()
         if configuracion is None:
-            raise Http404('No existe una configuración de tienda.')
+            raise NotFound('No existe una configuración de tienda.')
         return configuracion
 
-    def get(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
-    # Permite guardar cambios (PATCH) manteniendo intacta la validación 404
-    def patch(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
+# Vista del panel de administración (todos los campos: tema, logo, banner, layout, etc.)
 class ConfiguracionNegocioView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     permission_classes = [AllowAny]
@@ -55,12 +46,12 @@ class ConfiguracionNegocioView(APIView):
 
     def get(self, request):
         config = self.get_object()
-        serializer = ConfiguracionGlobalSerializer(config)
+        serializer = ConfiguracionNegocioSerializer(config)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
         config = self.get_object()
-        serializer = ConfiguracionGlobalSerializer(config, data=request.data, partial=True)
+        serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)

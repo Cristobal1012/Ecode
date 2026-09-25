@@ -3,7 +3,11 @@ from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
 from .models import ConfiguracionGlobal, OrdenCompra
 
+
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
+    banner_url = serializers.URLField(required=False, allow_blank=True, default='')
+    texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
+
     class Meta:
         model = ConfiguracionGlobal
         fields = [
@@ -12,68 +16,66 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'banner_url',
             'layout_catalogo',
         ]
-#esto sirve basicamente para recibir los datos del frontend y validarlos antes de crear la orden de compra en la base de datos. (cualquier consulta me preguntan, atte. Emilio)
+
+
 class OrdenCompraSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenCompra
         fields = [
-            'email_invitado', 
-            'metodo_pago', 
-            'direccion_envio_snapshot', 
-            'subtotal', 
-            'costo_envio', 
-            'total_final'
+            'email_invitado',
+            'metodo_pago',
+            'direccion_envio_snapshot',
+            'subtotal',
+            'costo_envio',
+            'total_final',
         ]
 
     def validate(self, data):
-        #acá obtenemos el usuario de la petición (request).
         request = self.context.get('request')
         
-        #segunda validacion: Logica de comprador invitado.
-        if not request.user.is_authenticated:
-            #si no hay sesión, el email_invitado es estrictamente obligatorio.
+        # Logica de comprador invitado: estricto si no esta autenticado
+        if not request or not request.user.is_authenticated:
             if not data.get('email_invitado'):
-                raise serializers.ValidationError({"email_invitado": "Debe proporcionar un correo electrónico para comprar como invitado."})
+                raise serializers.ValidationError(
+                    {"email_invitado": "Debe proporcionar un correo electronico para comprar como invitado."}
+                )
         
         return data
 
     def create(self, validated_data):
         request = self.context.get('request')
         
-        #si el usuario está autenticado, se asocia a la orden.
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user
-            #opcional: limpiar el email_invitado ya que tenemos el usuario real.
-            validated_data['email_invitado'] = '' 
+            validated_data['email_invitado'] = ''
 
         return super().create(validated_data)
+
 
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)
-    cantidad = serializers.IntegerField(default=1)
+    cantidad = serializers.IntegerField(default=1, min_value=1)
 
     def validate(self, data):
         producto_id = data.get('producto_mongo_id')
         sku = data.get('variante_sku')
         cantidad_solicitada = data.get('cantidad', 1)
 
-        # 1. Buscar el producto usando MongoEngine
+        # 1. Buscar el producto en MongoEngine
         try:
-            # objects(id=...) maneja el ObjectId automáticamente
             producto = Producto.objects(id=producto_id).first()
         except MongoValidationError:
             raise serializers.ValidationError(
-                {"producto_mongo_id": "El formato del ID del producto no es válido."}
+                {"producto_mongo_id": "El formato del ID del producto no es valido."}
             )
 
         if not producto:
             raise serializers.ValidationError(
-                {"producto_mongo_id": "El producto solicitado no existe en el catálogo."}
+                {"producto_mongo_id": "El producto solicitado no existe en el catalogo."}
             )
 
-        # 2. Filtrar la variante específica dentro del EmbeddedDocumentList
-        # MongoEngine permite usar .filter() directamente en la lista embebida
+        # 2. Filtrar variante especifica
         variante_encontrada = producto.variantes.filter(sku=sku).first()
 
         if not variante_encontrada:
@@ -81,7 +83,7 @@ class AgregarItemSerializer(serializers.Serializer):
                 {"variante_sku": "La variante especificada no existe para este producto."}
             )
 
-        # 3. La validación crucial de STOCK
+        # 3. Validacion de stock
         stock_disponible = variante_encontrada.stock
 
         if stock_disponible <= 0:

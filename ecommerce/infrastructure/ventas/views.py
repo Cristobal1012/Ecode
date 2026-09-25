@@ -42,7 +42,7 @@ class DashboardOperativoView(APIView):
             "mensaje": "bienvendo al panel de Control",
             "emprendedor_id": emprendedor_id
         })
-
+#para el pr
 class ConfiguracionNegocioView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 

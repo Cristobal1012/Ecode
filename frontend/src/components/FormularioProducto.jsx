@@ -3,7 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 
 export default function FormularioProducto({ alCancelar, alGuardar, productoAEditar }) {
   const [producto, setProducto] = useState({
-    nombre: '', descripcion: '', categoria: '', imagen: '' 
+    nombre: '', descripcion: '', categoria: '', imagen: '' , publicado: false
   });
   const [atributosGlobales, setAtributosGlobales] = useState([]);
   const [variantes, setVariantes] = useState([
@@ -22,7 +22,8 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
         nombre: productoAEditar.nombre || '',
         descripcion: productoAEditar.descripcion || '',
         categoria: productoAEditar.categoria || '',
-        imagen: productoAEditar.imagenes && productoAEditar.imagenes.length > 0 ? productoAEditar.imagenes[0] : ''
+        imagen: productoAEditar.imagenes && productoAEditar.imagenes.length > 0 ? productoAEditar.imagenes[0] : '',
+        publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false
       });
 
       // Desarmar diccionario de atributos globales a array
@@ -119,9 +120,14 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     });
 
     const payload = {
-      nombre: producto.nombre, descripcion: producto.descripcion, categoria: producto.categoria.trim(),
-      imagenes: producto.imagen ? [producto.imagen] : [], activo: true,
-      atributos_globales: objAtributosGlobales, variantes: payloadVariantes 
+      nombre: producto.nombre, 
+      descripcion: producto.descripcion, 
+      categoria: producto.categoria.trim(),
+      imagenes: producto.imagen ? [producto.imagen] : [], 
+      activo: true,
+      publicado: producto.publicado,
+      atributos_globales: objAtributosGlobales, 
+      variantes: payloadVariantes 
     };
 
     try {
@@ -251,7 +257,31 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
           </div>
         </div>
       ))}
-
+{/* NUEVO: INTERRUPTOR DE PUBLICACIÓN */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: producto.publicado ? '#ecfdf5' : '#f3f4f6', borderRadius: '8px', border: `1px solid ${producto.publicado ? '#10b981' : '#d1d5db'}`, marginTop: '20px' }}>
+        <div>
+          <strong style={{ color: producto.publicado ? '#065f46' : 'var(--color-text)', display: 'block', fontSize: '1.1em' }}>
+            {producto.publicado ? 'Ojo: Este producto será visible en la tienda.' : 'Producto en modo Borrador.'}
+          </strong>
+          <span style={{ fontSize: '0.85em', color: '#6b7280' }}>
+            {producto.publicado ? 'Los clientes podrán verlo y comprarlo inmediatamente.' : 'Solo tú puedes verlo. Actívalo cuando esté listo para la venta.'}
+          </span>
+        </div>
+        
+        {/* Toggle / Checkbox estilizado */}
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '10px' }}>
+          <span style={{ fontWeight: 'bold', color: producto.publicado ? '#10b981' : '#9ca3af' }}>
+            {producto.publicado ? 'PUBLICADO' : 'OCULTO'}
+          </span>
+          <input 
+            type="checkbox" 
+            checked={producto.publicado} 
+            onChange={(e) => setProducto({...producto, publicado: e.target.checked})}
+            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+          />
+        </label>
+      </div>
+      
       <button type="submit" disabled={cargando} style={{ width: '100%', padding: '15px', backgroundColor: 'var(--color-primary)', color: '#ffffff', fontSize: '1.1em', fontWeight: 'bold', border: 'none', borderRadius: '4px', cursor: cargando ? 'not-allowed' : 'pointer', marginTop: '20px' }}>
         {cargando ? 'Procesando...' : (productoAEditar ? 'Guardar Cambios' : 'Crear Producto')}
       </button>

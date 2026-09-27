@@ -16,6 +16,7 @@ class Producto(Document):
     imagenes = fields.ListField(fields.StringField(), default=list)
     fecha_creacion = fields.DateTimeField(required=True)
     activo = fields.BooleanField(default=True)
+    publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
     
     #relación de 1 a N embebida dentro del mismo documento

@@ -1,6 +1,11 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function ProductCardList({ producto, onSeleccionarVariante }) {
+export default function ProductCardList({ producto }) {
+  const navigate = useNavigate();
+  const id = producto.id || producto._id;
+  const imagenPrincipal = producto.imagenes && producto.imagenes.length > 0 ? producto.imagenes[0] : null;
+
   return (
     <div
       style={{
@@ -12,55 +17,50 @@ export default function ProductCardList({ producto, onSeleccionarVariante }) {
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: '20px',
+        backgroundColor: '#fff'
       }}
     >
-      <div>
-        <h4 style={{ margin: '0 0 10px 0' }}>
-          {producto.nombre}
-        </h4>
+      <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+        {imagenPrincipal && (
+          <img 
+            src={imagenPrincipal} 
+            alt={producto.nombre} 
+            style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px' }}
+          />
+        )}
+        <div>
+          <h4 style={{ margin: '0 0 5px 0', color: 'var(--color-primary)' }}>
+            {producto.nombre}
+          </h4>
+          <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 8px 0' }}>
+            Categoría: {producto.categoria}
+          </p>
 
-        {producto.atributos_globales &&
-          Object.keys(producto.atributos_globales).length > 0 && (
-            <div
-              style={{
-                padding: '10px',
-                backgroundColor: '#f9f9f9',
-                borderRadius: '5px',
-              }}
-            >
-              <strong style={{ fontSize: '12px' }}>
-                Ficha Técnica:
-              </strong>
-
-              <ul
-                style={{
-                  margin: '5px 0 0 0',
-                  paddingLeft: '20px',
-                  fontSize: '13px',
-                }}
-              >
-                {Object.entries(producto.atributos_globales).map(
-                  ([key, val]) => (
-                    <li key={key}>
-                      <b>{key.replace('_', ' ')}:</b>{' '}
-                      {val}
-                    </li>
-                  )
-                )}
-              </ul>
-            </div>
-          )}
+          {producto.atributos_globales &&
+            Object.keys(producto.atributos_globales).length > 0 && (
+              <span style={{ fontSize: '12px', color: '#555' }}>
+                {Object.entries(producto.atributos_globales)
+                  .map(([key, val]) => `${key.replace('_', ' ')}: ${val}`)
+                  .join(' | ')}
+              </span>
+            )}
+        </div>
       </div>
 
       <button
-        onClick={() => onSeleccionarVariante(producto)}
+        onClick={() => navigate(`/catalogo/producto/${id}`)}
         style={{
-          padding: '8px 12px',
+          padding: '10px 16px',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
+          backgroundColor: 'var(--color-secondary)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '4px',
+          fontWeight: 'bold'
         }}
       >
-        Seleccionar variante
+        Ver producto
       </button>
     </div>
   );

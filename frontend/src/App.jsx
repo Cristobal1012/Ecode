@@ -11,6 +11,7 @@ import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
 import { PALETTES } from './constants/palettes';
+import DetalleProducto from './pages/DetalleProducto';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -97,7 +98,7 @@ function App() {
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/variantes" element={<VariantSelector />} />
           <Route path="/catalogo" element={<Catalogo />} />
-
+          <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />
 

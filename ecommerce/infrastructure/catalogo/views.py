@@ -1,13 +1,16 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny # NUEVO: Importamos AllowAny para acceso público
 from .documents import Producto
 from .serializers import ProductoSerializer
 
 class ProductoListCreateView(APIView):
+    permission_classes = [AllowAny] # NUEVO: Permite que usuarios sin sesión puedan ver el catálogo
+
     def get(self, request):
-        # CAMBIO 1: Traemos SOLO los productos que están activos
-        productos = Producto.objects.filter(activo=True)
+        # CAMBIO: Filtramos para traer solo los activos Y publicados
+        productos = Producto.objects.filter(activo=True, publicado=True)
         serializer = ProductoSerializer(productos, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -19,6 +22,8 @@ class ProductoListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProductoDetailView(APIView):
+    permission_classes = [AllowAny] # NUEVO: Permitimos ver el detalle de un producto sin estar logueado
+
     def get_object(self, id):
         try:
             return Producto.objects.get(id=id)
@@ -45,13 +50,11 @@ class ProductoDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # CAMBIO 2: Agregamos el método PATCH para el borrado lógico (actualización parcial)
     def patch(self, request, id):
         producto = self.get_object(id)
         if not producto:
             return Response({"error": "Producto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
         
-        # El partial=True le dice a Django que es válido recibir solo un campo (ej: activo: false)
         serializer = ProductoSerializer(producto, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()

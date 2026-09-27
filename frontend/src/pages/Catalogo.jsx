@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
-// Eliminamos el import viejo de '../theme/paletas'
 import { PALETTES } from '../constants/palettes';
 import VariantSelector from '../components/VariantSelector';
 import Header from '../components/header/header';
@@ -8,7 +7,6 @@ import ProductCardGrid from '../components/ProductCardGrid';
 import ProductCardList from '../components/ProductCardList';
 import './Catalogo.css';
 
-// Definimos el tema predeterminado como 1 (el primero de tus PALETTES nuevos)
 const TEMA_PREDETERMINADO = 1;
 
 function obtenerAtributos(producto) {
@@ -36,29 +34,26 @@ export default function Catalogo() {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [layoutCatalogo, setLayoutCatalogo] = useState('GRID_3');
 
-  // APLICAR COLORES: Ahora usamos ÚNICAMENTE la paleta del Administrador
+  // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
     const activePalette = PALETTES.find((p) => p.id === temaConfigurado) || PALETTES[0];
     const root = document.documentElement.style;
 
     if (activePalette) {
-      // 1. Inyectamos las variables globales que usa el Admin
       root.setProperty('--color-primary', activePalette.colors.primary);
       root.setProperty('--color-secondary', activePalette.colors.secondary);
       root.setProperty('--color-accent', activePalette.colors.accent);
       root.setProperty('--color-background', activePalette.colors.background);
       root.setProperty('--color-text', activePalette.colors.text);
 
-      // 2. Puenteamos los colores a las variables antiguas que usa Catalogo.css
       root.setProperty('--catalogo-primary', activePalette.colors.primary);
       root.setProperty('--catalogo-background', activePalette.colors.background);
       root.setProperty('--catalogo-text', activePalette.colors.text);
       
-      // Colores de contraste genéricos para mantener la interfaz limpia
-      root.setProperty('--catalogo-on-primary', '#ffffff'); // Letras blancas sobre botones
-      root.setProperty('--catalogo-surface', '#ffffff');    // Fondo blanco para tarjetas
-      root.setProperty('--catalogo-muted-text', '#6b7280'); // Textos secundarios en gris
-      root.setProperty('--catalogo-border', '#e5e7eb');     // Bordes en gris claro
+      root.setProperty('--catalogo-on-primary', '#ffffff');
+      root.setProperty('--catalogo-surface', '#ffffff');
+      root.setProperty('--catalogo-muted-text', '#6b7280');
+      root.setProperty('--catalogo-border', '#e5e7eb');
     }
   }, [temaConfigurado]);
 
@@ -91,15 +86,19 @@ export default function Catalogo() {
         }
       });
 
-    // Traer productos
+    // Traer productos y filtrar SOLO los que están publicados y activos para la tienda
     clienteAxios
       .get('catalogo/productos/', { signal: controller.signal })
       .then(({ data }) => {
-        setProductos(
-          Array.isArray(data)
-            ? data.filter((producto) => producto && typeof producto === 'object')
-            : []
+        const listaProductos = Array.isArray(data) ? data : [];
+        
+        // MODIFICACIÓN: Filtramos para que en la tienda pública solo aparezcan 
+        // los productos activos Y que tengan publicado: true
+        const productosPublicados = listaProductos.filter(
+          (producto) => producto && typeof producto === 'object' && producto.activo !== false && producto.publicado === true
         );
+
+        setProductos(productosPublicados);
       })
       .catch((error) => {
         if (error.name !== 'CanceledError' && error.code !== 'ERR_CANCELED') {

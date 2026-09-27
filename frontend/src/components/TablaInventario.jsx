@@ -54,17 +54,12 @@ export default function TablaInventario({ onEditarProducto }) {
     cargarProductos();
   }, []);
 
-const eliminarProducto = async (id) => {
+  const eliminarProducto = async (id) => {
     if (!window.confirm('¿Estás seguro de que deseas desactivar este producto? (Se ocultará de la tienda pero se mantendrá en el historial)')) return;
     
     try {
-      // 1. Usamos PATCH en lugar de DELETE para hacer una actualización parcial
-      // 2. Enviamos el campo activo: false
       await clienteAxios.patch(`catalogo/productos/${id}/`, { activo: false });
-      
-      // 3. Lo quitamos visualmente de la tabla actual
       setProductos(productos.filter((p) => (p.id || p._id) !== id));
-      
     } catch (err) {
       console.error('Error al desactivar el producto:', err);
       alert('Hubo un error al intentar desactivar el producto.');
@@ -188,7 +183,17 @@ const eliminarProducto = async (id) => {
                         )}
                       </td>
                       <td style={{ padding: '15px', color: 'var(--color-text)', fontWeight: 'bold' }}>
-                        {producto.nombre}
+                        {/* NUEVO: Contenedor con la etiqueta visual del estado de publicación */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {producto.nombre}
+                          <span style={{ 
+                            backgroundColor: producto.publicado ? '#dcfce3' : '#f3f4f6', 
+                            color: producto.publicado ? '#166534' : '#4b5563', 
+                            padding: '2px 8px', borderRadius: '12px', fontSize: '0.75em', fontWeight: 'bold' 
+                          }}>
+                            {producto.publicado ? 'Publicado' : 'Borrador'}
+                          </span>
+                        </div>
                         <div style={{ fontSize: '0.8em', color: '#6b7280', fontWeight: 'normal', marginTop: '4px' }}>
                           {producto.variantes?.length || 0} variante(s)
                         </div>

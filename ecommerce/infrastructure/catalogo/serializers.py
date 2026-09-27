@@ -20,6 +20,7 @@ class ProductoSerializer(serializers.Serializer):
     fecha_creacion = serializers.DateTimeField(read_only=True) 
     
     activo = serializers.BooleanField(default=True)
+    publicado = serializers.BooleanField(default=False)
     atributos_globales = serializers.DictField(required=False, default=dict)
     
     variantes = VarianteSerializer(many=True, required=False)

@@ -60,10 +60,9 @@ function LandingPage() {
     const obtenerConfiguracion =
       async () => {
         try {
-          const response =
-            await clienteAxios.get(
-              "/api/configuracion/"
-            );
+          const response = await clienteAxios.get(
+            "configuracion/"
+          );
 
           setConfiguracion(response.data);
 

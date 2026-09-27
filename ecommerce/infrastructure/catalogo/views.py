@@ -1,16 +1,17 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny # NUEVO: Importamos AllowAny para acceso público
+from rest_framework.permissions import AllowAny
 from .documents import Producto
 from .serializers import ProductoSerializer
 
 class ProductoListCreateView(APIView):
-    permission_classes = [AllowAny] # NUEVO: Permite que usuarios sin sesión puedan ver el catálogo
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        # CAMBIO: Filtramos para traer solo los activos Y publicados
-        productos = Producto.objects.filter(activo=True, publicado=True)
+        # CAMBIO: Devolvemos todos los productos activos (incluyendo borradores y publicados) 
+        # para que el panel de administración los muestre en la tabla de inventario.
+        productos = Producto.objects.filter(activo=True)
         serializer = ProductoSerializer(productos, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -22,7 +23,7 @@ class ProductoListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProductoDetailView(APIView):
-    permission_classes = [AllowAny] # NUEVO: Permitimos ver el detalle de un producto sin estar logueado
+    permission_classes = [AllowAny]
 
     def get_object(self, id):
         try:

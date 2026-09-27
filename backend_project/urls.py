@@ -33,9 +33,9 @@ def bienvenida_api(request):
 
 urlpatterns = [
     path('', bienvenida_api, name='bienvenida_api'),
-    path('', include(configuracion_urlpatterns)),
+    path('api/configuracion/', include(configuracion_urlpatterns)),
     path('admin/', admin.site.urls),
-    path('usuarios/', include(usuarios_urlpatterns)),
-    path('ventas/', include(ventas_urlpatterns)),
-    path('catalogo/', include(catalogo_urlpatterns)),
-    ]
+    path('api/usuarios/', include(usuarios_urlpatterns)),
+    path('api/ventas/', include(ventas_urlpatterns)),
+    path('api/catalogo/', include(catalogo_urlpatterns)),
+]

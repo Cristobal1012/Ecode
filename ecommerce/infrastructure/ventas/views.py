@@ -21,14 +21,14 @@ class CheckoutAPIView(generics.CreateAPIView):
     permission_classes = [CanCheckout]
 
 
-# Vista pública que exige el test del CI (solo 3 campos de Landing Page y 404 si está vacía)
 class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     serializer_class = ConfiguracionGlobalSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get_object(self):
-        configuracion = ConfiguracionGlobal.objects.order_by('pk').first()
+        # CAMBIO AQUÍ: Obligamos a que lea el id=1 exacto que modifica el admin
+        configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
         if configuracion is None:
             raise NotFound('No existe una configuración de tienda.')
         return configuracion

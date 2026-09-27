@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login({ onSwitchToRegister }) {
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -17,35 +19,50 @@ export default function Login({ onSwitchToRegister }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // Simulación para cuando este configurado el backend.
         try {
-            console.log("Enviando petición a la ruta: http://localhost:8000/api/login/");
+            // 1. Obtenemos los tokens y el interceptor los guarda
+            await clienteAxios.post('usuarios/token/', formData);
             
-            const respuesta = await clienteAxios.post('usuarios/token/', formData);
-            console.log("Respuesta del servidor:", respuesta.data);
+            // 2. Inmediatamente consultamos el rol del usuario
+            const respuestaPerfil = await clienteAxios.get('usuarios/me/');
+            const rolUsuario = respuestaPerfil.data.rol;
+
             alert("¡Login exitoso!");
+
+            // 3. Redirección bifurcada según el rol
+            if (rolUsuario === 'ADMIN') {
+                navigate('/admin');
+            } else {
+                navigate('/catalogo');
+            }
+
         } catch (error) {
-            // Como el backend no está listo, la petición caerá aquí. 
             console.error("Axios interceptó un error:", error);
-            alert("Axios disparó la petición, pero el servidor no respondió (esperando al backend).");
+            alert("Error al iniciar sesión. Verifica tus credenciales.");
         }
     };
 
     const handleGoogleSuccess = async (credentialResponse) => {
-        // El token viene en credentialResponse.credential
         const googleToken = credentialResponse.credential;
-        console.log("Token de Google obtenido:", googleToken);
-
+        
         try {
-            console.log("Enviando token de Google al backend...");
             // Ajustar ruta ('google-login/') según el backend
-            const respuesta = await clienteAxios.post('google-login/', { token: googleToken });
+            await clienteAxios.post('google-login/', { token: googleToken });
             
-            console.log("Respuesta del servidor:", respuesta.data);
+            // Consultamos el perfil para saber a dónde mandarlo
+            const respuestaPerfil = await clienteAxios.get('usuarios/me/');
+            const rolUsuario = respuestaPerfil.data.rol;
+
             alert("¡Inicio de sesión con Google exitoso!");
+            
+            if (rolUsuario === 'ADMIN') {
+                navigate('/admin');
+            } else {
+                navigate('/catalogo');
+            }
         } catch (error) {
             console.error("Axios interceptó un error con Google:", error);
-            alert("Petición enviada, pero el backend de Google aún no está configurado.");
+            alert("No se pudo completar el acceso con Google.");
         }
     };
 
@@ -57,7 +74,6 @@ export default function Login({ onSwitchToRegister }) {
     return (
         <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', fontFamily: 'sans-serif' }}>
             <h2 style={{ textAlign: 'center' }}>Iniciar Sesión</h2>
-            
             
             <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: '15px' }}>
@@ -87,12 +103,10 @@ export default function Login({ onSwitchToRegister }) {
                 </button>
             </form>
 
-            
             <div style={{ margin: '20px 0', textAlign: 'center', color: '#888', fontSize: '14px' }}>
                 O ingresa con
             </div>
 
-            
             <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <GoogleLogin
                     onSuccess={handleGoogleSuccess}
@@ -108,7 +122,6 @@ export default function Login({ onSwitchToRegister }) {
                     ¿No tienes cuenta? Regístrate aquí
                 </button>
             </div>
-
         </div>
     );
 }

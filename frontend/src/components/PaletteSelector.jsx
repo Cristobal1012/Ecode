@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import clienteAxios from "./auth/axiosConfig";
 import { PALETTES } from '../constants/palettes';
 
 const applyColorsToRoot = (colors) => {
+  // ... tu función se mantiene igual
   if (!colors) return;
   const root = document.documentElement;
   root.style.setProperty('--color-primary', colors.primary);
@@ -13,8 +14,8 @@ const applyColorsToRoot = (colors) => {
 };
 
 export default function PaletteSelector() {
-  // Inicialización síncrona sin parpadeos
   const [selectedId, setSelectedId] = useState(() => {
+     // ... tu estado inicial se mantiene igual
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     const initialPalette = PALETTES.find((p) => p.id === initialId) || PALETTES[0];
@@ -25,11 +26,12 @@ export default function PaletteSelector() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  // Sincronizar selección actual con Django al montar
+  // 1. fetchTema LIMPIO usando clienteAxios
   useEffect(() => {
     const fetchTema = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/configuracion/');
+        // Tu cliente ya tiene el baseURL http://localhost:8000/api/
+        const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
         if (config && config.tema_seleccionado !== undefined) {
           const temaId = Number(config.tema_seleccionado);
@@ -47,36 +49,26 @@ export default function PaletteSelector() {
   }, []);
 
   const handleSelect = (palette) => {
+      // ... se mantiene igual
     setSelectedId(palette.id);
     applyColorsToRoot(palette.colors);
-
-    // 1. Guarda de inmediato en localStorage para activar el evento 'storage' en la otra pestaña
     localStorage.setItem('ecommerce_palette', palette.id.toString());
-
-    // 2. Notifica a componentes dentro de la misma pestaña
     window.dispatchEvent(
       new CustomEvent('themeChanged', { detail: { temaId: palette.id } })
     );
   };
 
+  // 2. handleSave LIMPIO usando clienteAxios
   const handleSave = async () => {
     setLoading(true);
     setFeedback(null);
-    const token = localStorage.getItem('access_token');
+    // Ya no necesitas sacar el token a mano ni armar los headers, Axios lo hace por ti
 
     try {
-      await axios.patch(
-        'http://127.0.0.1:8000/api/configuracion/',
-        { tema_seleccionado: String(selectedId) },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        }
-      );
+      await clienteAxios.patch('configuracion/negocio/', { 
+        tema_seleccionado: String(selectedId) 
+      });
 
-      // Asegurar sincronización en localStorage y emitir eventos
       localStorage.setItem('ecommerce_palette', selectedId.toString());
       setFeedback({ type: 'success', message: 'Configuración guardada exitosamente en el servidor.' });
 

@@ -113,10 +113,14 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
+            # ¡Agregamos estos dos para que el catálogo pueda leerlos!
+            'tema_seleccionado', 
+            'layout_catalogo',
         ]
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
+    # Este se queda exactamente igual, está perfecto.
     class Meta:
         model = ConfiguracionGlobal
         fields = [

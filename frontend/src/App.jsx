@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import axios from 'axios';
-
+import clienteAxios from './components/auth/axiosConfig';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
@@ -53,7 +52,7 @@ function App() {
     // 2. Consulta a Django para sincronizar con la base de datos
     const syncTheme = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/configuracion/');
+        const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
         if (config && config.tema_seleccionado !== undefined) {
           const serverId = Number(config.tema_seleccionado);

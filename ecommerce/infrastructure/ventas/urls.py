@@ -1,19 +1,22 @@
 from django.urls import path
 from . import views
 
+# Todo lo que esté aquí, Django le pondrá '/api/configuracion/' antes
 configuracion_urlpatterns = [
-    path(
-        'api/configuracion/',
-        views.ConfiguracionGlobalAPIView.as_view(),
-        name='configuracion-global',
-    ),
+    # Ruta resultante: GET /api/configuracion/ (Pública)
+    path('', views.ConfiguracionGlobalAPIView.as_view(), name='configuracion-global'),
+    
+    # Ruta resultante: GET/PATCH /api/configuracion/negocio/ (Administrador)
+    path('negocio/', views.ConfiguracionNegocioView.as_view(), name='configuracion-negocio'),
 ]
 
+# Todo lo que esté aquí, Django le pondrá '/api/ventas/' antes
 ventas_urlpatterns = [
-    path('api/checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
-    path('api/dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
-    path('api/configuracion/negocio/', views.ConfiguracionNegocioView.as_view(), name='configuracion-negocio'),
+    # Ruta resultante: POST /api/ventas/checkout/
+    path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
+    
+    # Ruta resultante: GET /api/ventas/dashboard/
+    path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
 ]
 
-# Unión de rutas para que Django las registre todas
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

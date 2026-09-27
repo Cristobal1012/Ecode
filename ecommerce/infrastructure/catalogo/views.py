@@ -6,7 +6,8 @@ from .serializers import ProductoSerializer
 
 class ProductoListCreateView(APIView):
     def get(self, request):
-        productos = Producto.objects.all()
+        # CAMBIO 1: Traemos SOLO los productos que están activos
+        productos = Producto.objects.filter(activo=True)
         serializer = ProductoSerializer(productos, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -39,6 +40,19 @@ class ProductoDetailView(APIView):
             return Response({"error": "Producto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
         
         serializer = ProductoSerializer(producto, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # CAMBIO 2: Agregamos el método PATCH para el borrado lógico (actualización parcial)
+    def patch(self, request, id):
+        producto = self.get_object(id)
+        if not producto:
+            return Response({"error": "Producto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # El partial=True le dice a Django que es válido recibir solo un campo (ej: activo: false)
+        serializer = ProductoSerializer(producto, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)

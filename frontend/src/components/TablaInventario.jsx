@@ -54,14 +54,20 @@ export default function TablaInventario({ onEditarProducto }) {
     cargarProductos();
   }, []);
 
-  const eliminarProducto = async (id) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este producto por completo (incluyendo todas sus variantes)?')) return;
+const eliminarProducto = async (id) => {
+    if (!window.confirm('¿Estás seguro de que deseas desactivar este producto? (Se ocultará de la tienda pero se mantendrá en el historial)')) return;
+    
     try {
-      await clienteAxios.delete(`catalogo/productos/${id}/`);
+      // 1. Usamos PATCH en lugar de DELETE para hacer una actualización parcial
+      // 2. Enviamos el campo activo: false
+      await clienteAxios.patch(`catalogo/productos/${id}/`, { activo: false });
+      
+      // 3. Lo quitamos visualmente de la tabla actual
       setProductos(productos.filter((p) => (p.id || p._id) !== id));
+      
     } catch (err) {
-      console.error('Error al eliminar:', err);
-      alert('Hubo un error al eliminar el producto.');
+      console.error('Error al desactivar el producto:', err);
+      alert('Hubo un error al intentar desactivar el producto.');
     }
   };
 

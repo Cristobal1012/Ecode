@@ -1,3 +1,4 @@
+import datetime
 from rest_framework import serializers
 from .documents import Producto, Variante
 
@@ -14,7 +15,10 @@ class ProductoSerializer(serializers.Serializer):
     descripcion = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     categoria = serializers.CharField()
     imagenes = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-    fecha_creacion = serializers.DateTimeField()
+    
+    # 1. CAMBIO: Añadimos read_only=True para que no bloquee la petición
+    fecha_creacion = serializers.DateTimeField(read_only=True) 
+    
     activo = serializers.BooleanField(default=True)
     atributos_globales = serializers.DictField(required=False, default=dict)
     
@@ -22,6 +26,10 @@ class ProductoSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         variantes_data = validated_data.pop('variantes', [])
+        
+        # 2. CAMBIO: Asignamos la fecha y hora exacta del servidor
+        validated_data['fecha_creacion'] = datetime.datetime.now()
+        
         producto = Producto(**validated_data)
         
         producto.variantes = [Variante(**v_data) for v_data in variantes_data]

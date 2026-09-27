@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // 1. Importamos useNavigate
+import { useNavigate } from 'react-router-dom';
 import PaletteSelector from '../components/PaletteSelector';
 import clienteAxios from '../components/auth/axiosConfig'; 
 import { PALETTES } from '../constants/palettes';
+import FormularioProducto from '../components/FormularioProducto';
+import TablaInventario from '../components/TablaInventario';
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
-  const navigate = useNavigate(); // 2. Inicializamos el hook de navegación
+  const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
+  
+  // NUEVO ESTADO: Almacena el producto seleccionado para edición
+  const [productoAEditar, setProductoAEditar] = useState(null); 
+  
+  const navigate = useNavigate();
 
   useEffect(() => {
     const savedPaletteId = Number(localStorage.getItem('ecommerce_palette')) || 1;
@@ -63,8 +70,48 @@ export default function Admin() {
       case 'inventario':
         return (
           <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Inventario</h2>
-            <p style={{ color: 'var(--color-text)' }}>Aquí estará la tabla para crear, editar y eliminar productos.</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--color-primary)', margin: 0 }}>Inventario</h2>
+              {/* Ocultamos el botón de agregar si estamos editando o creando */}
+              {!mostrandoFormulario && !productoAEditar && (
+                <button 
+                  onClick={() => setMostrandoFormulario(true)}
+                  style={{ 
+                    padding: '10px 20px', 
+                    backgroundColor: 'var(--color-accent)', 
+                    color: '#fff', 
+                    border: 'none', 
+                    borderRadius: '4px', 
+                    cursor: 'pointer', 
+                    fontWeight: 'bold',
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseOver={(e) => e.target.style.opacity = '0.9'}
+                  onMouseOut={(e) => e.target.style.opacity = '1'}
+                >
+                  + Agregar Producto
+                </button>
+              )}
+            </div>
+
+            {/* Muestra el formulario tanto si se presionó '+ Agregar Producto' como si hay un producto seleccionado para editar */}
+            {mostrandoFormulario || productoAEditar ? (
+              <FormularioProducto 
+                productoAEditar={productoAEditar} // Pasa los datos (null si es creación)
+                alCancelar={() => {
+                  setMostrandoFormulario(false);
+                  setProductoAEditar(null); // Limpiamos al cancelar
+                }} 
+                alGuardar={() => {
+                  setMostrandoFormulario(false);
+                  setProductoAEditar(null); // Limpiamos al guardar con éxito
+                }} 
+              />
+            ) : (
+              <TablaInventario 
+                onEditarProducto={(producto) => setProductoAEditar(producto)} // Define qué producto editar
+              /> 
+            )}
           </div>
         );
       case 'ventas':
@@ -112,9 +159,12 @@ export default function Admin() {
           <button onClick={() => setVistaActiva('dashboard')} style={getEstiloBoton(vistaActiva === 'dashboard')}>
             Dashboard
           </button>
-          <button onClick={() => setVistaActiva('inventario')} style={getEstiloBoton(vistaActiva === 'inventario')}>
+          
+          {/* Limpiamos el estado de edición si el usuario cambia de pestaña */}
+          <button onClick={() => { setVistaActiva('inventario'); setMostrandoFormulario(false); setProductoAEditar(null); }} style={getEstiloBoton(vistaActiva === 'inventario')}>
             Inventario
           </button>
+          
           <button onClick={() => setVistaActiva('ventas')} style={getEstiloBoton(vistaActiva === 'ventas')}>
             Ventas
           </button>
@@ -122,10 +172,8 @@ export default function Admin() {
             Configuración
           </button>
 
-          {/* 3. Separador visual sutil */}
           <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', margin: '15px 20px' }}></div>
 
-          {/* 4. Botón de navegación externa al catálogo */}
           <button 
             onClick={() => navigate('/catalogo')} 
             style={{...getEstiloBoton(false), display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}

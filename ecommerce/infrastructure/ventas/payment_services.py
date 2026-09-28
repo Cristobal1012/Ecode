@@ -1,0 +1,66 @@
+from abc import ABC, abstractmethod
+
+#PUERTO de Interface
+class PuertoPasarelaPago(ABC):
+    @abstractmethod
+    def inicializar_conexion(self):
+        pass
+
+    @abstractmethod
+    def generar_link_pago(self, monto, orden_id):
+        pass
+
+
+#ADAPTADORES
+class TransbankAdapter(PuertoPasarelaPago):
+    def __init__(self, api_keys_pagos):
+        credenciales = api_keys_pagos.get('TRANSBANK', {})
+        self.commerce_code = credenciales.get('commerce_code')
+        self.api_key_secret = credenciales.get('api_key_secret')
+        self.ambiente = credenciales.get('ambiente', 'integracion')
+
+    def inicializar_conexion(self):
+        pass
+
+    def generar_link_pago(self, monto, orden_id):
+        return f"https://webpay.transbank.cl/pago?orden={orden_id}&monto={monto}"
+
+
+class MercadoPagoAdapter(PuertoPasarelaPago):
+    def __init__(self, api_keys_pagos):
+        credenciales = api_keys_pagos.get('MERCADO_PAGO', {})
+        self.access_token = credenciales.get('access_token')
+        self.public_key = credenciales.get('public_key')
+
+    def inicializar_conexion(self):
+        pass
+
+    def generar_link_pago(self, monto, orden_id):
+        return f"https://mercadopago.cl/checkout?pref_id={orden_id}"
+
+
+class PayPalAdapter(PuertoPasarelaPago):
+    def __init__(self, api_keys_pagos):
+        credenciales = api_keys_pagos.get('PAYPAL', {})
+        self.client_id = credenciales.get('client_id')
+        self.secret = credenciales.get('secret')
+        self.modo = credenciales.get('modo', 'sandbox')
+
+    def inicializar_conexion(self):
+        pass
+
+    def generar_link_pago(self, monto, orden_id):
+        return f"https://paypal.com/checkout?token={orden_id}"
+
+
+class LinkifyAdapter(PuertoPasarelaPago):
+    def __init__(self, api_keys_pagos):
+        credenciales = api_keys_pagos.get('LINKIFY', {})
+        self.api_key = credenciales.get('api_key')
+        self.webhook_secret = credenciales.get('webhook_secret')
+
+    def inicializar_conexion(self):
+        pass
+
+    def generar_link_pago(self, monto, orden_id):
+        return f"https://linkify.cl/transferencia?orden={orden_id}"

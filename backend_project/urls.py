@@ -17,7 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from ecommerce.infrastructure.usuarios.urls import usuarios_urlpatterns
-from ecommerce.infrastructure.ventas.urls import ventas_urlpatterns
+from ecommerce.infrastructure.ventas.urls import (
+    configuracion_urlpatterns,
+    ventas_urlpatterns,
+)
 from ecommerce.infrastructure.catalogo.urls import catalogo_urlpatterns
 from django.http import JsonResponse
 
@@ -30,8 +33,9 @@ def bienvenida_api(request):
 
 urlpatterns = [
     path('', bienvenida_api, name='bienvenida_api'),
+    path('api/configuracion/', include(configuracion_urlpatterns)),
     path('admin/', admin.site.urls),
-    path('usuarios/', include(usuarios_urlpatterns)),
-    path('ventas/', include(ventas_urlpatterns)),
-    path('catalogo/', include(catalogo_urlpatterns)),
-    ]
+    path('api/usuarios/', include(usuarios_urlpatterns)),
+    path('api/ventas/', include(ventas_urlpatterns)),
+    path('api/catalogo/', include(catalogo_urlpatterns)),
+]

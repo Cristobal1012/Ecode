@@ -17,6 +17,8 @@ ventas_urlpatterns = [
     
     # Ruta resultante: GET /api/ventas/dashboard/
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
+
+    path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

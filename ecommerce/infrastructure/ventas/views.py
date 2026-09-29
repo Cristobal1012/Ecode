@@ -70,3 +70,17 @@ class DashboardOperativoView(APIView):
             "mensaje": "bienvenido al panel de Control",
             "emprendedor_id": emprendedor_id
         })
+
+class ReglasCheckoutView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
+        
+        # Si la configuración existe y tiene el campo, lo devuelve. Si no, aplica INVITADO por defecto.
+        modo = configuracion.modo_autenticacion if configuracion and configuracion.modo_autenticacion else 'INVITADO'
+        
+        return Response({
+            "modo_autenticacion": modo
+        }, status=status.HTTP_200_OK)

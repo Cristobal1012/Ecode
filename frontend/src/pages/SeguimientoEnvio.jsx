@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom'; 
 import clienteAxios from '../components/auth/axiosConfig';
 
 export default function SeguimientoEnvio() {
-    const [numeroOrden, setNumeroOrden] = useState('');
+    const [searchParams] = useSearchParams(); 
+    
+    // 3. Modificamos el estado inicial para que lea la URL (?orden=123)
+    const [numeroOrden, setNumeroOrden] = useState(searchParams.get('orden') || '');
+    
     const [email, setEmail] = useState('');
     const [seguimiento, setSeguimiento] = useState(null);
     const [mensaje, setMensaje] = useState('');

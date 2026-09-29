@@ -24,6 +24,46 @@ export default function DetalleProducto() {
       });
   }, [id]);
 
+  // Función unificada para agregar al carrito manejando el producto base, su variante y sincronización con Django
+  const handleAgregarAlCarrito = async (varianteSeleccionada, cantidadSeleccionada = 1) => {
+    if (!varianteSeleccionada) {
+        alert("Por favor, selecciona una variante válida.");
+        return;
+    }
+
+    const carritoGuardado = localStorage.getItem('carrito_local');
+    const carritoActual = carritoGuardado ? JSON.parse(carritoGuardado) : [];
+
+    // Usamos el SKU de la variante como ID único en el carrito para diferenciar tallas/colores
+    const indiceProducto = carritoActual.findIndex(item => item.sku === varianteSeleccionada.sku);
+
+    if (indiceProducto !== -1) {
+        carritoActual[indiceProducto].cantidad += cantidadSeleccionada;
+    } else {
+        carritoActual.push({
+            id: producto.id, // ID en MongoEngine
+            sku: varianteSeleccionada.sku,
+            nombre: `${producto.nombre} - ${varianteSeleccionada.valor || varianteSeleccionada.sku}`,
+            precio: varianteSeleccionada.precio,
+            cantidad: cantidadSeleccionada
+        });
+    }
+
+    // 1. Guardamos localmente para actualizar la interfaz al instante
+    localStorage.setItem('carrito_local', JSON.stringify(carritoActual));
+    window.dispatchEvent(new Event('carritoActualizado'));
+
+    // 2. Si el usuario está logueado, sincronizamos el carrito con la base de datos de Django
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        try {
+            await clienteAxios.post('ventas/carrito/', { items: carritoActual });
+        } catch (error) {
+            console.error("No se pudo sincronizar el carrito con la base de datos:", error);
+        }
+    }
+  };
+
   if (cargando) return <div style={{ padding: '40px', textAlign: 'center' }}>Cargando producto...</div>;
   if (error || !producto) return <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>{error || 'Producto no disponible'}</div>;
 
@@ -63,7 +103,7 @@ export default function DetalleProducto() {
                 margin: '15px 0 10px 0', 
                 color: 'var(--color-primary)', 
                 fontSize: '2rem', 
-                lineHeight: '1.2' // <-- ESTO SOLUCIONA EL SOLAPAMIENTO
+                lineHeight: '1.2' 
             }}>
                 {producto.nombre}
             </h1>
@@ -81,9 +121,12 @@ export default function DetalleProducto() {
               </div>
             )}
 
-            {/* Selector de Variantes (Tallas, Colores, Stock, Precios) */}
+            {/* Selector de Variantes con la función inyectada */}
             <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
-              <VariantSelector producto={producto} />
+              <VariantSelector 
+                producto={producto} 
+                onAgregarAlCarrito={handleAgregarAlCarrito} 
+              />
             </div>
           </div>
         </div>

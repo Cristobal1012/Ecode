@@ -13,6 +13,7 @@ import Admin from './pages/Admin';
 import { PALETTES } from './constants/palettes';
 import DetalleProducto from './pages/DetalleProducto';
 import SeguimientoEnvio from './pages/SeguimientoEnvio';
+import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -101,8 +102,14 @@ function App() {
           <Route path="/variantes" element={<VariantSelector />} />
           <Route path="/catalogo" element={<Catalogo />} />
           <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
+          
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />
+
+          {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/mis-pedidos" element={<HistorialPedidos />} />
+          </Route>
 
           {/* Ruta protegida para usuarios con rol ADMIN */}
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>

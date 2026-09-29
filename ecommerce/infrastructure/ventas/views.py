@@ -1,12 +1,11 @@
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
-from .models import ConfiguracionGlobal, OrdenCompra
+from .models import ConfiguracionGlobal, OrdenCompra, Carrito
 from .permissions import CanCheckout
 from .serializers import (
     ConfiguracionGlobalSerializer,
@@ -15,6 +14,24 @@ from .serializers import (
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from django.db.models import Q
+
+
+class CarritoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Busca el carrito del usuario. Si no existe (usuario nuevo), lo crea vacío
+        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
+        return Response({"items": carrito.items})
+
+    def post(self, request):
+        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
+        # Recibe la lista completa desde React y la guarda
+        items = request.data.get('items', [])
+        carrito.items = items
+        carrito.save()
+        return Response({"items": carrito.items})
+
 
 class CheckoutAPIView(generics.CreateAPIView):
     queryset = OrdenCompra.objects.all()
@@ -125,3 +142,32 @@ class SeguimientoEnvioView(APIView):
             "proveedor": proveedor,
             "codigo_seguimiento": codigo
         }, status=status.HTTP_200_OK)
+
+class HistorialPedidosAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ordenes = OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+        data = []
+        for orden in ordenes:
+            detalles = [{
+                "producto_mongo_id": d.producto_mongo_id,
+                "variante_sku": d.variante_sku,
+                "nombre_producto": d.nombre_producto_snapshot,
+                "precio_unitario": d.precio_unitario_snapshot,
+                "cantidad": d.cantidad
+            } for d in orden.detalles.all()]
+
+            data.append({
+                "id": orden.id,
+                "fecha": orden.fecha_creacion,
+                "estado": orden.estado,
+                "metodo_pago": orden.metodo_pago,
+                "subtotal": orden.subtotal,
+                "costo_envio": orden.costo_envio,
+                "total_final": orden.total_final,
+                "direccion": orden.direccion_envio_snapshot,
+                "detalles": detalles
+            })
+            
+        return Response(data, status=status.HTTP_200_OK)

@@ -17,15 +17,46 @@ export default function Login({ onSwitchToRegister }) {
         });
     };
 
+    // Función para descargar el carrito guardado en la base de datos de Django al iniciar sesión
+    const sincronizarCarrito = async () => {
+        try {
+            const respuesta = await clienteAxios.get('ventas/carrito/');
+            const carritoData = Array.isArray(respuesta.data) ? respuesta.data : (respuesta.data.items || []);
+
+            if (carritoData.length > 0) {
+                const carritoFormateado = carritoData.map(item => ({
+                    id: item.producto_id || item.id, 
+                    sku: item.sku || item.variante_sku || item.id,
+                    nombre: item.nombre || item.producto_nombre || 'Producto',
+                    precio: Number(item.precio),
+                    cantidad: Number(item.cantidad)
+                }));
+                
+                // Guardamos en memoria local del navegador y actualizamos el header
+                localStorage.setItem('carrito_local', JSON.stringify(carritoFormateado));
+                window.dispatchEvent(new Event('carritoActualizado'));
+            } else {
+                // Si en Django el carrito está vacío, limpiamos por si acaso
+                localStorage.removeItem('carrito_local');
+                window.dispatchEvent(new Event('carritoActualizado'));
+            }
+        } catch (error) {
+            console.error("No se pudo recuperar el carrito de la base de datos:", error);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
             // 1. Obtenemos los tokens y el interceptor los guarda
             await clienteAxios.post('usuarios/token/', formData);
             
-            // 2. Inmediatamente consultamos el rol del usuario
+            // 2. Consultamos el rol del usuario
             const respuestaPerfil = await clienteAxios.get('usuarios/me/');
             const rolUsuario = respuestaPerfil.data.rol;
+
+            // 3. Descargamos el carrito asociado a este usuario desde Django
+            await sincronizarCarrito();
 
             alert("¡Login exitoso!");
 
@@ -49,12 +80,13 @@ export default function Login({ onSwitchToRegister }) {
         const googleToken = credentialResponse.credential;
         
         try {
-            // Ajustar ruta ('google-login/') según el backend
             await clienteAxios.post('google-login/', { token: googleToken });
             
-            // Consultamos el perfil para saber a dónde mandarlo
             const respuestaPerfil = await clienteAxios.get('usuarios/me/');
             const rolUsuario = respuestaPerfil.data.rol;
+
+            // Descargamos el carrito también para Google
+            await sincronizarCarrito();
 
             alert("¡Inicio de sesión con Google exitoso!");
             

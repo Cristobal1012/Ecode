@@ -34,7 +34,8 @@ class ServicioCotizacion:
         if not isinstance(cfg, dict) or not isinstance(cfg.get('comunas'), dict):
             raise ConfiguracionCotizacionInvalida('Falta la cobertura del proveedor.')
         comunas = {_normalizar_comuna(nombre): codigo
-                   for nombre, codigo in cfg['comunas'].items()}
+                   for nombre, codigo in cfg['comunas'].items()
+                   if isinstance(nombre, str)}
         codigo = comunas.get(_normalizar_comuna(comuna))
         if codigo is None or codigo == '':
             raise ConfiguracionCotizacionInvalida('La comuna no tiene cobertura configurada.')

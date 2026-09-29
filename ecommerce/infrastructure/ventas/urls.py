@@ -12,6 +12,7 @@ configuracion_urlpatterns = [
 
 # Todo lo que esté aquí, Django le pondrá '/api/ventas/' antes
 ventas_urlpatterns = [
+    path('cotizaciones/', views.CotizacionesAPIView.as_view(), name='cotizaciones'),
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
     

@@ -19,6 +19,8 @@ ventas_urlpatterns = [
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
 
     path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
+
+    path('tracking/', views.SeguimientoEnvioView.as_view(), name='tracking-envio'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

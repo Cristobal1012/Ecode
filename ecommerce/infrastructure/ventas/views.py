@@ -13,7 +13,8 @@ from .serializers import (
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
 )
-
+from .adapters.logistica import ProveedorLogisticoAdapter
+from django.db.models import Q
 
 class CheckoutAPIView(generics.CreateAPIView):
     queryset = OrdenCompra.objects.all()
@@ -83,4 +84,44 @@ class ReglasCheckoutView(APIView):
         
         return Response({
             "modo_autenticacion": modo
+        }, status=status.HTTP_200_OK)
+
+class SeguimientoEnvioView(APIView):
+    #Permiso público: la seguridad radica en conocer el N° de Orden + Correo exacto
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        numero_orden = request.data.get('numero_orden')
+        email = request.data.get('email')
+
+        if not numero_orden or not email:
+            return Response(
+                {"error": "El número de orden y el correo son obligatorios para consultar el seguimiento."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Buscamos la orden validando el ID y verificando que el email coincida 
+            # ya sea en el campo email_invitado o en el email del usuario registrado
+            orden = OrdenCompra.objects.get(
+                Q(id=numero_orden) & (Q(email_invitado=email) | Q(usuario__email=email))
+            )
+        except OrdenCompra.DoesNotExist:
+            return Response(
+                {"error": "No se encontró un pedido que coincida con esos datos. Verifica la información."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Usamos los nombres exactos definidos en tu models.py
+        proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'starken'
+        codigo = orden.numero_seguimiento_tracking
+
+        estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(proveedor, codigo)
+
+        return Response({
+            "numero_orden": orden.id,
+            "estado_actual": estado_estandarizado,
+            "linea_tiempo_estandar": ["En origen", "En tránsito", "En reparto", "Entregado"],
+            "proveedor": proveedor,
+            "codigo_seguimiento": codigo
         }, status=status.HTTP_200_OK)

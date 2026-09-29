@@ -29,8 +29,11 @@ export default function Login({ onSwitchToRegister }) {
 
             alert("¡Login exitoso!");
 
-            // 3. Redirección bifurcada según el rol
-            if (rolUsuario === 'ADMIN') {
+            const urlAnterior = localStorage.getItem('url_anterior_login');
+            if (urlAnterior) {
+                localStorage.removeItem('url_anterior_login');
+                navigate(urlAnterior);
+            } else if (rolUsuario === 'ADMIN') {
                 navigate('/admin');
             } else {
                 navigate('/catalogo');

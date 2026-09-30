@@ -1,16 +1,29 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import clienteAxios from './auth/axiosConfig';
 
 const MenuUsuario = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [nombreUsuario, setNombreUsuario] = useState('Usuario');
     const menuRef = useRef(null);
     const navigate = useNavigate();
 
     const token = localStorage.getItem('access_token');
     const isLoggedIn = !!token;
     
-    // Aquí leerías el nombre real del usuario desde tu backend o JWT decodificado
-    const nombreUsuario = "Emilio"; 
+    // Obtenemos el nombre real del usuario autenticado consultando el backend
+    useEffect(() => {
+        if (isLoggedIn) {
+            clienteAxios.get('usuarios/me/')
+                .then(({ data }) => {
+                    const nombreReal = data.nombre || 'Usuario';
+                    setNombreUsuario(nombreReal);
+                })
+                .catch((error) => {
+                    console.error("No se pudo obtener el perfil del usuario:", error);
+                });
+        }
+    }, [isLoggedIn]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -26,13 +39,8 @@ const MenuUsuario = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('rol');
-        
-        // NUEVO: Borramos los productos del carrito al cerrar la cuenta
         localStorage.removeItem('carrito_local');
-        
-        // NUEVO: Avisamos al componente del carrito que se actualice
         window.dispatchEvent(new Event('carritoActualizado'));
-        
         setIsOpen(false);
         navigate('/');
     };
@@ -46,10 +54,7 @@ const MenuUsuario = () => {
     }
 
     return (
-        // CONTENEDOR PADRE: position relative es obligatorio para que el hijo flote respecto a este punto
         <div style={{ position: 'relative' }} ref={menuRef}>
-            
-            {/* Botón del Header */}
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 style={{
@@ -74,26 +79,25 @@ const MenuUsuario = () => {
                 </div>
             </button>
 
-            {/* Dropdown Desplegable: position absolute y z-index alto lo sacan del flujo del header */}
             {isOpen && (
                 <div 
                     style={{
                         position: 'absolute',
-                        top: '100%',        // Lo ubica justo debajo del botón
-                        right: '0',         // Lo alinea a la derecha
+                        top: '100%',
+                        right: '0',
                         marginTop: '8px',
-                        width: '280px',     // Ancho fijo
+                        width: '280px',
                         backgroundColor: 'white',
                         borderRadius: '8px',
-                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', // Sombra para dar relieve
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                         border: '1px solid #f3f4f6',
-                        zIndex: 9999        // Garantiza que flote sobre catálogos, banners, etc.
+                        zIndex: 9999
                     }}
                 >
                     <div style={{ padding: '16px', borderBottom: '1px solid #f3f4f6' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg style={{ width: '24px', height: '24px', color: 'white' }} fill="currentColor" viewBox="0 0 24 24">
+                                <svg style={{ width: '24px', height: '24px', color: '#4b5563' }} fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                                 </svg>
                             </div>

@@ -15,8 +15,13 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_boton_ingreso',
             'banner_url',
             'layout_catalogo',
+            'pasarelas_activas'
         ]
 
+    def get_pasarelas_activas(self, obj):
+        if not obj.api_keys_pagos:
+            return []
+        return list(obj.api_keys_pagos.keys())
 
 class OrdenCompraSerializer(serializers.ModelSerializer):
     class Meta:

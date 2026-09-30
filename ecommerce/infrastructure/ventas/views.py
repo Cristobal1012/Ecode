@@ -4,7 +4,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from .payment_services import generar_link_pago 
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra
 from .permissions import CanCheckout
@@ -19,6 +19,28 @@ class CheckoutAPIView(generics.CreateAPIView):
     queryset = OrdenCompra.objects.all()
     serializer_class = OrdenCompraSerializer
     permission_classes = [CanCheckout]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        orden = serializer.instance
+
+        try:
+            url_pago = generar_link_pago(orden.total_final, orden.id)
+            
+            respuesta_data = serializer.data
+            respuesta_data['url_pago'] = url_pago
+            respuesta_data['orden_id'] = orden.id
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(respuesta_data, status=status.HTTP_201_CREATED, headers=headers)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Error al generar pago con la pasarela: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):

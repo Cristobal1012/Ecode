@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function Checkout() {
@@ -10,15 +10,39 @@ export default function Checkout() {
     const [calle, setCalle] = useState('');
     const [comuna, setComuna] = useState('');
     const [mensaje, setMensaje] = useState('');
+    const [pasarelas, setPasarelas] = useState([]);
 
-    const procesarPago = async (e) => {
-        e.preventDefault(); //evita que la pagina se recargue al enviar el formulario.
+    useEffect(() => {
+        
+      axios.get('http://127.0.0.1:8000/api/configuracion/')
+        .then(response => {
+          console.log("Configuración recibida:", response.data);
+          const configuracionPagos = response.data.api_keys_pagos || response.data;
+          
+          const pasarelasValidas = Object.entries(configuracionPagos)
+            .filter(([nombre, config]) => config.activo === true)
+            .map(([nombre, config]) => nombre.toUpperCase());
+            
+          setPasarelas(pasarelasValidas);
+        })
+        .catch(error => {
+          console.error("Hubo un error obteniendo los métodos de pago:", error);
+        });
+        
+       
+
+    
+
+    }, []);
+
+    const procesarPago = async (metodoSeleccionado) => {
+        
         setMensaje('Procesando...');
 
         //armamos el JSON para django
         const payload = {
             email_invitado: usuarioActual ? '' : emailInvitado,
-            metodo_pago: "TRANSBANK",
+            metodo_pago: metodoSeleccionado,
             direccion_envio_snapshot: {
                 calle: calle,
                 comuna: comuna
@@ -52,7 +76,7 @@ export default function Checkout() {
                 </div>
             )}
 
-            <form onSubmit={procesarPago}>
+            <form>
                 {/* Formulario de Invitado */}
                 {!usuarioActual && (
                     <div style={{ marginBottom: '15px' }}>
@@ -89,9 +113,28 @@ export default function Checkout() {
                     />
                 </div>
 
-                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>
-                    Pagar $28.500
-                </button>
+                <div style={{ marginTop: '20px' }}>
+        {pasarelas.length === 0 ? (
+          <p style={{ color: '#d9534f', fontWeight: 'bold' }}>Cargando métodos de pago...</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {pasarelas.map(pasarela => (
+              <button 
+                key={pasarela}
+                type="button" 
+                onClick={() => procesarPago(pasarela)}
+                style={{ 
+                  width: '100%', padding: '10px', backgroundColor: '#007BFF', 
+                  color: 'white', border: 'none', borderRadius: '4px', 
+                  cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' 
+                }}
+              >
+                Pagar $28.500 con {pasarela}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
             </form>
         </div>
     );

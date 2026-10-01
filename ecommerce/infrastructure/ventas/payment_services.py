@@ -1,15 +1,25 @@
 from abc import ABC, abstractmethod
-
+import uuid
 #PUERTO de Interface
 class PuertoPasarelaPago(ABC):
     @abstractmethod
     def inicializar_conexion(self):
         pass
 
-    @abstractmethod
+    """@abstractmethod
     def generar_link_pago(self, monto, orden_id):
         pass
+    """
+    #esto es solo para probar que funciona la interfaz.
+class ServicioPagoLinkify(PuertoPasarelaPago):
+    def generar_link_pago(self, monto, orden_id):
+        token = uuid.uuid4().hex[:8]
+        return f"https://linkify.cl/simulacion-pago?orden={orden_id}&token={token}&monto={monto}"
 
+class ServicioPagoTransbank(PuertoPasarelaPago):
+    def generar_link_pago(self, monto, orden_id):
+        token = uuid.uuid4().hex[:8]
+        return f"https://webpay3gint.transbank.cl/simulacion-pago?orden={orden_id}&token={token}"
 
 #ADAPTADORES
 class TransbankAdapter(PuertoPasarelaPago):

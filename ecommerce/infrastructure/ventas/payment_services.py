@@ -12,12 +12,18 @@ class PuertoPasarelaPago(ABC):
     """
     #esto es solo para probar que funciona la interfaz.
 class ServicioPagoLinkify(PuertoPasarelaPago):
+    def inicializar_conexion(self):
+        pass
     def generar_link_pago(self, monto, orden_id):
         token = uuid.uuid4().hex[:8]
         return f"https://linkify.cl/simulacion-pago?orden={orden_id}&token={token}&monto={monto}"
 
 class ServicioPagoTransbank(PuertoPasarelaPago):
+    def inicializar_conexion(self):
+        pass
+
     def generar_link_pago(self, monto, orden_id):
+
         token = uuid.uuid4().hex[:8]
         return f"https://webpay3gint.transbank.cl/simulacion-pago?orden={orden_id}&token={token}"
 

@@ -9,6 +9,7 @@ from .models import ConfiguracionGlobal, OrdenCompra
 from .permissions import CanCheckout
 from .serializers import (
     ConfiguracionGlobalSerializer,
+    ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
 )
 

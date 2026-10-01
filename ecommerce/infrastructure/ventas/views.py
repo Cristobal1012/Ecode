@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra
 from .permissions import CanCheckout
+from .payment_services import generar_link_pago
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,

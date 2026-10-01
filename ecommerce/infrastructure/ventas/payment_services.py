@@ -74,3 +74,26 @@ class LinkifyAdapter(PuertoPasarelaPago):
 
     def generar_link_pago(self, monto, orden_id):
         return f"https://linkify.cl/transferencia?orden={orden_id}"
+
+
+def generar_link_pago(metodo_pago, monto, orden_id, api_keys_pagos):
+    """
+    Fábrica que instancia el adaptador correcto según el método elegido por el cliente.
+    """
+    metodo = metodo_pago.upper() if metodo_pago else ""
+    
+    if metodo == 'LINKIFY':
+        adaptador = ServicioPagoLinkify()
+        return adaptador.generar_link_pago(monto, orden_id)
+    elif metodo == 'TRANSBANK':
+        adaptador = ServicioPagoTransbank()
+        return adaptador.generar_link_pago(monto, orden_id)
+    elif metodo == 'MERCADO_PAGO':
+        adaptador = MercadoPagoAdapter(api_keys_pagos)
+        return adaptador.generar_link_pago(monto, orden_id)
+    elif metodo == 'PAYPAL':
+        adaptador = PayPalAdapter(api_keys_pagos)
+        return adaptador.generar_link_pago(monto, orden_id)
+    else:
+        token = uuid.uuid4().hex[:8]
+        return f"https://mock-bank.com/pago?orden={orden_id}&token={token}"

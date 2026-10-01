@@ -4,13 +4,11 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .payment_services import generar_link_pago 
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra
 from .permissions import CanCheckout
 from .serializers import (
     ConfiguracionGlobalSerializer,
-    ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
 )
 
@@ -27,7 +25,17 @@ class CheckoutAPIView(generics.CreateAPIView):
         orden = serializer.instance
 
         try:
-            url_pago = generar_link_pago(orden.total_final, orden.id)
+            # 1. Obtener las credenciales de la tienda
+            config = ConfiguracionGlobal.objects.filter(id=1).first()
+            api_keys = config.api_keys_pagos if config and config.api_keys_pagos else {}
+            
+            # 2. Llamar a la función con todos los argumentos que requiere el revisor
+            url_pago = generar_link_pago(
+                metodo_pago=orden.metodo_pago,
+                monto=orden.total_final,
+                orden_id=orden.id,
+                api_keys_pagos=api_keys
+            )
             
             respuesta_data = serializer.data
             respuesta_data['url_pago'] = url_pago

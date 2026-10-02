@@ -6,6 +6,8 @@ from .models import ConfiguracionGlobal, OrdenCompra
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
+    pasarelas_activas = serializers.SerializerMethodField()
+
 
     class Meta:
         model = ConfiguracionGlobal

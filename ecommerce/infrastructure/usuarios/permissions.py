@@ -22,3 +22,7 @@ class IsEmprendedor(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return self.has_permission(request, view)
+
+
+class IsAdministrador(IsEmprendedor):
+    """Nombre histórico del mismo permiso usado por las pruebas de seguridad."""

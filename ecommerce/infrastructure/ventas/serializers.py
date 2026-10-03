@@ -25,6 +25,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'tema_seleccionado', 
             'layout_catalogo',
             'pasarelas_activas'
+            'modo_autenticacion',
         ]
 
     def get_pasarelas_activas(self, obj):
@@ -44,6 +45,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'favicon',
             'banner',
             'layout_catalogo',
+            'modo_autenticacion',
         ]
 
 

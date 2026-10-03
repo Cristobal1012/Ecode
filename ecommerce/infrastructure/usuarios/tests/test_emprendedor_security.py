@@ -16,7 +16,7 @@ class IsEmprendedorSecurityTests(APITestCase):
         cls.comprador = create_user()
         cls.emprendedor = create_user(
             'emprendedor@example.test',
-            rol='Emprendedor',
+            rol='ADMIN',
         )
 
     @staticmethod

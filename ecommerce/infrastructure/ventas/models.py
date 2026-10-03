@@ -140,3 +140,16 @@ class PaginaLegal(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_pagina_display()} - {self.titulo}"
+
+class Carrito(models.Model):
+    # Relación 1 a 1: Cada usuario tiene exactamente un carrito
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='carrito'
+    )
+    # Aquí guardaremos el array de productos exactamente como lo maneja React
+    items = models.JSONField(default=list, blank=True) 
+
+    def __str__(self):
+        return f"Carrito de {self.usuario.email}"

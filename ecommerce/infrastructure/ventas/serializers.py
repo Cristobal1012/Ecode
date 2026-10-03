@@ -43,6 +43,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenCompra
         fields = [
+            'id',
+            'fecha_creacion',
+            'estado',
             'email_invitado',
             'metodo_pago',
             'direccion_envio_snapshot',

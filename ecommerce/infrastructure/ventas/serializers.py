@@ -23,6 +23,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'banner_url',
             'tema_seleccionado', 
             'layout_catalogo',
+            'modo_autenticacion',
         ]
 
 
@@ -38,6 +39,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'favicon',
             'banner',
             'layout_catalogo',
+            'modo_autenticacion',
         ]
 
 

@@ -24,7 +24,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'banner_url',
             'tema_seleccionado', 
             'layout_catalogo',
-            'pasarelas_activas'
+            'pasarelas_activas',
             'modo_autenticacion',
         ]
 

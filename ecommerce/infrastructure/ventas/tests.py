@@ -23,7 +23,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
         self.assertEqual(
             set(data),
             {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
-             'tema_seleccionado', 'layout_catalogo'},
+             'tema_seleccionado', 'layout_catalogo',
+             'pasarelas_activas', 'modo_autenticacion'}
         )
         self.assertNotIn('api_keys_pagos', data)
 

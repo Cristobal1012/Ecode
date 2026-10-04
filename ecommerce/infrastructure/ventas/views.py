@@ -12,6 +12,7 @@ from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito
 from .permissions import CanCheckout
+from .payment_services import generar_link_pago
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
@@ -43,6 +44,38 @@ class CheckoutAPIView(generics.CreateAPIView):
     queryset = OrdenCompra.objects.all()
     serializer_class = OrdenCompraSerializer
     permission_classes = [CanCheckout]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        orden = serializer.instance
+
+        try:
+            # 1. Obtener las credenciales de la tienda
+            config = ConfiguracionGlobal.objects.filter(id=1).first()
+            api_keys = config.api_keys_pagos if config and config.api_keys_pagos else {}
+            
+            # 2. Llamar a la función con todos los argumentos que requiere el revisor
+            url_pago = generar_link_pago(
+                metodo_pago=orden.metodo_pago,
+                monto=orden.total_final,
+                orden_id=orden.id,
+                api_keys_pagos=api_keys
+            )
+            
+            respuesta_data = serializer.data
+            respuesta_data['url_pago'] = url_pago
+            respuesta_data['orden_id'] = orden.id
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(respuesta_data, status=status.HTTP_201_CREATED, headers=headers)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Error al generar pago con la pasarela: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CotizacionesAPIView(APIView):

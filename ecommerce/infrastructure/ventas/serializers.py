@@ -10,10 +10,11 @@ from ecommerce.domain.logistica import (
 )
 from .models import ConfiguracionGlobal, OrdenCompra
 
-
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
+    pasarelas_activas = serializers.SerializerMethodField()
+
 
     class Meta:
         model = ConfiguracionGlobal
@@ -23,9 +24,14 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'banner_url',
             'tema_seleccionado', 
             'layout_catalogo',
+            'pasarelas_activas',
             'modo_autenticacion',
         ]
 
+    def get_pasarelas_activas(self, obj):
+        if not obj.api_keys_pagos:
+            return []
+        return list(obj.api_keys_pagos.keys())
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -95,8 +101,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         request = self.context.get('request')
-        
-        # Logica de comprador invitado: estricto si no esta autenticado
         if not request or not request.user.is_authenticated:
             if not data.get('email_invitado'):
                 raise serializers.ValidationError(
@@ -153,9 +157,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user
             validated_data['email_invitado'] = ''
-
         return super().create(validated_data)
-
 
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
@@ -167,38 +169,22 @@ class AgregarItemSerializer(serializers.Serializer):
         sku = data.get('variante_sku')
         cantidad_solicitada = data.get('cantidad', 1)
 
-        # 1. Buscar el producto en MongoEngine
         try:
             producto = Producto.objects(id=producto_id).first()
         except MongoValidationError:
-            raise serializers.ValidationError(
-                {"producto_mongo_id": "El formato del ID del producto no es valido."}
-            )
+            raise serializers.ValidationError({"producto_mongo_id": "El formato del ID del producto no es valido."})
 
         if not producto:
-            raise serializers.ValidationError(
-                {"producto_mongo_id": "El producto solicitado no existe en el catalogo."}
-            )
+            raise serializers.ValidationError({"producto_mongo_id": "El producto solicitado no existe en el catalogo."})
 
-        # 2. Filtrar variante especifica
         variante_encontrada = producto.variantes.filter(sku=sku).first()
-
         if not variante_encontrada:
-            raise serializers.ValidationError(
-                {"variante_sku": "La variante especificada no existe para este producto."}
-            )
+            raise serializers.ValidationError({"variante_sku": "La variante especificada no existe para este producto."})
 
-        # 3. Validacion de stock
         stock_disponible = variante_encontrada.stock
-
         if stock_disponible <= 0:
-            raise serializers.ValidationError(
-                {"stock": "Esta variante se encuentra agotada y no puede agregarse al carrito."}
-            )
-
+            raise serializers.ValidationError({"stock": "Esta variante se encuentra agotada y no puede agregarse al carrito."})
         if cantidad_solicitada > stock_disponible:
-            raise serializers.ValidationError(
-                {"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."}
-            )
+            raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data

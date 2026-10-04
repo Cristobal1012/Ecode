@@ -23,7 +23,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
         self.assertEqual(
             set(data),
             {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
-             'tema_seleccionado', 'layout_catalogo'},
+             'tema_seleccionado', 'layout_catalogo',
+             'pasarelas_activas', 'modo_autenticacion'}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -65,6 +66,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'banner_url': 'https://example.com/hero.jpg',
             'tema_seleccionado': 1,
             'layout_catalogo': 'GRID_3',
+            'pasarelas_activas': [],
+            'modo_autenticacion': 'MIXTO',
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):

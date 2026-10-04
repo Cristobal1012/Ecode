@@ -84,6 +84,7 @@ class OrdenCompra(models.Model):
     METODOS_PAGO = [
         ('TRANSBANK', 'Transbank'),
         ('PAYPAL', 'PayPal'),
+        ('LINKIFY', 'Linkify'),
         ('MERCADO_PAGO', 'Mercado Pago'),
         ('TRANSFERENCIA', 'Transferencia'),
     ]

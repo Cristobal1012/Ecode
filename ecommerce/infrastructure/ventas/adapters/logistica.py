@@ -190,3 +190,49 @@ class ProveedorLogisticoAdapter:
         except Exception as e:
             logger.error(f"Error consultando tracking: {str(e)}")
             return "Estado no disponible temporalmente"
+
+    @classmethod
+    def obtener_sucursales_por_comuna(cls, nombre_comuna):
+        nombre_limpio = str(nombre_comuna).strip().upper()
+        
+        if not nombre_limpio:
+            return {"error": "Debe especificar una comuna válida."}
+
+        # URL oficial ajustada a la documentación de Chilexpress (Type=0 para todas las oficinas)
+        url = f"https://testservices.wschilexpress.com/georeference/api/v1.0/offices?Type=0&CountyName={nombre_limpio}"
+        
+        api_key = os.getenv("CHILEXPRESS_API_KEY_GEO", "").strip()
+        if not api_key:
+            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+
+        headers = {
+            "Ocp-Apim-Subscription-Key": api_key,
+            "Content-Type": "application/json"
+        }
+
+        try:
+            print(f"DEBUG CHILEXPRESS: Consultando oficinas para la comuna '{nombre_limpio}'")
+            resp = requests.get(url, headers=headers, timeout=5)
+            
+            print(f"DEBUG SUCURSALES STATUS: {resp.status_code}")
+            print(f"DEBUG SUCURSALES BODY: {resp.text}")
+
+            if resp.status_code == 200:
+                data = resp.json()
+                
+                # La estructura de la respuesta oficial viene dentro de un arreglo 'offices'
+                offices = data.get("offices", [])
+                
+                sucursales = []
+                for office in offices:
+                    sucursales.append({
+                        "codigo": office.get("officeCode"),
+                        "nombre": office.get("officeName"),
+                        "direccion": f"{office.get('streetName', '')} {office.get('streetNumber', '')}".strip(),
+                    })
+                return sucursales
+            else:
+                return {"error": f"Error de API Chilexpress (Código {resp.status_code})" }
+        except Exception as e:
+            print(f"EXCEPCIÓN SUCURSALES: {str(e)}")
+            return {"error": "Servicio de sucursales no disponible temporalmente."}

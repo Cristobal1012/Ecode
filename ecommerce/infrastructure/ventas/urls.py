@@ -16,6 +16,7 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/logistica/cotizar/
     path('logistica/cotizar/', views.CotizacionEnvioView.as_view(), name='cotizar-envio'),
     path('logistica/comunas/', views.ComunasCoberturaAPIView.as_view(), name='comunas-cobertura'),
+    path('logistica/sucursales/', views.SucursalesChilexpressAPIView.as_view(), name='sucursales-chilexpress'),
     
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),

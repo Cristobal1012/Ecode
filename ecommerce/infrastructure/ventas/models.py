@@ -14,7 +14,8 @@ class ConfiguracionGlobal(models.Model):
         ('GRID_4', 'Cuadrícula de 4'),
     ]
     nombre_tienda = models.CharField(max_length=255)
-    # --- NUEVOS CAMPOS: ORIGEN PARA COTIZADOR LOGÍSTICO ---
+    
+    # --- CAMPOS DE ORIGEN / RETIRO EN LOCAL ---
     comuna_origen = models.CharField(
         max_length=100, 
         default='Santiago',
@@ -26,6 +27,11 @@ class ConfiguracionGlobal(models.Model):
         blank=True, 
         null=True
     )
+    calle_origen = models.CharField(max_length=255, default='Av. Principal', blank=True, null=True)
+    numero_origen = models.CharField(max_length=50, default='123', blank=True, null=True)
+    dpto_casa_origen = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Piso 4, Oficina 405 o Bodega B")
+    retiro_en_local_activo = models.BooleanField(default=True, help_text="Permite a los clientes seleccionar retiro gratuito en local")
+
     tema_seleccionado = models.IntegerField(default=1)
     logo = models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
     favicon = models.ImageField(upload_to='negocio/favicons/', blank=True, null=True)
@@ -38,7 +44,6 @@ class ConfiguracionGlobal(models.Model):
         max_length=100,
         default='Ver Catálogo',
     )
-    # Campo restaurado para pasar los tests y soportar URL directa del banner
     banner_url = models.URLField(max_length=500, blank=True, null=True)
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(

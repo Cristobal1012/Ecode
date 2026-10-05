@@ -294,3 +294,23 @@ class DireccionEnvioDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         # Seguridad: Un usuario solo puede ver/editar/eliminar SUS propias direcciones
         return DireccionEnvio.objects.filter(usuario=self.request.user)
+
+class SucursalesChilexpressAPIView(APIView):
+    """
+    GET /api/ventas/logistica/sucursales/?comuna=MAIPU
+    Devuelve las sucursales disponibles en una comuna específica.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        comuna = request.query_params.get('comuna')
+        if not comuna:
+            return Response({"error": "Debe especificar una comuna."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resultado = ProveedorLogisticoAdapter.obtener_sucursales_por_comuna(comuna)
+        
+        if isinstance(resultado, dict) and "error" in resultado:
+            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({"sucursales": resultado}, status=status.HTTP_200_OK)

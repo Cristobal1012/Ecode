@@ -15,7 +15,6 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
     pasarelas_activas = serializers.SerializerMethodField()
 
-
     class Meta:
         model = ConfiguracionGlobal
         fields = [
@@ -26,6 +25,12 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'layout_catalogo',
             'pasarelas_activas',
             'modo_autenticacion',
+            'comuna_origen',
+            'region_origen',
+            'calle_origen',
+            'numero_origen',
+            'dpto_casa_origen',
+            'retiro_en_local_activo',
         ]
 
     def get_pasarelas_activas(self, obj):
@@ -46,6 +51,12 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'banner',
             'layout_catalogo',
             'modo_autenticacion',
+            'comuna_origen',
+            'region_origen',
+            'calle_origen',
+            'numero_origen',
+            'dpto_casa_origen',
+            'retiro_en_local_activo',
         ]
 
 
@@ -137,7 +148,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
-        if proveedor:
+        if proveedor and proveedor != 'RETIRO_LOCAL':
             config = ConfiguracionGlobal.objects.filter(pk=1).first()
             service = ServicioCotizacion(config.api_keys_logistica if config else {})
             solicitud = SolicitudCotizacion(
@@ -153,6 +164,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise ProveedorLogisticoNoDisponible() from exc
             validated_data['costo_envio'] = float(quote.costo_envio)
             validated_data['total_final'] = float(quote.total_final)
+        elif proveedor == 'RETIRO_LOCAL':
+            validated_data['costo_envio'] = 0.0
+            validated_data['total_final'] = float(validated_data['subtotal'])
         
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user

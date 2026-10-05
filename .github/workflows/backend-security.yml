@@ -14,6 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
       postgres:
         image: postgres:15
         env:
@@ -33,7 +42,8 @@ jobs:
       POSTGRES_PASSWORD: test-only-password
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: '5432'
-      MONGO_URI: mongodb://127.0.0.1:27017/ecode_ci_unused
+      MONGO_URI: mongodb://127.0.0.1:27017/ecode_ci
+      MONGO_TEST_URI: mongodb://127.0.0.1:27017
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

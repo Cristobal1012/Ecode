@@ -91,7 +91,10 @@ Sin activar el entorno virtual de Windows:
 
 `.github/workflows/backend-security.yml` ejecuta la suite con PostgreSQL 15
 aislado. Usa las versiones ya fijadas por el proyecto y no requiere secretos ni
-servicios Google/Mongo. No se cambian los settings productivos por SQLite.
+servicios Google. La suite completa también ejecuta las pruebas de catálogo
+SCRUM-125 con un servicio MongoDB 6 y bases aisladas por ejecución; las suites
+de usuarios/ventas mencionadas arriba siguen sin necesitar MongoDB. No se
+cambian los settings productivos por SQLite.
 
 Validación local realizada: 22 tests aprobados sobre PostgreSQL, comprobación
 de migraciones sin cambios pendientes y `git diff --check` sin errores.

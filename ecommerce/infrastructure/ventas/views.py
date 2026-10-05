@@ -5,7 +5,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from dataclasses import asdict
-
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 
@@ -18,9 +17,21 @@ from .serializers import (
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
     SolicitudCotizacionSerializer,
+    AdminOrdenCompraEstadoSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from django.db.models import Q
+
+class AdminOrdenCompraListView(generics.ListAPIView):
+
+    queryset = OrdenCompra.objects.filter(estado__in=['PENDIENTE', 'PAGADO']).order_by('-fecha_creacion')
+    serializer_class = OrdenCompraSerializer
+
+class AdminOrdenCompraPatchView(generics.UpdateAPIView):
+
+    queryset = OrdenCompra.objects.all()
+    serializer_class = AdminOrdenCompraEstadoSerializer 
+    http_method_names = ['patch']
 
 
 class CarritoAPIView(APIView):

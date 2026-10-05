@@ -25,6 +25,13 @@ ventas_urlpatterns = [
     # NUEVA RUTA PARA EL CARRITO: GET/POST /api/ventas/carrito/
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
+
+
+    # NUEVAS RUTAs: administracion de ordenes que seria solo para administradores
+    # Ruta resultante: GET /api/ventas/admin/ordenes/
+    path('admin/ordenes/', views.AdminOrdenCompraListView.as_view(), name='admin-ordenes-list'),
+    
+    path('admin/ordenes/<int:pk>/estado/', views.AdminOrdenCompraPatchView.as_view(), name='admin-ordenes-patch'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

@@ -188,3 +188,8 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
+    
+class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdenCompra
+        fields = ['estado']

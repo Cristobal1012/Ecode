@@ -6,6 +6,12 @@ class Variante(EmbeddedDocument):
     stock = fields.IntField(required=True, default=0)
     imagen_especifica = fields.StringField(null=True, blank=True)
     atributos_variables = fields.DictField(default=dict)
+    
+    # --- CAMPOS LOGÍSTICOS A NIVEL DE SKU (MEJOR PRÁCTICA) ---
+    peso_kg = fields.FloatField(default=1.0)
+    alto_cm = fields.IntField(default=10)
+    ancho_cm = fields.IntField(default=10)
+    largo_cm = fields.IntField(default=10)
 
 class Producto(Document):
     meta = {'collection': 'productos'}
@@ -19,7 +25,7 @@ class Producto(Document):
     publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
     
-    #relación de 1 a N embebida dentro del mismo documento
+    # relación de 1 a N embebida dentro del mismo documento
     variantes = fields.EmbeddedDocumentListField(Variante)
 
     def __str__(self):

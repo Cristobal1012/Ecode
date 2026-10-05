@@ -5,19 +5,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from dataclasses import asdict
-
-from ecommerce.application.logistica import ServicioCotizacion
-from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
-
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
-from .models import ConfiguracionGlobal, OrdenCompra, Carrito
+from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio
 from .permissions import CanCheckout
 from .payment_services import generar_link_pago
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
-    SolicitudCotizacionSerializer,
+    DireccionEnvioSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from django.db.models import Q
@@ -78,29 +74,54 @@ class CheckoutAPIView(generics.CreateAPIView):
             )
 
 
-class CotizacionesAPIView(APIView):
+class CotizacionEnvioView(APIView):
+    """
+    Endpoint para cotizar despachos desde el frontend en React.
+    Espera un POST con los detalles del paquete y destino.
+    """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        serializer = SolicitudCotizacionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        config = ConfiguracionGlobal.objects.filter(pk=1).first()
-        if config is None:
-            raise NotFound('No existe una configuración de tienda.')
-        service = ServicioCotizacion(config.api_keys_logistica)
+        datos = request.data
+        
+        # Validamos que venga al menos el destino
+        destino = datos.get('destino')
+        if not destino:
+            return Response(
+                {"error": "El código de comuna de destino es obligatorio."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Extraemos los datos enviados por React y forzamos el tipo de dato numérico
+        origen = datos.get('origen', 'SANTIAGO') 
         try:
-            opciones, errores = service.opciones(serializer.to_domain())
-        except ConfiguracionCotizacionInvalida as exc:
-            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        data = []
-        for opcion in opciones:
-            item = asdict(opcion)
-            item['costo_envio'] = int(opcion.costo_envio)
-            item['total_final'] = int(opcion.total_final)
-            data.append(item)
-        return Response({'opciones': data, 'errores': errores},
-                        status=status.HTTP_200_OK if data else status.HTTP_503_SERVICE_UNAVAILABLE)
+            peso = float(datos.get('peso', 1.0))
+            alto = int(datos.get('alto', 15))
+            ancho = int(datos.get('ancho', 15))
+            largo = int(datos.get('largo', 15))
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Las dimensiones y el peso deben ser valores numéricos válidos."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Llamamos al adaptador usando Chilexpress
+        resultado = ProveedorLogisticoAdapter.cotizar_envio(
+            proveedor="chilexpress",
+            origen=origen,
+            destino=destino,
+            peso_kg=peso,
+            alto_cm=alto,
+            ancho_cm=ancho,
+            largo_cm=largo
+        )
+
+        # Si el adaptador capturó un error, devolvemos 400
+        if "error" in resultado:
+            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(resultado, status=status.HTTP_200_OK)
 
 
 class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
@@ -109,14 +130,12 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     authentication_classes = []
 
     def get_object(self):
-        # CAMBIO AQUÍ: Obligamos a que lea el id=1 exacto que modifica el admin
         configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
         if configuracion is None:
             raise NotFound('No existe una configuración de tienda.')
         return configuracion
 
 
-# Vista del panel de administración (todos los campos: tema, logo, banner, layout, etc.)
 class ConfiguracionNegocioView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     permission_classes = [AllowAny]
@@ -153,22 +172,21 @@ class DashboardOperativoView(APIView):
             "emprendedor_id": emprendedor_id
         })
 
+
 class ReglasCheckoutView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request):
         configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
-        
-        # Si la configuración existe y tiene el campo, lo devuelve. Si no, aplica INVITADO por defecto.
         modo = configuracion.modo_autenticacion if configuracion and configuracion.modo_autenticacion else 'INVITADO'
         
         return Response({
             "modo_autenticacion": modo
         }, status=status.HTTP_200_OK)
 
+
 class SeguimientoEnvioView(APIView):
-    #Permiso público: la seguridad radica en conocer el N° de Orden + Correo exacto
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -182,8 +200,6 @@ class SeguimientoEnvioView(APIView):
             )
 
         try:
-            # Buscamos la orden validando el ID y verificando que el email coincida 
-            # ya sea en el campo email_invitado o en el email del usuario registrado
             orden = OrdenCompra.objects.get(
                 Q(id=numero_orden) & (Q(email_invitado=email) | Q(usuario__email=email))
             )
@@ -193,8 +209,8 @@ class SeguimientoEnvioView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Usamos los nombres exactos definidos en tu models.py
-        proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'starken'
+        # Se eliminó la referencia a Starken, dejando Chilexpress como fallback logístico
+        proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
         codigo = orden.numero_seguimiento_tracking
 
         estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(proveedor, codigo)
@@ -206,6 +222,7 @@ class SeguimientoEnvioView(APIView):
             "proveedor": proveedor,
             "codigo_seguimiento": codigo
         }, status=status.HTTP_200_OK)
+
 
 class HistorialPedidosAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -235,3 +252,45 @@ class HistorialPedidosAPIView(APIView):
             })
             
         return Response(data, status=status.HTTP_200_OK)
+
+class ComunasCoberturaAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        resultado = ProveedorLogisticoAdapter.obtener_comunas_chilexpress()
+        
+        if isinstance(resultado, dict) and "error" in resultado:
+            print("LOG DE ERROR DE CHILEXPRESS:", resultado["error"]) # <--- Agrega esto para verlo en consola
+            return Response(resultado, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+        return Response({"comunas": resultado}, status=status.HTTP_200_OK)
+
+class DireccionEnvioListCreateView(generics.ListCreateAPIView):
+    """
+    GET: Lista todas las direcciones del usuario autenticado.
+    POST: Crea una nueva dirección para el usuario autenticado.
+    """
+    serializer_class = DireccionEnvioSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Retorna solo las direcciones del usuario actual, ordenadas por principal primero
+        return DireccionEnvio.objects.filter(usuario=self.request.user).order_by('-es_predeterminado', '-id')
+
+    def perform_create(self, serializer):
+        # Asigna automáticamente el usuario autenticado al crear la dirección
+        serializer.save(usuario=self.request.user)
+
+class DireccionEnvioDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET: Obtiene una dirección específica.
+    PUT/PATCH: Actualiza una dirección específica (ej. hacerla principal).
+    DELETE: Elimina una dirección.
+    """
+    serializer_class = DireccionEnvioSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Seguridad: Un usuario solo puede ver/editar/eliminar SUS propias direcciones
+        return DireccionEnvio.objects.filter(usuario=self.request.user)

@@ -8,7 +8,7 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
-from .models import ConfiguracionGlobal, OrdenCompra
+from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio
 
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
@@ -188,3 +188,18 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
+
+class DireccionEnvioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DireccionEnvio
+        fields = [
+            'id', 
+            'calle', 
+            'calle_numero',
+            'dpto_casa',
+            'comuna', 
+            'ciudad', 
+            'region', 
+            'codigo_postal', 
+            'es_predeterminado'
+        ]

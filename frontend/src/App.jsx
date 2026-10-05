@@ -14,7 +14,7 @@ import { PALETTES } from './constants/palettes';
 import DetalleProducto from './pages/DetalleProducto';
 import SeguimientoEnvio from './pages/SeguimientoEnvio';
 import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
-
+import MisDirecciones from './components/MisDirecciones'; // Ajusta la ruta a donde guardaste el archivo
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
   const activePalette = PALETTES.find((p) => p.id === Number(paletteId)) || PALETTES[0];
@@ -102,7 +102,7 @@ function App() {
           <Route path="/variantes" element={<VariantSelector />} />
           <Route path="/catalogo" element={<Catalogo />} />
           <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
-          
+          <Route path="/mis-direcciones" element={<MisDirecciones />} />
           {/* Pantalla de login y registro */}
           <Route path="/login" element={<AuthPage />} />
 

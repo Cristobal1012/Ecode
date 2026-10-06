@@ -2,6 +2,15 @@ import React, { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import DashboardCard from './DashboardCard';
 import RecentOrders from './RecentOrders';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts';
 
 export default function Dashboard({ busqueda = '', onVerTodos }) {
   const [metricas, setMetricas] = useState({
@@ -9,15 +18,14 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
     total_mensual: 0,
   });
 
+  const [historico, setHistorico] = useState([]);
   const [ordenes, setOrdenes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
-  // Fechas seleccionadas por el usuario
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
-  // Fechas que realmente se están aplicando al filtro
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
   const [filtroFechaFin, setFiltroFechaFin] = useState('');
 
@@ -27,6 +35,12 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
       currency: 'CLP',
       maximumFractionDigits: 0,
     }).format(Number(monto) || 0);
+  };
+
+  const formatearFecha = (fecha) => {
+    const [anio, mes, dia] = fecha.split('-');
+
+    return `${dia}/${mes}`;
   };
 
   useEffect(() => {
@@ -48,34 +62,18 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
             total_mensual: 0,
           }
         );
+        const historicoRecibido = response.data.historico || [];
 
-        // Obtener las últimas órdenes entregadas por el backend
+        setHistorico(
+          historicoRecibido.map((registro) => ({
+            ...registro,
+            fechaFormateada: formatearFecha(registro.fecha),
+          }))
+        );
+
         const ordenesRecibidas = response.data.ultimas_ordenes || [];
+        setOrdenes(ordenesRecibidas);
 
-        // Filtrar las órdenes según las fechas seleccionadas
-        const ordenesFiltradas = ordenesRecibidas.filter((orden) => {
-          const fechaOrden = new Date(orden.fecha_creacion);
-
-          if (filtroFechaInicio) {
-            const inicio = new Date(`${filtroFechaInicio}T00:00:00`);
-
-            if (fechaOrden < inicio) {
-              return false;
-            }
-          }
-
-          if (filtroFechaFin) {
-            const fin = new Date(`${filtroFechaFin}T23:59:59`);
-
-            if (fechaOrden > fin) {
-              return false;
-            }
-          }
-
-          return true;
-        });
-
-        setOrdenes(ordenesFiltradas);
       } catch (error) {
         console.error('Error cargando métricas del dashboard:', error);
         setError('No fue posible cargar la información del dashboard.');
@@ -329,52 +327,102 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
       {/* Resumen */}
       <section
         style={{
-          backgroundColor: '#e6f4f1',
+          backgroundColor: '#ffffff',
           borderRadius: '12px',
           padding: '25px',
           marginBottom: '30px',
-          border: '1px solid #cce8e1',
-          textAlign: 'center',
+          border: '1px solid #e5e7eb',
         }}
       >
         <h3
           style={{
-            margin: '0 0 8px',
-            color: '#0f3a2b',
+            margin: '0 0 5px',
+            color: 'var(--color-text)',
             fontSize: '1.2rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
           }}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M18 20V10" />
-            <path d="M12 20V4" />
-            <path d="M6 20v-6" />
-          </svg>
-
-          Resumen de ventas
+          Histórico de ventas
         </h3>
 
         <p
           style={{
-            margin: 0,
-            color: '#4a6b62',
+            margin: '0 0 25px',
+            color: '#6b7280',
             fontSize: '0.9rem',
           }}
         >
-          La visualización histórica de ventas estará disponible próximamente.
+          Evolución de las ventas pagadas según el período seleccionado.
         </p>
+
+        {historico.length > 0 ? (
+          <div style={{ width: '100%', height: '350px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={historico}
+                margin={{
+                  top: 10,
+                  right: 20,
+                  left: 10,
+                  bottom: 10,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#e5e7eb"
+                />
+
+                <XAxis
+                  dataKey="fechaFormateada"
+                  tick={{
+                    fill: '#6b7280',
+                    fontSize: 12,
+                  }}
+                />
+
+                <YAxis
+                  tick={{
+                    fill: '#6b7280',
+                    fontSize: 12,
+                  }}
+                  tickFormatter={(valor) => formatearMonto(valor)}
+                />
+
+                <Tooltip
+                  formatter={(valor) => [
+                    formatearMonto(valor),
+                    'Ventas',
+                  ]}
+                  labelFormatter={(fecha) => `Fecha: ${fecha}`}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="ventas"
+                  name="Ventas"
+                  stroke="var(--color-primary)"
+                  strokeWidth={3}
+                  dot={{
+                    r: 4,
+                    fill: 'var(--color-primary)',
+                  }}
+                  activeDot={{
+                    r: 6,
+                  }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: '50px 20px',
+              textAlign: 'center',
+              color: '#6b7280',
+            }}
+          >
+            No existen ventas pagadas para el período seleccionado.
+          </div>
+        )}
       </section>
 
       {/* Últimos pedidos */}

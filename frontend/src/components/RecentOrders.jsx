@@ -91,22 +91,6 @@ export default function RecentOrders({ ordenes = [], busqueda = '', onVerTodos }
             Las últimas órdenes registradas en tu tienda.
           </p>
         </div>
-
-        <button
-          onClick={onVerTodos}
-          style={{
-            padding: '9px 16px',
-            border: 'none',
-            borderRadius: '7px',
-            backgroundColor: 'var(--color-primary)',
-            color: '#ffffff',
-            fontSize: '0.85rem',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          Ver todos
-        </button>
       </div>
 
       {ordenesOrdenadas.length === 0 ? (

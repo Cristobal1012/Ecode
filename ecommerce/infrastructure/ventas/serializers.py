@@ -82,6 +82,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         choices=['STARKEN', 'CHILEXPRESS', 'RETIRO_LOCAL'], required=False,
     )
     paquete = PaqueteSerializer(write_only=True, required=False)
+    email_cliente = serializers.SerializerMethodField()
 
     class Meta:
         model = OrdenCompra
@@ -90,6 +91,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'fecha_creacion',
             'estado',
             'email_invitado',
+            'email_cliente',
             'metodo_pago',
             'direccion_envio_snapshot',
             'subtotal',
@@ -98,6 +100,14 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'proveedor_logistico',
             'paquete',
         ]
+
+    def get_email_cliente(self, obj):
+        if obj.email_invitado:
+            return obj.email_invitado
+        if obj.usuario and obj.usuario.email:
+            return obj.usuario.email
+        return None   
+    
 
     def validate(self, data):
         request = self.context.get('request')
@@ -159,6 +169,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             validated_data['email_invitado'] = ''
         return super().create(validated_data)
 
+        
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)

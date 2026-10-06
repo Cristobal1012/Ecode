@@ -32,7 +32,6 @@ class AdminOrdenCompraPatchView(generics.UpdateAPIView):
     queryset = OrdenCompra.objects.all()
     serializer_class = AdminOrdenCompraEstadoSerializer 
     http_method_names = ['patch']
-    # Corregimos el Error 1: Blindamos el endpoint
     permission_classes = [IsAdministrador]
 
 

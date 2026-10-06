@@ -5,7 +5,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import redirect
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
+from django.db.models.functions import TruncDate
+
 from django.utils import timezone
 import logging
 from django.http import HttpResponseRedirect, HttpResponse
@@ -489,45 +491,91 @@ class DescargarEtiquetaView(APIView):
 class DashboardMetricasView(APIView):
     """
     Endpoint para el dashboard operativo.
-    Retorna métricas de ventas (histórico y mensual) y las 5 órdenes más recientes.
-    Permite filtrar los totales mediante query params: ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
+    Retorna métricas de ventas (histórico y mensual),
+    ventas históricas agrupadas por día y las 5 órdenes más recientes.
+
+    Permite filtrar los datos mediante:
+    ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
     """
-    permission_classes = [IsEmprendedor] # Solo el administrador puede ver esto
+    permission_classes = [IsEmprendedor]
 
     def get(self, request):
         # 1. Capturar parámetros de fecha para filtrado (opcional)
         fecha_inicio = request.query_params.get('fecha_inicio')
         fecha_fin = request.query_params.get('fecha_fin')
 
-        # 2. Base Queryset: Consideramos como "venta" solo las órdenes PAGADAS
+        # 2. Base Queryset: solo las órdenes PAGADAS cuentan como ventas
         ordenes_pagadas = OrdenCompra.objects.filter(estado='PAGADO')
 
         # Aplicar filtros de fecha si vienen en la petición
         if fecha_inicio:
-            ordenes_pagadas = ordenes_pagadas.filter(fecha_creacion__gte=fecha_inicio)
+            ordenes_pagadas = ordenes_pagadas.filter(
+                fecha_creacion__gte=fecha_inicio
+            )
+
         if fecha_fin:
-            # Agregamos hasta el final del día si solo viene la fecha
-            ordenes_pagadas = ordenes_pagadas.filter(fecha_creacion__lte=f"{fecha_fin} 23:59:59")
+            ordenes_pagadas = ordenes_pagadas.filter(
+                fecha_creacion__lte=f"{fecha_fin} 23:59:59"
+            )
 
-        # 3. Calcular Total Histórico (aplicando los filtros de fecha si existen)
-        total_historico = ordenes_pagadas.aggregate(total=Sum('total_final'))['total'] or 0
+        # 3. Calcular total histórico
+        total_historico = (
+            ordenes_pagadas.aggregate(total=Sum('total_final'))['total'] or 0
+        )
 
-        # 4. Calcular Total Mensual (del mes y año actual)
+        # 4. Calcular ventas del mes actual
         hoy = timezone.now()
-        ventas_mes_actual = ordenes_pagadas.filter(
-            fecha_creacion__year=hoy.year,
-            fecha_creacion__month=hoy.month
-        ).aggregate(total=Sum('total_final'))['total'] or 0
 
-        # 5. Obtener las 5 órdenes más recientes (aquí incluimos todos los estados para ver intentos fallidos)
-        ultimas_ordenes = OrdenCompra.objects.all().order_by('-fecha_creacion')[:5]
-        
+        ventas_mes_actual = (
+            ordenes_pagadas
+            .filter(
+                fecha_creacion__year=hoy.year,
+                fecha_creacion__month=hoy.month
+            )
+            .aggregate(total=Sum('total_final'))['total'] or 0
+        )
+
+        # 5. Agrupar ventas PAGADAS por día
+        historico_ventas = (
+            ordenes_pagadas
+            .annotate(fecha=TruncDate('fecha_creacion'))
+            .values('fecha')
+            .annotate(
+                ventas=Sum('total_final'),
+                pedidos=Count('id')
+            )
+            .order_by('fecha')
+        )
+
+        historico_data = [
+            {
+                "fecha": registro["fecha"],
+                "ventas": float(registro["ventas"] or 0),
+                "pedidos": registro["pedidos"]
+            }
+            for registro in historico_ventas
+        ]
+
+        # 6. Obtener las 5 órdenes más recientes.
+        # Aquí incluimos todos los estados para mostrar la actividad reciente.
+        ultimas_ordenes = (
+            OrdenCompra.objects
+            .all()
+            .order_by('-fecha_creacion')[:5]
+        )
+
         ordenes_data = []
+
         for orden in ultimas_ordenes:
-            # Determinamos el nombre del cliente (registrado o invitado)
+            # Determinamos el nombre del cliente
             cliente = orden.email_invitado
+
             if orden.usuario:
-                cliente = getattr(orden.usuario, 'get_full_name', lambda: orden.usuario.email)()
+                cliente = getattr(
+                    orden.usuario,
+                    'get_full_name',
+                    lambda: orden.usuario.email
+                )()
 
             ordenes_data.append({
                 "id": orden.id,
@@ -538,11 +586,12 @@ class DashboardMetricasView(APIView):
                 "metodo_pago": orden.metodo_pago
             })
 
-        # 6. Estructurar y retornar la respuesta
+        # 7. Estructurar y retornar la respuesta
         return Response({
             "metricas": {
                 "total_historico": float(total_historico),
                 "total_mensual": float(ventas_mes_actual)
             },
+            "historico": historico_data,
             "ultimas_ordenes": ordenes_data
         }, status=status.HTTP_200_OK)

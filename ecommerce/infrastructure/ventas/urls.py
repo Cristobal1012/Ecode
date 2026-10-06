@@ -21,6 +21,10 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
     
+    # NUEVA RUTA PARA EL RETORNO DE TRANSBANK
+    # Ruta resultante: GET/POST /api/ventas/transbank/retorno/
+    path('transbank/retorno/', views.TransbankRetornoView.as_view(), name='transbank_retorno'),
+    
     # Ruta resultante: GET /api/ventas/dashboard/
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
 

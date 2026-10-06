@@ -236,3 +236,103 @@ class ProveedorLogisticoAdapter:
         except Exception as e:
             print(f"EXCEPCIÓN SUCURSALES: {str(e)}")
             return {"error": "Servicio de sucursales no disponible temporalmente."}
+        
+    # ==========================================
+    # 4. GENERACIÓN DE ORDEN DE TRANSPORTE (OT) Y ETIQUETAS
+    # ==========================================
+    @classmethod
+    def generar_orden_transporte(cls, datos_envio: dict) -> dict:
+        """
+        Genera una Orden de Transporte (OT) en Chilexpress utilizando la API oficial de transport-orders.
+        """
+        url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders"
+        
+        api_key = os.getenv("CHILEXPRESS_API_KEY_ENVIOS", "").strip()
+        if not api_key:
+            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+
+        headers = {
+            "Ocp-Apim-Subscription-Key": api_key,
+            "Content-Type": "application/json"
+        }
+
+        # Estructura requerida por Chilexpress según documentación oficial
+        payload = {
+            "header": {
+                "certificateNumber": 0,
+                "customerCardNumber": "18578680", # TCC de pruebas oficial[cite: 1]
+                "countyOfOriginCoverageCode": datos_envio.get("origen_codigo", "PUDA"),
+                "labelType": 2, # 2 = Imagen en Binario + Datos[cite: 1]
+                "marketplaceRut": "96756430",
+                "sellerRut": "DEFAULT"
+            },
+            "details": [{
+                "addresses": [{
+                    "addressId": 0,
+                    "countyCoverageCode": datos_envio.get("destino_codigo", "PROV"),
+                    "streetName": datos_envio.get("calle", "SIN CALLE"),
+                    "streetNumber": str(datos_envio.get("numero", "0")),
+                    "supplement": datos_envio.get("supplement", ""),
+                    "addressType": "DEST",
+                    "deliveryOnCommercialOffice": datos_envio.get("es_sucursal", False),
+                    "commercialOfficeId": str(datos_envio.get("sucursal_id", "")) if datos_envio.get("es_sucursal") else "",
+                    "observation": "DEFAULT"
+                }, {
+                    "addressId": 0,
+                    "countyCoverageCode": datos_envio.get("origen_codigo", "PUDA"),
+                    "streetName": "AVENIDA DE RETORNO",
+                    "streetNumber": "120",
+                    "supplement": "Bodega",
+                    "addressType": "DEV",
+                    "deliveryOnCommercialOffice": False,
+                    "observation": "DEFAULT"
+                }],
+                "contacts": [{
+                    "name": datos_envio.get("nombre_destinatario", "Cliente"),
+                    "phoneNumber": datos_envio.get("telefono", "123456789"),
+                    "mail": datos_envio.get("email", "cliente@correo.cl"),
+                    "contactType": "D"
+                }, {
+                    "name": "Remitente Tienda",
+                    "phoneNumber": "999999999",
+                    "mail": "contacto@tu-tienda.cl",
+                    "contactType": "R"
+                }],
+                "packages": [{
+                    "weight": str(datos_envio.get("peso", "1")),
+                    "height": int(datos_envio.get("alto", 10)),
+                    "width": int(datos_envio.get("ancho", 10)),
+                    "length": int(datos_envio.get("largo", 10)),
+                    "serviceDeliveryCode": 3,
+                    "productCode": 3,
+                    "deliveryReference": str(datos_envio.get("referencia", "ORDEN-1")),
+                    "groupReference": "",
+                    "declaredValue": int(datos_envio.get("valor_declarado", 1000)),
+                    "declaredContent": 1
+                    # Eliminado receivableAmountInDelivery para evitar conflictos de parseo
+                }]
+            }]
+        }
+
+        try:
+            logger.info(f"Enviando solicitud de OT a Chilexpress para la referencia: {datos_envio.get('referencia')}")
+            respuesta = requests.post(url, headers=headers, json=payload, timeout=10)
+            
+            if respuesta.status_code in [200, 201]:
+                data = respuesta.json()
+                detalle = data.get("data", {}).get("detail", [{}])[0]
+                
+                return {
+                    "exito": True,
+                    "numero_ot": detalle.get("transportOrderNumber"),
+                    "codigo_barras": detalle.get("barcode"),
+                    "etiqueta_data": detalle.get("label", {}).get("labelData"),
+                    "data_completa": data
+                }
+            else:
+                logger.error(f"Error generando OT en Chilexpress: {respuesta.text}")
+                return {"exito": False, "error": respuesta.text}
+                
+        except Exception as e:
+            logger.error(f"Excepción en generacion de OT Chilexpress: {str(e)}")
+            return {"exito": False, "error": str(e)}

@@ -165,8 +165,9 @@ export default function Checkout() {
             const payload = { destino: comunaDestino.trim().toUpperCase(), peso: medidasCaja.peso, alto: medidasCaja.lado, ancho: medidasCaja.lado, largo: medidasCaja.lado };
             const respuesta = await clienteAxios.post('ventas/logistica/cotizar/', payload);
             
+            // Cambio importante: pasamos el proveedor a MAYÚSCULAS para cumplir con el serializer
             const opciones = [{
-                proveedor: respuesta.data.proveedor.toLowerCase(),
+                proveedor: respuesta.data.proveedor.toUpperCase(),
                 nombre: `Chilexpress - ${respuesta.data.tiempo_estimado}`,
                 tipo: tipoDespacho === 'SUCURSAL' ? 'RETIRO' : 'DOMICILIO',
                 costo_envio: respuesta.data.precio

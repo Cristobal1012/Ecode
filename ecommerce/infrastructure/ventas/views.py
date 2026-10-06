@@ -4,6 +4,10 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import redirect
+from django.db.models import Q
+import logging
+from django.http import HttpResponseRedirect
 from dataclasses import asdict
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio
@@ -16,8 +20,10 @@ from .serializers import (
     DireccionEnvioSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
-from django.db.models import Q
+from .adapters.transbank_adapter import TransbankWebpayAdapter
+import os
 
+logger = logging.getLogger(__name__)
 
 class CarritoAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -48,21 +54,15 @@ class CheckoutAPIView(generics.CreateAPIView):
         orden = serializer.instance
 
         try:
-            # 1. Obtener las credenciales de la tienda
-            config = ConfiguracionGlobal.objects.filter(id=1).first()
-            api_keys = config.api_keys_pagos if config and config.api_keys_pagos else {}
-            
-            # 2. Llamar a la función con todos los argumentos que requiere el revisor
-            url_pago = generar_link_pago(
-                metodo_pago=orden.metodo_pago,
-                monto=orden.total_final,
-                orden_id=orden.id,
-                api_keys_pagos=api_keys
-            )
-            
+            # Respuesta hacia React
             respuesta_data = serializer.data
-            respuesta_data['url_pago'] = url_pago
+            respuesta_data['mensaje'] = "Orden creada con éxito."
             respuesta_data['orden_id'] = orden.id
+            
+            # Si el serializer generó una URL de Transbank, la inyectamos en la respuesta
+            if hasattr(orden, 'url_pago') and orden.url_pago:
+                respuesta_data['url_pago'] = orden.url_pago
+                respuesta_data['mensaje'] = "Orden creada. Redirigiendo al pago..."
             
             headers = self.get_success_headers(serializer.data)
             return Response(respuesta_data, status=status.HTTP_201_CREATED, headers=headers)
@@ -73,6 +73,99 @@ class CheckoutAPIView(generics.CreateAPIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class TransbankRetornoView(APIView):
+    permission_classes = [AllowAny]  # Permite acceso público desde la redirección externa de Webpay
+
+    def get(self, request):
+        # Transbank envía 'token_ws' en pagos normales, o 'TBK_TOKEN' y 'TBK_ORDEN_COMPRA' si el usuario anula
+        token = request.GET.get('token_ws') or request.POST.get('token_ws')
+        tbk_token = request.GET.get('TBK_TOKEN')
+        tbk_orden = request.GET.get('TBK_ORDEN_COMPRA')
+
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+        # Manejo de anulación directa por parte del usuario en el portal de Transbank
+        if tbk_token and not token:
+            if tbk_orden:
+                orden_id_limpio = tbk_orden.replace('ORD-', '')
+                try:
+                    orden = OrdenCompra.objects.get(id=orden_id_limpio)
+                    orden.estado = 'CANCELADO'
+                    orden.save()
+                    logger.info(f"Orden {orden.id} marcada como CANCELADA por anulación en Transbank.")
+                except OrdenCompra.DoesNotExist:
+                    pass
+            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=cancelado")
+
+        if not token:
+            return Response({"error": "Token no proporcionado"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Confirmar transacción con Transbank
+        resultado_tbk = TransbankWebpayAdapter.confirmar_transaccion(token)
+        
+        if not resultado_tbk.get('exito'):
+            return Response({"error": "Error al comunicar con Transbank"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        buy_order = resultado_tbk['data_completa'].get('buy_order', '')
+        # Extraer el ID real de la orden (quitando el prefijo 'ORD-')
+        orden_id = buy_order.replace('ORD-', '')
+
+        try:
+            orden = OrdenCompra.objects.get(id=orden_id)
+        except OrdenCompra.DoesNotExist:
+            return Response({"error": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+        if resultado_tbk.get('aprobado'):
+            orden.estado = 'PAGADO'
+            orden.save()
+
+            # --- 2. GENERACIÓN AUTOMÁTICA DE OT Y ETIQUETA EN CHILEXPRESS ---
+            if orden.proveedor_logistico == 'CHILEXPRESS':
+                try:
+                    config = ConfiguracionGlobal.objects.first()
+                    catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
+                    
+                    comuna_origen_nombre = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
+                    codigo_origen = catalogo.get(comuna_origen_nombre.upper(), "PUDA")
+                    
+                    comuna_destino_nombre = orden.direccion_envio_snapshot.get('comuna', '')
+                    codigo_destino = catalogo.get(comuna_destino_nombre.upper(), "PROV")
+
+                    datos_envio = {
+                        "origen_codigo": codigo_origen,
+                        "destino_codigo": codigo_destino,
+                        "calle": orden.direccion_envio_snapshot.get('calle', 'SIN CALLE'),
+                        "numero": orden.direccion_envio_snapshot.get('numero', '0'),
+                        "supplement": orden.direccion_envio_snapshot.get('dpto_casa', ''),
+                        "nombre_destinatario": getattr(orden.usuario, 'get_full_name', lambda: 'Cliente E-commerce')() if orden.usuario else 'Cliente Invitado',
+                        "telefono": "999999999", 
+                        "email": orden.email_invitado or (orden.usuario.email if orden.usuario else 'cliente@correo.cl'),
+                        "peso": "1", 
+                        "alto": "10",
+                        "ancho": "10",
+                        "largo": "10",
+                        "referencia": f"ORD-{orden.id}",
+                        "valor_declarado": int(orden.total_final)
+                    }
+
+                    respuesta_chx = ProveedorLogisticoAdapter.generar_orden_transporte(datos_envio)
+                    
+                    if respuesta_chx.get('exito'):
+                        orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
+                        orden.save()
+                        logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
+                    else:
+                        logger.error(f"Fallo al generar OT en Chilexpress para orden {orden.id}: {respuesta_chx.get('error')}")
+                except Exception as e:
+                    logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
+            # -----------------------------------------------------------------
+
+            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=exito")
+        else:
+            orden.estado = 'RECHAZADO'
+            orden.save()
+            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=rechazado")
 
 class CotizacionEnvioView(APIView):
     """
@@ -209,7 +302,6 @@ class SeguimientoEnvioView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Se eliminó la referencia a Starken, dejando Chilexpress como fallback logístico
         proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
         codigo = orden.numero_seguimiento_tracking
 
@@ -248,7 +340,10 @@ class HistorialPedidosAPIView(APIView):
                 "costo_envio": orden.costo_envio,
                 "total_final": orden.total_final,
                 "direccion": orden.direccion_envio_snapshot,
-                "detalles": detalles
+                "detalles": detalles,
+                # --- AGREGAR ESTAS DOS LÍNEAS ---
+                "id_transaccion_pasarela": orden.id_transaccion_pasarela,
+                "proveedor_logistico": orden.proveedor_logistico
             })
             
         return Response(data, status=status.HTTP_200_OK)
@@ -261,7 +356,7 @@ class ComunasCoberturaAPIView(APIView):
         resultado = ProveedorLogisticoAdapter.obtener_comunas_chilexpress()
         
         if isinstance(resultado, dict) and "error" in resultado:
-            print("LOG DE ERROR DE CHILEXPRESS:", resultado["error"]) # <--- Agrega esto para verlo en consola
+            print("LOG DE ERROR DE CHILEXPRESS:", resultado["error"])
             return Response(resultado, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             
         return Response({"comunas": resultado}, status=status.HTTP_200_OK)

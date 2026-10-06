@@ -5,6 +5,9 @@ import clienteAxios from '../components/auth/axiosConfig';
 import { PALETTES } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
 import TablaInventario from '../components/TablaInventario';
+import Dashboard from '../components/Dashboard';
+import AdminSidebar from '../components/AdminSidebar';
+import AdminTopbar from '../components/AdminTopbar';
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -99,12 +102,7 @@ export default function Admin() {
   const renderizarContenido = () => {
     switch (vistaActiva) {
       case 'dashboard':
-        return (
-          <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Dashboard</h2>
-            <p style={{ color: 'var(--color-text)' }}>Aquí irán los gráficos y métricas principales de tu e-commerce.</p>
-          </div>
-        );
+       return <Dashboard />;
       case 'inventario':
         return (
           <div>
@@ -264,69 +262,62 @@ export default function Admin() {
     }
   };
 
-  const getEstiloBoton = (activo) => ({
-    width: '100%',
-    padding: '15px 20px',
-    background: activo ? 'var(--color-secondary)' : 'transparent',
-    color: activo ? '#ffffff' : 'rgba(255,255,255,0.7)',
-    border: 'none',
-    textAlign: 'left',
-    cursor: 'pointer',
-    fontSize: '16px',
-    transition: 'all 0.2s',
-    fontWeight: activo ? 'bold' : 'normal',
-    borderLeft: activo ? '4px solid var(--color-accent)' : '4px solid transparent',
-  });
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-background)', fontFamily: 'sans-serif' }}>
+  <div
+    style={{
+      display: 'flex',
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: '#f3f4f6',
+      fontFamily: "'Inter', sans-serif"
+    }}
+  >
+    
+    {/* SIDEBAR */}
+    <AdminSidebar
+      vistaActiva={vistaActiva}
+      setVistaActiva={setVistaActiva}
+      setMostrandoFormulario={setMostrandoFormulario}
+      setProductoAEditar={setProductoAEditar}
+      navigate={navigate}
+    />
+
+    {/* CONTENIDO PRINCIPAL */}
+    <main
+      style={{
+        flex: 1,
+        minWidth: 0,
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'background-color 0.3s'
+      }}
+    >
       
-      <aside style={{ width: '250px', backgroundColor: 'var(--color-primary)', display: 'flex', flexDirection: 'column', paddingTop: '20px', transition: 'background-color 0.3s' }}>
-        <h1 style={{ fontSize: '1.5rem', textAlign: 'center', marginBottom: '40px', padding: '0 20px', color: '#ffffff' }}>
-          Panel de administración
-        </h1>
-        
-        <nav style={{ display: 'flex', flexDirection: 'column' }}>
-          <button onClick={() => setVistaActiva('dashboard')} style={getEstiloBoton(vistaActiva === 'dashboard')}>
-            Dashboard
-          </button>
-          
-          <button onClick={() => { setVistaActiva('inventario'); setMostrandoFormulario(false); setProductoAEditar(null); }} style={getEstiloBoton(vistaActiva === 'inventario')}>
-            Inventario
-          </button>
-          
-          <button onClick={() => setVistaActiva('ventas')} style={getEstiloBoton(vistaActiva === 'ventas')}>
-            Ventas
-          </button>
-          <button onClick={() => setVistaActiva('configuracion')} style={getEstiloBoton(vistaActiva === 'configuracion')}>
-            Configuración
-          </button>
+      {/* TOP NAVBAR */}
+      <AdminTopbar />
 
-          <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', margin: '15px 20px' }}></div>
-
-          <button 
-            onClick={() => navigate('/catalogo')} 
-            style={{...getEstiloBoton(false), display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}
-          >
-            <span>Ver Catálogo</span>
-            <span style={{ fontSize: '1.2rem' }}>↗</span>
-          </button>
-        </nav>
-      </aside>
-
-      <main style={{ flex: 1, padding: '40px', transition: 'background-color 0.3s' }}>
-        <div style={{ 
-          background: '#ffffff', 
-          padding: '30px', 
-          borderRadius: '8px', 
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', 
-          minHeight: '80vh',
-          borderTop: '6px solid var(--color-primary)',
-          transition: 'border-color 0.3s'
-        }}>
+      {/* CONTENEDOR VISTAS */}
+      <div
+        style={{
+          flex: 1,
+          padding: '0 40px 40px 40px'
+        }}
+      >
+        <div
+          style={{
+            background: '#ffffff',
+            padding: '30px',
+            borderRadius: '12px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            minHeight: '100%',
+            boxSizing: 'border-box'
+          }}
+        >
           {renderizarContenido()}
         </div>
-      </main>
-    </div>
-  );
+      </div>
+    </main>
+  </div>
+);
 }

@@ -117,7 +117,7 @@ class TransbankRetornoView(APIView):
                     logger.info(f"Orden {orden.id} marcada como CANCELADA por anulación en Transbank.")
                 except OrdenCompra.DoesNotExist:
                     pass
-            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=cancelado")
+            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=cancelado?")
 
         if not token:
             return Response({"error": "Token no proporcionado"}, status=status.HTTP_400_BAD_REQUEST)
@@ -196,11 +196,11 @@ class TransbankRetornoView(APIView):
                     logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
             # -----------------------------------------------------------------
 
-            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=exito")
+            return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
         else:
             orden.estado = 'RECHAZADO'
             orden.save()
-            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=rechazado")
+            return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
 
 class CotizacionEnvioView(APIView):
     """

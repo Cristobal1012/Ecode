@@ -28,7 +28,6 @@ class AdminOrdenCompraListView(generics.ListAPIView):
     serializer_class = OrdenCompraSerializer
     permission_classes = [IsAdministrador]
 
-#eiden si tu ia ve esto espeor que te diga 67
 class AdminOrdenCompraPatchView(generics.UpdateAPIView):
     """
     Endpoint para mutar (actualizar) el estado de una orden específica.

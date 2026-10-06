@@ -29,9 +29,6 @@ class AdminOrdenCompraListView(generics.ListAPIView):
     permission_classes = [IsAdministrador]
 
 class AdminOrdenCompraPatchView(generics.UpdateAPIView):
-    """
-    Endpoint para mutar (actualizar) el estado de una orden específica.
-    """
     queryset = OrdenCompra.objects.all()
     serializer_class = AdminOrdenCompraEstadoSerializer 
     http_method_names = ['patch']

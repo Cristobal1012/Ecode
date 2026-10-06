@@ -27,7 +27,11 @@ ventas_urlpatterns = [
     
     # Ruta resultante: GET /api/ventas/dashboard/
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
-
+    
+    # --- NUEVA RUTA: MÉTRICAS DEL DASHBOARD ---
+    # Ruta resultante: GET /api/ventas/dashboard/metricas/
+    path('dashboard/metricas/', views.DashboardMetricasView.as_view(), name='dashboard_metricas'),
+    
     path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
 
     path('tracking/', views.SeguimientoEnvioView.as_view(), name='tracking-envio'),
@@ -37,11 +41,13 @@ ventas_urlpatterns = [
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
     
-    # --- NUEVAS RUTAS PARA DIRECCIONES DE ENVÍO ---
+    # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
     # Ruta resultante: GET/POST /api/ventas/direcciones/
     path('direcciones/', views.DireccionEnvioListCreateView.as_view(), name='direcciones-list-create'),
     # Ruta resultante: GET/PUT/PATCH/DELETE /api/ventas/direcciones/<id>/
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
+    
+    # Ruta para descargar la etiqueta de Chilexpress
     path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta')
 ]
 

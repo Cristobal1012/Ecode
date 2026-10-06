@@ -22,6 +22,7 @@ from .serializers import (
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 import os
+from ecommerce.infrastructure.catalogo.documents import Producto
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,26 @@ class CheckoutAPIView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         orden = serializer.instance
+
+        # --- NUEVO: GUARDAR LOS DETALLES DEL CARRITO EN LA ORDEN ---
+        # 1. Obtenemos los productos que React nos envió en la petición (como 'items' o 'detalles')
+        items_carrito = request.data.get('items') or request.data.get('detalles') or []
+        
+        # 2. Importamos el modelo de detalles (Ajusta el nombre 'DetalleOrdenCompra' si en tu models.py se llama distinto, por ej. 'DetalleOrden')
+        from .models import DetalleOrden 
+        
+        # 3. Guardamos cada item vinculándolo a la orden que acabamos de crear
+        for item in items_carrito:
+            DetalleOrden.objects.create(
+                orden=orden,
+                # Mapeamos las llaves que vienen de React a los campos de tu modelo SQL
+                producto_mongo_id=item.get('id') or item.get('producto_mongo_id'),
+                variante_sku=item.get('sku') or item.get('variante_sku'),
+                nombre_producto_snapshot=item.get('nombre') or item.get('nombre_producto', 'Producto sin nombre'),
+                precio_unitario_snapshot=item.get('precio') or item.get('precio_unitario', 0),
+                cantidad=item.get('cantidad', 1)
+            )
+        # -----------------------------------------------------------
 
         try:
             # Respuesta hacia React
@@ -119,6 +140,20 @@ class TransbankRetornoView(APIView):
         if resultado_tbk.get('aprobado'):
             orden.estado = 'PAGADO'
             orden.save()
+
+            # --- NUEVO: DESCONTAR STOCK EN MONGODB ---
+            try:
+                for detalle in orden.detalles.all():
+                    exito_stock = Producto.reducir_stock_variante(
+                        producto_id=detalle.producto_mongo_id,
+                        sku=detalle.variante_sku,
+                        cantidad=detalle.cantidad
+                    )
+                    if not exito_stock:
+                        logger.warning(f"No se pudo descontar stock para el SKU {detalle.variante_sku} (Orden {orden.id})")
+            except Exception as e:
+                logger.error(f"Excepción al intentar descontar stock para orden {orden.id}: {str(e)}")
+            # -----------------------------------------
 
             # --- 2. GENERACIÓN AUTOMÁTICA DE OT Y ETIQUETA EN CHILEXPRESS ---
             if orden.proveedor_logistico == 'CHILEXPRESS':

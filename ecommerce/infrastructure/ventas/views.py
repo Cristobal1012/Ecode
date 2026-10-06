@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from django.shortcuts import redirect
 from django.db.models import Q
 import logging
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio
@@ -23,6 +23,7 @@ from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 import os
 from ecommerce.infrastructure.catalogo.documents import Producto
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -444,3 +445,42 @@ class SucursalesChilexpressAPIView(APIView):
             return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
             
         return Response({"sucursales": resultado}, status=status.HTTP_200_OK)
+
+class DescargarEtiquetaView(APIView):
+    permission_classes = [IsEmprendedor]
+
+    def get(self, orden_id):
+        try:
+            orden = OrdenCompra.objects.get(id=orden_id)
+        except OrdenCompra.DoesNotExist:
+            return Response({"error": "Orden no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if orden.proveedor_logistico != 'CHILEXPRESS' or not orden.id_transaccion_pasarela:
+            return Response({"error": "Esta orden no tiene una etiqueta de Chilexpress válida."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Extraemos el número de OT de la cadena "TOKEN | OT: 123456789"
+        try:
+            partes = orden.id_transaccion_pasarela.split('OT: ')
+            if len(partes) > 1:
+                numero_ot = partes[1].strip()
+            else:
+                return Response({"error": "No se encontró el número de OT."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "Formato de OT inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Llamamos a nuestro adaptador
+        resultado = ProveedorLogisticoAdapter.obtener_etiqueta_chilexpress(numero_ot)
+
+        if resultado.get('exito') and resultado.get('base64'):
+            try:
+                # Decodificamos el string Base64 a bytes binarios
+                pdf_bytes = base64.b64decode(resultado['base64'])
+                
+                # Preparamos la respuesta HTTP como un archivo PDF
+                response = HttpResponse(pdf_bytes, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="Etiqueta_OT_{numero_ot}.pdf"'
+                return response
+            except Exception as e:
+                return Response({"error": "Error al procesar el archivo PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({"error": resultado.get('error', 'Fallo al obtener la etiqueta desde Chilexpress')}, status=status.HTTP_400_BAD_REQUEST)

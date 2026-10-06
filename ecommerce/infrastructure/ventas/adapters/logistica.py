@@ -336,3 +336,36 @@ class ProveedorLogisticoAdapter:
         except Exception as e:
             logger.error(f"Excepción en generacion de OT Chilexpress: {str(e)}")
             return {"exito": False, "error": str(e)}
+
+    @classmethod
+    def obtener_etiqueta_chilexpress(cls, numero_ot):
+        import requests
+        
+        url = "http://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders-labels"
+        
+        # Obtenemos las credenciales (Ocp-Apim-Subscription-Key) igual que en tus otros métodos
+        headers = cls._obtener_headers_chilexpress()
+        if not headers:
+            return {"error": "Credenciales de Chilexpress no configuradas."}
+
+        # labelType 2 = Imagen en Binario + Datos
+        payload = {
+            "transportOrderNumber": int(float(numero_ot)), 
+            "labelType": 2
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            data = response.json()
+
+            if response.status_code == 200 and data.get("statusCode") == 0:
+                detalles = data.get("data", {}).get("detail", [])
+                if detalles and len(detalles) > 0:
+                    etiqueta_base64 = detalles[0].get("label", {}).get("labelData")
+                    if etiqueta_base64:
+                        return {"exito": True, "base64": etiqueta_base64}
+            
+            return {"error": data.get("statusDescription", "No se pudo obtener la etiqueta.")}
+
+        except Exception as e:
+            return {"error": f"Error de conexión con Chilexpress: {str(e)}"}

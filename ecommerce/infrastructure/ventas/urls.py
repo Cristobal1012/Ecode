@@ -42,6 +42,7 @@ ventas_urlpatterns = [
     path('direcciones/', views.DireccionEnvioListCreateView.as_view(), name='direcciones-list-create'),
     # Ruta resultante: GET/PUT/PATCH/DELETE /api/ventas/direcciones/<id>/
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
+    path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta')
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

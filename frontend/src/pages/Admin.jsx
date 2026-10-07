@@ -5,6 +5,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import { PALETTES } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
 import TablaInventario from '../components/TablaInventario';
+import GestorPedidos from '../components/GestorPedidos';
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -118,7 +119,7 @@ export default function Admin() {
         return (
           <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Ventas</h2>
-            <p style={{ color: 'var(--color-text)' }}>Aquí podrás ver el historial de pedidos y su estado.</p>
+            <GestorPedidos/>
           </div>
         );
       case 'configuracion':

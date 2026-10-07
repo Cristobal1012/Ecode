@@ -12,6 +12,7 @@ export default function GaleriaImagenes({
 
   const [archivosSeleccionados, setArchivosSeleccionados] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
+  const [eliminando, setEliminando] = useState(null);
   const [error, setError] = useState('');
 
   const manejarArchivos = (archivos) => {
@@ -48,6 +49,101 @@ export default function GaleriaImagenes({
     setArchivosSeleccionados((prev) =>
       prev.filter((_, i) => i !== index)
     );
+  };
+
+  /*
+   * Obtiene el ID de una imagen.
+   *
+   * Primero intenta encontrarlo en archivosGestionados.
+   * Si no existe, intenta obtenerlo desde el nombre de archivo
+   * de la URL de la imagen.
+   */
+  const obtenerImagenId = (url, index) => {
+    const archivoGestionado = archivosGestionados[index];
+
+    if (archivoGestionado) {
+      if (typeof archivoGestionado === 'object') {
+        return (
+          archivoGestionado.id ||
+          archivoGestionado.imagen_id ||
+          archivoGestionado.image_id
+        );
+      }
+
+      if (typeof archivoGestionado === 'string') {
+        const partes = archivoGestionado.split('/');
+        const nombre = partes[partes.length - 1];
+        return nombre.split('.')[0];
+      }
+    }
+
+    try {
+      const urlObj = new URL(url, window.location.origin);
+      const partes = urlObj.pathname.split('/').filter(Boolean);
+      const nombreArchivo = partes[partes.length - 1];
+
+      return nombreArchivo.split('.')[0];
+    } catch (error) {
+      console.error('No se pudo obtener el ID de la imagen:', error);
+      return null;
+    }
+  };
+
+  const eliminarImagenExistente = async (url, index) => {
+    if (!productoId) {
+      setError('No se encontró el producto.');
+      return;
+    }
+
+    const imagenId = obtenerImagenId(url, index);
+
+    if (!imagenId) {
+      setError('No se pudo identificar la imagen que deseas eliminar.');
+      return;
+    }
+
+    const confirmar = window.confirm(
+      '¿Estás seguro de que deseas eliminar esta imagen?'
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
+    setEliminando(index);
+    setError('');
+
+    try {
+      await clienteAxios.delete(
+        `catalogo/productos/${productoId}/imagenes/${imagenId}/`
+      );
+
+      // Actualizar las imágenes mostradas
+      const nuevasImagenes = imagenes.filter((_, i) => i !== index);
+
+      onImagenesChange(nuevasImagenes);
+
+      // Actualizar archivos gestionados si el padre los utiliza
+      if (onArchivosChange) {
+        const nuevosArchivos = archivosGestionados.filter(
+          (_, i) => i !== index
+        );
+
+        onArchivosChange(nuevosArchivos);
+      }
+    } catch (err) {
+      console.error(
+        'Error al eliminar imagen:',
+        err.response?.data || err.message
+      );
+
+      setError(
+        err.response?.data?.detail ||
+        'No se pudo eliminar la imagen.'
+      );
+    } finally {
+      setEliminando(null);
+    }
   };
 
   const subirImagenes = async () => {
@@ -111,6 +207,7 @@ export default function GaleriaImagenes({
     >
       <h4>Galería de imágenes</h4>
 
+      {/* Zona para subir imágenes */}
       <div
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -146,6 +243,7 @@ export default function GaleriaImagenes({
         />
       </div>
 
+      {/* Mensaje de error */}
       {error && (
         <p
           style={{
@@ -160,6 +258,7 @@ export default function GaleriaImagenes({
         </p>
       )}
 
+      {/* Imágenes seleccionadas todavía no subidas */}
       {archivosSeleccionados.length > 0 && (
         <div style={{ marginTop: '20px' }}>
           <h5>Imágenes seleccionadas</h5>
@@ -225,6 +324,7 @@ export default function GaleriaImagenes({
         </div>
       )}
 
+      {/* Imágenes que ya están almacenadas */}
       {imagenes.length > 0 && (
         <div style={{ marginTop: '25px' }}>
           <h5>Imágenes de la galería</h5>
@@ -238,7 +338,14 @@ export default function GaleriaImagenes({
             }}
           >
             {imagenes.map((url, index) => (
-              <div key={url || index}>
+              <div
+                key={url || index}
+                style={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  padding: '5px'
+                }}
+              >
                 <img
                   src={url}
                   alt={`Producto ${index + 1}`}
@@ -262,6 +369,34 @@ export default function GaleriaImagenes({
                     Portada
                   </small>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    eliminarImagenExistente(url, index)
+                  }
+                  disabled={eliminando === index}
+                  style={{
+                    width: '100%',
+                    marginTop: '6px',
+                    backgroundColor:
+                      eliminando === index
+                        ? '#9ca3af'
+                        : '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    cursor:
+                      eliminando === index
+                        ? 'not-allowed'
+                        : 'pointer'
+                  }}
+                >
+                  {eliminando === index
+                    ? 'Eliminando...'
+                    : 'Eliminar'}
+                </button>
               </div>
             ))}
           </div>

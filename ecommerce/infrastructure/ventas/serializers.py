@@ -1,20 +1,26 @@
 from decimal import Decimal
+import uuid
 
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
+
+# Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
-from .models import ConfiguracionGlobal, OrdenCompra
+
+from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio
+from .adapters.transbank_adapter import TransbankWebpayAdapter
+# NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
+from .adapters.logistica import ProveedorLogisticoAdapter
 
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
     pasarelas_activas = serializers.SerializerMethodField()
-
 
     class Meta:
         model = ConfiguracionGlobal
@@ -26,6 +32,12 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'layout_catalogo',
             'pasarelas_activas',
             'modo_autenticacion',
+            'comuna_origen',
+            'region_origen',
+            'calle_origen',
+            'numero_origen',
+            'dpto_casa_origen',
+            'retiro_en_local_activo',
         ]
 
     def get_pasarelas_activas(self, obj):
@@ -46,6 +58,12 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'banner',
             'layout_catalogo',
             'modo_autenticacion',
+            'comuna_origen',
+            'region_origen',
+            'calle_origen',
+            'numero_origen',
+            'dpto_casa_origen',
+            'retiro_en_local_activo',
         ]
 
 
@@ -95,8 +113,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'subtotal',
             'costo_envio',
             'total_final',
-            'proveedor_logistico',
             'paquete',
+            'id_transaccion_pasarela',
+            'proveedor_logistico',
         ]
 
     def validate(self, data):
@@ -108,15 +127,18 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 )
 
         config = ConfiguracionGlobal.objects.filter(pk=1).first()
+        
+        # Validamos usando el campo del modelo en lugar de buscar en el antiguo JSON
+        retiro_activo = config.retiro_en_local_activo if config else False
         logistica = (config.api_keys_logistica or {}) if config else {}
-        if logistica.get('proveedor_activo') or (
-            isinstance(logistica.get('retiro_en_local'), dict)
-            and logistica['retiro_en_local'].get('activo') is True
-        ):
+        proveedor_activo = logistica.get('proveedor_activo', False)
+
+        if proveedor_activo or retiro_activo:
             if not data.get('proveedor_logistico'):
                 raise serializers.ValidationError({
                     'proveedor_logistico': 'Seleccione una opción de entrega cotizada.'
                 })
+            
             if data['proveedor_logistico'] != 'RETIRO_LOCAL':
                 direccion = data.get('direccion_envio_snapshot') or {}
                 if not isinstance(direccion, dict) or not direccion.get('comuna'):
@@ -125,6 +147,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     })
                 if 'paquete' not in data:
                     raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
+                    
         elif not data.get('proveedor_logistico'):
             faltantes = [campo for campo in ('costo_envio', 'total_final') if campo not in data]
             if faltantes:
@@ -137,27 +160,80 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
-        if proveedor:
-            config = ConfiguracionGlobal.objects.filter(pk=1).first()
-            service = ServicioCotizacion(config.api_keys_logistica if config else {})
-            solicitud = SolicitudCotizacion(
-                comuna=(validated_data.get('direccion_envio_snapshot') or {}).get('comuna', ''),
-                subtotal=Decimal(str(validated_data['subtotal'])),
-                paquete=paquete,
-            )
-            try:
-                quote = service.cotizar(solicitud, proveedor)
-            except ConfiguracionCotizacionInvalida as exc:
-                raise serializers.ValidationError({'proveedor_logistico': str(exc)}) from exc
-            except ErrorCotizacion as exc:
-                raise ProveedorLogisticoNoDisponible() from exc
-            validated_data['costo_envio'] = float(quote.costo_envio)
-            validated_data['total_final'] = float(quote.total_final)
         
+        # 1. COTIZACIÓN REAL O RETIRO LOCAL
+        if proveedor and proveedor != 'RETIRO_LOCAL':
+            config = ConfiguracionGlobal.objects.filter(pk=1).first()
+            origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
+            destino = (validated_data.get('direccion_envio_snapshot') or {}).get('comuna', '')
+            
+            # REEMPLAZO: Usamos la API de Chilexpress real a través de nuestro Adapter
+            if paquete and destino:
+                resultado = ProveedorLogisticoAdapter.cotizar_envio(
+                    proveedor=proveedor.lower(),
+                    origen=origen,
+                    destino=destino,
+                    peso_kg=float(paquete.peso_kg),
+                    alto_cm=int(paquete.alto_cm),
+                    ancho_cm=int(paquete.ancho_cm),
+                    largo_cm=int(paquete.largo_cm)
+                )
+                
+                if "error" in resultado:
+                    raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
+                    
+                validated_data['costo_envio'] = float(resultado['precio'])
+                validated_data['total_final'] = float(validated_data['subtotal']) + float(resultado['precio'])
+            else:
+                validated_data['costo_envio'] = float(validated_data.get('costo_envio', 0))
+                validated_data['total_final'] = float(validated_data.get('total_final', validated_data['subtotal']))
+                
+        elif proveedor == 'RETIRO_LOCAL':
+            validated_data['costo_envio'] = 0.0
+            validated_data['total_final'] = float(validated_data['subtotal'])
+        
+        # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user
             validated_data['email_invitado'] = ''
-        return super().create(validated_data)
+            
+        # 3. CREAR LA ORDEN EN BASE DE DATOS
+        orden = super().create(validated_data)
+        
+        # 4. INTEGRACIÓN CON PASARELAS DE PAGO
+        metodo_pago = validated_data.get('metodo_pago')
+        url_pago = None
+        
+        if metodo_pago == 'TRANSBANK':
+            if request:
+                host = request.get_host()
+                scheme = request.scheme
+                return_url = f"{scheme}://{host}/api/ventas/transbank/retorno/"
+            else:
+                return_url = "http://localhost:8000/api/ventas/transbank/retorno/"
+                
+            session_id = str(uuid.uuid4())
+            
+            respuesta_tbk = TransbankWebpayAdapter.iniciar_transaccion(
+                orden_id=str(orden.id),
+                monto=orden.total_final,
+                return_url=return_url,
+                session_id=session_id
+            )
+            
+            if respuesta_tbk.get('exito'):
+                url_pago = f"{respuesta_tbk['url_pago']}?token_ws={respuesta_tbk['token']}"
+                orden.id_transaccion_pasarela = respuesta_tbk['token']
+                orden.save()
+            else:
+                orden.delete()
+                raise serializers.ValidationError({
+                    "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
+                })
+
+        # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
+        orden.url_pago = url_pago
+        return orden
 
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
@@ -188,3 +264,18 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
+
+class DireccionEnvioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DireccionEnvio
+        fields = [
+            'id', 
+            'calle', 
+            'calle_numero',
+            'dpto_casa',
+            'comuna', 
+            'ciudad', 
+            'region', 
+            'codigo_postal', 
+            'es_predeterminado'
+        ]

@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import GaleriaImagenes from './GaleriaImagenes';
 
+const crearVarianteVacia = () => ({
+  sku: '',
+  precio: '',
+  stock: '',
+  peso_kg: 1.0,
+  alto_cm: 10,
+  ancho_cm: 10,
+  largo_cm: 10,
+  atributosVariables: []
+});
+
 export default function FormularioProducto({
   alCancelar,
   alGuardar,
@@ -14,28 +25,31 @@ export default function FormularioProducto({
     publicado: false
   });
 
-  //Imágenes existentes/devueltas por el backend
+  // Imágenes existentes/devueltas por el backend
   const [imagenes, setImagenes] = useState([]);
 
-  //Archivos gestionados por GaleriaImagenes
+  // Archivos gestionados por GaleriaImagenes
   const [archivosGestionados, setArchivosGestionados] = useState([]);
 
-  //ID del producto ya guardado
+  // ID del producto ya guardado
   const [productoGuardadoId, setProductoGuardadoId] = useState(null);
+
+  // Atributos globales
   const [atributosGlobales, setAtributosGlobales] = useState([]);
+
+  // Variantes
   const [variantes, setVariantes] = useState([
-    {
-      sku: '',
-      precio: '',
-      stock: '',
-      atributosVariables: []
-    }
+    crearVarianteVacia()
   ]);
 
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
+
+  // ============================================================
+  // CARGAR DATOS DEL PRODUCTO AL EDITAR
+  // ============================================================
 
   useEffect(() => {
     if (productoAEditar) {
@@ -49,21 +63,24 @@ export default function FormularioProducto({
             : false
       });
 
-      //Conservamos las imágenes existentes
+      // Conservamos las imágenes existentes
       setImagenes(productoAEditar.imagenes || []);
 
-      //Guardamos el ID para poder subir imágenes
+      // Guardamos el ID para poder subir imágenes
       setProductoGuardadoId(
-        productoAEditar.id || productoAEditar._id
+        productoAEditar.id || productoAEditar._id || null
       );
 
-      //Atributos globales
+      // ========================================================
+      // ATRIBUTOS GLOBALES
+      // ========================================================
+
       if (productoAEditar.atributos_globales) {
         const arrGlobales = Object.entries(
           productoAEditar.atributos_globales
-        ).map(([k, v]) => ({
-          clave: k.replace(/_/g, ' '),
-          valor: String(v)
+        ).map(([clave, valor]) => ({
+          clave: clave.replace(/_/g, ' '),
+          valor: String(valor)
         }));
 
         setAtributosGlobales(arrGlobales);
@@ -71,47 +88,61 @@ export default function FormularioProducto({
         setAtributosGlobales([]);
       }
 
-      //Variantes del producto
-      if (productoAEditar.variantes && productoAEditar.variantes.length > 0) {
+      // ========================================================
+      // VARIANTES
+      // ========================================================
+
+      if (
+        productoAEditar.variantes &&
+        productoAEditar.variantes.length > 0
+      ) {
         const arrVariantes = productoAEditar.variantes.map((v) => {
-          const arrAttrVar = v.atributos_variables ? Object.entries(v.atributos_variables).map(([k, val]) => ({clave: k.replace(/_/g, ' '),valor: String(val)})): [];
+          const arrAttrVar = v.atributos_variables
+            ? Object.entries(v.atributos_variables).map(
+                ([clave, valor]) => ({
+                  clave: clave.replace(/_/g, ' '),
+                  valor: String(valor)
+                })
+              )
+            : [];
+
           return {
             sku: v.sku || '',
-            precio: v.precio || '',
-            stock: v.stock || 0,
+            precio: v.precio ?? '',
+            stock: v.stock ?? 0,
+
+            // Campos logísticos
+            peso_kg: v.peso_kg ?? 1.0,
+            alto_cm: v.alto_cm ?? 10,
+            ancho_cm: v.ancho_cm ?? 10,
+            largo_cm: v.largo_cm ?? 10,
+
             atributosVariables: arrAttrVar
           };
         });
 
         setVariantes(arrVariantes);
       } else {
-        setVariantes([
-          {
-            sku: '',
-            precio: '',
-            stock: '',
-            atributosVariables: []
-          }
-        ]);
+        setVariantes([crearVarianteVacia()]);
       }
     } else {
-      //Si estamos creando un producto nuevo
+      // ========================================================
+      // CREAR PRODUCTO NUEVO
+      // ========================================================
+
       setProductoGuardadoId(null);
       setImagenes([]);
       setArchivosGestionados([]);
       setAtributosGlobales([]);
-      setVariantes([
-        {
-          sku: '',
-          precio: '',
-          stock: '',
-          atributosVariables: []
-        }
-      ]);
+      setVariantes([crearVarianteVacia()]);
+      setError('');
     }
   }, [productoAEditar]);
 
-  //Cargar categorias existentes
+  // ============================================================
+  // CARGAR CATEGORÍAS EXISTENTES
+  // ============================================================
+
   useEffect(() => {
     const cargarCategorias = async () => {
       try {
@@ -148,21 +179,30 @@ export default function FormularioProducto({
         }
       }
     };
+
     cargarCategorias();
   }, [productoAEditar]);
 
-  //Cambios del producto
+  // ============================================================
+  // CAMBIOS DEL PRODUCTO
+  // ============================================================
+
   const handleChangeProducto = (e) => {
-    setProducto({
-      ...producto,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+
+    setProducto((prev) => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  //Atributos globales
+  // ============================================================
+  // ATRIBUTOS GLOBALES
+  // ============================================================
+
   const agregarAtributoGlobal = () => {
-    setAtributosGlobales([
-      ...atributosGlobales,
+    setAtributosGlobales((prev) => [
+      ...prev,
       {
         clave: '',
         valor: ''
@@ -175,29 +215,32 @@ export default function FormularioProducto({
     campo,
     valor
   ) => {
-    const nuevos = [...atributosGlobales];
-
-    nuevos[index][campo] = valor;
-
-    setAtributosGlobales(nuevos);
-  };
-
-  const eliminarAtributoGlobal = (index) => {
-    setAtributosGlobales(
-      atributosGlobales.filter((_, i) => i !== index)
+    setAtributosGlobales((prev) =>
+      prev.map((attr, i) =>
+        i === index
+          ? {
+              ...attr,
+              [campo]: valor
+            }
+          : attr
+      )
     );
   };
 
-  //Variantes
+  const eliminarAtributoGlobal = (index) => {
+    setAtributosGlobales((prev) =>
+      prev.filter((_, i) => i !== index)
+    );
+  };
+
+  // ============================================================
+  // VARIANTES
+  // ============================================================
+
   const agregarVariante = () => {
-    setVariantes([
-      ...variantes,
-      {
-        sku: '',
-        precio: '',
-        stock: '',
-        atributosVariables: []
-      }
+    setVariantes((prev) => [
+      ...prev,
+      crearVarianteVacia()
     ]);
   };
 
@@ -206,9 +249,16 @@ export default function FormularioProducto({
     campo,
     valor
   ) => {
-    const nuevas = [...variantes];
-    nuevas[index][campo] = valor;
-    setVariantes(nuevas);
+    setVariantes((prev) =>
+      prev.map((variante, i) =>
+        i === index
+          ? {
+              ...variante,
+              [campo]: valor
+            }
+          : variante
+      )
+    );
   };
 
   const eliminarVariante = (index) => {
@@ -218,19 +268,33 @@ export default function FormularioProducto({
       );
       return;
     }
-    setVariantes(
-      variantes.filter((_, i) => i !== index)
+
+    setVariantes((prev) =>
+      prev.filter((_, i) => i !== index)
     );
   };
 
-  //Atributos de la variante
+  // ============================================================
+  // ATRIBUTOS DE VARIANTE
+  // ============================================================
+
   const agregarAtributoVariante = (varIndex) => {
-    const nuevas = [...variantes];
-    nuevas[varIndex].atributosVariables.push({
-      clave: '',
-      valor: ''
-    });
-    setVariantes(nuevas);
+    setVariantes((prev) =>
+      prev.map((variante, i) =>
+        i === varIndex
+          ? {
+              ...variante,
+              atributosVariables: [
+                ...variante.atributosVariables,
+                {
+                  clave: '',
+                  valor: ''
+                }
+              ]
+            }
+          : variante
+      )
+    );
   };
 
   const actualizarAtributoVariante = (
@@ -239,103 +303,175 @@ export default function FormularioProducto({
     campo,
     valor
   ) => {
-    const nuevas = [...variantes];
-    nuevas[varIndex].atributosVariables[attrIndex][campo] =
-      valor;
-    setVariantes(nuevas);
+    setVariantes((prev) =>
+      prev.map((variante, i) => {
+        if (i !== varIndex) {
+          return variante;
+        }
+
+        return {
+          ...variante,
+          atributosVariables:
+            variante.atributosVariables.map(
+              (attr, j) =>
+                j === attrIndex
+                  ? {
+                      ...attr,
+                      [campo]: valor
+                    }
+                  : attr
+            )
+        };
+      })
+    );
   };
 
   const eliminarAtributoVariante = (
     varIndex,
     attrIndex
   ) => {
-    const nuevas = [...variantes];
-    nuevas[varIndex].atributosVariables.splice(
-      attrIndex,
-      1
-    );
-    setVariantes(nuevas);
-  };
-
-  //Guardar prodcuto
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setCargando(true);
-    setError('');
-    const objAtributosGlobales =
-      atributosGlobales.reduce((acc, attr) => {
-        if (attr.clave && attr.valor) {
-          acc[
-            attr.clave
-              .toLowerCase()
-              .trim()
-              .replace(/ /g, '_')
-          ] = attr.valor.trim();
+    setVariantes((prev) =>
+      prev.map((variante, i) => {
+        if (i !== varIndex) {
+          return variante;
         }
 
-        return acc;
-      }, {});
+        return {
+          ...variante,
+          atributosVariables:
+            variante.atributosVariables.filter(
+              (_, j) => j !== attrIndex
+            )
+        };
+      })
+    );
+  };
 
-    const payloadVariantes = variantes.map((v) => {
-      const objAtributosVariables =
-        v.atributosVariables.reduce(
-          (acc, attr) => {
-            if (attr.clave && attr.valor) {
-              acc[
-                attr.clave
-                  .toLowerCase()
-                  .trim()
-                  .replace(/ /g, '_')
-              ] = attr.valor.trim();
-            }
-            return acc;
-          },
-          {}
-        );
+  // ============================================================
+  // GUARDAR PRODUCTO
+  // ============================================================
 
-      return {
-        sku: v.sku,
-        precio: parseFloat(v.precio),
-        stock: parseInt(v.stock, 10),
-        atributos_variables:
-          objAtributosVariables
-      };
-    });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-    //Payload
-    //IMPORTANTE
-    //Las imágenes NO se mandan aquí
-    //Se suben posteriormente mediante:
-    //POST /catalogo/productos/{id}/imagenes/
-    const payload = {
-      nombre: producto.nombre,
-      descripcion: producto.descripcion,
-      categoria: producto.categoria.trim(),
-      activo: true,
-      publicado: producto.publicado,
-      atributos_globales: objAtributosGlobales,
-      variantes: payloadVariantes
-    };
+    setCargando(true);
+    setError('');
 
     try {
+      // ========================================================
+      // ATRIBUTOS GLOBALES
+      // ========================================================
+
+      const objAtributosGlobales =
+        atributosGlobales.reduce((acc, attr) => {
+          if (
+            attr.clave?.trim() &&
+            attr.valor?.trim()
+          ) {
+            const clave = attr.clave
+              .toLowerCase()
+              .trim()
+              .replace(/\s+/g, '_');
+
+            acc[clave] = attr.valor.trim();
+          }
+
+          return acc;
+        }, {});
+
+      // ========================================================
+      // VARIANTES
+      // ========================================================
+
+      const payloadVariantes = variantes.map((v) => {
+        const objAtributosVariables =
+          v.atributosVariables.reduce(
+            (acc, attr) => {
+              if (
+                attr.clave?.trim() &&
+                attr.valor?.trim()
+              ) {
+                const clave = attr.clave
+                  .toLowerCase()
+                  .trim()
+                  .replace(/\s+/g, '_');
+
+                acc[clave] = attr.valor.trim();
+              }
+
+              return acc;
+            },
+            {}
+          );
+
+        return {
+          sku: v.sku.trim(),
+
+          precio: parseFloat(v.precio),
+          stock: parseInt(v.stock, 10),
+
+          // Campos logísticos
+          peso_kg: parseFloat(v.peso_kg),
+          alto_cm: parseInt(v.alto_cm, 10),
+          ancho_cm: parseInt(v.ancho_cm, 10),
+          largo_cm: parseInt(v.largo_cm, 10),
+
+          atributos_variables:
+            objAtributosVariables
+        };
+      });
+
+      // ========================================================
+      // PAYLOAD
+      // ========================================================
+
+      const payload = {
+        nombre: producto.nombre.trim(),
+        descripcion: producto.descripcion.trim(),
+        categoria: producto.categoria.trim(),
+
+        activo: true,
+        publicado: producto.publicado,
+
+        atributos_globales:
+          objAtributosGlobales,
+
+        variantes: payloadVariantes
+      };
+
       let idProducto;
 
-      //Editar
+      // ========================================================
+      // EDITAR PRODUCTO
+      // ========================================================
+
       if (productoAEditar) {
         idProducto =
           productoAEditar.id ||
           productoAEditar._id;
+
+        if (!idProducto) {
+          throw new Error(
+            'No se encontró el ID del producto.'
+          );
+        }
+
         await clienteAxios.put(
           `catalogo/productos/${idProducto}/`,
           payload
         );
+
         setProductoGuardadoId(idProducto);
+
         alert(
-          '¡Producto actualizado! Ahora puedes agregar imágenes nuevas'
+          '¡Producto actualizado! Ahora puedes agregar imágenes nuevas.'
         );
       }
 
-      //Crear
+      // ========================================================
+      // CREAR PRODUCTO
+      // ========================================================
+
       else {
         const response =
           await clienteAxios.post(
@@ -343,47 +479,83 @@ export default function FormularioProducto({
             payload
           );
 
-        //Intentamos obtener el ID desde la respuesta
         idProducto =
           response.data?.id ||
           response.data?._id;
+
         if (!idProducto) {
           throw new Error(
             'El backend no devolvió el ID del producto creado.'
           );
         }
+
         setProductoGuardadoId(idProducto);
+
         alert(
           '¡Producto creado! Ahora puedes agregar imágenes.'
         );
       }
 
       /*
-       * IMPORTANTE
-       * NO llamamos alGuardar() aquí
+       * IMPORTANTE:
+       *
+       * NO llamamos alGuardar() aquí.
        *
        * Dejamos el formulario abierto para que
        * GaleriaImagenes pueda utilizar el ID del producto
-       * y subir los archivos
+       * y subir los archivos.
        */
-
     } catch (err) {
       console.error(
         'Error del backend:',
         err.response?.data || err.message
       );
 
-      setError(
-        err.response?.data?.detail ||
-        'Ocurrió un error al guardar. Revisa la consola.'
-      );
+      const data = err.response?.data;
+
+      let mensaje =
+        data?.detail ||
+        data?.message ||
+        'Ocurrió un error al guardar. Revisa la consola.';
+
+      // Si Django REST Framework devuelve errores por campo
+      if (
+        typeof data === 'object' &&
+        !data?.detail &&
+        !data?.message
+      ) {
+        try {
+          mensaje = Object.entries(data)
+            .map(([campo, errores]) => {
+              const texto = Array.isArray(errores)
+                ? errores.join(', ')
+                : String(errores);
+
+              return `${campo}: ${texto}`;
+            })
+            .join(' | ');
+        } catch {
+          // Dejamos el mensaje genérico
+        }
+      }
+
+      setError(mensaje);
     } finally {
       setCargando(false);
     }
   };
+
+  // ============================================================
+  // FINALIZAR
+  // ============================================================
+
   const finalizarFormulario = () => {
     alGuardar();
   };
+
+  // ============================================================
+  // ESTILOS
+  // ============================================================
 
   const inputStyle = {
     width: '100%',
@@ -392,7 +564,8 @@ export default function FormularioProducto({
     borderRadius: '4px',
     marginTop: '5px',
     backgroundColor: '#fff',
-    color: '#000'
+    color: '#000',
+    boxSizing: 'border-box'
   };
 
   const cardStyle = {
@@ -402,6 +575,10 @@ export default function FormularioProducto({
     border: '1px solid #e5e7eb',
     marginBottom: '15px'
   };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <form
@@ -413,7 +590,10 @@ export default function FormularioProducto({
         borderRadius: '8px'
       }}
     >
-      {/* ENCABEZADO */}
+      {/* ======================================================
+          ENCABEZADO
+      ======================================================= */}
+
       <div
         style={{
           display: 'flex',
@@ -449,6 +629,10 @@ export default function FormularioProducto({
         </button>
       </div>
 
+      {/* ======================================================
+          ERROR
+      ======================================================= */}
+
       {error && (
         <p
           style={{
@@ -461,6 +645,10 @@ export default function FormularioProducto({
           {error}
         </p>
       )}
+
+      {/* ======================================================
+          DATOS GENERALES
+      ======================================================= */}
 
       <h4
         style={{
@@ -482,9 +670,12 @@ export default function FormularioProducto({
         }}
       >
         {/* NOMBRE */}
+
         <div>
           <label
-            style={{ fontWeight: 'bold' }}
+            style={{
+              fontWeight: 'bold'
+            }}
           >
             Nombre del Producto
           </label>
@@ -500,9 +691,12 @@ export default function FormularioProducto({
         </div>
 
         {/* CATEGORÍA */}
+
         <div>
           <label
-            style={{ fontWeight: 'bold' }}
+            style={{
+              fontWeight: 'bold'
+            }}
           >
             Categoría
           </label>
@@ -548,10 +742,11 @@ export default function FormularioProducto({
                   type="button"
                   onClick={() => {
                     setModoNuevaCategoria(true);
-                    setProducto({
-                      ...producto,
+
+                    setProducto((prev) => ({
+                      ...prev,
                       categoria: ''
-                    });
+                    }));
                   }}
                   style={{
                     padding: '0 15px',
@@ -588,10 +783,11 @@ export default function FormularioProducto({
                     type="button"
                     onClick={() => {
                       setModoNuevaCategoria(false);
-                      setProducto({
-                        ...producto,
+
+                      setProducto((prev) => ({
+                        ...prev,
                         categoria: ''
-                      });
+                      }));
                     }}
                     style={{
                       padding: '0 15px',
@@ -611,13 +807,16 @@ export default function FormularioProducto({
         </div>
 
         {/* DESCRIPCIÓN */}
+
         <div
           style={{
             gridColumn: '1 / -1'
           }}
         >
           <label
-            style={{ fontWeight: 'bold' }}
+            style={{
+              fontWeight: 'bold'
+            }}
           >
             Descripción
           </label>
@@ -633,7 +832,10 @@ export default function FormularioProducto({
           />
         </div>
 
-        {/*Galeria de images*/}
+        {/* ====================================================
+            GALERÍA
+        ===================================================== */}
+
         <GaleriaImagenes
           productoId={productoGuardadoId}
           imagenes={imagenes}
@@ -647,6 +849,10 @@ export default function FormularioProducto({
         />
       </div>
 
+      {/* ======================================================
+          ATRIBUTOS GLOBALES
+      ======================================================= */}
+
       <div
         style={{
           ...cardStyle,
@@ -657,8 +863,7 @@ export default function FormularioProducto({
         <div
           style={{
             display: 'flex',
-            justifyContent:
-              'space-between',
+            justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '15px'
           }}
@@ -744,11 +949,14 @@ export default function FormularioProducto({
         )}
       </div>
 
+      {/* ======================================================
+          VARIANTES
+      ======================================================= */}
+
       <div
         style={{
           display: 'flex',
-          justifyContent:
-            'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom:
             '2px solid var(--color-secondary)',
@@ -790,11 +998,12 @@ export default function FormularioProducto({
             key={varIndex}
             style={cardStyle}
           >
+            {/* CABECERA VARIANTE */}
+
             <div
               style={{
                 display: 'flex',
-                justifyContent:
-                  'space-between',
+                justifyContent: 'space-between',
                 marginBottom: '10px'
               }}
             >
@@ -815,8 +1024,7 @@ export default function FormularioProducto({
                   )
                 }
                 style={{
-                  background:
-                    'transparent',
+                  background: 'transparent',
                   border: 'none',
                   color: '#ef4444',
                   cursor: 'pointer',
@@ -826,6 +1034,8 @@ export default function FormularioProducto({
                 Eliminar Variante
               </button>
             </div>
+
+            {/* SKU / PRECIO / STOCK */}
 
             <div
               style={{
@@ -837,6 +1047,7 @@ export default function FormularioProducto({
               }}
             >
               {/* SKU */}
+
               <div>
                 <label
                   style={{
@@ -863,6 +1074,7 @@ export default function FormularioProducto({
               </div>
 
               {/* PRECIO */}
+
               <div>
                 <label
                   style={{
@@ -891,6 +1103,7 @@ export default function FormularioProducto({
               </div>
 
               {/* STOCK */}
+
               <div>
                 <label
                   style={{
@@ -918,7 +1131,180 @@ export default function FormularioProducto({
               </div>
             </div>
 
-            {/* ATRIBUTOS DE VARIANTE */}
+            {/* ==================================================
+                DIMENSIONES LOGÍSTICAS
+            =================================================== */}
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(4, 1fr)',
+                gap: '15px',
+                marginBottom: '15px',
+                padding: '10px',
+                backgroundColor: '#e0f2fe',
+                borderRadius: '4px',
+                border: '1px solid #bae6fd'
+              }}
+            >
+              <div
+                style={{
+                  gridColumn: '1 / -1'
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '0.85em',
+                    fontWeight: 'bold',
+                    color: '#0369a1'
+                  }}
+                >
+                  Dimensiones Logísticas
+                </span>
+              </div>
+
+              {/* PESO */}
+
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.8em',
+                    fontWeight: 'bold',
+                    color: '#0c4a6e'
+                  }}
+                >
+                  Peso (Kg)
+                </label>
+
+                <input
+                  type="number"
+                  value={variante.peso_kg}
+                  onChange={(e) =>
+                    actualizarVariante(
+                      varIndex,
+                      'peso_kg',
+                      e.target.value
+                    )
+                  }
+                  style={{
+                    ...inputStyle,
+                    marginTop: '2px',
+                    padding: '6px'
+                  }}
+                  min="0.1"
+                  step="0.1"
+                  required
+                />
+              </div>
+
+              {/* ALTO */}
+
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.8em',
+                    fontWeight: 'bold',
+                    color: '#0c4a6e'
+                  }}
+                >
+                  Alto (cm)
+                </label>
+
+                <input
+                  type="number"
+                  value={variante.alto_cm}
+                  onChange={(e) =>
+                    actualizarVariante(
+                      varIndex,
+                      'alto_cm',
+                      e.target.value
+                    )
+                  }
+                  style={{
+                    ...inputStyle,
+                    marginTop: '2px',
+                    padding: '6px'
+                  }}
+                  min="1"
+                  step="1"
+                  required
+                />
+              </div>
+
+              {/* ANCHO */}
+
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.8em',
+                    fontWeight: 'bold',
+                    color: '#0c4a6e'
+                  }}
+                >
+                  Ancho (cm)
+                </label>
+
+                <input
+                  type="number"
+                  value={variante.ancho_cm}
+                  onChange={(e) =>
+                    actualizarVariante(
+                      varIndex,
+                      'ancho_cm',
+                      e.target.value
+                    )
+                  }
+                  style={{
+                    ...inputStyle,
+                    marginTop: '2px',
+                    padding: '6px'
+                  }}
+                  min="1"
+                  step="1"
+                  required
+                />
+              </div>
+
+              {/* LARGO */}
+
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.8em',
+                    fontWeight: 'bold',
+                    color: '#0c4a6e'
+                  }}
+                >
+                  Largo (cm)
+                </label>
+
+                <input
+                  type="number"
+                  value={variante.largo_cm}
+                  onChange={(e) =>
+                    actualizarVariante(
+                      varIndex,
+                      'largo_cm',
+                      e.target.value
+                    )
+                  }
+                  style={{
+                    ...inputStyle,
+                    marginTop: '2px',
+                    padding: '6px'
+                  }}
+                  min="1"
+                  step="1"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* ==================================================
+                ATRIBUTOS DE VARIANTE
+            =================================================== */}
+
             <div
               style={{
                 backgroundColor: '#f3f4f6',
@@ -1040,12 +1426,15 @@ export default function FormularioProducto({
         )
       )}
 
+      {/* ======================================================
+          ESTADO PUBLICACIÓN
+      ======================================================= */}
+
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent:
-            'space-between',
+          justifyContent: 'space-between',
           padding: '15px',
           backgroundColor:
             producto.publicado
@@ -1112,11 +1501,11 @@ export default function FormularioProducto({
             type="checkbox"
             checked={producto.publicado}
             onChange={(e) =>
-              setProducto({
-                ...producto,
+              setProducto((prev) => ({
+                ...prev,
                 publicado:
                   e.target.checked
-              })
+              }))
             }
             style={{
               width: '20px',
@@ -1126,6 +1515,10 @@ export default function FormularioProducto({
           />
         </label>
       </div>
+
+      {/* ======================================================
+          BOTONES
+      ======================================================= */}
 
       {!productoGuardadoId ? (
         <button
@@ -1154,8 +1547,7 @@ export default function FormularioProducto({
       ) : (
         <>
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             disabled={cargando}
             style={{
               width: '100%',

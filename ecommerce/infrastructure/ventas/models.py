@@ -14,6 +14,24 @@ class ConfiguracionGlobal(models.Model):
         ('GRID_4', 'Cuadrícula de 4'),
     ]
     nombre_tienda = models.CharField(max_length=255)
+    
+    # --- CAMPOS DE ORIGEN / RETIRO EN LOCAL ---
+    comuna_origen = models.CharField(
+        max_length=100, 
+        default='Santiago',
+        help_text="Comuna desde donde se despachan los productos (Punto A)"
+    )
+    region_origen = models.CharField(
+        max_length=100, 
+        default='Metropolitana',
+        blank=True, 
+        null=True
+    )
+    calle_origen = models.CharField(max_length=255, default='Av. Principal', blank=True, null=True)
+    numero_origen = models.CharField(max_length=50, default='123', blank=True, null=True)
+    dpto_casa_origen = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Piso 4, Oficina 405 o Bodega B")
+    retiro_en_local_activo = models.BooleanField(default=True, help_text="Permite a los clientes seleccionar retiro gratuito en local")
+
     tema_seleccionado = models.IntegerField(default=1)
     logo = models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
     favicon = models.ImageField(upload_to='negocio/favicons/', blank=True, null=True)
@@ -26,7 +44,6 @@ class ConfiguracionGlobal(models.Model):
         max_length=100,
         default='Ver Catálogo',
     )
-    # Campo restaurado para pasar los tests y soportar URL directa del banner
     banner_url = models.URLField(max_length=500, blank=True, null=True)
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(
@@ -46,14 +63,22 @@ class DireccionEnvio(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='direcciones')
     calle = models.CharField(max_length=255)
     calle_numero = models.CharField(max_length=50)
+    dpto_casa = models.CharField(max_length=100, blank=True, null=True)
     comuna = models.CharField(max_length=100)
     ciudad = models.CharField(max_length=100)
     region = models.CharField(max_length=100)
     codigo_postal = models.CharField(max_length=20, blank=True, null=True)
     es_predeterminado = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        # Si el usuario marca esta dirección como predeterminada,
+        # desmarcamos las demás.
+        if self.es_predeterminado:
+            DireccionEnvio.objects.filter(usuario=self.usuario).update(es_predeterminado=False)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.calle}, {self.ciudad}"
+        return f"{self.calle} {self.calle_numero}, {self.ciudad}"
 
 class Promocion(models.Model):
     TIPOS_DESCUENTO = [

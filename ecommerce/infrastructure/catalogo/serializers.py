@@ -15,6 +15,12 @@ class VarianteSerializer(serializers.Serializer):
     stock = serializers.IntegerField(default=0)
     imagen_especifica = ReferenciaImagenField(required=False, allow_blank=True, allow_null=True)
     atributos_variables = serializers.DictField(required=False, default=dict)
+    
+    # --- NUEVOS CAMPOS LOGÍSTICOS ---
+    peso_kg = serializers.FloatField(required=False, default=1.0)
+    alto_cm = serializers.IntegerField(required=False, default=10)
+    ancho_cm = serializers.IntegerField(required=False, default=10)
+    largo_cm = serializers.IntegerField(required=False, default=10)
 
 class ProductoSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)

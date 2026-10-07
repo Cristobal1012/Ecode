@@ -13,6 +13,18 @@ export default function Admin() {
   
   // NUEVO ESTADO: Almacena el producto seleccionado para edición
   const [productoAEditar, setProductoAEditar] = useState(null); 
+
+  // --- NUEVOS ESTADOS PARA LA DIRECCIÓN DEL LOCAL Y RETIRO ---
+  const [configLocal, setConfigLocal] = useState({
+    calle_origen: '',
+    numero_origen: '',
+    dpto_casa_origen: '',
+    comuna_origen: '',
+    region_origen: '',
+    retiro_en_local_activo: true
+  });
+  const [guardandoLocal, setGuardandoLocal] = useState(false);
+  const [mensajeLocal, setMensajeLocal] = useState('');
   
   const navigate = useNavigate();
 
@@ -36,14 +48,25 @@ export default function Admin() {
       try {
         const response = await clienteAxios.get('configuracion/negocio/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
-        if (config && config.tema_seleccionado !== undefined) {
-          const temaId = Number(config.tema_seleccionado);
-          localStorage.setItem('ecommerce_palette', temaId.toString());
-          const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-          applyColors(palette.colors);
+        if (config) {
+          if (config.tema_seleccionado !== undefined) {
+            const temaId = Number(config.tema_seleccionado);
+            localStorage.setItem('ecommerce_palette', temaId.toString());
+            const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
+            applyColors(palette.colors);
+          }
+          // Cargar datos de la tienda para el formulario de retiro local
+          setConfigLocal({
+            calle_origen: config.calle_origen || '',
+            numero_origen: config.numero_origen || '',
+            comuna_origen: config.comuna_origen || '',
+            region_origen: config.region_origen || '',
+            dpto_casa_origen: config.dpto_casa_origen || '',
+            retiro_en_local_activo: config.retiro_en_local_activo ?? true
+          });
         }
       } catch (error) {
-        console.error('Error al sincronizar colores en el panel Admin:', error);
+        console.error('Error al sincronizar configuración en el panel Admin:', error);
       }
     };
 
@@ -59,6 +82,21 @@ export default function Admin() {
     return () => window.removeEventListener('themeChanged', handleThemeChanged);
   }, []);
 
+  const handleGuardarConfigLocal = async (e) => {
+    e.preventDefault();
+    setGuardandoLocal(true);
+    setMensajeLocal('');
+    try {
+      await clienteAxios.patch('configuracion/negocio/', configLocal);
+      setMensajeLocal('¡Dirección de la tienda y retiro en local actualizados con éxito!');
+    } catch (error) {
+      console.error('Error guardando configuración de tienda:', error);
+      setMensajeLocal('Error al guardar los cambios. Inténtalo de nuevo.');
+    } finally {
+      setGuardandoLocal(false);
+    }
+  };
+
   const renderizarContenido = () => {
     switch (vistaActiva) {
       case 'dashboard':
@@ -73,7 +111,6 @@ export default function Admin() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '1.5rem', color: 'var(--color-primary)', margin: 0 }}>Inventario</h2>
-              {/* Ocultamos el botón de agregar si estamos editando o creando */}
               {!mostrandoFormulario && !productoAEditar && (
                 <button 
                   onClick={() => setMostrandoFormulario(true)}
@@ -95,22 +132,21 @@ export default function Admin() {
               )}
             </div>
 
-            {/* Muestra el formulario tanto si se presionó '+ Agregar Producto' como si hay un producto seleccionado para editar */}
             {mostrandoFormulario || productoAEditar ? (
               <FormularioProducto 
-                productoAEditar={productoAEditar} // Pasa los datos (null si es creación)
+                productoAEditar={productoAEditar}
                 alCancelar={() => {
                   setMostrandoFormulario(false);
-                  setProductoAEditar(null); // Limpiamos al cancelar
+                  setProductoAEditar(null);
                 }} 
                 alGuardar={() => {
                   setMostrandoFormulario(false);
-                  setProductoAEditar(null); // Limpiamos al guardar con éxito
+                  setProductoAEditar(null);
                 }} 
               />
             ) : (
               <TablaInventario 
-                onEditarProducto={(producto) => setProductoAEditar(producto)} // Define qué producto editar
+                onEditarProducto={(producto) => setProductoAEditar(producto)}
               /> 
             )}
           </div>
@@ -126,7 +162,102 @@ export default function Admin() {
         return (
           <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Configuración</h2>
-            <PaletteSelector />
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>Paleta de Colores de la Tienda</h3>
+              <PaletteSelector />
+            </div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+
+            <div>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>Dirección del Local y Retiro en Tienda</h3>
+              {mensajeLocal && (
+                <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeLocal.includes('éxito') ? '#d4edda' : '#f8d7da', color: mensajeLocal.includes('éxito') ? '#155724' : '#721c24', borderRadius: '4px', fontSize: '0.9rem' }}>
+                  {mensajeLocal}
+                </div>
+              )}
+              <form onSubmit={handleGuardarConfigLocal} style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <div style={{ flex: 3 }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Calle del Local</label>
+                    <input 
+                      type="text" 
+                      value={configLocal.calle_origen} 
+                      onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})} 
+                      required 
+                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                      placeholder="Ej: Av. Principal"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Número</label>
+                    <input 
+                      type="text" 
+                      value={configLocal.numero_origen} 
+                      onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})} 
+                      required 
+                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                      placeholder="Ej: 123"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Piso, Oficina, Bodega o Detalle (Opcional)</label>
+                  <input 
+                    type="text" 
+                    value={configLocal.dpto_casa_origen} 
+                    onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})} 
+                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                    placeholder="Ej: Piso 4, Oficina 405"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Comuna</label>
+                    <input 
+                      type="text" 
+                      value={configLocal.comuna_origen} 
+                      onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})} 
+                      required 
+                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                      placeholder="Ej: Santiago"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Región</label>
+                    <input 
+                      type="text" 
+                      value={configLocal.region_origen} 
+                      onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})} 
+                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                      placeholder="Ej: Metropolitana"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', color: '#374151', cursor: 'pointer', marginTop: '5px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={configLocal.retiro_en_local_activo} 
+                      onChange={(e) => setConfigLocal({...configLocal, retiro_en_local_activo: e.target.checked})} 
+                      style={{ marginRight: '10px', width: '18px', height: '18px' }}
+                    />
+                    Permitir a los clientes seleccionar "Retiro en Local" gratuito en el Checkout
+                  </label>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={guardandoLocal}
+                  style={{ padding: '12px 20px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardandoLocal ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '1rem', marginTop: '10px' }}
+                >
+                  {guardandoLocal ? 'Guardando...' : 'Guardar Dirección y Opciones de Retiro'}
+                </button>
+              </form>
+            </div>
           </div>
         );
       default:
@@ -161,7 +292,6 @@ export default function Admin() {
             Dashboard
           </button>
           
-          {/* Limpiamos el estado de edición si el usuario cambia de pestaña */}
           <button onClick={() => { setVistaActiva('inventario'); setMostrandoFormulario(false); setProductoAEditar(null); }} style={getEstiloBoton(vistaActiva === 'inventario')}>
             Inventario
           </button>

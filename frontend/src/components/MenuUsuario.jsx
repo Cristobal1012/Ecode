@@ -53,6 +53,10 @@ const MenuUsuario = () => {
         );
     }
 
+    const hoverStyle = (e, isHover) => {
+        e.currentTarget.style.backgroundColor = isHover ? '#f9fafb' : 'transparent';
+    };
+
     return (
         <div style={{ position: 'relative' }} ref={menuRef}>
             <button 
@@ -120,13 +124,27 @@ const MenuUsuario = () => {
                             to="/mis-pedidos" 
                             onClick={() => setIsOpen(false)}
                             style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', color: '#374151', textDecoration: 'none', borderRadius: '6px' }}
-                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onMouseOver={(e) => hoverStyle(e, true)}
+                            onMouseOut={(e) => hoverStyle(e, false)}
                         >
                             <svg style={{ width: '20px', height: '20px', color: '#6b7280' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
                             Mis Pedidos
+                        </Link>
+                        
+                        {/* NUEVO ENLACE: Mis Direcciones */}
+                        <Link 
+                            to="/mis-direcciones" 
+                            onClick={() => setIsOpen(false)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', color: '#374151', textDecoration: 'none', borderRadius: '6px' }}
+                            onMouseOver={(e) => hoverStyle(e, true)}
+                            onMouseOut={(e) => hoverStyle(e, false)}
+                        >
+                            <svg style={{ width: '20px', height: '20px', color: '#6b7280' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            Mis direcciones de envío
                         </Link>
                     </div>
                 </div>

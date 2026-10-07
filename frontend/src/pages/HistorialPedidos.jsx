@@ -9,6 +9,7 @@ const TEMA_PREDETERMINADO = 1;
 const HistorialPedidos = () => {
     const [pedidos, setPedidos] = useState([]);
     const [cargando, setCargando] = useState(true);
+    const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null); // Para el modal de detalles de envío
     const [temaConfigurado, setTemaConfigurado] = useState(() => {
         const savedPaletteId = Number(localStorage.getItem('ecommerce_palette'));
         return savedPaletteId || TEMA_PREDETERMINADO;
@@ -70,7 +71,7 @@ const HistorialPedidos = () => {
     const formatearFecha = (fechaStr) => {
         if (!fechaStr) return 'Fecha no disponible';
         const fecha = new Date(fechaStr);
-        if (isNaN(fecha.getTime())) return fechaStr; // Si de plano no es válida, devuelve el texto crudo
+        if (isNaN(fecha.getTime())) return fechaStr; 
         return fecha.toLocaleDateString('es-CL', { 
             year: 'numeric', 
             month: '2-digit', 
@@ -101,7 +102,7 @@ const HistorialPedidos = () => {
         <div style={{ backgroundColor: 'var(--color-background)', minHeight: '100vh', paddingBottom: '50px' }}>
             <Header />
             
-            <div style={{ maxWidth: '900px', margin: '30px auto', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '1px solid #e5e7eb' }}>
+            <div style={{ maxWidth: '950px', margin: '30px auto', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '1px solid #e5e7eb' }}>
                 <button 
                     onClick={() => navigate('/catalogo')}
                     style={{ marginBottom: '20px', padding: '8px 14px', backgroundColor: '#e5e7eb', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
@@ -124,7 +125,7 @@ const HistorialPedidos = () => {
                                     <th style={{ padding: '12px' }}>Fecha</th>
                                     <th style={{ padding: '12px' }}>Total</th>
                                     <th style={{ padding: '12px' }}>Estado</th>
-                                    <th style={{ padding: '12px' }}>Acción</th>
+                                    <th style={{ padding: '12px' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -133,7 +134,6 @@ const HistorialPedidos = () => {
                                         <tr key={orden.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                                             <td style={{ padding: '12px', fontWeight: 'bold', color: '#1f2937' }}>#{orden.id}</td>
                                             <td style={{ padding: '12px', color: '#4b5563' }}>
-                                                {/* Usamos orden.fecha o orden.fecha_creacion dependiendo de lo que devuelva la API */}
                                                 {formatearFecha(orden.fecha || orden.fecha_creacion)}
                                             </td>
                                             <td style={{ padding: '12px', fontWeight: '500', color: '#1f2937' }}>
@@ -152,12 +152,24 @@ const HistorialPedidos = () => {
                                                 </span>
                                             </td>
                                             <td style={{ padding: '12px' }}>
-                                                <button 
-                                                    onClick={() => navigate(`/seguimiento?orden=${orden.id}`)}
-                                                    style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: '500', textDecoration: 'underline', padding: 0 }}
-                                                >
-                                                    Ver Seguimiento
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                                    <button 
+                                                        onClick={() => navigate(`/seguimiento?orden=${orden.id}`)}
+                                                        style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: '500', textDecoration: 'underline', padding: 0 }}
+                                                    >
+                                                        Seguimiento
+                                                    </button>
+
+                                                    {/* Opción para ver detalle de la etiqueta/envío si está pagado y usa Chilexpress */}
+                                                    {orden.estado?.toUpperCase() === 'PAGADO' && (
+                                                        <button 
+                                                            onClick={() => setPedidoSeleccionado(orden)}
+                                                            style={{ background: '#f3f4f6', border: '1px solid #d1d5db', color: '#374151', cursor: 'pointer', fontWeight: '500', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem' }}
+                                                        >
+                                                            Ver Detalle Envío
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -173,6 +185,43 @@ const HistorialPedidos = () => {
                     </div>
                 )}
             </div>
+
+            {/* MODAL / VENTANA FLOTANTE PARA VER LOS DATOS LOGÍSTICOS DEL ENVÍO */}
+            {pedidoSeleccionado && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    {console.log("LOG: Datos del pedido seleccionado en el modal: ", pedidoSeleccionado)}
+                    <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', width: '90%', maxWidth: '500px', boxShadow: '0 10px 15px rgba(0,0,0,0.2)' }}>
+                        <h3 style={{ color: 'var(--color-primary)', marginTop: 0, marginBottom: '15px' }}>
+                            Detalle de Envío - Orden #{pedidoSeleccionado.id}
+                        </h3>
+                        
+                        <div style={{ fontSize: '0.95rem', color: '#374151', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                            <div><strong>Proveedor Logístico:</strong> {pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</div>
+                            <div><strong>Estado del Pago:</strong> {pedidoSeleccionado.estado}</div>
+                            <div><strong>Información Pasarela / OT:</strong> <span style={{ fontFamily: 'monospace', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{pedidoSeleccionado.id_transaccion_pasarela || 'Generándose...'}</span></div>
+                            
+                            {pedidoSeleccionado.direccion && (
+                                <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb', marginTop: '5px' }}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Dirección de Destino:</div>
+                                    <div>{pedidoSeleccionado.direccion.calle} #{pedidoSeleccionado.direccion.numero}, {pedidoSeleccionado.direccion.comuna}</div>
+                                    {pedidoSeleccionado.direccion.dpto_casa && (
+                                        <div>Detalle/Dpto: {pedidoSeleccionado.direccion.dpto_casa}</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                            <button 
+                                onClick={() => setPedidoSeleccionado(null)}
+                                style={{ padding: '8px 16px', backgroundColor: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

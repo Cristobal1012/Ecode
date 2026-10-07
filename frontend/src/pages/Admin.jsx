@@ -6,6 +6,7 @@ import { PALETTES } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
 import TablaInventario from '../components/TablaInventario';
 import GestorPedidos from '../components/GestorPedidos';
+import GestorPoliticas from '../components/GestorPoliticas';
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -158,6 +159,7 @@ export default function Admin() {
             <GestorPedidos/>
           </div>
         );
+
       case 'configuracion':
         return (
           <div>
@@ -260,6 +262,12 @@ export default function Admin() {
             </div>
           </div>
         );
+        case 'paginas':
+          return (
+            <div>
+              <GestorPoliticas />
+            </div>
+          );
       default:
         return <h2 style={{ color: 'var(--color-text)' }}>Bienvenido al Panel</h2>;
     }
@@ -301,6 +309,12 @@ export default function Admin() {
           </button>
           <button onClick={() => setVistaActiva('configuracion')} style={getEstiloBoton(vistaActiva === 'configuracion')}>
             Configuración
+          </button>
+          <button 
+            onClick={() => { setVistaActiva('paginas'); setMostrandoFormulario(false); setProductoAEditar(null); }} 
+            style={getEstiloBoton(vistaActiva === 'paginas')}
+          >
+            Páginas Legales
           </button>
 
           <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', margin: '15px 20px' }}></div>

@@ -34,6 +34,19 @@ from .serializers import (
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 
+class CarritoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
+        return Response({"items": carrito.items})
+
+    def post(self, request):
+        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
+        items = request.data.get('items', [])
+        carrito.items = items
+        carrito.save()
+        return Response({"items": carrito.items})
 
 class AdminOrdenCompraListView(generics.ListAPIView):
     queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')

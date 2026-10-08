@@ -10,9 +10,16 @@ from django.db.models.functions import TruncDate
 
 from django.utils import timezone
 import logging
+import os
+import base64
 from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
-from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor
+
+from ecommerce.application.logistica import ServicioCotizacion
+from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
+from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
+from ecommerce.infrastructure.catalogo.documents import Producto
+
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio
 from .permissions import CanCheckout
 from .payment_services import generar_link_pago
@@ -21,30 +28,24 @@ from .serializers import (
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
     DireccionEnvioSerializer,
+    SolicitudCotizacionSerializer,
+    AdminOrdenCompraEstadoSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
-import os
-from ecommerce.infrastructure.catalogo.documents import Producto
-import base64
 
-logger = logging.getLogger(__name__)
 
-class CarritoAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+class AdminOrdenCompraListView(generics.ListAPIView):
+    queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
+    serializer_class = OrdenCompraSerializer
+    permission_classes = [IsAdministrador]
 
-    def get(self, request):
-        # Busca el carrito del usuario. Si no existe (usuario nuevo), lo crea vacío
-        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
-        return Response({"items": carrito.items})
 
-    def post(self, request):
-        carrito, created = Carrito.objects.get_or_create(usuario=request.user)
-        # Recibe la lista completa desde React y la guarda
-        items = request.data.get('items', [])
-        carrito.items = items
-        carrito.save()
-        return Response({"items": carrito.items})
+class AdminOrdenCompraPatchView(generics.UpdateAPIView):
+    queryset = OrdenCompra.objects.all()
+    serializer_class = AdminOrdenCompraEstadoSerializer 
+    http_method_names = ['patch']
+    permission_classes = [IsAdministrador]
 
 
 class CheckoutAPIView(generics.CreateAPIView):

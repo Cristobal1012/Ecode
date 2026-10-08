@@ -48,7 +48,13 @@ ventas_urlpatterns = [
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
     
     # Ruta para descargar la etiqueta de Chilexpress
-    path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta')
+    path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),
+
+    # NUEVAS RUTAS: administración de órdenes (solo administradores)
+    # Ruta resultante: GET /api/ventas/admin/ordenes/
+    path('admin/ordenes/', views.AdminOrdenCompraListView.as_view(), name='admin-ordenes-list'),
+    # Ruta resultante: PATCH /api/ventas/admin/ordenes/<pk>/estado/
+    path('admin/ordenes/<int:pk>/estado/', views.AdminOrdenCompraPatchView.as_view(), name='admin-ordenes-patch'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

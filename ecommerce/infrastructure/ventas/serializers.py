@@ -12,7 +12,7 @@ from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
 
-from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio
+from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -275,6 +275,11 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
+class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdenCompra
+        fields = ['estado']
+
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -290,8 +295,8 @@ class DireccionEnvioSerializer(serializers.ModelSerializer):
             'codigo_postal', 
             'es_predeterminado'
         ]
-    
-class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
+
+class PaginaLegalSerializer(serializers.ModelSerializer):
     class Meta:
-        model = OrdenCompra
-        fields = ['estado']
+        model = PaginaLegal
+        fields = ['id', 'tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']

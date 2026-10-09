@@ -40,8 +40,7 @@ ventas_urlpatterns = [
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
-    
-    # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
+# --- RUTAS PARA DIRECCIONES DE ENVÍO ---
     # Ruta resultante: GET/POST /api/ventas/direcciones/
     path('direcciones/', views.DireccionEnvioListCreateView.as_view(), name='direcciones-list-create'),
     # Ruta resultante: GET/PUT/PATCH/DELETE /api/ventas/direcciones/<id>/
@@ -55,6 +54,7 @@ ventas_urlpatterns = [
     path('admin/ordenes/', views.AdminOrdenCompraListView.as_view(), name='admin-ordenes-list'),
     # Ruta resultante: PATCH /api/ventas/admin/ordenes/<pk>/estado/
     path('admin/ordenes/<int:pk>/estado/', views.AdminOrdenCompraPatchView.as_view(), name='admin-ordenes-patch'),
+    path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

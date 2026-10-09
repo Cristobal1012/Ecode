@@ -20,7 +20,7 @@ from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.infrastructure.catalogo.documents import Producto
 
-from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio
+from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
 from .permissions import CanCheckout
 from .payment_services import generar_link_pago
 from .serializers import (
@@ -30,9 +30,27 @@ from .serializers import (
     DireccionEnvioSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
+    PaginaLegalSerializer
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+
+
+class AdminOrdenCompraListView(generics.ListAPIView):
+    queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
+    serializer_class = OrdenCompraSerializer
+    permission_classes = [IsAdministrador]
+
+
+class AdminOrdenCompraPatchView(generics.UpdateAPIView):
+    queryset = OrdenCompra.objects.all()
+    serializer_class = AdminOrdenCompraEstadoSerializer 
+    http_method_names = ['patch']
+    permission_classes = [IsAdministrador]
+
+
+logger = logging.getLogger(__name__)
+
 
 class CarritoAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -47,18 +65,6 @@ class CarritoAPIView(APIView):
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})
-
-class AdminOrdenCompraListView(generics.ListAPIView):
-    queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
-    serializer_class = OrdenCompraSerializer
-    permission_classes = [IsAdministrador]
-
-
-class AdminOrdenCompraPatchView(generics.UpdateAPIView):
-    queryset = OrdenCompra.objects.all()
-    serializer_class = AdminOrdenCompraEstadoSerializer 
-    http_method_names = ['patch']
-    permission_classes = [IsAdministrador]
 
 
 class CheckoutAPIView(generics.CreateAPIView):
@@ -609,3 +615,8 @@ class DashboardMetricasView(APIView):
             "historico": historico_data,
             "ultimas_ordenes": ordenes_data
         }, status=status.HTTP_200_OK)
+    
+class PaginaLegalListView(generics.ListAPIView):
+    queryset = PaginaLegal.objects.all()
+    serializer_class = PaginaLegalSerializer
+    permission_classes = [AllowAny]

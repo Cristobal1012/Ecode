@@ -8,6 +8,8 @@ import TablaInventario from '../components/TablaInventario';
 import Dashboard from '../components/Dashboard';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopbar from '../components/AdminTopbar';
+import GestorPedidos from '../components/GestorPedidos';
+import GestorPoliticas from '../components/GestorPoliticas';
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -152,9 +154,10 @@ export default function Admin() {
         return (
           <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Ventas</h2>
-            <p style={{ color: 'var(--color-text)' }}>Aquí podrás ver el historial de pedidos y su estado.</p>
+            <GestorPedidos/>
           </div>
         );
+
       case 'configuracion':
         return (
           <div>
@@ -257,6 +260,12 @@ export default function Admin() {
             </div>
           </div>
         );
+        case 'paginas':
+          return (
+            <div>
+              <GestorPoliticas />
+            </div>
+          );
       default:
         return <h2 style={{ color: 'var(--color-text)' }}>Bienvenido al Panel</h2>;
     }

@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -101,13 +102,15 @@ class ProveedorLogisticoAdapter:
     @classmethod
     def _cotizar_chilexpress(cls, origen, destino, peso, alto, ancho, largo):
         catalogo = cls._obtener_catalogo_dinamico()
-        
+        if not catalogo:
+            return {"error": "Servicio de coberturas no disponible temporalmente", "tipo": "proveedor"}
+
         # TRADUCCIÓN: Pasamos del nombre legible (Ej: MAIPU) al código de 4 letras oficial (MIPU)
         codigo_origen = catalogo.get(str(origen).strip().upper(), "STGO")
         codigo_destino = catalogo.get(str(destino).strip().upper())
-        
+
         if not codigo_destino:
-            return {"error": f"La comuna '{destino}' no es válida o no tiene cobertura."}
+            return {"error": f"La comuna '{destino}' no es válida o no tiene cobertura.", "tipo": "cobertura"}
 
         url = "https://testservices.wschilexpress.com/rating/api/v1.0/rates/business"
         api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
@@ -136,27 +139,32 @@ class ProveedorLogisticoAdapter:
             respuesta = requests.post(url, headers=headers, json=payload, timeout=6)
             
             if respuesta.status_code != 200:
-                return {"error": f"Error del cotizador: {respuesta.text}"}
-                
+                return {"error": f"Error del cotizador: {respuesta.text}", "tipo": "proveedor"}
+
             data = respuesta.json()
             servicios = data.get("data", {}).get("courierServiceOptions", []) or data.get("courierServiceOptions", [])
-            
+
             if not servicios:
-                return {"error": "No hay servicios disponibles para esta ruta"}
-                
+                return {"error": "No hay servicios disponibles para esta ruta", "tipo": "proveedor"}
+
             # Buscamos el servicio Express, si no existe devolvemos el primero de la lista
-            servicio_optimo = next((s for s in servicios if s['serviceDescription'] == 'EXPRESS'), servicios[0])
-            
+            servicio_optimo = next((s for s in servicios if s.get('serviceDescription') == 'EXPRESS'), servicios[0])
+
+            # Una tarifa ausente, no numérica o negativa no es confiable: nunca se cobra
+            precio = Decimal(str(servicio_optimo.get("serviceValue")))
+            if not precio.is_finite() or precio < 0:
+                raise ValueError(f"Tarifa inválida: {servicio_optimo.get('serviceValue')}")
+
             return {
                 "proveedor": "Chilexpress",
-                "precio": int(servicio_optimo.get("serviceValue", 0)),
+                "precio": int(precio.quantize(Decimal('1'), rounding=ROUND_HALF_UP)),
                 "tiempo_estimado": servicio_optimo.get("serviceDescription", "No especificado"),
                 "moneda": "CLP"
             }
-            
+
         except Exception as e:
             logger.error(f"Error cotizando con Chilexpress: {str(e)}")
-            return {"error": "Servicio de cotización no disponible temporalmente"}
+            return {"error": "Servicio de cotización no disponible temporalmente", "tipo": "proveedor"}
 
     # ==========================================
     # 3. SEGUIMIENTO DE ENVÍOS (TRACKING)

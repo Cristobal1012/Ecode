@@ -1,44 +1,61 @@
 # Cotización logística (SCRUM-119)
 
-`ConfiguracionGlobal.api_keys_logistica` guarda la configuración privada. Ejemplo de estructura:
+## Flujo actual (Chilexpress)
+
+La cotización y el checkout usan `ProveedorLogisticoAdapter`
+(`ecommerce/infrastructure/ventas/adapters/logistica.py`), que consulta la API de Chilexpress con las claves
+definidas en `.env`:
+
+- `CHILEXPRESS_API_KEY_COTIZADOR`: tarifas (`rating/api/v1.0/rates/business`).
+- `CHILEXPRESS_API_KEY_COBERTURAS`: regiones y comunas (`georeference`). Si falta, se usa la del cotizador.
+- `CHILEXPRESS_API_KEY_ENVIOS`: órdenes de transporte y seguimiento.
+
+El catálogo de comunas (nombre → código de cobertura) se descarga desde Chilexpress y se guarda en memoria.
+
+La configuración de la tienda vive en campos de `ConfiguracionGlobal`: `comuna_origen`, `region_origen`,
+`calle_origen`, `numero_origen`, `dpto_casa_origen` y `retiro_en_local_activo`. Son públicos (el checkout
+muestra la dirección de retiro); las claves nunca se exponen.
+
+### `POST /api/ventas/logistica/cotizar/`
+
+Solicitud (`destino` es el nombre de la comuna; peso en kg, medidas en cm, todos mayores a cero):
 
 ```json
-{
-  "proveedor_activo": "CHILEXPRESS",
-  "retiro_en_local": {"activo": true, "nombre": "Retiro en tienda"},
-  "CHILEXPRESS": {
-    "subscription_key": "clave-del-portal",
-    "ambiente": "test",
-    "codigo_origen": "PUDA",
-    "comunas": {"Santiago": "STGO"},
-    "ruta_precio": "data.0.serviceValue"
-  },
-  "STARKEN": {
-    "api_key": "clave-del-proveedor",
-    "url_cotizacion": "https://endpoint-entregado-por-starken",
-    "codigo_origen": 1,
-    "comunas": {"Santiago": 19},
-    "ruta_precio": "precio"
-  }
-}
+{"destino": "SANTIAGO", "peso": 1.5, "alto": 10, "ancho": 20, "largo": 30}
 ```
 
-Solo se consulta `proveedor_activo` (`STARKEN` o `CHILEXPRESS`). La clave de la comuna se compara sin distinguir mayúsculas ni tildes. Los códigos deben provenir de las coberturas de cada transportista; un nombre de comuna por sí solo no es un código de cobertura. `retiro_en_local.activo` ofrece una opción de costo cero. No incluir claves, endpoints privados ni el JSON de configuración en respuestas públicas.
-
-Para Chilexpress se usa la API de tarifas empresariales, con `subscription_key` en `Ocp-Apim-Subscription-Key`. `ambiente` puede ser `test` o `produccion`. Opcionalmente `url_cotizacion` permite usar el endpoint asignado por Chilexpress y `ruta_precio` especifica una ruta JSON al valor de la tarifa (p. ej. `data.0.serviceValue`). Para Starken se exige `url_cotizacion`, pues el contrato HTTP y la URL dependen del acceso de integración otorgado al comercio. `ruta_precio` identifica el valor en la respuesta. Las llamadas tienen un timeout de cinco segundos y nunca exponen detalles del proveedor al comprador.
-
-`POST /api/ventas/cotizaciones/` recibe `comuna`, `subtotal` y, para despacho, `paquete` con `peso_kg`, `alto_cm`, `ancho_cm`, `largo_cm`. Devuelve `opciones`, cada una con `proveedor`, `nombre`, `tipo`, `costo_envio`, `total_final` y `moneda`. Si un transportista falla y existe retiro, se conserva el retiro y se informa `errores`. El checkout recibe `proveedor_logistico` y el mismo `paquete`; recalcula la tarifa antes de crear la orden. Esta cotización no reserva tarifa ni reemplaza el cálculo de subtotal desde productos, que requiere datos de carrito confiables aún ausentes en el proyecto.
-
-Ejemplo de solicitud del cotizador:
+Respuesta exitosa (`200`):
 
 ```json
-{"comuna":"Santiago","subtotal":25000,"paquete":{"peso_kg":"1.50","alto_cm":"10","ancho_cm":"20","largo_cm":"30"}}
+{"proveedor": "Chilexpress", "precio": 3500, "tiempo_estimado": "EXPRESS", "moneda": "CLP"}
 ```
 
-Ejemplo de respuesta, cuando también hay retiro en tienda:
+Errores, siempre con el cuerpo `{"error": "..."}`:
 
-```json
-{"opciones":[{"proveedor":"CHILEXPRESS","nombre":"Chilexpress","tipo":"DESPACHO","costo_envio":3500,"total_final":28500,"moneda":"CLP"},{"proveedor":"RETIRO_LOCAL","nombre":"Retiro en local","tipo":"RETIRO","costo_envio":0,"total_final":25000,"moneda":"CLP"}],"errores":[]}
-```
+- `400`: falta `destino`, medidas no numéricas o no positivas, o comuna sin cobertura.
+- `503`: Chilexpress no respondió, no ofreció servicios, entregó una tarifa inválida (negativa o no numérica)
+  o no se pudo descargar el catálogo de comunas. Nunca se convierte en costo cero.
 
-La documentación pública de [Chilexpress](https://developers.wschilexpress.com/) describe la clave de suscripción, los códigos de cobertura y la cotización por medidas; su [guía de integración](https://cxpgdastprod.blob.core.windows.net/mdn/documentos/Nuevas_API_Chilexpress.pdf) muestra el endpoint empresarial. El [portal de Starken](https://developers.starken.cl/cotizaTusEnvios) anuncia la API de cotización, pero la tienda debe configurar la URL y la ruta del precio de la respuesta entregadas para su integración. Las pruebas automatizadas simulan las respuestas HTTP; la validación con credenciales reales queda pendiente de la configuración de cada comercio.
+### Checkout (`POST /api/ventas/checkout/`)
+
+Recibe `proveedor_logistico` (`CHILEXPRESS` o `RETIRO_LOCAL`) y, para despacho, `paquete` con `peso_kg`,
+`alto_cm`, `ancho_cm`, `largo_cm` más la `comuna` en `direccion_envio_snapshot`. El backend recalcula la tarifa
+y el total, ignorando `costo_envio`/`total_final` enviados por el cliente. `RETIRO_LOCAL` cuesta cero y se
+rechaza con `400` si `retiro_en_local_activo` está desactivado. Si Chilexpress falla, responde `503` y no se
+crea la orden.
+
+Las pruebas automatizadas (`ventas/test_logistica.py`) simulan el catálogo y las respuestas HTTP de
+Chilexpress, por lo que no salen a internet. La conexión real se valida manualmente contra el sandbox con las
+claves del `.env`.
+
+## Diseño anterior (sin uso en producción)
+
+`ServicioCotizacion` (`ecommerce/application/logistica.py`) y `logistics_adapters.py` implementan una
+cotización multi-proveedor (Starken/Chilexpress) configurada en el JSON `ConfiguracionGlobal.api_keys_logistica`.
+Hoy solo los cubren `AdaptadoresTests`; ningún endpoint los usa. Queda pendiente decidir si se eliminan o se
+reintegran.
+
+La documentación pública de [Chilexpress](https://developers.wschilexpress.com/) describe la clave de suscripción,
+los códigos de cobertura y la cotización por medidas; su
+[guía de integración](https://cxpgdastprod.blob.core.windows.net/mdn/documentos/Nuevas_API_Chilexpress.pdf)
+muestra el endpoint empresarial.

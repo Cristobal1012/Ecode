@@ -24,7 +24,9 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
             set(data),
             {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'layout_catalogo',
-             'pasarelas_activas', 'modo_autenticacion'}
+             'pasarelas_activas', 'modo_autenticacion',
+             'comuna_origen', 'region_origen', 'calle_origen',
+             'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo'}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -68,6 +70,12 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'layout_catalogo': 'GRID_3',
             'pasarelas_activas': [],
             'modo_autenticacion': 'MIXTO',
+            'comuna_origen': 'Santiago',
+            'region_origen': 'Metropolitana',
+            'calle_origen': 'Av. Principal',
+            'numero_origen': '123',
+            'dpto_casa_origen': None,
+            'retiro_en_local_activo': True,
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):
@@ -110,7 +118,9 @@ class CheckoutAccessTests(APITestCase):
     def configure(self, mode):
         ConfiguracionGlobal.objects.update_or_create(
             pk=1, defaults={'nombre_tienda': 'Tienda QA',
-                            'modo_autenticacion': mode},
+                            'modo_autenticacion': mode,
+                            # Estas pruebas validan acceso, no logística
+                            'retiro_en_local_activo': False},
         )
 
     def checkout(self, payload=None):

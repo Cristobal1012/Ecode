@@ -234,7 +234,12 @@ class CotizacionEnvioView(APIView):
             largo = int(datos.get('largo', 15))
         except (ValueError, TypeError):
             return Response(
-                {"error": "Las dimensiones y el peso deben ser valores numéricos válidos."}, 
+                {"error": "Las dimensiones y el peso deben ser valores numéricos válidos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if min(peso, alto, ancho, largo) <= 0:
+            return Response(
+                {"error": "Las dimensiones y el peso deben ser mayores a cero."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -249,9 +254,11 @@ class CotizacionEnvioView(APIView):
             largo_cm=largo
         )
 
-        # Si el adaptador capturó un error, devolvemos 400
+        # Comuna sin cobertura → 400; Chilexpress caído o tarifa inválida → 503
         if "error" in resultado:
-            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
+            codigo = (status.HTTP_503_SERVICE_UNAVAILABLE if resultado.get("tipo") == "proveedor"
+                      else status.HTTP_400_BAD_REQUEST)
+            return Response({"error": resultado["error"]}, status=codigo)
 
         return Response(resultado, status=status.HTTP_200_OK)
 

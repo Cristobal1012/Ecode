@@ -91,54 +91,73 @@ class AdaptadoresTests(SimpleTestCase):
         self.assertEqual(errores[0]['proveedor'], 'CHILEXPRESS')
 
 
+ADAPTADOR_CHILEXPRESS = 'ecommerce.infrastructure.ventas.adapters.logistica'
+
+
+def respuesta_chilexpress(servicios, status=200):
+    result = Mock(status_code=status, text='provider error')
+    result.json.return_value = {'data': {'courierServiceOptions': servicios}}
+    return result
+
+
+TARIFA_OK = [{'serviceValue': 3500, 'serviceDescription': 'EXPRESS'}]
+
+
+@patch.dict('os.environ', {'CHILEXPRESS_API_KEY_COTIZADOR': 'secreto-chilexpress'})
 class CotizacionesAPITests(APITestCase):
     def setUp(self):
         self.config = ConfiguracionGlobal.objects.create(
-            id=1, nombre_tienda='QA', api_keys_logistica={
-                'proveedor_activo': 'CHILEXPRESS', 'CHILEXPRESS': CHILEXPRESS,
-                'retiro_en_local': {'activo': True, 'nombre': 'Retiro en tienda'},
-            },
+            id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
+            api_keys_logistica={'proveedor_activo': 'CHILEXPRESS'},
         )
-        self.payload = {'comuna': 'Santiago', 'subtotal': '25000', 'paquete': PAQUETE}
+        self.payload = {'destino': 'SANTIAGO', 'peso': 1.5, 'alto': 10, 'ancho': 20, 'largo': 30}
+        # El catálogo de comunas se descarga por red: en pruebas se fija uno conocido
+        catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ProveedorLogisticoAdapter._obtener_catalogo_dinamico',
+                         return_value={'SANTIAGO': 'STGO'})
+        catalogo.start()
+        self.addCleanup(catalogo.stop)
 
-    @patch('ecommerce.infrastructure.ventas.logistics_adapters.requests.post')
-    def test_opciones_publicas_calculan_total_y_ocultan_credenciales(self, post):
-        post.return_value = respuesta({'data': [{'serviceValue': 3500}]})
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_cotizacion_entrega_precio_y_oculta_credenciales(self, post):
+        post.return_value = respuesta_chilexpress(TARIFA_OK)
 
-        response = self.client.post(reverse('cotizaciones'), self.payload, format='json')
+        response = self.client.post(reverse('cotizar-envio'), self.payload, format='json')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['opciones'][0]['costo_envio'], 3500)
-        self.assertEqual(response.data['opciones'][0]['total_final'], 28500)
-        self.assertEqual(response.data['opciones'][1]['proveedor'], 'RETIRO_LOCAL')
-        self.assertEqual(response.data['opciones'][1]['costo_envio'], 0)
+        self.assertEqual(response.data['precio'], 3500)
+        self.assertEqual(response.data['proveedor'], 'Chilexpress')
+        self.assertEqual(post.call_args.kwargs['json']['destinationCountyCode'], 'STGO')
+        self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'],
+                         'secreto-chilexpress')
         self.assertNotIn('secreto-chilexpress', str(response.data))
 
-    def test_rechaza_paquete_invalido(self):
-        payload = {**self.payload, 'paquete': {**PAQUETE, 'peso_kg': '-1'}}
-        response = self.client.post(reverse('cotizaciones'), payload, format='json')
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_rechaza_datos_invalidos_sin_consultar_proveedor(self, post):
+        for payload in ({**self.payload, 'peso': -1}, {**self.payload, 'alto': 'abc'},
+                        {k: v for k, v in self.payload.items() if k != 'destino'}):
+            with self.subTest(payload=payload):
+                response = self.client.post(reverse('cotizar-envio'), payload, format='json')
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('error', response.data)
+        post.assert_not_called()
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_comuna_sin_cobertura_responde_400(self, post):
+        payload = {**self.payload, 'destino': 'ATLANTIDA'}
+        response = self.client.post(reverse('cotizar-envio'), payload, format='json')
         self.assertEqual(response.status_code, 400)
-        self.assertIn('paquete', response.data)
+        post.assert_not_called()
 
-    def test_retiro_funciona_sin_paquete(self):
-        self.config.api_keys_logistica = {'retiro_en_local': {'activo': True}}
-        self.config.save(update_fields=['api_keys_logistica'])
-        response = self.client.post(reverse('cotizaciones'), {'subtotal': '25000'}, format='json')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['opciones'][0]['total_final'], 25000)
-
-    @patch('ecommerce.infrastructure.ventas.logistics_adapters.requests.post')
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_fallo_de_proveedor_no_se_convierte_en_costo_cero(self, post):
-        self.config.api_keys_logistica.pop('retiro_en_local')
-        self.config.save(update_fields=['api_keys_logistica'])
-        post.return_value = respuesta({}, status=500)
-        response = self.client.post(reverse('cotizaciones'), self.payload, format='json')
+        post.return_value = respuesta_chilexpress([], status=500)
+        response = self.client.post(reverse('cotizar-envio'), self.payload, format='json')
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.data['opciones'], [])
+        self.assertNotIn('precio', response.data)
 
-    @patch('ecommerce.infrastructure.ventas.logistics_adapters.requests.post')
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_checkout_recalcula_envio_y_total(self, post):
-        post.return_value = respuesta({'data': [{'serviceValue': 3500}]})
+        post.return_value = respuesta_chilexpress(TARIFA_OK)
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
             'direccion_envio_snapshot': {'comuna': 'Santiago', 'calle': 'Uno 123'},
@@ -158,10 +177,11 @@ class CotizacionesAPITests(APITestCase):
             'direccion_envio_snapshot': {}, 'subtotal': 25000,
             'proveedor_logistico': 'RETIRO_LOCAL',
         }
-        self.config.api_keys_logistica.pop('retiro_en_local')
-        self.config.save(update_fields=['api_keys_logistica'])
+        self.config.retiro_en_local_activo = False
+        self.config.save(update_fields=['retiro_en_local_activo'])
         response = self.client.post(reverse('checkout'), payload, format='json')
         self.assertEqual(response.status_code, 400)
+        self.assertIn('proveedor_logistico', response.data)
         self.assertFalse(OrdenCompra.objects.exists())
 
     def test_checkout_retiro_ignora_costo_enviado_por_cliente(self):
@@ -177,9 +197,10 @@ class CotizacionesAPITests(APITestCase):
         self.assertEqual(orden.costo_envio, 0)
         self.assertEqual(orden.total_final, 25000)
 
-    @patch('ecommerce.infrastructure.ventas.logistics_adapters.requests.post')
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_tarifa_sin_precio_valido_no_crea_orden(self, post):
-        post.return_value = respuesta({'data': [{'serviceValue': '-10'}]})
+        post.return_value = respuesta_chilexpress(
+            [{'serviceValue': '-10', 'serviceDescription': 'EXPRESS'}])
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
             'direccion_envio_snapshot': {'comuna': 'Santiago'},

@@ -133,6 +133,11 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         logistica = (config.api_keys_logistica or {}) if config else {}
         proveedor_activo = logistica.get('proveedor_activo', False)
 
+        if data.get('proveedor_logistico') == 'RETIRO_LOCAL' and not retiro_activo:
+            raise serializers.ValidationError({
+                'proveedor_logistico': 'El retiro en local no está habilitado en esta tienda.'
+            })
+
         if proveedor_activo or retiro_activo:
             if not data.get('proveedor_logistico'):
                 raise serializers.ValidationError({
@@ -180,6 +185,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 )
                 
                 if "error" in resultado:
+                    if resultado.get("tipo") == "proveedor":
+                        raise ProveedorLogisticoNoDisponible()
                     raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
                     
                 validated_data['costo_envio'] = float(resultado['precio'])

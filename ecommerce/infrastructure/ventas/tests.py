@@ -95,6 +95,43 @@ class ConfiguracionGlobalAPITests(APITestCase):
         self.assertEqual(response.status_code, 405)
 
 
+class ConfiguracionNegocioAccessTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.configuracion = ConfiguracionGlobal.objects.create(
+            pk=1, nombre_tienda='Tienda QA', texto_bienvenida='Original',
+        )
+        cls.buyer_token = Token.objects.create(user=create_user())
+        cls.admin_token = Token.objects.create(
+            user=create_user('admin@example.test', rol='ADMIN'),
+        )
+
+    def patch(self, token=None):
+        if token:
+            self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        return self.client.patch(reverse('configuracion-negocio'),
+                                 {'texto_bienvenida': 'Modificado'},
+                                 format='json')
+
+    def test_anonymous_cannot_read_or_modify(self):
+        self.assertEqual(
+            self.client.get(reverse('configuracion-negocio')).status_code, 401)
+        self.assertEqual(self.patch().status_code, 401)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.texto_bienvenida, 'Original')
+
+    def test_buyer_cannot_modify(self):
+        self.assertEqual(self.patch(self.buyer_token).status_code, 403)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.texto_bienvenida, 'Original')
+
+    def test_admin_can_modify(self):
+        response = self.patch(self.admin_token)
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.texto_bienvenida, 'Modificado')
+
+
 class CheckoutAccessTests(APITestCase):
     @classmethod
     def setUpTestData(cls):

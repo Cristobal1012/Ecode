@@ -277,8 +277,8 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
 
 class ConfiguracionNegocioView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # Solo el administrador de la tienda puede ver y modificar la configuración
+    permission_classes = [IsEmprendedor]
 
     def get_object(self):
         obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)

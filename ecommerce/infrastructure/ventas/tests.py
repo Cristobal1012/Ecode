@@ -332,3 +332,28 @@ class SeguimientoEnvioTests(APITestCase):
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.data, esperado.data)
         consultar_estado.assert_not_called()
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+class AnulacionTransbankTests(APITestCase):
+    def anular(self, orden_compra):
+        return self.client.get(reverse('transbank_retorno'),
+                               {'TBK_TOKEN': 'token-anulado', 'TBK_ORDEN_COMPRA': orden_compra})
+
+    def test_anulacion_cancela_la_orden_y_lleva_a_pagina_publica(self):
+        orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
+        )
+        response = self.anular(f'ORD-{orden.id}')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-cancelado?orden={orden.id}')
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+
+    def test_orden_invalida_redirige_sin_numero(self):
+        for orden_compra in ('ORD-999999', 'ORD-abc'):
+            with self.subTest(orden_compra=orden_compra):
+                response = self.anular(orden_compra)
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response['Location'], 'http://tienda.test/pago-cancelado')

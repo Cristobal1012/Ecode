@@ -1,9 +1,11 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/header/header'; // Ajusta la ruta de tu Header
 
 export default function PagoCancelado() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const ordenId = searchParams.get('orden');
 
   return (
     <div style={{ backgroundColor: 'var(--color-background, #f3f4f6)', minHeight: '100vh' }}>
@@ -21,6 +23,12 @@ export default function PagoCancelado() {
           Has anulado el proceso de pago o la transacción fue rechazada.
         </p>
 
+        {ordenId && (
+          <p style={{ color: '#6b7280', fontSize: '0.95rem', marginBottom: '20px' }}>
+            Orden #{ordenId}
+          </p>
+        )}
+
         <p style={{ color: '#6b7280', fontSize: '0.95rem', marginBottom: '40px', lineHeight: '1.5' }}>
           No te preocupes, <strong>no se ha realizado ningún cargo en tu cuenta</strong>. 
           Tus productos siguen seguros en tu carrito por si deseas intentar la compra nuevamente con otro medio de pago.
@@ -28,10 +36,10 @@ export default function PagoCancelado() {
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
           <button 
-            onClick={() => navigate('/carrito')}
+            onClick={() => navigate('/checkout')}
             style={{ padding: '12px 24px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1rem', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' }}
           >
-            Volver al Carrito
+            Volver al checkout
           </button>
           <button 
             onClick={() => navigate('/catalogo')}

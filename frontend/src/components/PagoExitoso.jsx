@@ -1,16 +1,22 @@
 import React, { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Header from '../components/header/header'; // Ajusta la ruta de tu Header si es distinta
+import clienteAxios from './auth/axiosConfig';
 
 export default function PagoExitoso() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ordenId = searchParams.get('orden');
+  // El invitado no tiene historial: se le lleva al seguimiento con su número de orden (RF-02.4)
+  const usuarioAutenticado = !!localStorage.getItem('access_token');
 
   useEffect(() => {
     // Limpiar el carrito local una vez que el pago fue exitoso
     localStorage.removeItem('carrito_local');
     window.dispatchEvent(new Event('carritoActualizado'));
+    if (usuarioAutenticado) {
+      clienteAxios.post('ventas/carrito/', { items: [] }).catch(() => {});
+    }
   }, []);
 
   return (
@@ -37,7 +43,8 @@ export default function PagoExitoso() {
         )}
 
         <p style={{ color: '#6b7280', fontSize: '0.95rem', marginBottom: '40px', lineHeight: '1.5' }}>
-          Hemos enviado un comprobante a tu correo electrónico con los detalles de tu compra y la información de seguimiento.
+          {/* TODO(PENDIENTE): cuando exista el envío de correos (RF-04.2), avisar aquí que se envió el comprobante */}
+          Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
         </p>
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
@@ -48,10 +55,10 @@ export default function PagoExitoso() {
             Seguir Comprando
           </button>
           <button 
-            onClick={() => navigate('/mis-pedidos')}
+            onClick={() => navigate(usuarioAutenticado ? '/mis-pedidos' : `/seguimiento${ordenId ? `?orden=${encodeURIComponent(ordenId)}` : ''}`)}
             style={{ padding: '12px 24px', backgroundColor: '#fff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '1rem', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' }}
           >
-            Ver mis pedidos
+            {usuarioAutenticado ? 'Ver mis pedidos' : 'Seguir mi pedido'}
           </button>
         </div>
 

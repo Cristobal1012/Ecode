@@ -268,16 +268,16 @@ export default function Checkout() {
 
         try {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
-            localStorage.removeItem('carrito_local');
-            window.dispatchEvent(new Event('carritoActualizado'));
-
-            if (usuarioAutenticado) {
-                try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
-            }
 
             if (respuesta.data.url_pago) {
+                // El carrito se conserva por si el pago se anula; lo vacía PagoExitoso
                 window.location.href = respuesta.data.url_pago;
             } else {
+                localStorage.removeItem('carrito_local');
+                window.dispatchEvent(new Event('carritoActualizado'));
+                if (usuarioAutenticado) {
+                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
+                }
                 setTimeout(() => { navigate('/mis-pedidos'); }, 1500);
             }
         } catch (error) {
@@ -327,8 +327,8 @@ export default function Checkout() {
             <form onSubmit={(e) => e.preventDefault()}>
                 {compraComoInvitado && (
                     <div style={{ marginBottom: '20px' }}>
-                        <label style={{fontWeight: 'bold'}}>Correo electrónico para el recibo y estado de envío:</label>
-                        <input type="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required style={inputStyle} />
+                        <label htmlFor="checkout-email" style={{fontWeight: 'bold'}}>Correo electrónico para el recibo y estado de envío:</label>
+                        <input id="checkout-email" type="email" autoComplete="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required style={inputStyle} />
                     </div>
                 )}
                 
@@ -393,29 +393,29 @@ export default function Checkout() {
                             <div style={{ padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                                     <div style={{ flex: 3 }}>
-                                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Calle</label>
-                                        <input type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required style={inputStyle} placeholder="Ej: Av. Providencia" />
+                                        <label htmlFor="checkout-calle" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Calle</label>
+                                        <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required style={inputStyle} placeholder="Ej: Av. Providencia" />
                                     </div>
                                     <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Número</label>
-                                        <input type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required style={inputStyle} />
+                                        <label htmlFor="checkout-numero" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Número</label>
+                                        <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required style={inputStyle} />
                                     </div>
                                 </div>
                                 <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Dpto, Casa o Referencia (Opcional)</label>
-                                    <input type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} style={inputStyle} placeholder="Ej: Depto 505" />
+                                    <label htmlFor="checkout-dpto" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Dpto, Casa o Referencia (Opcional)</label>
+                                    <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} style={inputStyle} placeholder="Ej: Depto 505" />
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                                     <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Comuna</label>
-                                        <select value={comuna} onChange={(e) => { setComuna(e.target.value); cotizarEnvio(e.target.value); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
+                                        <label htmlFor="checkout-comuna" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Comuna</label>
+                                        <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); cotizarEnvio(e.target.value); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
                                             <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
                                             {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
                                     <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Ciudad</label>
-                                        <input type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required style={inputStyle} />
+                                        <label htmlFor="checkout-ciudad" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Ciudad</label>
+                                        <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required style={inputStyle} />
                                     </div>
                                 </div>
                                 {usuarioAutenticado && (
@@ -431,8 +431,8 @@ export default function Checkout() {
                     <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                         <h4 style={{ margin: '0 0 15px 0', fontSize: '1rem' }}>Elige la sucursal de retiro</h4>
                         <div style={{ marginBottom: '15px' }}>
-                            <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>¿En qué comuna te encuentras?</label>
-                            <select value={comunaSucursal} onChange={(e) => { setComunaSucursal(e.target.value); cotizarEnvio(e.target.value); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
+                            <label htmlFor="checkout-comuna-sucursal" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>¿En qué comuna te encuentras?</label>
+                            <select id="checkout-comuna-sucursal" value={comunaSucursal} onChange={(e) => { setComunaSucursal(e.target.value); cotizarEnvio(e.target.value); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
                                 <option value="">-- Selecciona comuna --</option>
                                 {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>

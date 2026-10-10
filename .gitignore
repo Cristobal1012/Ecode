@@ -45,3 +45,4 @@ Thumbs.db
 *.swp
 .env
 .playwright-mcp/
+.mcp.json

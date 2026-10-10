@@ -93,16 +93,18 @@ class TransbankRetornoView(APIView):
 
         # Manejo de anulación directa por parte del usuario en el portal de Transbank
         if tbk_token and not token:
-            if tbk_orden:
-                orden_id_limpio = tbk_orden.replace('ORD-', '')
+            orden_id_limpio = (tbk_orden or '').replace('ORD-', '')
+            if orden_id_limpio:
                 try:
                     orden = OrdenCompra.objects.get(id=orden_id_limpio)
                     orden.estado = 'CANCELADO'
                     orden.save()
                     logger.info(f"Orden {orden.id} marcada como CANCELADA por anulación en Transbank.")
-                except OrdenCompra.DoesNotExist:
-                    pass
-            return HttpResponseRedirect(f"{frontend_url}/mis-pedidos?pago=cancelado?")
+                except (OrdenCompra.DoesNotExist, ValueError):
+                    orden_id_limpio = ''
+            # Página pública: el invitado no tiene acceso a /mis-pedidos
+            destino = f"{frontend_url}/pago-cancelado"
+            return HttpResponseRedirect(f"{destino}?orden={orden_id_limpio}" if orden_id_limpio else destino)
 
         if not token:
             return Response({"error": "Token no proporcionado"}, status=status.HTTP_400_BAD_REQUEST)

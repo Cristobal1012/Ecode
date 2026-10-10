@@ -12,8 +12,7 @@ export const Footer = () => {
       try {
         setErrorConexion(false);
         // Corrección Error 1: Petición mediante la instancia centralizada y ruta relativa
-        const res = await clienteAxios.get('ventas/paginas-legales/');
-        
+        const res = await clienteAxios.get('/ventas/paginas-legales/');
         // Corrección Error 3: Sin filtrado de atributos inexistentes (publicada/es_publica)
         const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
         setPaginas(data);

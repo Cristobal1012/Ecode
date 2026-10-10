@@ -57,26 +57,7 @@ class CheckoutAPIView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         orden = serializer.instance
-
-        # --- NUEVO: GUARDAR LOS DETALLES DEL CARRITO EN LA ORDEN ---
-        # 1. Obtenemos los productos que React nos envió en la petición (como 'items' o 'detalles')
-        items_carrito = request.data.get('items') or request.data.get('detalles') or []
-        
-        # 2. Importamos el modelo de detalles (Ajusta el nombre 'DetalleOrdenCompra' si en tu models.py se llama distinto, por ej. 'DetalleOrden')
-        from .models import DetalleOrden 
-        
-        # 3. Guardamos cada item vinculándolo a la orden que acabamos de crear
-        for item in items_carrito:
-            DetalleOrden.objects.create(
-                orden=orden,
-                # Mapeamos las llaves que vienen de React a los campos de tu modelo SQL
-                producto_mongo_id=item.get('id') or item.get('producto_mongo_id'),
-                variante_sku=item.get('sku') or item.get('variante_sku'),
-                nombre_producto_snapshot=item.get('nombre') or item.get('nombre_producto', 'Producto sin nombre'),
-                precio_unitario_snapshot=item.get('precio') or item.get('precio_unitario', 0),
-                cantidad=item.get('cantidad', 1)
-            )
-        # -----------------------------------------------------------
+        # El detalle de la orden lo guarda el serializer con los precios del catálogo
 
         try:
             # Respuesta hacia React
@@ -192,6 +173,8 @@ class TransbankRetornoView(APIView):
                     
                     if respuesta_chx.get('exito'):
                         orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
+                        # El portal de seguimiento (RF-02.4) consulta a Chilexpress con este código
+                        orden.numero_seguimiento_tracking = respuesta_chx.get('numero_ot')
                         orden.save()
                         logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
                     else:
@@ -342,7 +325,8 @@ class SeguimientoEnvioView(APIView):
             orden = OrdenCompra.objects.get(
                 Q(id=numero_orden) & (Q(email_invitado=email) | Q(usuario__email=email))
             )
-        except OrdenCompra.DoesNotExist:
+        # Un número de orden no numérico recibe la misma respuesta genérica (RF-02.4)
+        except (OrdenCompra.DoesNotExist, ValueError):
             return Response(
                 {"error": "No se encontró un pedido que coincida con esos datos. Verifica la información."},
                 status=status.HTTP_404_NOT_FOUND

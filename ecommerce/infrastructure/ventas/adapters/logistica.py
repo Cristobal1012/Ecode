@@ -329,10 +329,14 @@ class ProveedorLogisticoAdapter:
             if respuesta.status_code in [200, 201]:
                 data = respuesta.json()
                 detalle = data.get("data", {}).get("detail", [{}])[0]
-                
+                # Chilexpress devuelve la OT como decimal (712678903156.0); la guardamos como entero en texto
+                numero_ot = detalle.get("transportOrderNumber")
+                if numero_ot is not None:
+                    numero_ot = str(int(float(numero_ot)))
+
                 return {
                     "exito": True,
-                    "numero_ot": detalle.get("transportOrderNumber"),
+                    "numero_ot": numero_ot,
                     "codigo_barras": detalle.get("barcode"),
                     "etiqueta_data": detalle.get("label", {}).get("labelData"),
                     "data_completa": data

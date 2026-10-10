@@ -11,8 +11,11 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
+from ecommerce.application.ventas import PrepararPedido
+from ecommerce.domain.ventas import ErrorPedido, ItemSolicitado, SubtotalDesactualizado
+from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
-from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -92,6 +95,18 @@ class SolicitudCotizacionSerializer(serializers.Serializer):
         )
 
 
+def catalogo_variantes():
+    """Adaptador del catálogo que usa el checkout; las pruebas lo reemplazan por uno falso."""
+    return MongoCatalogoVariantes()
+
+
+class ItemPedidoSerializer(serializers.Serializer):
+    # El nombre y el precio que envía el navegador se ignoran: se toman del catálogo
+    producto_mongo_id = serializers.CharField(max_length=255)
+    variante_sku = serializers.CharField(max_length=255)
+    cantidad = serializers.IntegerField(min_value=1)
+
+
 class OrdenCompraSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=0, min_value=Decimal('0'))
     costo_envio = serializers.FloatField(required=False)
@@ -100,6 +115,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         choices=['STARKEN', 'CHILEXPRESS', 'RETIRO_LOCAL'], required=False,
     )
     paquete = PaqueteSerializer(write_only=True, required=False)
+    # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
+    acepta_terminos = serializers.BooleanField(write_only=True)
+    items = ItemPedidoSerializer(many=True, write_only=True)
 
     class Meta:
         model = OrdenCompra
@@ -116,7 +134,16 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'paquete',
             'id_transaccion_pasarela',
             'proveedor_logistico',
+            'acepta_terminos',
+            'items',
         ]
+
+    def validate_acepta_terminos(self, value):
+        if value is not True:
+            raise serializers.ValidationError(
+                'Debes aceptar los Términos y Condiciones y la Política de Privacidad.'
+            )
+        return value
 
     def validate(self, data):
         request = self.context.get('request')
@@ -157,11 +184,30 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             faltantes = [campo for campo in ('costo_envio', 'total_final') if campo not in data]
             if faltantes:
                 raise serializers.ValidationError({campo: 'Campo requerido.' for campo in faltantes})
-        
+
+        # RN-03: stock por variante y precios del catálogo, no los del navegador
+        items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
+                 for i in data['items']]
+        try:
+            self._pedido = PrepararPedido(catalogo_variantes()).ejecutar(items, data['subtotal'])
+        except SubtotalDesactualizado as error:
+            raise serializers.ValidationError({
+                'subtotal': str(error),
+                'precios_vigentes': [
+                    {'producto_mongo_id': l.producto_id, 'variante_sku': l.sku,
+                     'nombre': l.nombre, 'precio': str(l.precio_unitario)}
+                    for l in error.lineas
+                ],
+            })
+        except ErrorPedido as error:
+            raise serializers.ValidationError({'items': str(error)})
+
         return data
 
     def create(self, validated_data):
         request = self.context.get('request')
+        validated_data.pop('acepta_terminos')
+        validated_data.pop('items')
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
@@ -206,7 +252,15 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             
         # 3. CREAR LA ORDEN EN BASE DE DATOS
         orden = super().create(validated_data)
-        
+        DetalleOrden.objects.bulk_create([
+            DetalleOrden(
+                orden=orden, producto_mongo_id=linea.producto_id, variante_sku=linea.sku,
+                nombre_producto_snapshot=linea.nombre,
+                precio_unitario_snapshot=float(linea.precio_unitario), cantidad=linea.cantidad,
+            )
+            for linea in self._pedido.lineas
+        ])
+
         # 4. INTEGRACIÓN CON PASARELAS DE PAGO
         metodo_pago = validated_data.get('metodo_pago')
         url_pago = None

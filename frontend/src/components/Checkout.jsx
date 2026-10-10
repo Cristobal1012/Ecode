@@ -42,6 +42,8 @@ export default function Checkout() {
     const [opcionEntregaSeleccionada, setOpcionEntregaSeleccionada] = useState(null);
     const [costoEnvio, setCostoEnvio] = useState(0);
     const [cotizando, setCotizando] = useState(false);
+    // RF-04.4: consentimiento obligatorio, desmarcado por defecto
+    const [aceptaTerminos, setAceptaTerminos] = useState(false);
 
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
     const navigate = useNavigate();
@@ -206,6 +208,7 @@ export default function Checkout() {
     const procesarPago = async (metodoSeleccionado) => {
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
+        if (!aceptaTerminos) return setMensaje('Debes aceptar los Términos y Condiciones y la Política de Privacidad.');
 
         let dirSnapshot = {};
         
@@ -258,7 +261,8 @@ export default function Checkout() {
             costo_envio: costoEnvio, 
             total_final: totalFinal,
             proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
-            paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada, 
+            paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada,
+            acepta_terminos: aceptaTerminos,
             items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
         };
 
@@ -277,8 +281,23 @@ export default function Checkout() {
                 setTimeout(() => { navigate('/mis-pedidos'); }, 1500);
             }
         } catch (error) {
-            setMensaje('Error al procesar la compra.');
-            console.error(error.response?.data);
+            const datos = error.response?.data || {};
+            // Si cambiaron los precios, se actualiza el carrito para que el comprador vea el nuevo total
+            if (datos.precios_vigentes) {
+                const carritoActualizado = itemsCarrito.map(item => {
+                    const vigente = datos.precios_vigentes.find(p => p.variante_sku === item.sku);
+                    return vigente ? { ...item, precio: vigente.precio } : item;
+                });
+                localStorage.setItem('carrito_local', JSON.stringify(carritoActualizado));
+                setItemsCarrito(carritoActualizado);
+                window.dispatchEvent(new Event('carritoActualizado'));
+                if (usuarioAutenticado) {
+                    try { await clienteAxios.post('ventas/carrito/', { items: carritoActualizado }); } catch (err) {}
+                }
+            }
+            const detalle = datos.subtotal || datos.items || datos.acepta_terminos;
+            setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
+            console.error(datos);
         }
     };
 
@@ -470,6 +489,11 @@ export default function Checkout() {
                     </div>
                 )}
             
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '20px', fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required style={{ marginTop: '3px' }} />
+                    <span>Acepto los Términos y Condiciones y la Política de Privacidad.</span>
+                </label>
+
                 <div style={{ marginTop: '20px' }}>
                     {cargandoPagos ? (
                         <p style={{ color: '#d9534f', fontWeight: 'bold' }}>Cargando métodos de pago...</p>
@@ -478,7 +502,7 @@ export default function Checkout() {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {pasarelas.map(pasarela => {
-                                const validadoParaPagar = itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const validadoParaPagar = aceptaTerminos && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
                                 return (
                                     <button
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}

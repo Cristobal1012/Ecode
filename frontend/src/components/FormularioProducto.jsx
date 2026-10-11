@@ -6,16 +6,18 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     nombre: '', descripcion: '', categoria: '', imagen: '' , publicado: false
   });
   const [atributosGlobales, setAtributosGlobales] = useState([]);
+  
+  // 1. CAMBIO: Añadidos los campos logísticos al estado inicial de la variante
   const [variantes, setVariantes] = useState([
-    { sku: '', precio: '', stock: '', atributosVariables: [] }
+    { sku: '', precio: '', stock: '', peso_kg: 1.0, alto_cm: 10, ancho_cm: 10, largo_cm: 10, atributosVariables: [] }
   ]);
+  
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
 
-  // NUEVO: Efecto para PRE-CARGAR los datos si estamos editando
   useEffect(() => {
     if (productoAEditar) {
       setProducto({
@@ -26,16 +28,14 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
         publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false
       });
 
-      // Desarmar diccionario de atributos globales a array
       if (productoAEditar.atributos_globales) {
         const arrGlobales = Object.entries(productoAEditar.atributos_globales).map(([k, v]) => ({
-          clave: k.replace(/_/g, ' '), // Quitar guiones bajos
+          clave: k.replace(/_/g, ' '), 
           valor: String(v)
         }));
         setAtributosGlobales(arrGlobales);
       }
 
-      // Desarmar arreglo de variantes y sus diccionarios internos
       if (productoAEditar.variantes && productoAEditar.variantes.length > 0) {
         const arrVariantes = productoAEditar.variantes.map(v => {
           const arrAttrVar = v.atributos_variables ? Object.entries(v.atributos_variables).map(([k, val]) => ({
@@ -47,6 +47,11 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
             sku: v.sku || '',
             precio: v.precio || '',
             stock: v.stock || 0,
+            // 2. CAMBIO: Precarga de campos logísticos con defaults por seguridad
+            peso_kg: v.peso_kg || 1.0,
+            alto_cm: v.alto_cm || 10,
+            ancho_cm: v.ancho_cm || 10,
+            largo_cm: v.largo_cm || 10,
             atributosVariables: arrAttrVar
           };
         });
@@ -55,7 +60,6 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     }
   }, [productoAEditar]);
 
-  // Efecto para cargar categorías
   useEffect(() => {
     const cargarCategorias = async () => {
       try {
@@ -74,15 +78,14 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
 
   const handleChangeProducto = (e) => setProducto({ ...producto, [e.target.name]: e.target.value });
 
-  // Lógica Atributos Globales
   const agregarAtributoGlobal = () => setAtributosGlobales([...atributosGlobales, { clave: '', valor: '' }]);
   const actualizarAtributoGlobal = (index, campo, valor) => {
     const nuevos = [...atributosGlobales]; nuevos[index][campo] = valor; setAtributosGlobales(nuevos);
   };
   const eliminarAtributoGlobal = (index) => setAtributosGlobales(atributosGlobales.filter((_, i) => i !== index));
 
-  // Lógica Variantes
-  const agregarVariante = () => setVariantes([...variantes, { sku: '', precio: '', stock: '', atributosVariables: [] }]);
+  // 3. CAMBIO: Estado inicial con logística al agregar nueva variante
+  const agregarVariante = () => setVariantes([...variantes, { sku: '', precio: '', stock: '', peso_kg: 1.0, alto_cm: 10, ancho_cm: 10, largo_cm: 10, atributosVariables: [] }]);
   const actualizarVariante = (index, campo, valor) => {
     const nuevas = [...variantes]; nuevas[index][campo] = valor; setVariantes(nuevas);
   };
@@ -100,7 +103,6 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     const nuevas = [...variantes]; nuevas[varIndex].atributosVariables.splice(attrIndex, 1); setVariantes(nuevas);
   };
 
-  // Envío del Formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
     setCargando(true);
@@ -116,7 +118,17 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
         if (attr.clave && attr.valor) acc[attr.clave.toLowerCase().trim().replace(/ /g, '_')] = attr.valor.trim();
         return acc;
       }, {});
-      return { sku: v.sku, precio: parseFloat(v.precio), stock: parseInt(v.stock, 10), atributos_variables: objAtributosVariables };
+      return { 
+        sku: v.sku, 
+        precio: parseFloat(v.precio), 
+        stock: parseInt(v.stock, 10), 
+        // 4. CAMBIO: Forzar tipo numérico para el payload
+        peso_kg: parseFloat(v.peso_kg),
+        alto_cm: parseInt(v.alto_cm, 10),
+        ancho_cm: parseInt(v.ancho_cm, 10),
+        largo_cm: parseInt(v.largo_cm, 10),
+        atributos_variables: objAtributosVariables 
+      };
     });
 
     const payload = {
@@ -131,7 +143,6 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     };
 
     try {
-      // NUEVO: Decidimos si hacemos POST o PUT basándonos en si hay productoAEditar
       if (productoAEditar) {
         const id = productoAEditar.id || productoAEditar._id;
         await clienteAxios.put(`catalogo/productos/${id}/`, payload);
@@ -156,7 +167,7 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
     <form onSubmit={handleSubmit} style={{ maxWidth: '900px', backgroundColor: '#f9fafb', padding: '25px', borderRadius: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ color: 'var(--color-primary)', margin: 0, fontSize: '1.5rem' }}>
-          {productoAEditar ? 'Editar Producto' : 'Crear Nuevo Producto'} {/* Cambio de Título */}
+          {productoAEditar ? 'Editar Producto' : 'Crear Nuevo Producto'}
         </h3>
         <button type="button" onClick={alCancelar} style={{ background: 'transparent', border: 'none', color: 'var(--color-text)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
       </div>
@@ -242,6 +253,29 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
             </div>
           </div>
 
+          {/* 5. CAMBIO: SECCIÓN LOGÍSTICA (NUEVA) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '15px', padding: '10px', backgroundColor: '#e0f2fe', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <span style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#0369a1' }}>Dimensiones Logísticas (Para Chilexpress)</span>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#0c4a6e' }}>Peso (Kg)</label>
+              <input type="number" value={variante.peso_kg} onChange={(e) => actualizarVariante(varIndex, 'peso_kg', e.target.value)} style={{...inputStyle, marginTop: '2px', padding: '6px'}} min="0.1" step="0.1" required />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#0c4a6e' }}>Alto (cm)</label>
+              <input type="number" value={variante.alto_cm} onChange={(e) => actualizarVariante(varIndex, 'alto_cm', e.target.value)} style={{...inputStyle, marginTop: '2px', padding: '6px'}} min="1" step="1" required />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#0c4a6e' }}>Ancho (cm)</label>
+              <input type="number" value={variante.ancho_cm} onChange={(e) => actualizarVariante(varIndex, 'ancho_cm', e.target.value)} style={{...inputStyle, marginTop: '2px', padding: '6px'}} min="1" step="1" required />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#0c4a6e' }}>Largo (cm)</label>
+              <input type="number" value={variante.largo_cm} onChange={(e) => actualizarVariante(varIndex, 'largo_cm', e.target.value)} style={{...inputStyle, marginTop: '2px', padding: '6px'}} min="1" step="1" required />
+            </div>
+          </div>
+
           <div style={{ backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <span style={{ fontSize: '0.9em', fontWeight: 'bold' }}>Atributos específicos (Ej: Talla: M)</span>
@@ -257,7 +291,7 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
           </div>
         </div>
       ))}
-{/* NUEVO: INTERRUPTOR DE PUBLICACIÓN */}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: producto.publicado ? '#ecfdf5' : '#f3f4f6', borderRadius: '8px', border: `1px solid ${producto.publicado ? '#10b981' : '#d1d5db'}`, marginTop: '20px' }}>
         <div>
           <strong style={{ color: producto.publicado ? '#065f46' : 'var(--color-text)', display: 'block', fontSize: '1.1em' }}>
@@ -268,7 +302,6 @@ export default function FormularioProducto({ alCancelar, alGuardar, productoAEdi
           </span>
         </div>
         
-        {/* Toggle / Checkbox estilizado */}
         <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '10px' }}>
           <span style={{ fontWeight: 'bold', color: producto.publicado ? '#10b981' : '#9ca3af' }}>
             {producto.publicado ? 'PUBLICADO' : 'OCULTO'}

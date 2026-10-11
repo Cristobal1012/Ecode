@@ -81,7 +81,15 @@ const HistorialPedidos = () => {
         });
     };
 
-    // Función auxiliar para dar estilo visual al estado del pedido
+    const diccionarioEstados = {
+        'PENDIENTE': 'Pendiente',
+        'PAGADO': 'Pagado',
+        'EN_PREPARACION': 'En Preparación',
+        'ENVIADO': 'Despachado',
+        'ENTREGADO': 'Entregado',
+        'CANCELADO': 'Cancelado'
+    };
+
     const obtenerEstiloEstado = (estado) => {
         switch (estado?.toUpperCase()) {
             case 'PAGADO':
@@ -148,7 +156,7 @@ const HistorialPedidos = () => {
                                                     display: 'inline-block',
                                                     ...obtenerEstiloEstado(orden.estado)
                                                 }}>
-                                                    {orden.estado}
+                                                    {diccionarioEstados[orden.estado] || orden.estado}
                                                 </span>
                                             </td>
                                             <td style={{ padding: '12px' }}>
@@ -197,7 +205,7 @@ const HistorialPedidos = () => {
                         
                         <div style={{ fontSize: '0.95rem', color: '#374151', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
                             <div><strong>Proveedor Logístico:</strong> {pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</div>
-                            <div><strong>Estado del Pago:</strong> {pedidoSeleccionado.estado}</div>
+                            <div><strong>Estado del Pago:</strong> {diccionarioEstados[pedidoSeleccionado.estado] || pedidoSeleccionado.estado}</div>
                             <div><strong>Información Pasarela / OT:</strong> <span style={{ fontFamily: 'monospace', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{pedidoSeleccionado.id_transaccion_pasarela || 'Generándose...'}</span></div>
                             
                             {pedidoSeleccionado.direccion && (

@@ -40,15 +40,21 @@ ventas_urlpatterns = [
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
-    
-    # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
+# --- RUTAS PARA DIRECCIONES DE ENVÍO ---
     # Ruta resultante: GET/POST /api/ventas/direcciones/
     path('direcciones/', views.DireccionEnvioListCreateView.as_view(), name='direcciones-list-create'),
     # Ruta resultante: GET/PUT/PATCH/DELETE /api/ventas/direcciones/<id>/
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
     
     # Ruta para descargar la etiqueta de Chilexpress
-    path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta')
+    path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),
+
+    # NUEVAS RUTAS: administración de órdenes (solo administradores)
+    # Ruta resultante: GET /api/ventas/admin/ordenes/
+    path('admin/ordenes/', views.AdminOrdenCompraListView.as_view(), name='admin-ordenes-list'),
+    # Ruta resultante: PATCH /api/ventas/admin/ordenes/<pk>/estado/
+    path('admin/ordenes/<int:pk>/estado/', views.AdminOrdenCompraPatchView.as_view(), name='admin-ordenes-patch'),
+    path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

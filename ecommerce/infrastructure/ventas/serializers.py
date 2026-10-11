@@ -16,6 +16,7 @@ from ecommerce.domain.ventas import ErrorPedido, ItemSolicitado, SubtotalDesactu
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
+from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -118,6 +119,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
+    email_cliente = serializers.SerializerMethodField()
 
     class Meta:
         model = OrdenCompra
@@ -126,6 +128,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'fecha_creacion',
             'estado',
             'email_invitado',
+            'email_cliente',
             'metodo_pago',
             'direccion_envio_snapshot',
             'subtotal',
@@ -144,6 +147,13 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'Debes aceptar los Términos y Condiciones y la Política de Privacidad.'
             )
         return value
+    def get_email_cliente(self, obj):
+        if obj.email_invitado:
+            return obj.email_invitado
+        if obj.usuario and obj.usuario.email:
+            return obj.usuario.email
+        return None   
+    
 
     def validate(self, data):
         request = self.context.get('request')
@@ -296,6 +306,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         orden.url_pago = url_pago
         return orden
 
+        
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)
@@ -325,6 +336,11 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
+class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdenCompra
+        fields = ['estado']
+
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -340,3 +356,8 @@ class DireccionEnvioSerializer(serializers.ModelSerializer):
             'codigo_postal', 
             'es_predeterminado'
         ]
+
+class PaginaLegalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaginaLegal
+        fields = ['id', 'tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']

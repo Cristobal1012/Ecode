@@ -44,4 +44,3 @@ Thumbs.db
 .idea/
 *.swp
 .env
-.playwright-mcp/

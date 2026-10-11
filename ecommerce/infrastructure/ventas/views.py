@@ -620,3 +620,4 @@ class PaginaLegalListView(generics.ListAPIView):
     queryset = PaginaLegal.objects.all()
     serializer_class = PaginaLegalSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []

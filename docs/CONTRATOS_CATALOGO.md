@@ -6,6 +6,10 @@ Este documento especifica los contratos de datos y formatos JSON aceptados para 
 
 ## 1. Esquema de Datos (POST /catalogo/productos/)
 
+La ruta montada es `/api/catalogo/productos/`. Las escrituras requieren una
+cuenta ADMIN activa. Para subida multipart, borrado y galería del formulario,
+consultar [el contrato SCRUM-125](IMAGENES_CATALOGO.md).
+
 ### A. Objeto Raíz (Producto)
 
 | Campo | Tipo | Obligatorio | Descripción |
@@ -13,8 +17,8 @@ Este documento especifica los contratos de datos y formatos JSON aceptados para 
 | nombre | String | Sí | Nombre comercial del producto (máx. 255 caracteres). |
 | descripcion | String | No | Detalle o especificación técnica. |
 | categoria | String | Sí | Categoría de navegación (clave para filtros en UI). |
-| imagenes | Array[String] | No | Lista de URLs de imágenes generales (por defecto: `[]`). |
-| fecha_creacion | DateTime | Sí | Fecha de creación del producto. |
+| imagenes | Array[String] | No | URLs HTTP(S) externas o URLs propias ya asociadas al producto. La respuesta siempre expone URLs; al crear, por defecto `[]`; omitir en PUT/PATCH conserva la galería. |
+| fecha_creacion | DateTime | Solo lectura | Fecha de creación asignada por el servidor. |
 | activo | Boolean | No | Estado de visibilidad (por defecto: `true`). |
 | atributos_globales | Object (Dict) | No | Pares clave-valor invariables entre variantes (por defecto: `{}`). |
 | variantes | Array[Variante] | No | Lista embebida de variantes comerciales. Puede estar vacía. |

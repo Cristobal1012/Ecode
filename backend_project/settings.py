@@ -124,7 +124,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es'
 
-TIME_ZONE = 'Chile/Continental'
+TIME_ZONE = 'America/Santiago'
 
 USE_I18N = True
 
@@ -135,6 +135,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Product images use Django's default storage. MEDIA_ROOT is separate from code
+# and static assets; production must serve MEDIA_URL through its media server.
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+CATALOGO_IMAGEN_MAX_BYTES = int(os.environ.get('CATALOGO_IMAGEN_MAX_BYTES', 5 * 1024 * 1024))
+CATALOGO_IMAGEN_MAX_ARCHIVOS = int(os.environ.get('CATALOGO_IMAGEN_MAX_ARCHIVOS', 10))
+CATALOGO_IMAGEN_MAX_GALERIA = int(os.environ.get('CATALOGO_IMAGEN_MAX_GALERIA', 20))
+CATALOGO_IMAGEN_MAX_PIXELES = int(os.environ.get('CATALOGO_IMAGEN_MAX_PIXELES', 20_000_000))
 
 
 # Email

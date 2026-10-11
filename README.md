@@ -173,6 +173,11 @@ pruebas. Consultar [alcance, configuración y matriz QA](docs/security-qa.md) y
 el [contrato OpenAPI de autenticación](docs/openapi.json), que documenta las
 rutas reales de registro, login JWT, renovación de tokens y Google SSO.
 
+Los endpoints de galerías de producto, límites de subida y flujo de integración
+para los formularios React se documentan en
+[Imágenes del catálogo (SCRUM-125)](docs/IMAGENES_CATALOGO.md). La suite completa
+usa PostgreSQL y MongoDB reales, con bases de prueba aisladas.
+
 ## Estado del proyecto
 
 En desarrollo — Sprint 0.

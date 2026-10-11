@@ -12,6 +12,12 @@ import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
 import { PALETTES } from './constants/palettes';
 import DetalleProducto from './pages/DetalleProducto';
+import SeguimientoEnvio from './pages/SeguimientoEnvio';
+import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
+import MisDirecciones from './components/MisDirecciones'; // Ajusta la ruta a donde guardaste el archivo
+import PagoExitoso from './components/PagoExitoso';
+import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a donde guardaste el archivo
+import Footer from './components/footer';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -92,21 +98,41 @@ function App() {
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
-        <Routes>
-          {/* Vistas públicas */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/variantes" element={<VariantSelector />} />
-          <Route path="/catalogo" element={<Catalogo />} />
-          <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
-          {/* Pantalla de login y registro */}
-          <Route path="/login" element={<AuthPage />} />
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <main style={{ flex: 1 }}>
+            <Routes>
+              {/* Vistas públicas */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/seguimiento" element={<SeguimientoEnvio />} />
+              <Route path="/variantes" element={<VariantSelector />} />
+              <Route path="/catalogo" element={<Catalogo />} />
+              <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
+              <Route path="/mis-direcciones" element={<MisDirecciones />} />
+              <Route path="/pago-exitoso" element={<PagoExitoso />} />
+              <Route path="/pago-cancelado" element={<PagoCancelado />} />
+              <Route path="/pago-rechazado" element={<PagoCancelado />} />
+              {/* Pantalla de login y registro */}
+              <Route path="/login" element={<AuthPage />} />
 
-          {/* Ruta protegida para usuarios con rol ADMIN */}
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
-            <Route path="/admin" element={<Admin />} />
-          </Route>
-        </Routes>
+              {/* Vista pública para desplegar páginas legales individuales */}
+              <Route path="/legal/:slug" element={<div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}><h2>Página Legal</h2><p>Contenido legal cargado dinámicamente.</p></div>} />
+
+              {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/mis-pedidos" element={<HistorialPedidos />} />
+              </Route>
+
+              {/* Ruta protegida para usuarios con rol ADMIN */}
+              <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+                <Route path="/admin" element={<Admin />} />
+              </Route>
+            </Routes>
+          </main>
+          
+          {/* Footer inyectado dinámicamente en toda la aplicación */}
+          <Footer />
+        </div>
       </BrowserRouter>
     </GoogleOAuthProvider>
   );

@@ -7,8 +7,13 @@ export default function GestorPedidos() {
 
   // Opciones exactas solicitadas en los criterios de aceptación
   const opcionesEstado = [
-    'Pendiente', 'Pagado', 'En Preparación', 'Despachado', 'Entregado', 'Cancelado'
-  ];
+  { valor: 'PENDIENTE', etiqueta: 'Pendiente' },
+  { valor: 'PAGADO', etiqueta: 'Pagado' },
+  { valor: 'EN_PREPARACION', etiqueta: 'En Preparación' }, // Sin espacio, con guion bajo y sin tilde
+  { valor: 'ENVIADO', etiqueta: 'Despachado' }, // Cambiado al estándar de backend más común
+  { valor: 'ENTREGADO', etiqueta: 'Entregado' },
+  { valor: 'CANCELADO', etiqueta: 'Cancelado' }
+];
 
   useEffect(() => {
     cargarPedidos();
@@ -65,7 +70,7 @@ export default function GestorPedidos() {
               <td style={{ padding: '12px' }}>${Number(pedido.total_final).toLocaleString('es-CL')}</td>
               <td style={{ padding: '12px' }}>
                 <select
-                  value={pedido.estado}
+                  value={pedido.estado ? pedido.estado.toUpperCase() : 'PENDIENTE'} 
                   onChange={(e) => handleCambioEstado(pedido.id, e.target.value)}
                   style={{
                     padding: '6px',
@@ -75,7 +80,9 @@ export default function GestorPedidos() {
                   }}
                 >
                   {opcionesEstado.map(opcion => (
-                    <option key={opcion} value={opcion}>{opcion}</option>
+                    <option key={opcion.valor} value={opcion.valor}>
+                      {opcion.etiqueta}
+                    </option>
                   ))}
                 </select>
               </td>

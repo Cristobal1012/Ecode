@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from mongoengine import Document, EmbeddedDocument, fields
 
 class Variante(EmbeddedDocument):
@@ -19,6 +21,8 @@ class Producto(Document):
     nombre = fields.StringField(required=True, max_length=255)
     descripcion = fields.StringField(null=True, blank=True)
     categoria = fields.StringField(required=True)
+    # Managed images use storage keys internally; serializers expose their URLs.
+    # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)
     fecha_creacion = fields.DateTimeField(required=True)
     activo = fields.BooleanField(default=True)
@@ -30,6 +34,14 @@ class Producto(Document):
 
     def __str__(self):
         return f"{self.nombre} ({self.categoria})"
+
+
+class ImagenPendienteBorrado(Document):
+    """Durable, idempotent cleanup intents for files owned by the catalog."""
+
+    meta = {'collection': 'imagenes_catalogo_pendientes_borrado'}
+    clave = fields.StringField(required=True, unique=True)
+    fecha_creacion = fields.DateTimeField(default=lambda: datetime.now(timezone.utc))
     
     @classmethod
     def reducir_stock_variante(cls, producto_id, sku, cantidad):

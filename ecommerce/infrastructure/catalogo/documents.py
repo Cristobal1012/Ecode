@@ -35,14 +35,6 @@ class Producto(Document):
     def __str__(self):
         return f"{self.nombre} ({self.categoria})"
 
-
-class ImagenPendienteBorrado(Document):
-    """Durable, idempotent cleanup intents for files owned by the catalog."""
-
-    meta = {'collection': 'imagenes_catalogo_pendientes_borrado'}
-    clave = fields.StringField(required=True, unique=True)
-    fecha_creacion = fields.DateTimeField(default=lambda: datetime.now(timezone.utc))
-    
     @classmethod
     def reducir_stock_variante(cls, producto_id, sku, cantidad):
         print(f"\n--- DEBUG STOCK ---")
@@ -79,3 +71,11 @@ class ImagenPendienteBorrado(Document):
             print(f"ERROR EXCEPCIÓN en MongoDB: {str(e)}")
             print(f"-------------------\n")
             return False
+
+
+class ImagenPendienteBorrado(Document):
+    """Durable, idempotent cleanup intents for files owned by the catalog."""
+
+    meta = {'collection': 'imagenes_catalogo_pendientes_borrado'}
+    clave = fields.StringField(required=True, unique=True)
+    fecha_creacion = fields.DateTimeField(default=lambda: datetime.now(timezone.utc))

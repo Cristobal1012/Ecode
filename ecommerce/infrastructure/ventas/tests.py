@@ -357,3 +357,28 @@ class AnulacionTransbankTests(APITestCase):
                 response = self.anular(orden_compra)
                 self.assertEqual(response.status_code, 302)
                 self.assertEqual(response['Location'], 'http://tienda.test/pago-cancelado')
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+class PagoAprobadoTransbankTests(APITestCase):
+    @patch('ecommerce.infrastructure.ventas.views.Producto.reducir_stock_variante', return_value=True)
+    @patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion')
+    def test_pago_aprobado_descuenta_stock_de_cada_detalle(self, confirmar, reducir_stock):
+        orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={}, subtotal=20000, costo_envio=0, total_final=20000,
+        )
+        DetalleOrden.objects.create(
+            orden=orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
+        )
+        confirmar.return_value = {
+            'exito': True, 'aprobado': True, 'data_completa': {'buy_order': f'ORD-{orden.id}'},
+        }
+
+        response = self.client.get(reverse('transbank_retorno'), {'token_ws': 'token-tbk'})
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={orden.id}')
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'PAGADO')
+        reducir_stock.assert_called_once_with(producto_id='camisa', sku='CAMISA-S', cantidad=2)

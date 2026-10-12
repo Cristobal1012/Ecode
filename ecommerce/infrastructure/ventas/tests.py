@@ -427,6 +427,55 @@ class CambioEstadoAdminTests(APITestCase):
         self.assertEqual(self.stock(), 1)
 
 
+class PanelPedidosAdminTests(APITestCase):
+    """RF-03.3 y AGENTS.md §4.1: listado del panel y resolución de revisiones."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.buyer_token = Token.objects.create(user=create_user())
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+        cls.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
+            estado='PAGADO', requiere_revision=True,
+            motivo_revision='Pago confirmado sin stock para CAMISA-S',
+        )
+
+    def autenticar(self, token):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def resolver(self, orden_id=None):
+        return self.client.post(
+            reverse('admin-ordenes-resolver-revision', args=[orden_id or self.orden.id]))
+
+    def test_listado_incluye_revision_y_transiciones_permitidas(self):
+        self.autenticar(self.admin_token)
+        orden, = self.client.get(reverse('admin-ordenes-list')).data
+        self.assertEqual(orden['estado'], 'PAGADO')
+        self.assertTrue(orden['requiere_revision'])
+        self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
+        self.assertEqual(orden['transiciones_permitidas'], ['EN_PREPARACION', 'CANCELADO'])
+        self.assertEqual(orden['email_cliente'], 'invitado@example.test')
+
+    def test_resolver_revision_quita_la_marca_una_sola_vez(self):
+        self.autenticar(self.admin_token)
+        response = self.resolver()
+        self.assertEqual(response.status_code, 200)
+        self.orden.refresh_from_db()
+        self.assertFalse(self.orden.requiere_revision)
+        self.assertEqual(self.orden.motivo_revision, 'Pago confirmado sin stock para CAMISA-S')
+
+        self.assertEqual(self.resolver().status_code, 409)
+        self.assertEqual(self.resolver(orden_id=999999).status_code, 404)
+
+    def test_solo_el_admin_ve_el_panel_y_resuelve_revisiones(self):
+        self.autenticar(self.buyer_token)
+        self.assertEqual(self.client.get(reverse('admin-ordenes-list')).status_code, 403)
+        self.assertEqual(self.resolver().status_code, 403)
+        self.orden.refresh_from_db()
+        self.assertTrue(self.orden.requiere_revision)
+
+
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class AnulacionTransbankTests(APITestCase):
     def anular(self, orden_compra):

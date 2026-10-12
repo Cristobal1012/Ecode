@@ -20,7 +20,7 @@ from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
     MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago, OrdenNoEncontrada,
-    PedidoModificado, ResultadoPago,
+    PedidoModificado, ResolverRevision, ResultadoPago, SinRevisionPendiente,
 )
 from ecommerce.domain.ventas import TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
@@ -35,6 +35,7 @@ from .serializers import (
     DireccionEnvioSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
+    AdminOrdenCompraSerializer,
     PaginaLegalSerializer
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -56,8 +57,22 @@ def cambiar_estado_pedido():
 
 class AdminOrdenCompraListView(generics.ListAPIView):
     queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
-    serializer_class = OrdenCompraSerializer
+    serializer_class = AdminOrdenCompraSerializer
     permission_classes = [IsAdministrador]
+
+
+class AdminResolverRevisionView(APIView):
+    """El admin marca como resuelta la revisión de una orden (AGENTS.md §4.1)."""
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pk):
+        try:
+            ResolverRevision(DjangoRepositorioOrdenes()).ejecutar(pk)
+        except OrdenNoEncontrada:
+            return Response({'detail': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        except SinRevisionPendiente as error:
+            return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
+        return Response({'id': pk, 'requiere_revision': False})
 
 
 class AdminOrdenCompraPatchView(APIView):

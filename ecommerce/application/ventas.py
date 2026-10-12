@@ -90,6 +90,11 @@ class RepositorioOrdenes(ABC):
     def marcar_revision(self, orden_id, motivo: str) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def resolver_revision(self, orden_id) -> bool:
+        """Quita la marca de revisión y conserva el motivo; False si no estaba marcada."""
+        raise NotImplementedError
+
 
 class ResultadoPago(StrEnum):
     PAGADO = 'PAGADO'
@@ -209,3 +214,25 @@ class CambiarEstadoPedido:
             reponer_stock(self.inventario, orden.items)
             self.ordenes.registrar_stock_descontado(orden.id, False)
         return nuevo
+
+
+class SinRevisionPendiente(Exception):
+    def __init__(self):
+        super().__init__('La orden no tiene una revisión pendiente.')
+
+
+class ResolverRevision:
+    """AGENTS.md §4.1: el admin marca como resuelta la revisión de una orden (ej. ya reembolsó).
+
+    El motivo se conserva como historial.
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes):
+        self.ordenes = ordenes
+
+    def ejecutar(self, orden_id) -> None:
+        orden = self.ordenes.obtener(orden_id)
+        if orden is None:
+            raise OrdenNoEncontrada()
+        if not self.ordenes.resolver_revision(orden.id):
+            raise SinRevisionPendiente()

@@ -142,6 +142,15 @@ def _etiqueta(estado):
         return str(estado)
 
 
+def transiciones_desde(estado) -> list[EstadoPedido]:
+    """Estados a los que puede pasar un pedido, en el orden del flujo (vacío si es final)."""
+    try:
+        permitidas = TRANSICIONES_PERMITIDAS[EstadoPedido(estado)]
+    except ValueError:
+        return []
+    return [siguiente for siguiente in EstadoPedido if siguiente in permitidas]
+
+
 def validar_transicion(actual, nuevo) -> EstadoPedido:
     """RF-03.3 / AGENTS.md §9: devuelve el nuevo estado si la transición está permitida."""
     try:

@@ -1,6 +1,8 @@
 from django.test import SimpleTestCase
 
-from ecommerce.domain.ventas import EstadoPedido, TransicionNoPermitida, validar_transicion
+from ecommerce.domain.ventas import (
+    EstadoPedido, TransicionNoPermitida, transiciones_desde, validar_transicion,
+)
 
 E = EstadoPedido
 
@@ -23,6 +25,14 @@ class MaquinaEstadosPedidoTests(SimpleTestCase):
                     else:
                         with self.assertRaises(TransicionNoPermitida):
                             validar_transicion(actual, nuevo)
+
+    def test_transiciones_desde_cada_estado_en_orden_del_flujo(self):
+        for actual in EstadoPedido:
+            with self.subTest(actual=actual):
+                esperadas = [nuevo for nuevo in EstadoPedido if (actual, nuevo) in PERMITIDAS]
+                self.assertEqual(transiciones_desde(actual), esperadas)
+        self.assertEqual(transiciones_desde('PAGADO'), [E.EN_PREPARACION, E.CANCELADO])
+        self.assertEqual(transiciones_desde('RECHAZADO'), [])
 
     def test_acepta_los_codigos_como_texto(self):
         self.assertIs(validar_transicion('PAGADO', 'EN_PREPARACION'), E.EN_PREPARACION)

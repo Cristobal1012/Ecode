@@ -12,7 +12,9 @@ from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
 from ecommerce.application.ventas import PrepararPedido
-from ecommerce.domain.ventas import ErrorPedido, ItemSolicitado, SubtotalDesactualizado
+from ecommerce.domain.ventas import (
+    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, transiciones_desde,
+)
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
@@ -339,6 +341,27 @@ class AgregarItemSerializer(serializers.Serializer):
 class AdminOrdenCompraEstadoSerializer(serializers.Serializer):
     # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido (AGENTS.md §9)
     estado = serializers.ChoiceField(choices=OrdenCompra.ESTADOS_PEDIDO)
+
+
+class AdminOrdenCompraSerializer(serializers.ModelSerializer):
+    """Listado del panel (RF-03.3): incluye la revisión pendiente y las transiciones de §9."""
+
+    email_cliente = serializers.SerializerMethodField()
+    transiciones_permitidas = serializers.SerializerMethodField()
+
+    get_email_cliente = OrdenCompraSerializer.get_email_cliente
+
+    class Meta:
+        model = OrdenCompra
+        fields = [
+            'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
+            'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
+            'motivo_cancelacion', 'transiciones_permitidas',
+        ]
+        read_only_fields = fields
+
+    def get_transiciones_permitidas(self, obj):
+        return [estado.value for estado in transiciones_desde(obj.estado)]
 
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):

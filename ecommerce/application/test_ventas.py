@@ -4,7 +4,8 @@ from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
-    PedidoModificado, PrepararPedido, RepositorioOrdenes, ResultadoPago,
+    PedidoModificado, PrepararPedido, RepositorioOrdenes, ResolverRevision, ResultadoPago,
+    SinRevisionPendiente,
 )
 from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, StockInsuficiente,
@@ -100,6 +101,7 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
+            'requiere_revision': False,
         }
         return self.ordenes[orden_id]
 
@@ -123,7 +125,13 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         self.ordenes[orden_id]['stock_descontado'] = descontado
 
     def marcar_revision(self, orden_id, motivo):
-        self.ordenes[orden_id]['motivo_revision'] = motivo
+        self.ordenes[orden_id].update(requiere_revision=True, motivo_revision=motivo)
+
+    def resolver_revision(self, orden_id):
+        if not self.ordenes[orden_id]['requiere_revision']:
+            return False
+        self.ordenes[orden_id]['requiere_revision'] = False
+        return True
 
 
 class ConfirmarPagoTests(SimpleTestCase):
@@ -257,3 +265,23 @@ class CambiarEstadoPedidoTests(SimpleTestCase):
     def test_orden_inexistente(self):
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(99, 'CANCELADO')
+
+
+class ResolverRevisionTests(SimpleTestCase):
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.caso = ResolverRevision(self.ordenes)
+
+    def test_quita_la_marca_y_conserva_el_motivo(self):
+        orden = self.ordenes.agregar(1, 'PAGADO', [])
+        self.ordenes.marcar_revision(1, 'Pago confirmado sin stock para CAMISA-S')
+        self.caso.ejecutar(1)
+        self.assertFalse(orden['requiere_revision'])
+        self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
+
+    def test_orden_sin_revision_pendiente_o_inexistente(self):
+        self.ordenes.agregar(1, 'PAGADO', [])
+        with self.assertRaises(SinRevisionPendiente):
+            self.caso.ejecutar(1)
+        with self.assertRaises(OrdenNoEncontrada):
+            self.caso.ejecutar(99)

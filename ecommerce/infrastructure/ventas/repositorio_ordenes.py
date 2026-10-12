@@ -31,3 +31,7 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
 
     def marcar_revision(self, orden_id, motivo):
         OrdenCompra.objects.filter(id=orden_id).update(requiere_revision=True, motivo_revision=motivo)
+
+    def resolver_revision(self, orden_id):
+        return OrdenCompra.objects.filter(id=orden_id, requiere_revision=True).update(
+            requiere_revision=False) == 1

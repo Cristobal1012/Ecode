@@ -18,7 +18,10 @@ from dataclasses import asdict
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
-from ecommerce.infrastructure.catalogo.documents import Producto
+from ecommerce.application.ventas import (
+    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, ConfirmarPago, ResultadoPago,
+)
+from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
 from .permissions import CanCheckout
@@ -34,6 +37,15 @@ from .serializers import (
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .repositorio_ordenes import DjangoRepositorioOrdenes
+
+
+def inventario_variantes():
+    return MongoInventarioVariantes()
+
+
+def confirmar_pago():
+    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes())
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
@@ -111,17 +123,13 @@ class TransbankRetornoView(APIView):
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-        # Manejo de anulación directa por parte del usuario en el portal de Transbank
+        # Anulación del comprador en el portal de Transbank
         if tbk_token and not token:
             orden_id_limpio = (tbk_orden or '').replace('ORD-', '')
-            if orden_id_limpio:
-                try:
-                    orden = OrdenCompra.objects.get(id=orden_id_limpio)
-                    orden.estado = 'CANCELADO'
-                    orden.save()
-                    logger.info(f"Orden {orden.id} marcada como CANCELADA por anulación en Transbank.")
-                except (OrdenCompra.DoesNotExist, ValueError):
-                    orden_id_limpio = ''
+            if confirmar_pago().rechazar(orden_id_limpio, MOTIVO_PAGO_ANULADO):
+                logger.info(f"Orden {orden_id_limpio} cancelada por anulación en Transbank.")
+            else:
+                orden_id_limpio = ''
             # Página pública: el invitado no tiene acceso a /mis-pedidos
             destino = f"{frontend_url}/pago-cancelado"
             return HttpResponseRedirect(f"{destino}?orden={orden_id_limpio}" if orden_id_limpio else destino)
@@ -141,81 +149,75 @@ class TransbankRetornoView(APIView):
 
         try:
             orden = OrdenCompra.objects.get(id=orden_id)
-        except OrdenCompra.DoesNotExist:
+        except (OrdenCompra.DoesNotExist, ValueError):
             return Response({"error": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
 
-        if resultado_tbk.get('aprobado'):
-            # Idempotencia (AGENTS.md §4.1): solo la primera confirmación pasa la orden de PENDIENTE a
-            # PAGADO; una repetida no vuelve a descontar stock ni a generar la OT.
-            if not OrdenCompra.objects.filter(id=orden.id, estado='PENDIENTE').update(estado='PAGADO'):
-                logger.info(f"Confirmación repetida de la orden {orden.id} (estado {orden.estado}); se omite.")
-                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
-            orden.estado = 'PAGADO'
-
-            # --- DESCONTAR STOCK EN MONGODB (atómico; revalida el stock al confirmar, RN-03) ---
-            try:
-                for detalle in orden.detalles.all():
-                    exito_stock = Producto.reducir_stock_variante(
-                        producto_id=detalle.producto_mongo_id,
-                        sku=detalle.variante_sku,
-                        cantidad=detalle.cantidad
-                    )
-                    if not exito_stock:
-                        # TODO(PENDIENTE): AGENTS.md §4.1, qué hacer si el pago se confirma sin stock
-                        # (¿cancelación y reembolso? ¿pedido en espera?). Por ahora solo queda registrado.
-                        logger.error(f"Pago confirmado sin stock para el SKU {detalle.variante_sku} (orden {orden.id})")
-            except Exception:
-                logger.exception(f"Excepción al intentar descontar stock para orden {orden.id}")
-            # -----------------------------------------
-
-            # --- 2. GENERACIÓN AUTOMÁTICA DE OT Y ETIQUETA EN CHILEXPRESS ---
-            if orden.proveedor_logistico == 'CHILEXPRESS':
-                try:
-                    config = ConfiguracionGlobal.objects.first()
-                    catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
-                    
-                    comuna_origen_nombre = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
-                    codigo_origen = catalogo.get(comuna_origen_nombre.upper(), "PUDA")
-                    
-                    comuna_destino_nombre = orden.direccion_envio_snapshot.get('comuna', '')
-                    codigo_destino = catalogo.get(comuna_destino_nombre.upper(), "PROV")
-
-                    datos_envio = {
-                        "origen_codigo": codigo_origen,
-                        "destino_codigo": codigo_destino,
-                        "calle": orden.direccion_envio_snapshot.get('calle', 'SIN CALLE'),
-                        "numero": orden.direccion_envio_snapshot.get('numero', '0'),
-                        "supplement": orden.direccion_envio_snapshot.get('dpto_casa', ''),
-                        "nombre_destinatario": getattr(orden.usuario, 'get_full_name', lambda: 'Cliente E-commerce')() if orden.usuario else 'Cliente Invitado',
-                        "telefono": "999999999", 
-                        "email": orden.email_invitado or (orden.usuario.email if orden.usuario else 'cliente@correo.cl'),
-                        "peso": "1", 
-                        "alto": "10",
-                        "ancho": "10",
-                        "largo": "10",
-                        "referencia": f"ORD-{orden.id}",
-                        "valor_declarado": int(orden.total_final)
-                    }
-
-                    respuesta_chx = ProveedorLogisticoAdapter.generar_orden_transporte(datos_envio)
-                    
-                    if respuesta_chx.get('exito'):
-                        orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
-                        # El portal de seguimiento (RF-02.4) consulta a Chilexpress con este código
-                        orden.numero_seguimiento_tracking = respuesta_chx.get('numero_ot')
-                        orden.save()
-                        logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
-                    else:
-                        logger.error(f"Fallo al generar OT en Chilexpress para orden {orden.id}: {respuesta_chx.get('error')}")
-                except Exception as e:
-                    logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
-            # -----------------------------------------------------------------
-
-            return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
-        else:
-            orden.estado = 'RECHAZADO'
-            orden.save()
+        caso = confirmar_pago()
+        if not resultado_tbk.get('aprobado'):
+            caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
             return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
+
+        # 2. Estado y stock de la orden (idempotente, stock todo o nada; AGENTS.md §4.1)
+        try:
+            resultado = caso.aprobar(orden.id)
+        except Exception:
+            # El pago ya está aprobado: la orden quedó marcada para revisión del admin
+            logger.exception(f"Error al descontar stock de la orden {orden.id}")
+            resultado = ResultadoPago.EN_REVISION
+
+        orden.refresh_from_db()
+        if resultado == ResultadoPago.EN_REVISION:
+            logger.error(f"La orden {orden.id} requiere revisión del admin: {orden.motivo_revision}")
+        elif resultado == ResultadoPago.REPETIDO:
+            logger.info(f"Confirmación repetida de la orden {orden.id}; se omite.")
+        elif resultado == ResultadoPago.PAGADO:
+            self._generar_orden_transporte(orden)
+
+        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
+
+    def _generar_orden_transporte(self, orden):
+        """Genera la OT y etiqueta en Chilexpress para una orden recién pagada."""
+        if orden.proveedor_logistico != 'CHILEXPRESS':
+            return
+        try:
+            config = ConfiguracionGlobal.objects.first()
+            catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
+            
+            comuna_origen_nombre = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
+            codigo_origen = catalogo.get(comuna_origen_nombre.upper(), "PUDA")
+            
+            comuna_destino_nombre = orden.direccion_envio_snapshot.get('comuna', '')
+            codigo_destino = catalogo.get(comuna_destino_nombre.upper(), "PROV")
+
+            datos_envio = {
+                "origen_codigo": codigo_origen,
+                "destino_codigo": codigo_destino,
+                "calle": orden.direccion_envio_snapshot.get('calle', 'SIN CALLE'),
+                "numero": orden.direccion_envio_snapshot.get('numero', '0'),
+                "supplement": orden.direccion_envio_snapshot.get('dpto_casa', ''),
+                "nombre_destinatario": getattr(orden.usuario, 'get_full_name', lambda: 'Cliente E-commerce')() if orden.usuario else 'Cliente Invitado',
+                "telefono": "999999999", 
+                "email": orden.email_invitado or (orden.usuario.email if orden.usuario else 'cliente@correo.cl'),
+                "peso": "1", 
+                "alto": "10",
+                "ancho": "10",
+                "largo": "10",
+                "referencia": f"ORD-{orden.id}",
+                "valor_declarado": int(orden.total_final)
+            }
+
+            respuesta_chx = ProveedorLogisticoAdapter.generar_orden_transporte(datos_envio)
+            
+            if respuesta_chx.get('exito'):
+                orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
+                # El portal de seguimiento (RF-02.4) consulta a Chilexpress con este código
+                orden.numero_seguimiento_tracking = respuesta_chx.get('numero_ot')
+                orden.save(update_fields=['id_transaccion_pasarela', 'numero_seguimiento_tracking'])
+                logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
+            else:
+                logger.error(f"Fallo al generar OT en Chilexpress para orden {orden.id}: {respuesta_chx.get('error')}")
+        except Exception as e:
+            logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
 
 class CotizacionEnvioView(APIView):
     """

@@ -552,3 +552,14 @@ class ReducirStockVarianteTests(SimpleTestCase):
             resultados = list(pool.map(lambda _: self.reducir('POLERA-S', 1), range(10)))
         self.assertEqual(resultados.count(True), 1)
         self.assertEqual(self.stock('POLERA-S'), 0)
+
+    def test_reponer_devuelve_stock_solo_a_la_variante_indicada(self):
+        self.assertTrue(Producto.reponer_stock_variante(str(self.producto.id), 'POLERA-S', 2))
+        self.assertEqual(self.stock('POLERA-S'), 5)
+        self.assertEqual(self.stock('POLERA-M'), 5)
+        for producto_id, sku, cantidad in ((self.producto.id, 'NO-EXISTE', 1),
+                                           ('no-es-un-id', 'POLERA-S', 1),
+                                           (self.producto.id, 'POLERA-S', 0)):
+            with self.subTest(sku=sku, cantidad=cantidad):
+                self.assertFalse(Producto.reponer_stock_variante(str(producto_id), sku, cantidad))
+        self.assertEqual(self.stock('POLERA-S'), 5)

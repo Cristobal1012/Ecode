@@ -111,6 +111,11 @@ ETIQUETAS_ESTADO = {
     EstadoPedido.CANCELADO: 'Cancelado',
 }
 
+# Estados en los que el pago ya se confirmó
+ESTADOS_PAGADOS = frozenset({
+    EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION, EstadoPedido.ENVIADO, EstadoPedido.ENTREGADO,
+})
+
 # AGENTS.md §9: cualquier transición que no esté aquí se rechaza
 TRANSICIONES_PERMITIDAS = {
     EstadoPedido.PENDIENTE: {EstadoPedido.PAGADO, EstadoPedido.CANCELADO},
@@ -146,3 +151,12 @@ def validar_transicion(actual, nuevo) -> EstadoPedido:
     if nuevo not in TRANSICIONES_PERMITIDAS[actual]:
         raise TransicionNoPermitida(actual, nuevo)
     return nuevo
+
+
+@dataclass(frozen=True)
+class OrdenRegistrada:
+    """Una orden ya creada, con lo necesario para confirmar su pago."""
+
+    id: int
+    estado: EstadoPedido
+    items: tuple[ItemSolicitado, ...]

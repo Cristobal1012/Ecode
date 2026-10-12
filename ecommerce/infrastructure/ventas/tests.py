@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from ecommerce.application.test_ventas import CatalogoFalso
+from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
@@ -395,6 +395,7 @@ class AnulacionTransbankTests(APITestCase):
         self.assertEqual(response['Location'], f'http://tienda.test/pago-cancelado?orden={orden.id}')
         orden.refresh_from_db()
         self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertEqual(orden.motivo_cancelacion, 'Pago anulado por el comprador')
 
     def test_orden_invalida_redirige_sin_numero(self):
         for orden_compra in ('ORD-999999', 'ORD-abc'):
@@ -405,8 +406,9 @@ class AnulacionTransbankTests(APITestCase):
 
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
-@patch('ecommerce.infrastructure.ventas.views.Producto.reducir_stock_variante', return_value=True)
 class PagoAprobadoTransbankTests(APITestCase):
+    """RF-02.2 y AGENTS.md §4.1: la vista delega en ConfirmarPago (idempotente, stock todo o nada)."""
+
     def setUp(self):
         self.orden = OrdenCompra.objects.create(
             email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
@@ -416,24 +418,31 @@ class PagoAprobadoTransbankTests(APITestCase):
             orden=self.orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
             nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
         )
-        confirmar = patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion',
-                          return_value={'exito': True, 'aprobado': True,
-                                        'data_completa': {'buy_order': f'ORD-{self.orden.id}'}})
-        confirmar.start()
-        self.addCleanup(confirmar.stop)
+        self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 3})
+        for objetivo, opciones in (
+            ('views.inventario_variantes', {'return_value': self.inventario}),
+            ('views.TransbankWebpayAdapter.confirmar_transaccion',
+             {'return_value': {'exito': True, 'aprobado': True,
+                               'data_completa': {'buy_order': f'ORD-{self.orden.id}'}}}),
+        ):
+            parche = patch(f'ecommerce.infrastructure.ventas.{objetivo}', **opciones)
+            self.confirmar = parche.start()
+            self.addCleanup(parche.stop)
 
     def confirmar_pago(self):
         return self.client.get(reverse('transbank_retorno'), {'token_ws': 'token-tbk'})
 
-    def test_pago_aprobado_descuenta_stock_de_cada_detalle(self, reducir_stock):
+    def test_pago_aprobado_descuenta_stock_de_cada_detalle(self):
         response = self.confirmar_pago()
 
         self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
         self.orden.refresh_from_db()
         self.assertEqual(self.orden.estado, 'PAGADO')
-        reducir_stock.assert_called_once_with(producto_id='camisa', sku='CAMISA-S', cantidad=2)
+        self.assertTrue(self.orden.stock_descontado)
+        self.assertFalse(self.orden.requiere_revision)
+        self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 1)
 
-    def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self, reducir_stock):
+    def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
         with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica:
@@ -443,15 +452,34 @@ class PagoAprobadoTransbankTests(APITestCase):
             response = self.confirmar_pago()
 
         self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
-        reducir_stock.assert_called_once()
+        self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 1)
         logistica.generar_orden_transporte.assert_called_once()
+        # Guardar la OT no debe pisar el estado ni las marcas que dejó el caso de uso
+        self.orden.refresh_from_db()
+        self.assertEqual((self.orden.estado, self.orden.stock_descontado, self.orden.numero_seguimiento_tracking),
+                         ('PAGADO', True, '1'))
 
-    def test_pago_confirmado_sin_stock_queda_registrado_como_error(self, reducir_stock):
-        # TODO(PENDIENTE): AGENTS.md §4.1 aún no define qué pasa con la orden en este caso
-        reducir_stock.return_value = False
-        with self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
-            self.confirmar_pago()
+    def test_pago_confirmado_sin_stock_queda_pagado_y_en_revision_sin_ot(self):
+        self.inventario.stock[('camisa', 'CAMISA-S')] = 1
+        OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
+        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica,                 self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
+            response = self.confirmar_pago()
 
-        self.assertIn('sin stock para el SKU CAMISA-S', logs.output[0])
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
+        self.assertIn('Pago confirmado sin stock para CAMISA-S', logs.output[0])
+        logistica.generar_orden_transporte.assert_not_called()
         self.orden.refresh_from_db()
         self.assertEqual(self.orden.estado, 'PAGADO')
+        self.assertTrue(self.orden.requiere_revision)
+        self.assertEqual(self.orden.motivo_revision, 'Pago confirmado sin stock para CAMISA-S')
+        self.assertFalse(self.orden.stock_descontado)
+        self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 1)
+
+    def test_pago_rechazado_cancela_la_orden_con_motivo(self):
+        self.confirmar.return_value = {**self.confirmar.return_value, 'aprobado': False}
+        response = self.confirmar_pago()
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-rechazado?orden={self.orden.id}')
+        self.orden.refresh_from_db()
+        self.assertEqual((self.orden.estado, self.orden.motivo_cancelacion), ('CANCELADO', 'Pago rechazado'))
+        self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 3)

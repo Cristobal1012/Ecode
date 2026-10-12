@@ -58,6 +58,22 @@ class Producto(Document):
         )
         return resultado.modified_count == 1
 
+    @classmethod
+    def reponer_stock_variante(cls, producto_id, sku, cantidad):
+        """Devuelve stock a una variante (pago sin stock o pedido cancelado). False si no existe."""
+        cantidad = int(cantidad)
+        if cantidad < 1:
+            return False
+        try:
+            id_producto = ObjectId(producto_id)
+        except (InvalidId, TypeError):
+            return False
+        resultado = cls._get_collection().update_one(
+            {'_id': id_producto, 'variantes.sku': str(sku)},
+            {'$inc': {'variantes.$.stock': cantidad}},
+        )
+        return resultado.modified_count == 1
+
 
 class ImagenPendienteBorrado(Document):
     """Durable, idempotent cleanup intents for files owned by the catalog."""

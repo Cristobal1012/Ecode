@@ -145,10 +145,14 @@ class TransbankRetornoView(APIView):
             return Response({"error": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
 
         if resultado_tbk.get('aprobado'):
+            # Idempotencia (AGENTS.md §4.1): solo la primera confirmación pasa la orden de PENDIENTE a
+            # PAGADO; una repetida no vuelve a descontar stock ni a generar la OT.
+            if not OrdenCompra.objects.filter(id=orden.id, estado='PENDIENTE').update(estado='PAGADO'):
+                logger.info(f"Confirmación repetida de la orden {orden.id} (estado {orden.estado}); se omite.")
+                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
             orden.estado = 'PAGADO'
-            orden.save()
 
-            # --- NUEVO: DESCONTAR STOCK EN MONGODB ---
+            # --- DESCONTAR STOCK EN MONGODB (atómico; revalida el stock al confirmar, RN-03) ---
             try:
                 for detalle in orden.detalles.all():
                     exito_stock = Producto.reducir_stock_variante(
@@ -157,9 +161,11 @@ class TransbankRetornoView(APIView):
                         cantidad=detalle.cantidad
                     )
                     if not exito_stock:
-                        logger.warning(f"No se pudo descontar stock para el SKU {detalle.variante_sku} (Orden {orden.id})")
-            except Exception as e:
-                logger.error(f"Excepción al intentar descontar stock para orden {orden.id}: {str(e)}")
+                        # TODO(PENDIENTE): AGENTS.md §4.1, qué hacer si el pago se confirma sin stock
+                        # (¿cancelación y reembolso? ¿pedido en espera?). Por ahora solo queda registrado.
+                        logger.error(f"Pago confirmado sin stock para el SKU {detalle.variante_sku} (orden {orden.id})")
+            except Exception:
+                logger.exception(f"Excepción al intentar descontar stock para orden {orden.id}")
             # -----------------------------------------
 
             # --- 2. GENERACIÓN AUTOMÁTICA DE OT Y ETIQUETA EN CHILEXPRESS ---

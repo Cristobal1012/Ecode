@@ -1,5 +1,6 @@
 """Real MongoDB/storage integration and signed-JWT API tests for SCRUM-125."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
 import os
@@ -490,3 +491,64 @@ class GaleriaAPITests(APITestCase):
         borrado = self.client.delete(self.url_borrado(response.data['archivos'][0]['id']))
         self.assertEqual(borrado.status_code, 204)
         self.assertEqual(self.archivos_guardados(), [])
+
+
+class ReducirStockVarianteTests(SimpleTestCase):
+    """RN-03 y AGENTS.md §4.1: el descuento de stock es atómico y condicional."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.mongo_client = MongoClient(
+            os.environ.get('MONGO_TEST_URI', settings.MONGO_URI), serverSelectionTimeoutMS=5000,
+        )
+        cls.addClassCleanup(cls.mongo_client.close)
+        cls.mongo_db_name = f'test_ecode_stock_{uuid4().hex}'
+        cls.addClassCleanup(cls.mongo_client.drop_database, cls.mongo_db_name)
+        binding = patch.object(Producto, '_get_collection',
+                               return_value=cls.mongo_client[cls.mongo_db_name]['productos'])
+        binding.start()
+        cls.addClassCleanup(binding.stop)
+
+    def setUp(self):
+        Producto._get_collection().delete_many({})
+        self.producto = Producto(
+            nombre='Polera', categoria='Ropa', fecha_creacion=datetime.now(timezone.utc),
+            variantes=[Variante(sku='POLERA-S', precio=10000, stock=3),
+                       Variante(sku='POLERA-M', precio=10000, stock=5)],
+        ).save()
+
+    def stock(self, sku):
+        self.producto.reload()
+        return next(v.stock for v in self.producto.variantes if v.sku == sku)
+
+    def reducir(self, sku, cantidad, producto_id=None):
+        return Producto.reducir_stock_variante(str(producto_id or self.producto.id), sku, cantidad)
+
+    def test_descuenta_solo_la_variante_indicada(self):
+        self.assertTrue(self.reducir('POLERA-S', 2))
+        self.assertEqual(self.stock('POLERA-S'), 1)
+        self.assertEqual(self.stock('POLERA-M'), 5)
+
+    def test_stock_insuficiente_no_modifica_nada(self):
+        self.assertFalse(self.reducir('POLERA-S', 4))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_sku_o_producto_inexistente_devuelve_false(self):
+        self.assertFalse(self.reducir('NO-EXISTE', 1))
+        self.assertFalse(self.reducir('POLERA-S', 1, producto_id='64b000000000000000000000'))
+        self.assertFalse(self.reducir('POLERA-S', 1, producto_id='no-es-un-id'))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_cantidad_no_positiva_no_descuenta(self):
+        for cantidad in (0, -2):
+            with self.subTest(cantidad=cantidad):
+                self.assertFalse(self.reducir('POLERA-S', cantidad))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_compras_simultaneas_de_la_ultima_unidad_producen_una_sola_venta(self):
+        self.assertTrue(self.reducir('POLERA-S', 2))
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            resultados = list(pool.map(lambda _: self.reducir('POLERA-S', 1), range(10)))
+        self.assertEqual(resultados.count(True), 1)
+        self.assertEqual(self.stock('POLERA-S'), 0)

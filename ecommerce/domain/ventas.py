@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 
 
 class ErrorPedido(Exception):
@@ -86,3 +87,62 @@ def armar_linea(item: ItemSolicitado, variante: VarianteCatalogo | None) -> Line
         producto_id=item.producto_id, sku=item.sku, nombre=variante.nombre,
         precio_unitario=variante.precio, cantidad=item.cantidad,
     )
+
+
+class EstadoPedido(StrEnum):
+    PENDIENTE = 'PENDIENTE'
+    PAGADO = 'PAGADO'
+    EN_PREPARACION = 'EN_PREPARACION'
+    ENVIADO = 'ENVIADO'
+    ENTREGADO = 'ENTREGADO'
+    CANCELADO = 'CANCELADO'
+
+    @property
+    def etiqueta(self):
+        return ETIQUETAS_ESTADO[self]
+
+
+ETIQUETAS_ESTADO = {
+    EstadoPedido.PENDIENTE: 'Pendiente',
+    EstadoPedido.PAGADO: 'Pagado',
+    EstadoPedido.EN_PREPARACION: 'En Preparación',
+    EstadoPedido.ENVIADO: 'Despachado',
+    EstadoPedido.ENTREGADO: 'Entregado',
+    EstadoPedido.CANCELADO: 'Cancelado',
+}
+
+# AGENTS.md §9: cualquier transición que no esté aquí se rechaza
+TRANSICIONES_PERMITIDAS = {
+    EstadoPedido.PENDIENTE: {EstadoPedido.PAGADO, EstadoPedido.CANCELADO},
+    EstadoPedido.PAGADO: {EstadoPedido.EN_PREPARACION, EstadoPedido.CANCELADO},
+    EstadoPedido.EN_PREPARACION: {EstadoPedido.ENVIADO, EstadoPedido.CANCELADO},
+    EstadoPedido.ENVIADO: {EstadoPedido.ENTREGADO},
+    EstadoPedido.ENTREGADO: set(),
+    EstadoPedido.CANCELADO: set(),
+}
+
+
+class TransicionNoPermitida(Exception):
+    def __init__(self, actual, nuevo):
+        self.actual = actual
+        self.nuevo = nuevo
+        super().__init__(
+            f'Un pedido {_etiqueta(actual)} no puede pasar a {_etiqueta(nuevo)}.')
+
+
+def _etiqueta(estado):
+    try:
+        return EstadoPedido(estado).etiqueta
+    except ValueError:
+        return str(estado)
+
+
+def validar_transicion(actual, nuevo) -> EstadoPedido:
+    """RF-03.3 / AGENTS.md §9: devuelve el nuevo estado si la transición está permitida."""
+    try:
+        actual, nuevo = EstadoPedido(actual), EstadoPedido(nuevo)
+    except ValueError:
+        raise TransicionNoPermitida(actual, nuevo) from None
+    if nuevo not in TRANSICIONES_PERMITIDAS[actual]:
+        raise TransicionNoPermitida(actual, nuevo)
+    return nuevo

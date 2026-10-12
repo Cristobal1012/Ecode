@@ -334,6 +334,51 @@ class SeguimientoEnvioTests(APITestCase):
         consultar_estado.assert_not_called()
 
 
+class CambioEstadoAdminTests(APITestCase):
+    """RF-03.3 / AGENTS.md §9: el admin solo puede hacer las transiciones permitidas."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.buyer_token = Token.objects.create(user=create_user())
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+
+    def setUp(self):
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
+            estado='PAGADO',
+        )
+
+    def cambiar(self, estado, token=None):
+        if token:
+            self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        return self.client.patch(reverse('admin-ordenes-patch', args=[self.orden.id]),
+                                 {'estado': estado}, format='json')
+
+    def assertEstado(self, estado):
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, estado)
+
+    def test_solo_el_admin_puede_cambiar_el_estado(self):
+        self.assertEqual(self.cambiar('EN_PREPARACION').status_code, 401)
+        self.assertEqual(self.cambiar('EN_PREPARACION', self.buyer_token).status_code, 403)
+        self.assertEstado('PAGADO')
+
+    def test_transicion_permitida(self):
+        response = self.cambiar('EN_PREPARACION', self.admin_token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEstado('EN_PREPARACION')
+
+    def test_transicion_no_permitida_se_rechaza_sin_cambios(self):
+        for actual, nuevo in (('CANCELADO', 'PAGADO'), ('PAGADO', 'PENDIENTE'), ('PAGADO', 'PAGADO')):
+            with self.subTest(actual=actual, nuevo=nuevo):
+                OrdenCompra.objects.filter(id=self.orden.id).update(estado=actual)
+                response = self.cambiar(nuevo, self.admin_token)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('no puede pasar a', str(response.data['estado']))
+                self.assertEstado(actual)
+
+
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class AnulacionTransbankTests(APITestCase):
     def anular(self, orden_compra):
@@ -360,25 +405,53 @@ class AnulacionTransbankTests(APITestCase):
 
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+@patch('ecommerce.infrastructure.ventas.views.Producto.reducir_stock_variante', return_value=True)
 class PagoAprobadoTransbankTests(APITestCase):
-    @patch('ecommerce.infrastructure.ventas.views.Producto.reducir_stock_variante', return_value=True)
-    @patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion')
-    def test_pago_aprobado_descuenta_stock_de_cada_detalle(self, confirmar, reducir_stock):
-        orden = OrdenCompra.objects.create(
+    def setUp(self):
+        self.orden = OrdenCompra.objects.create(
             email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
             direccion_envio_snapshot={}, subtotal=20000, costo_envio=0, total_final=20000,
         )
         DetalleOrden.objects.create(
-            orden=orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            orden=self.orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
             nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
         )
-        confirmar.return_value = {
-            'exito': True, 'aprobado': True, 'data_completa': {'buy_order': f'ORD-{orden.id}'},
-        }
+        confirmar = patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion',
+                          return_value={'exito': True, 'aprobado': True,
+                                        'data_completa': {'buy_order': f'ORD-{self.orden.id}'}})
+        confirmar.start()
+        self.addCleanup(confirmar.stop)
 
-        response = self.client.get(reverse('transbank_retorno'), {'token_ws': 'token-tbk'})
+    def confirmar_pago(self):
+        return self.client.get(reverse('transbank_retorno'), {'token_ws': 'token-tbk'})
 
-        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={orden.id}')
-        orden.refresh_from_db()
-        self.assertEqual(orden.estado, 'PAGADO')
+    def test_pago_aprobado_descuenta_stock_de_cada_detalle(self, reducir_stock):
+        response = self.confirmar_pago()
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PAGADO')
         reducir_stock.assert_called_once_with(producto_id='camisa', sku='CAMISA-S', cantidad=2)
+
+    def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self, reducir_stock):
+        # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
+        OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
+        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica:
+            logistica._obtener_catalogo_dinamico.return_value = {}
+            logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}
+            self.confirmar_pago()
+            response = self.confirmar_pago()
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
+        reducir_stock.assert_called_once()
+        logistica.generar_orden_transporte.assert_called_once()
+
+    def test_pago_confirmado_sin_stock_queda_registrado_como_error(self, reducir_stock):
+        # TODO(PENDIENTE): AGENTS.md §4.1 aún no define qué pasa con la orden en este caso
+        reducir_stock.return_value = False
+        with self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
+            self.confirmar_pago()
+
+        self.assertIn('sin stock para el SKU CAMISA-S', logs.output[0])
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PAGADO')

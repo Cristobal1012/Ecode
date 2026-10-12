@@ -12,7 +12,9 @@ from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
 from ecommerce.application.ventas import PrepararPedido
-from ecommerce.domain.ventas import ErrorPedido, ItemSolicitado, SubtotalDesactualizado
+from ecommerce.domain.ventas import (
+    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, TransicionNoPermitida, validar_transicion,
+)
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
@@ -340,6 +342,13 @@ class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenCompra
         fields = ['estado']
+
+    def validate_estado(self, value):
+        # RF-03.3 / AGENTS.md §9: la regla vive en el dominio
+        try:
+            return validar_transicion(self.instance.estado, value).value
+        except TransicionNoPermitida as error:
+            raise serializers.ValidationError(str(error))
 
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):

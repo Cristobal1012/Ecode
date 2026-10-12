@@ -5,6 +5,8 @@
 .env
 .env.local
 .env.*
+# Plantilla sin secretos que sí se versiona
+!.env.example
 
 # =========================
 #Entornos Virtuales

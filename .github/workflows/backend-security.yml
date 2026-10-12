@@ -44,6 +44,10 @@ jobs:
       POSTGRES_PORT: '5432'
       MONGO_URI: mongodb://127.0.0.1:27017/ecode_ci
       MONGO_TEST_URI: mongodb://127.0.0.1:27017
+      # Los tests corren con DEBUG=False (como producción); llave solo para CI
+      SECRET_KEY: ci-only-secret-key-not-used-anywhere-else-0123456789
+      # El cliente de pruebas usa HTTP: sin esto, cada petición recibiría un 301 a HTTPS
+      SECURE_SSL_REDIRECT: 'False'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -20,6 +20,7 @@ from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalog
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
 from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .html_seguro import limpiar_html, tiene_texto
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
 
@@ -371,6 +372,35 @@ class DireccionEnvioSerializer(serializers.ModelSerializer):
         ]
 
 class PaginaLegalSerializer(serializers.ModelSerializer):
+    """Listado público (enlaces del footer): sin el contenido."""
+
     class Meta:
         model = PaginaLegal
-        fields = ['id', 'tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']
+        fields = ['id', 'tipo_pagina', 'titulo', 'ultima_actualizacion']
+
+
+class PaginaLegalDetalleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaginaLegal
+        fields = ['tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']
+
+
+class PaginaLegalAdminSerializer(serializers.ModelSerializer):
+    """RF-03.5: el admin redacta, guarda como borrador y publica cada página."""
+
+    class Meta:
+        model = PaginaLegal
+        fields = ['tipo_pagina', 'titulo', 'contenido', 'publicada', 'ultima_actualizacion']
+        read_only_fields = ['tipo_pagina', 'ultima_actualizacion']
+        extra_kwargs = {'contenido': {'allow_blank': True}}
+
+    def validate_contenido(self, value):
+        # Se muestra tal cual en la tienda: solo queda el formato del editor (XSS)
+        return limpiar_html(value)
+
+    def validate(self, data):
+        publicada = data.get('publicada', self.instance.publicada if self.instance else False)
+        contenido = data.get('contenido', self.instance.contenido if self.instance else '')
+        if publicada and not tiene_texto(contenido):
+            raise serializers.ValidationError({'contenido': 'No se puede publicar una página sin contenido.'})
+        return data

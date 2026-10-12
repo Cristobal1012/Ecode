@@ -167,7 +167,10 @@ class PaginaLegal(models.Model):
 
     tipo_pagina = models.CharField(max_length=30, choices=TIPOS_PAGINA, unique=True)
     titulo = models.CharField(max_length=255)
+    # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
     contenido = models.TextField()
+    # RF-03.5: solo las publicadas aparecen en el footer y son visibles al público
+    publicada = models.BooleanField(default=False)
     ultima_actualizacion = models.DateTimeField(auto_now=True)
 
     def __str__(self):

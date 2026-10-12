@@ -58,6 +58,11 @@ ventas_urlpatterns = [
     path('admin/ordenes/<int:pk>/revision/resolver/', views.AdminResolverRevisionView.as_view(),
          name='admin-ordenes-resolver-revision'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
+    # Ruta resultante: GET /api/ventas/paginas-legales/<tipo>/ (ej. terminos)
+    path('paginas-legales/<str:tipo>/', views.PaginaLegalDetalleView.as_view(), name='pagina-legal-detalle'),
+    # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
+    path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
+    path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

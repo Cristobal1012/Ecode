@@ -36,7 +36,9 @@ from .serializers import (
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
-    PaginaLegalSerializer
+    PaginaLegalSerializer,
+    PaginaLegalDetalleSerializer,
+    PaginaLegalAdminSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.transbank_adapter import TransbankWebpayAdapter
@@ -657,7 +659,56 @@ class DashboardMetricasView(APIView):
         }, status=status.HTTP_200_OK)
     
 class PaginaLegalListView(generics.ListAPIView):
-    queryset = PaginaLegal.objects.all()
+    # RF-03.5: el footer solo enlaza las páginas publicadas
+    queryset = PaginaLegal.objects.filter(publicada=True)
     serializer_class = PaginaLegalSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
+
+
+def tipo_pagina_legal(tipo):
+    """El tipo llega en la URL en cualquier formato (ej. 'terminos'); None si no es válido."""
+    tipo = tipo.upper()
+    return tipo if tipo in dict(PaginaLegal.TIPOS_PAGINA) else None
+
+
+class PaginaLegalDetalleView(APIView):
+    """Página pública /legal/<tipo>: un borrador responde igual que una página inexistente."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, tipo):
+        pagina = PaginaLegal.objects.filter(tipo_pagina=tipo.upper(), publicada=True).first()
+        if pagina is None:
+            return Response({'detail': 'Página no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PaginaLegalDetalleSerializer(pagina).data)
+
+
+class AdminPaginasLegalesView(APIView):
+    """Las tres páginas legales para el editor del admin, aunque aún no estén redactadas."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        existentes = {pagina.tipo_pagina: pagina for pagina in PaginaLegal.objects.all()}
+        return Response([
+            PaginaLegalAdminSerializer(existentes[tipo]).data if tipo in existentes else {
+                'tipo_pagina': tipo, 'titulo': nombre, 'contenido': '',
+                'publicada': False, 'ultima_actualizacion': None,
+            }
+            for tipo, nombre in PaginaLegal.TIPOS_PAGINA
+        ])
+
+
+class AdminPaginaLegalView(APIView):
+    """RF-03.5: el admin crea o actualiza una página legal por tipo."""
+    permission_classes = [IsAdministrador]
+
+    def put(self, request, tipo):
+        tipo = tipo_pagina_legal(tipo)
+        if tipo is None:
+            return Response({'detail': 'Página no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        pagina = PaginaLegal.objects.filter(tipo_pagina=tipo).first()
+        serializer = PaginaLegalAdminSerializer(pagina, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(tipo_pagina=tipo)
+        return Response(serializer.data, status=status.HTTP_200_OK if pagina else status.HTTP_201_CREATED)

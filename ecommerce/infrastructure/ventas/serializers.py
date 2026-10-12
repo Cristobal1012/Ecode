@@ -112,8 +112,9 @@ class ItemPedidoSerializer(serializers.Serializer):
 
 class OrdenCompraSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=0, min_value=Decimal('0'))
-    costo_envio = serializers.FloatField(required=False)
-    total_final = serializers.FloatField(required=False)
+    # Los calcula el servidor (cotización + subtotal del catálogo); lo que envíe el navegador se ignora
+    costo_envio = serializers.FloatField(read_only=True)
+    total_final = serializers.FloatField(read_only=True)
     proveedor_logistico = serializers.ChoiceField(
         choices=['STARKEN', 'CHILEXPRESS', 'RETIRO_LOCAL'], required=False,
     )
@@ -169,33 +170,27 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         
         # Validamos usando el campo del modelo en lugar de buscar en el antiguo JSON
         retiro_activo = config.retiro_en_local_activo if config else False
-        logistica = (config.api_keys_logistica or {}) if config else {}
-        proveedor_activo = logistica.get('proveedor_activo', False)
+        proveedor = data.get('proveedor_logistico')
 
-        if data.get('proveedor_logistico') == 'RETIRO_LOCAL' and not retiro_activo:
+        # Toda orden necesita una entrega que el servidor pueda costear (RF-02.3)
+        if not proveedor:
             raise serializers.ValidationError({
-                'proveedor_logistico': 'El retiro en local no está habilitado en esta tienda.'
+                'proveedor_logistico': 'Seleccione una opción de entrega cotizada.'
             })
 
-        if proveedor_activo or retiro_activo:
-            if not data.get('proveedor_logistico'):
+        if proveedor == 'RETIRO_LOCAL':
+            if not retiro_activo:
                 raise serializers.ValidationError({
-                    'proveedor_logistico': 'Seleccione una opción de entrega cotizada.'
+                    'proveedor_logistico': 'El retiro en local no está habilitado en esta tienda.'
                 })
-            
-            if data['proveedor_logistico'] != 'RETIRO_LOCAL':
-                direccion = data.get('direccion_envio_snapshot') or {}
-                if not isinstance(direccion, dict) or not direccion.get('comuna'):
-                    raise serializers.ValidationError({
-                        'direccion_envio_snapshot': 'Se requiere la comuna de destino.'
-                    })
-                if 'paquete' not in data:
-                    raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
-                    
-        elif not data.get('proveedor_logistico'):
-            faltantes = [campo for campo in ('costo_envio', 'total_final') if campo not in data]
-            if faltantes:
-                raise serializers.ValidationError({campo: 'Campo requerido.' for campo in faltantes})
+        else:
+            direccion = data.get('direccion_envio_snapshot') or {}
+            if not isinstance(direccion, dict) or not direccion.get('comuna'):
+                raise serializers.ValidationError({
+                    'direccion_envio_snapshot': 'Se requiere la comuna de destino.'
+                })
+            if 'paquete' not in data:
+                raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
@@ -224,38 +219,34 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
         
-        # 1. COTIZACIÓN REAL O RETIRO LOCAL
-        if proveedor and proveedor != 'RETIRO_LOCAL':
+        # 1. COTIZACIÓN REAL O RETIRO LOCAL (validate ya exige comuna y paquete para un courier)
+        if proveedor == 'RETIRO_LOCAL':
+            costo_envio = 0.0
+        else:
             config = ConfiguracionGlobal.objects.filter(pk=1).first()
             origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
-            destino = (validated_data.get('direccion_envio_snapshot') or {}).get('comuna', '')
-            
+            destino = validated_data['direccion_envio_snapshot']['comuna']
+
             # REEMPLAZO: Usamos la API de Chilexpress real a través de nuestro Adapter
-            if paquete and destino:
-                resultado = ProveedorLogisticoAdapter.cotizar_envio(
-                    proveedor=proveedor.lower(),
-                    origen=origen,
-                    destino=destino,
-                    peso_kg=float(paquete.peso_kg),
-                    alto_cm=int(paquete.alto_cm),
-                    ancho_cm=int(paquete.ancho_cm),
-                    largo_cm=int(paquete.largo_cm)
-                )
-                
-                if "error" in resultado:
-                    if resultado.get("tipo") == "proveedor":
-                        raise ProveedorLogisticoNoDisponible()
-                    raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
-                    
-                validated_data['costo_envio'] = float(resultado['precio'])
-                validated_data['total_final'] = float(validated_data['subtotal']) + float(resultado['precio'])
-            else:
-                validated_data['costo_envio'] = float(validated_data.get('costo_envio', 0))
-                validated_data['total_final'] = float(validated_data.get('total_final', validated_data['subtotal']))
-                
-        elif proveedor == 'RETIRO_LOCAL':
-            validated_data['costo_envio'] = 0.0
-            validated_data['total_final'] = float(validated_data['subtotal'])
+            resultado = ProveedorLogisticoAdapter.cotizar_envio(
+                proveedor=proveedor.lower(),
+                origen=origen,
+                destino=destino,
+                peso_kg=float(paquete.peso_kg),
+                alto_cm=int(paquete.alto_cm),
+                ancho_cm=int(paquete.ancho_cm),
+                largo_cm=int(paquete.largo_cm)
+            )
+
+            if "error" in resultado:
+                if resultado.get("tipo") == "proveedor":
+                    raise ProveedorLogisticoNoDisponible()
+                raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
+            costo_envio = float(resultado['precio'])
+
+        # El total siempre lo calcula el servidor: subtotal validado contra el catálogo + envío cotizado
+        validated_data['costo_envio'] = costo_envio
+        validated_data['total_final'] = float(validated_data['subtotal']) + costo_envio
         
         # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:

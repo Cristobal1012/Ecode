@@ -158,16 +158,22 @@ class CheckoutAccessTests(APITestCase):
             ('camisa', 'CAMISA-S'): VarianteCatalogo(
                 'Camisa - CAMISA-S', Decimal('10000.00'), 3, True),
         })
+        # Estas pruebas validan acceso: la cotización del courier se simula sin red
+        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.ProveedorLogisticoAdapter.cotizar_envio',
+                           return_value={'precio': 1000})
+        cotizacion.start()
+        self.addCleanup(cotizacion.stop)
+        # Mismo formato que arma Checkout.jsx
         self.payload = {
             'items': [{'producto_mongo_id': 'camisa', 'variante_sku': 'CAMISA-S', 'cantidad': 1}],
             'email_invitado': 'invitado@example.test',
             'metodo_pago': 'TRANSFERENCIA',
             'direccion_envio_snapshot': {
-                'calle': 'Prueba', 'ciudad': 'Santiago',
+                'calle': 'Prueba', 'ciudad': 'Santiago', 'comuna': 'Santiago',
             },
             'subtotal': 10000,
-            'costo_envio': 1000,
-            'total_final': 11000,
+            'proveedor_logistico': 'CHILEXPRESS',
+            'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
         }
 
@@ -194,6 +200,7 @@ class CheckoutAccessTests(APITestCase):
                 self.assertIsNone(order.usuario_id)
                 self.assertEqual(order.email_invitado,
                                  self.payload['email_invitado'])
+                self.assertEqual((order.costo_envio, order.total_final), (1000, 11000))
 
     def test_required_registration_rejects_anonymous_before_validation(self):
         self.configure('REGISTRO_OBLIGATORIO')

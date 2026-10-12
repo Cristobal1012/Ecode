@@ -136,6 +136,13 @@ class OrdenCompra(models.Model):
     costo_envio = models.FloatField()
     total_final = models.FloatField()
 
+    # El admin debe revisar la orden (ej. pago confirmado sin stock); el estado no cambia
+    requiere_revision = models.BooleanField(default=False)
+    motivo_revision = models.CharField(max_length=255, blank=True, default='')
+    motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
+    # Al cancelar solo se repone el stock que realmente se descontó
+    stock_descontado = models.BooleanField(default=False)
+
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario
         return f"Orden #{self.id} - {identificador}" 

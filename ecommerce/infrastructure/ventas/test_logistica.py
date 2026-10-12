@@ -207,6 +207,45 @@ class CotizacionesAPITests(APITestCase):
         self.assertEqual(orden.costo_envio, 0)
         self.assertEqual(orden.total_final, 25000)
 
+    def sin_logistica_configurada(self):
+        self.config.retiro_en_local_activo = False
+        self.config.api_keys_logistica = {}
+        self.config.save(update_fields=['retiro_en_local_activo', 'api_keys_logistica'])
+
+    def checkout_con_totales_manipulados(self, **cambios):
+        payload = {
+            'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
+            'acepta_terminos': True, 'items': ITEMS,
+            'direccion_envio_snapshot': {'comuna': 'Santiago', 'calle': 'Uno 123'},
+            'subtotal': 25000, 'costo_envio': 0, 'total_final': 1, **cambios,
+        }
+        return self.client.post(reverse('checkout'), payload, format='json')
+
+    def test_sin_opcion_de_entrega_se_rechaza_aunque_la_tienda_no_tenga_logistica(self):
+        self.sin_logistica_configurada()
+        response = self.checkout_con_totales_manipulados()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('proveedor_logistico', response.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+    def test_courier_sin_paquete_se_rechaza_en_vez_de_usar_el_total_del_navegador(self):
+        self.sin_logistica_configurada()
+        response = self.checkout_con_totales_manipulados(proveedor_logistico='CHILEXPRESS')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('paquete', response.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_sin_logistica_activa_el_courier_igual_se_cotiza_en_el_servidor(self, post):
+        post.return_value = respuesta_chilexpress(TARIFA_OK)
+        self.sin_logistica_configurada()
+        response = self.checkout_con_totales_manipulados(
+            proveedor_logistico='CHILEXPRESS', paquete=PAQUETE)
+        self.assertEqual(response.status_code, 201, response.data)
+        orden = OrdenCompra.objects.get()
+        self.assertEqual((orden.costo_envio, orden.total_final), (3500, 28500))
+        self.assertEqual((response.data['costo_envio'], response.data['total_final']), (3500, 28500))
+
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_tarifa_sin_precio_valido_no_crea_orden(self, post):
         post.return_value = respuesta_chilexpress(

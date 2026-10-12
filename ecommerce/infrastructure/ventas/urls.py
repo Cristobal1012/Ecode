@@ -54,6 +54,9 @@ ventas_urlpatterns = [
     path('admin/ordenes/', views.AdminOrdenCompraListView.as_view(), name='admin-ordenes-list'),
     # Ruta resultante: PATCH /api/ventas/admin/ordenes/<pk>/estado/
     path('admin/ordenes/<int:pk>/estado/', views.AdminOrdenCompraPatchView.as_view(), name='admin-ordenes-patch'),
+    # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/revision/resolver/
+    path('admin/ordenes/<int:pk>/revision/resolver/', views.AdminResolverRevisionView.as_view(),
+         name='admin-ordenes-resolver-revision'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
 ]
 

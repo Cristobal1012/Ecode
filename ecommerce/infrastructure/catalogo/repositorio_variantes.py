@@ -1,10 +1,10 @@
-"""Adaptador MongoDB del puerto CatalogoVariantes."""
+"""Adaptadores MongoDB de los puertos CatalogoVariantes e InventarioVariantes."""
 
 from decimal import Decimal
 
 from mongoengine.errors import ValidationError as MongoValidationError
 
-from ecommerce.application.ventas import CatalogoVariantes
+from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
 from ecommerce.domain.ventas import VarianteCatalogo
 
 from .documents import Producto
@@ -31,3 +31,11 @@ class MongoCatalogoVariantes(CatalogoVariantes):
             stock=int(variante.stock),
             disponible=bool(producto.activo and producto.publicado),
         )
+
+
+class MongoInventarioVariantes(InventarioVariantes):
+    def descontar(self, producto_id, sku, cantidad):
+        return Producto.reducir_stock_variante(producto_id, sku, cantidad)
+
+    def reponer(self, producto_id, sku, cantidad):
+        Producto.reponer_stock_variante(producto_id, sku, cantidad)

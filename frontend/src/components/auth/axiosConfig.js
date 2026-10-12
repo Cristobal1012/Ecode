@@ -1,12 +1,42 @@
 import axios from 'axios';
 
 // Agregamos /api/ a la base URL para que todas las peticiones apunten correctamente
+const BASE_URL = 'http://localhost:8000/api/';
+
 const clienteAxios = axios.create({
-    baseURL: 'http://localhost:8000/api/', 
+    baseURL: BASE_URL,
     headers: {
         'Content-Type': 'application/json'
     }
 });
+
+// Token vencido o inválido (ej. firmado con otra SECRET_KEY): se descarta la sesión local
+const cerrarSesionLocal = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('rol');
+};
+
+// Una sola renovación a la vez, aunque fallen varias peticiones al mismo tiempo
+let renovacionEnCurso = null;
+
+const renovarToken = () => {
+    if (!renovacionEnCurso) {
+        const refresh = localStorage.getItem('refresh_token');
+        const peticion = refresh
+            // axios directo (no clienteAxios) para no pasar por estos interceptores
+            ? axios.post(`${BASE_URL}usuarios/token/refresh/`, { refresh })
+            : Promise.reject(new Error('No hay refresh_token'));
+        renovacionEnCurso = peticion
+            .then(({ data }) => {
+                localStorage.setItem('access_token', data.access);
+                if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
+                return data.access;
+            })
+            .finally(() => { renovacionEnCurso = null; });
+    }
+    return renovacionEnCurso;
+};
 
 // NUEVO: Interceptor de Peticiones (Inyecta el token)
 clienteAxios.interceptors.request.use((config) => {
@@ -28,8 +58,21 @@ clienteAxios.interceptors.response.use(
         }
         return response;
     },
-    (error) => {
-        return Promise.reject(error);
+    async (error) => {
+        const original = error.config;
+        // Solo un 401 de una petición que llevaba token, y un único reintento por petición
+        if (error.response?.status !== 401 || !original?.headers?.Authorization || original._reintentado) {
+            return Promise.reject(error);
+        }
+        original._reintentado = true;
+        try {
+            original.headers.Authorization = `Bearer ${await renovarToken()}`;
+        } catch {
+            // Sin sesión válida: las páginas públicas siguen funcionando y ProtectedRoute lleva al login
+            cerrarSesionLocal();
+            delete original.headers.Authorization;
+        }
+        return clienteAxios(original);
     }
 );
 

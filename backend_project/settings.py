@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 import os
+import warnings
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from mongoengine import connect
 from datetime import timedelta
@@ -21,16 +23,38 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Cargar las variables de entorno desde el archivo .env
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+def env_bool(nombre, por_defecto=False):
+    """Lee un booleano del entorno: true/1/yes/si/on. Vacío o ausente → valor por defecto."""
+    valor = os.environ.get(nombre, '').strip().lower()
+    if not valor:
+        return por_defecto
+    return valor in ('1', 'true', 'yes', 'si', 'sí', 'on')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0h49locw&@49d8(-(fh&!!oiyc^57n-7@7iy5a6nf5g@@l@axc'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def env_lista(nombre, por_defecto=''):
+    """Lee una lista separada por comas del entorno. Vacía o ausente → valor por defecto."""
+    valor = os.environ.get(nombre, '').strip() or por_defecto
+    return [item.strip() for item in valor.split(',') if item.strip()]
 
-ALLOWED_HOSTS = []
+
+# Checklist de despliegue: https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+# Seguro por defecto: sin DEBUG=True en el .env, la app se comporta como producción
+DEBUG = env_bool('DEBUG', False)
+
+# Firma sesiones, CSRF, enlaces de recuperación y también los JWT (SIGNING_KEY de SimpleJWT)
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY and DEBUG:
+    # Fija (no aleatoria) para que runserver no invalide la sesión en cada recarga
+    SECRET_KEY = 'django-insecure-solo-desarrollo-no-usar-en-produccion'
+    warnings.warn('SECRET_KEY no está definida: se usa una llave de desarrollo (DEBUG=True).')
+if not DEBUG and (not SECRET_KEY or SECRET_KEY.startswith('django-insecure')):
+    raise ImproperlyConfigured(
+        'Define una SECRET_KEY propia en el .env (obligatoria con DEBUG=False). Genérala con: '
+        'python -c "from django.core.management.utils import get_random_secret_key; '
+        'print(get_random_secret_key())". En desarrollo puedes usar DEBUG=True.'
+    )
+
+ALLOWED_HOSTS = env_lista('ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG else '')
 
 
 # Application definition
@@ -178,9 +202,20 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# Orígenes del frontend que pueden llamar a la API
+CORS_ALLOWED_ORIGINS = env_lista(
+    'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173' if DEBUG else '')
+CSRF_TRUSTED_ORIGINS = env_lista('CSRF_TRUSTED_ORIGINS')
+
+# HTTPS: lo termina el hosting; activos por defecto fuera de desarrollo
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+# El navegador recuerda HSTS: subirlo (ej. 31536000) solo después de verificar el HTTPS
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS') or (0 if DEBUG else 3600))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+# Detrás del proxy del hosting la petición llega por HTTP: sin esto, SECURE_SSL_REDIRECT entra en bucle
+if env_bool('CONFIAR_PROXY_HTTPS', not DEBUG):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 GOOGLE_CLIENT_ID = None  # Reemplazar por tu Client ID (ej: "xxxx.apps.googleusercontent.com") cuando este creado

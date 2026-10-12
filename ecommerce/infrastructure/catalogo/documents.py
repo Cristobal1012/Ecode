@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from mongoengine import Document, EmbeddedDocument, fields
 
 class Variante(EmbeddedDocument):
@@ -35,6 +37,43 @@ class Producto(Document):
     def __str__(self):
         return f"{self.nombre} ({self.categoria})"
 
+    @classmethod
+    def reducir_stock_variante(cls, producto_id, sku, cantidad):
+        """Descuenta stock de una variante de forma atómica y condicional (RN-03, AGENTS.md §4.1).
+
+        Un único update filtra por stock suficiente, así dos compras simultáneas de la última
+        unidad producen una sola venta. Devuelve False si no hay stock o no existe el SKU.
+        """
+        cantidad = int(cantidad)
+        if cantidad < 1:
+            return False
+        try:
+            id_producto = ObjectId(producto_id)
+        except (InvalidId, TypeError):
+            return False
+        resultado = cls._get_collection().update_one(
+            {'_id': id_producto,
+             'variantes': {'$elemMatch': {'sku': str(sku), 'stock': {'$gte': cantidad}}}},
+            {'$inc': {'variantes.$.stock': -cantidad}},
+        )
+        return resultado.modified_count == 1
+
+    @classmethod
+    def reponer_stock_variante(cls, producto_id, sku, cantidad):
+        """Devuelve stock a una variante (pago sin stock o pedido cancelado). False si no existe."""
+        cantidad = int(cantidad)
+        if cantidad < 1:
+            return False
+        try:
+            id_producto = ObjectId(producto_id)
+        except (InvalidId, TypeError):
+            return False
+        resultado = cls._get_collection().update_one(
+            {'_id': id_producto, 'variantes.sku': str(sku)},
+            {'$inc': {'variantes.$.stock': cantidad}},
+        )
+        return resultado.modified_count == 1
+
 
 class ImagenPendienteBorrado(Document):
     """Durable, idempotent cleanup intents for files owned by the catalog."""
@@ -42,40 +81,3 @@ class ImagenPendienteBorrado(Document):
     meta = {'collection': 'imagenes_catalogo_pendientes_borrado'}
     clave = fields.StringField(required=True, unique=True)
     fecha_creacion = fields.DateTimeField(default=lambda: datetime.now(timezone.utc))
-    
-    @classmethod
-    def reducir_stock_variante(cls, producto_id, sku, cantidad):
-        print(f"\n--- DEBUG STOCK ---")
-        print(f"Intentando descontar {cantidad} (Tipo: {type(cantidad).__name__}) del SKU '{sku}' en producto ID: {producto_id}")
-        
-        try:
-            producto = cls.objects.get(id=producto_id)
-            print(f"Producto encontrado en MongoDB: {producto.nombre}")
-            
-            # Aseguramos que la cantidad a descontar sea un número entero
-            cant_int = int(cantidad)
-            
-            for variante in producto.variantes:
-                print(f"Revisando variante SKU: '{variante.sku}' | Stock actual: {variante.stock}")
-                
-                # Convertimos ambos a string por si hay diferencias de formato
-                if str(variante.sku) == str(sku):
-                    if int(variante.stock) >= cant_int:
-                        variante.stock = int(variante.stock) - cant_int
-                        producto.save()
-                        print(f"¡ÉXITO! Stock descontado. Nuevo stock: {variante.stock}")
-                        print(f"-------------------\n")
-                        return True
-                    else:
-                        print(f"ERROR: Stock insuficiente (Tiene {variante.stock}, se piden {cant_int})")
-                        print(f"-------------------\n")
-                        return False
-            
-            print(f"ERROR: No se encontró el SKU '{sku}' en las variantes de este producto.")
-            print(f"-------------------\n")
-            return False
-            
-        except Exception as e:
-            print(f"ERROR EXCEPCIÓN en MongoDB: {str(e)}")
-            print(f"-------------------\n")
-            return False

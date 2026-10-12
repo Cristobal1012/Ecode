@@ -1,5 +1,6 @@
 """Real MongoDB/storage integration and signed-JWT API tests for SCRUM-125."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
 import os
@@ -225,6 +226,8 @@ class GaleriaAPITests(APITestCase):
         self.assertTrue(response.data['imagenes'][2].endswith('.jpg'))
         get = self.client.get(self.url)
         self.assertEqual(get.data['archivos'], response.data['archivos'])
+        # El público solo ve productos publicados
+        Producto.objects(id=self.producto.id).update(set__publicado=True)
         self.client.credentials()
         public = self.client.get(self.detalle)
         self.assertEqual(public.status_code, 200)
@@ -490,3 +493,130 @@ class GaleriaAPITests(APITestCase):
         borrado = self.client.delete(self.url_borrado(response.data['archivos'][0]['id']))
         self.assertEqual(borrado.status_code, 204)
         self.assertEqual(self.archivos_guardados(), [])
+
+
+def usar_mongo_de_prueba(cls):
+    """Liga Producto a una base Mongo temporal, que se borra al terminar la clase de tests."""
+    cliente = MongoClient(
+        os.environ.get('MONGO_TEST_URI', settings.MONGO_URI), serverSelectionTimeoutMS=5000,
+    )
+    cls.addClassCleanup(cliente.close)
+    nombre_base = f'test_ecode_{uuid4().hex}'
+    cls.addClassCleanup(cliente.drop_database, nombre_base)
+    binding = patch.object(Producto, '_get_collection', return_value=cliente[nombre_base]['productos'])
+    binding.start()
+    cls.addClassCleanup(binding.stop)
+
+
+class ReducirStockVarianteTests(SimpleTestCase):
+    """RN-03 y AGENTS.md §4.1: el descuento de stock es atómico y condicional."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        usar_mongo_de_prueba(cls)
+
+    def setUp(self):
+        Producto._get_collection().delete_many({})
+        self.producto = Producto(
+            nombre='Polera', categoria='Ropa', fecha_creacion=datetime.now(timezone.utc),
+            variantes=[Variante(sku='POLERA-S', precio=10000, stock=3),
+                       Variante(sku='POLERA-M', precio=10000, stock=5)],
+        ).save()
+
+    def stock(self, sku):
+        self.producto.reload()
+        return next(v.stock for v in self.producto.variantes if v.sku == sku)
+
+    def reducir(self, sku, cantidad, producto_id=None):
+        return Producto.reducir_stock_variante(str(producto_id or self.producto.id), sku, cantidad)
+
+    def test_descuenta_solo_la_variante_indicada(self):
+        self.assertTrue(self.reducir('POLERA-S', 2))
+        self.assertEqual(self.stock('POLERA-S'), 1)
+        self.assertEqual(self.stock('POLERA-M'), 5)
+
+    def test_stock_insuficiente_no_modifica_nada(self):
+        self.assertFalse(self.reducir('POLERA-S', 4))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_sku_o_producto_inexistente_devuelve_false(self):
+        self.assertFalse(self.reducir('NO-EXISTE', 1))
+        self.assertFalse(self.reducir('POLERA-S', 1, producto_id='64b000000000000000000000'))
+        self.assertFalse(self.reducir('POLERA-S', 1, producto_id='no-es-un-id'))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_cantidad_no_positiva_no_descuenta(self):
+        for cantidad in (0, -2):
+            with self.subTest(cantidad=cantidad):
+                self.assertFalse(self.reducir('POLERA-S', cantidad))
+        self.assertEqual(self.stock('POLERA-S'), 3)
+
+    def test_compras_simultaneas_de_la_ultima_unidad_producen_una_sola_venta(self):
+        self.assertTrue(self.reducir('POLERA-S', 2))
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            resultados = list(pool.map(lambda _: self.reducir('POLERA-S', 1), range(10)))
+        self.assertEqual(resultados.count(True), 1)
+        self.assertEqual(self.stock('POLERA-S'), 0)
+
+    def test_reponer_devuelve_stock_solo_a_la_variante_indicada(self):
+        self.assertTrue(Producto.reponer_stock_variante(str(self.producto.id), 'POLERA-S', 2))
+        self.assertEqual(self.stock('POLERA-S'), 5)
+        self.assertEqual(self.stock('POLERA-M'), 5)
+        for producto_id, sku, cantidad in ((self.producto.id, 'NO-EXISTE', 1),
+                                           ('no-es-un-id', 'POLERA-S', 1),
+                                           (self.producto.id, 'POLERA-S', 0)):
+            with self.subTest(sku=sku, cantidad=cantidad):
+                self.assertFalse(Producto.reponer_stock_variante(str(producto_id), sku, cantidad))
+        self.assertEqual(self.stock('POLERA-S'), 5)
+
+
+class CatalogoPublicoTests(APITestCase):
+    """El público solo ve productos activos y publicados; el admin también ve los borradores."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        usar_mongo_de_prueba(cls)
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = create_user('catalogo-admin@example.test', rol='ADMIN')
+        cls.comprador = create_user('catalogo-comprador@example.test')
+
+    def setUp(self):
+        Producto._get_collection().delete_many({})
+        self.productos = {
+            nombre: Producto(nombre=nombre, categoria='Ropa', fecha_creacion=datetime.now(timezone.utc),
+                             activo=activo, publicado=publicado).save()
+            for nombre, activo, publicado in (
+                ('Publicado', True, True), ('Borrador', True, False), ('Inactivo', False, True),
+            )
+        }
+
+    def autenticar(self, usuario):
+        token = RefreshToken.for_user(usuario).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    def listado(self):
+        response = self.client.get(reverse('lista_productos'))
+        self.assertEqual(response.status_code, 200)
+        return sorted(producto['nombre'] for producto in response.data)
+
+    def detalle(self, nombre):
+        return self.client.get(reverse('detalle_producto', args=[self.productos[nombre].id]))
+
+    def test_publico_y_compradores_solo_ven_productos_publicados(self):
+        for usuario in (None, self.comprador):
+            with self.subTest(usuario=usuario and usuario.rol):
+                if usuario:
+                    self.autenticar(usuario)
+                self.assertEqual(self.listado(), ['Publicado'])
+                self.assertEqual(self.detalle('Publicado').status_code, 200)
+                for nombre in ('Borrador', 'Inactivo'):
+                    self.assertEqual(self.detalle(nombre).status_code, 404)
+
+    def test_admin_ve_los_borradores_en_el_inventario(self):
+        self.autenticar(self.admin)
+        self.assertEqual(self.listado(), ['Borrador', 'Publicado'])
+        self.assertEqual(self.detalle('Borrador').status_code, 200)

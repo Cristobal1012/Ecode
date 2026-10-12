@@ -171,3 +171,13 @@ class OrdenRegistrada:
     items: tuple[ItemSolicitado, ...]
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado: bool = False
+
+
+# RF-04.4: el comprador acepta estas páginas en el checkout, así que deben estar publicadas para vender
+PAGINAS_REQUERIDAS_PARA_VENDER = ('TERMINOS', 'PRIVACIDAD')
+
+
+def paginas_legales_faltantes(publicadas) -> list[str]:
+    """Páginas legales requeridas para vender que aún no están publicadas, en orden fijo."""
+    publicadas = set(publicadas)
+    return [tipo for tipo in PAGINAS_REQUERIDAS_PARA_VENDER if tipo not in publicadas]

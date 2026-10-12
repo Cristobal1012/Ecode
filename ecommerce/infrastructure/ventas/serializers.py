@@ -1,6 +1,7 @@
 from decimal import Decimal
 import uuid
 
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
@@ -13,7 +14,7 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.application.ventas import PrepararPedido
 from ecommerce.domain.ventas import (
-    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, transiciones_desde,
+    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, paginas_legales_faltantes, transiciones_desde,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
@@ -160,6 +161,17 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     
 
     def validate(self, data):
+        # RF-04.4: el comprador acepta páginas que debe poder leer (en desarrollo no se exige)
+        if settings.EXIGIR_PAGINAS_LEGALES:
+            faltantes = paginas_legales_faltantes(
+                PaginaLegal.objects.filter(publicada=True).values_list('tipo_pagina', flat=True))
+            if faltantes:
+                nombres = dict(PaginaLegal.TIPOS_PAGINA)
+                raise serializers.ValidationError({'acepta_terminos': (
+                    'No es posible comprar todavía: la tienda aún no publica '
+                    f"{' ni '.join(nombres[tipo] for tipo in faltantes)}."
+                )})
+
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             if not data.get('email_invitado'):

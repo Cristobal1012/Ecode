@@ -1,6 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -9,7 +10,7 @@ from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
 from .serializers import ConfiguracionGlobalSerializer
 
 
@@ -303,6 +304,33 @@ class CheckoutAccessTests(APITestCase):
             HTTP_AUTHORIZATION=f'Token {self.tokens[1].key}',
         )
         self.assertEqual(self.client.get(reverse('checkout')).status_code, 405)
+
+    def publicar(self, tipo):
+        PaginaLegal.objects.create(tipo_pagina=tipo, titulo=tipo, contenido='<p>Texto</p>', publicada=True)
+
+    @override_settings(EXIGIR_PAGINAS_LEGALES=True)
+    def test_en_produccion_no_se_vende_sin_terminos_y_privacidad_publicados(self):
+        self.configure('INVITADO')
+        response = self.checkout()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Términos y Condiciones ni Política de Privacidad', str(response.data['acepta_terminos']))
+
+        # Un borrador o solo una de las dos no basta
+        PaginaLegal.objects.create(tipo_pagina='PRIVACIDAD', titulo='Privacidad', contenido='<p>x</p>')
+        self.publicar('TERMINOS')
+        response = self.checkout()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Política de Privacidad', str(response.data['acepta_terminos']))
+        self.assertNotIn('Términos', str(response.data['acepta_terminos']))
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        PaginaLegal.objects.filter(tipo_pagina='PRIVACIDAD').update(publicada=True)
+        self.assertEqual(self.checkout().status_code, 201)
+
+    @override_settings(EXIGIR_PAGINAS_LEGALES=False)
+    def test_en_desarrollo_se_vende_sin_paginas_legales(self):
+        self.configure('INVITADO')
+        self.assertEqual(self.checkout().status_code, 201)
 
 
 @patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter.consultar_estado',

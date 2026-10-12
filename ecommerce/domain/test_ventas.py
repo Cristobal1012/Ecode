@@ -1,7 +1,8 @@
 from django.test import SimpleTestCase
 
 from ecommerce.domain.ventas import (
-    EstadoPedido, TransicionNoPermitida, transiciones_desde, validar_transicion,
+    EstadoPedido, TransicionNoPermitida, paginas_legales_faltantes, transiciones_desde,
+    validar_transicion,
 )
 
 E = EstadoPedido
@@ -47,3 +48,10 @@ class MaquinaEstadosPedidoTests(SimpleTestCase):
         with self.assertRaisesMessage(TransicionNoPermitida,
                                       'Un pedido Cancelado no puede pasar a Pagado.'):
             validar_transicion(E.CANCELADO, E.PAGADO)
+
+
+class PaginasLegalesParaVenderTests(SimpleTestCase):
+    def test_faltan_terminos_y_privacidad_hasta_publicarlas(self):
+        self.assertEqual(paginas_legales_faltantes([]), ['TERMINOS', 'PRIVACIDAD'])
+        self.assertEqual(paginas_legales_faltantes(['REEMBOLSOS', 'PRIVACIDAD']), ['TERMINOS'])
+        self.assertEqual(paginas_legales_faltantes(['PRIVACIDAD', 'TERMINOS']), [])

@@ -218,4 +218,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', Fals
 if env_bool('CONFIAR_PROXY_HTTPS', not DEBUG):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# En producción no se vende sin Términos y Privacidad publicados (RF-04.4); en desarrollo sí.
+# Variable propia porque el runner de tests fuerza DEBUG=False.
+EXIGIR_PAGINAS_LEGALES = env_bool('EXIGIR_PAGINAS_LEGALES', not DEBUG)
+
 GOOGLE_CLIENT_ID = None  # Reemplazar por tu Client ID (ej: "xxxx.apps.googleusercontent.com") cuando este creado

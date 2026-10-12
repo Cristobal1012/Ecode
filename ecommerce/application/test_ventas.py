@@ -3,12 +3,12 @@ from decimal import Decimal
 from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
-    CatalogoVariantes, ConfirmarPago, InventarioVariantes, PrepararPedido, RepositorioOrdenes,
-    ResultadoPago,
+    CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
+    PedidoModificado, PrepararPedido, RepositorioOrdenes, ResultadoPago,
 )
 from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, StockInsuficiente,
-    SubtotalDesactualizado, VarianteCatalogo, VarianteNoDisponible,
+    SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo, VarianteNoDisponible,
 )
 
 
@@ -93,38 +93,37 @@ class InventarioFalso(InventarioVariantes):
 class RepositorioOrdenesFalso(RepositorioOrdenes):
     def __init__(self):
         self.ordenes = {}
+        # Simula que otro proceso cambia la orden entre la lectura y la escritura
+        self.cambio_concurrente = None
 
-    def agregar(self, orden_id, estado, items):
+    def agregar(self, orden_id, estado, items, stock_descontado=False):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
-            'stock_descontado': False, 'motivo_revision': '', 'motivo_cancelacion': '',
+            'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
         }
         return self.ordenes[orden_id]
 
     def obtener(self, orden_id):
         datos = self.ordenes.get(orden_id)
-        return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'])
+        return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'],
+                                         datos['stock_descontado'])
 
-    def marcar_pagada_si_pendiente(self, orden_id):
-        return self._cambiar_si_pendiente(orden_id, EstadoPedido.PAGADO)
-
-    def cancelar_si_pendiente(self, orden_id, motivo):
-        if not self._cambiar_si_pendiente(orden_id, EstadoPedido.CANCELADO):
+    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion=''):
+        datos = self.ordenes[orden_id]
+        if self.cambio_concurrente:
+            datos['estado'], self.cambio_concurrente = self.cambio_concurrente, None
+        if datos['estado'] != desde:
             return False
-        self.ordenes[orden_id]['motivo_cancelacion'] = motivo
+        datos['estado'] = EstadoPedido(hacia)
+        if motivo_cancelacion:
+            datos['motivo_cancelacion'] = motivo_cancelacion
         return True
 
-    def registrar_stock_descontado(self, orden_id):
-        self.ordenes[orden_id]['stock_descontado'] = True
+    def registrar_stock_descontado(self, orden_id, descontado=True):
+        self.ordenes[orden_id]['stock_descontado'] = descontado
 
     def marcar_revision(self, orden_id, motivo):
         self.ordenes[orden_id]['motivo_revision'] = motivo
-
-    def _cambiar_si_pendiente(self, orden_id, estado):
-        if self.ordenes[orden_id]['estado'] != EstadoPedido.PENDIENTE:
-            return False
-        self.ordenes[orden_id]['estado'] = estado
-        return True
 
 
 class ConfirmarPagoTests(SimpleTestCase):
@@ -186,3 +185,75 @@ class ConfirmarPagoTests(SimpleTestCase):
         pagada = self.ordenes.agregar(2, 'PAGADO', [])
         self.assertFalse(self.caso.rechazar(2, 'Pago rechazado'))
         self.assertEqual(pagada['estado'], EstadoPedido.PAGADO)
+
+
+class CambiarEstadoPedidoTests(SimpleTestCase):
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 5})
+        self.caso = CambiarEstadoPedido(self.ordenes, self.inventario)
+
+    def orden(self, estado, stock_descontado=False):
+        return self.ordenes.agregar(1, estado, [('camisa', 'CAMISA-S', 2)], stock_descontado)
+
+    def stock(self):
+        return self.inventario.stock[('camisa', 'CAMISA-S')]
+
+    def test_avance_normal_no_toca_el_stock(self):
+        orden = self.orden('PAGADO', stock_descontado=True)
+        self.assertEqual(self.caso.ejecutar(1, 'EN_PREPARACION'), EstadoPedido.EN_PREPARACION)
+        self.assertEqual(orden['estado'], EstadoPedido.EN_PREPARACION)
+        self.assertEqual(self.stock(), 5)
+
+    def test_transicion_no_permitida_no_cambia_nada(self):
+        orden = self.orden('CANCELADO')
+        with self.assertRaises(TransicionNoPermitida):
+            self.caso.ejecutar(1, 'PAGADO')
+        self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+        self.assertEqual(self.stock(), 5)
+
+    def test_pagar_a_mano_descuenta_stock_como_un_pago_en_linea(self):
+        orden = self.orden('PENDIENTE')
+        self.assertEqual(self.caso.ejecutar(1, 'PAGADO'), EstadoPedido.PAGADO)
+        self.assertEqual(orden['estado'], EstadoPedido.PAGADO)
+        self.assertTrue(orden['stock_descontado'])
+        self.assertEqual(self.stock(), 3)
+
+    def test_pagar_a_mano_sin_stock_deja_la_orden_en_revision(self):
+        self.inventario.stock[('camisa', 'CAMISA-S')] = 1
+        orden = self.orden('PENDIENTE')
+        self.caso.ejecutar(1, 'PAGADO')
+        self.assertEqual(orden['estado'], EstadoPedido.PAGADO)
+        self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
+        self.assertEqual(self.stock(), 1)
+
+    def test_cancelar_repone_el_stock_descontado(self):
+        for estado in ('PAGADO', 'EN_PREPARACION'):
+            with self.subTest(estado=estado):
+                self.inventario.stock[('camisa', 'CAMISA-S')] = 3
+                orden = self.orden(estado, stock_descontado=True)
+                self.caso.ejecutar(1, 'CANCELADO')
+                self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+                self.assertEqual(orden['motivo_cancelacion'], 'Cancelado por el administrador')
+                self.assertFalse(orden['stock_descontado'])
+                self.assertEqual(self.stock(), 5)
+
+    def test_cancelar_sin_stock_descontado_no_repone(self):
+        # PENDIENTE, o PAGADO en revisión porque faltó stock al confirmar
+        for estado in ('PENDIENTE', 'PAGADO'):
+            with self.subTest(estado=estado):
+                self.orden(estado, stock_descontado=False)
+                self.caso.ejecutar(1, 'CANCELADO')
+                self.assertEqual(self.stock(), 5)
+
+    def test_cambio_concurrente_se_rechaza_sin_reponer_dos_veces(self):
+        orden = self.orden('PAGADO', stock_descontado=True)
+        self.ordenes.cambio_concurrente = EstadoPedido.CANCELADO
+        with self.assertRaises(PedidoModificado):
+            self.caso.ejecutar(1, 'CANCELADO')
+        self.assertEqual(self.stock(), 5)
+        self.assertTrue(orden['stock_descontado'])
+
+    def test_orden_inexistente(self):
+        with self.assertRaises(OrdenNoEncontrada):
+            self.caso.ejecutar(99, 'CANCELADO')

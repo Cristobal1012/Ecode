@@ -160,3 +160,5 @@ class OrdenRegistrada:
     id: int
     estado: EstadoPedido
     items: tuple[ItemSolicitado, ...]
+    # Al cancelar solo se repone el stock que realmente se descontó
+    stock_descontado: bool = False

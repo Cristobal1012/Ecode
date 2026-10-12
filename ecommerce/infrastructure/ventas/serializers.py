@@ -12,9 +12,7 @@ from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
 from ecommerce.application.ventas import PrepararPedido
-from ecommerce.domain.ventas import (
-    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, TransicionNoPermitida, validar_transicion,
-)
+from ecommerce.domain.ventas import ErrorPedido, ItemSolicitado, SubtotalDesactualizado
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
@@ -338,17 +336,9 @@ class AgregarItemSerializer(serializers.Serializer):
             raise serializers.ValidationError({"cantidad": f"Stock insuficiente. Solo quedan {stock_disponible} unidades disponibles."})
 
         return data
-class AdminOrdenCompraEstadoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrdenCompra
-        fields = ['estado']
-
-    def validate_estado(self, value):
-        # RF-03.3 / AGENTS.md §9: la regla vive en el dominio
-        try:
-            return validar_transicion(self.instance.estado, value).value
-        except TransicionNoPermitida as error:
-            raise serializers.ValidationError(str(error))
+class AdminOrdenCompraEstadoSerializer(serializers.Serializer):
+    # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido (AGENTS.md §9)
+    estado = serializers.ChoiceField(choices=OrdenCompra.ESTADOS_PEDIDO)
 
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):

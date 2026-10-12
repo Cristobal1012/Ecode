@@ -16,21 +16,18 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             ItemSolicitado(detalle.producto_mongo_id, detalle.variante_sku, detalle.cantidad)
             for detalle in orden.detalles.order_by('id')
         )
-        return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items)
+        return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado)
 
-    def marcar_pagada_si_pendiente(self, orden_id):
-        # Un UPDATE condicional es atómico: dos confirmaciones simultáneas no pagan dos veces
-        return self._pendiente(orden_id).update(estado=EstadoPedido.PAGADO.value) == 1
+    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion=''):
+        # Un UPDATE condicional es atómico: de dos cambios simultáneos solo uno se aplica
+        cambios = {'estado': EstadoPedido(hacia).value}
+        if motivo_cancelacion:
+            cambios['motivo_cancelacion'] = motivo_cancelacion
+        return OrdenCompra.objects.filter(
+            id=orden_id, estado=EstadoPedido(desde).value).update(**cambios) == 1
 
-    def cancelar_si_pendiente(self, orden_id, motivo):
-        return self._pendiente(orden_id).update(
-            estado=EstadoPedido.CANCELADO.value, motivo_cancelacion=motivo) == 1
-
-    def registrar_stock_descontado(self, orden_id):
-        OrdenCompra.objects.filter(id=orden_id).update(stock_descontado=True)
+    def registrar_stock_descontado(self, orden_id, descontado=True):
+        OrdenCompra.objects.filter(id=orden_id).update(stock_descontado=descontado)
 
     def marcar_revision(self, orden_id, motivo):
         OrdenCompra.objects.filter(id=orden_id).update(requiere_revision=True, motivo_revision=motivo)
-
-    def _pendiente(self, orden_id):
-        return OrdenCompra.objects.filter(id=orden_id, estado=EstadoPedido.PENDIENTE.value)

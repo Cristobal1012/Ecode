@@ -19,8 +19,10 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
-    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, ConfirmarPago, ResultadoPago,
+    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago, OrdenNoEncontrada,
+    PedidoModificado, ResultadoPago,
 )
+from ecommerce.domain.ventas import TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
@@ -48,17 +50,39 @@ def confirmar_pago():
     return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes())
 
 
+def cambiar_estado_pedido():
+    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes())
+
+
 class AdminOrdenCompraListView(generics.ListAPIView):
     queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
     serializer_class = OrdenCompraSerializer
     permission_classes = [IsAdministrador]
 
 
-class AdminOrdenCompraPatchView(generics.UpdateAPIView):
-    queryset = OrdenCompra.objects.all()
-    serializer_class = AdminOrdenCompraEstadoSerializer 
-    http_method_names = ['patch']
+class AdminOrdenCompraPatchView(APIView):
+    """RF-03.3: cambio de estado manual del admin (transiciones de AGENTS.md §9)."""
     permission_classes = [IsAdministrador]
+
+    def patch(self, request, pk):
+        serializer = AdminOrdenCompraEstadoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            estado = cambiar_estado_pedido().ejecutar(pk, serializer.validated_data['estado'])
+        except OrdenNoEncontrada:
+            return Response({'detail': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        except TransicionNoPermitida as error:
+            return Response({'estado': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        except PedidoModificado as error:
+            return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
+
+        orden = OrdenCompra.objects.get(id=pk)
+        return Response({
+            'id': orden.id,
+            'estado': estado.value,
+            'requiere_revision': orden.requiere_revision,
+            'motivo_revision': orden.motivo_revision,
+        })
 
 
 logger = logging.getLogger(__name__)

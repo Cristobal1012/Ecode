@@ -345,15 +345,27 @@ class CambioEstadoAdminTests(APITestCase):
     def setUp(self):
         self.orden = OrdenCompra.objects.create(
             email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
-            direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
-            estado='PAGADO',
+            direccion_envio_snapshot={}, subtotal=20000, costo_envio=0, total_final=20000,
+            estado='PAGADO', stock_descontado=True,
         )
+        DetalleOrden.objects.create(
+            orden=self.orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
+        )
+        self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 3})
+        inventario = patch('ecommerce.infrastructure.ventas.views.inventario_variantes',
+                           return_value=self.inventario)
+        inventario.start()
+        self.addCleanup(inventario.stop)
 
-    def cambiar(self, estado, token=None):
+    def cambiar(self, estado, token=None, orden_id=None):
         if token:
             self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
-        return self.client.patch(reverse('admin-ordenes-patch', args=[self.orden.id]),
+        return self.client.patch(reverse('admin-ordenes-patch', args=[orden_id or self.orden.id]),
                                  {'estado': estado}, format='json')
+
+    def stock(self):
+        return self.inventario.stock[('camisa', 'CAMISA-S')]
 
     def assertEstado(self, estado):
         self.orden.refresh_from_db()
@@ -377,6 +389,42 @@ class CambioEstadoAdminTests(APITestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn('no puede pasar a', str(response.data['estado']))
                 self.assertEstado(actual)
+        self.assertEqual(self.stock(), 3)
+
+    def test_estado_desconocido_u_orden_inexistente(self):
+        self.assertEqual(self.cambiar('RECHAZADO', self.admin_token).status_code, 400)
+        self.assertEqual(self.cambiar('CANCELADO', self.admin_token, orden_id=999999).status_code, 404)
+        self.assertEstado('PAGADO')
+
+    def test_cancelar_repone_el_stock_descontado(self):
+        response = self.cambiar('CANCELADO', self.admin_token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEstado('CANCELADO')
+        self.assertEqual(self.orden.motivo_cancelacion, 'Cancelado por el administrador')
+        self.assertFalse(self.orden.stock_descontado)
+        self.assertEqual(self.stock(), 5)
+
+    def test_pagar_a_mano_descuenta_stock_y_avisa_si_queda_en_revision(self):
+        OrdenCompra.objects.filter(id=self.orden.id).update(estado='PENDIENTE', stock_descontado=False)
+        response = self.cambiar('PAGADO', self.admin_token)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['requiere_revision'])
+        self.assertEqual(self.stock(), 1)
+
+        otra = OrdenCompra.objects.create(
+            email_invitado='otro@example.test', metodo_pago='TRANSFERENCIA',
+            direccion_envio_snapshot={}, subtotal=20000, costo_envio=0, total_final=20000,
+        )
+        DetalleOrden.objects.create(
+            orden=otra, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
+        )
+        response = self.cambiar('PAGADO', orden_id=otra.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado'], 'PAGADO')
+        self.assertTrue(response.data['requiere_revision'])
+        self.assertEqual(response.data['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
+        self.assertEqual(self.stock(), 1)
 
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})

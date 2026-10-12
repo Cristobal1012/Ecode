@@ -226,6 +226,8 @@ class GaleriaAPITests(APITestCase):
         self.assertTrue(response.data['imagenes'][2].endswith('.jpg'))
         get = self.client.get(self.url)
         self.assertEqual(get.data['archivos'], response.data['archivos'])
+        # El público solo ve productos publicados
+        Producto.objects(id=self.producto.id).update(set__publicado=True)
         self.client.credentials()
         public = self.client.get(self.detalle)
         self.assertEqual(public.status_code, 200)
@@ -493,22 +495,26 @@ class GaleriaAPITests(APITestCase):
         self.assertEqual(self.archivos_guardados(), [])
 
 
+def usar_mongo_de_prueba(cls):
+    """Liga Producto a una base Mongo temporal, que se borra al terminar la clase de tests."""
+    cliente = MongoClient(
+        os.environ.get('MONGO_TEST_URI', settings.MONGO_URI), serverSelectionTimeoutMS=5000,
+    )
+    cls.addClassCleanup(cliente.close)
+    nombre_base = f'test_ecode_{uuid4().hex}'
+    cls.addClassCleanup(cliente.drop_database, nombre_base)
+    binding = patch.object(Producto, '_get_collection', return_value=cliente[nombre_base]['productos'])
+    binding.start()
+    cls.addClassCleanup(binding.stop)
+
+
 class ReducirStockVarianteTests(SimpleTestCase):
     """RN-03 y AGENTS.md §4.1: el descuento de stock es atómico y condicional."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.mongo_client = MongoClient(
-            os.environ.get('MONGO_TEST_URI', settings.MONGO_URI), serverSelectionTimeoutMS=5000,
-        )
-        cls.addClassCleanup(cls.mongo_client.close)
-        cls.mongo_db_name = f'test_ecode_stock_{uuid4().hex}'
-        cls.addClassCleanup(cls.mongo_client.drop_database, cls.mongo_db_name)
-        binding = patch.object(Producto, '_get_collection',
-                               return_value=cls.mongo_client[cls.mongo_db_name]['productos'])
-        binding.start()
-        cls.addClassCleanup(binding.stop)
+        usar_mongo_de_prueba(cls)
 
     def setUp(self):
         Producto._get_collection().delete_many({})
@@ -563,3 +569,54 @@ class ReducirStockVarianteTests(SimpleTestCase):
             with self.subTest(sku=sku, cantidad=cantidad):
                 self.assertFalse(Producto.reponer_stock_variante(str(producto_id), sku, cantidad))
         self.assertEqual(self.stock('POLERA-S'), 5)
+
+
+class CatalogoPublicoTests(APITestCase):
+    """El público solo ve productos activos y publicados; el admin también ve los borradores."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        usar_mongo_de_prueba(cls)
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = create_user('catalogo-admin@example.test', rol='ADMIN')
+        cls.comprador = create_user('catalogo-comprador@example.test')
+
+    def setUp(self):
+        Producto._get_collection().delete_many({})
+        self.productos = {
+            nombre: Producto(nombre=nombre, categoria='Ropa', fecha_creacion=datetime.now(timezone.utc),
+                             activo=activo, publicado=publicado).save()
+            for nombre, activo, publicado in (
+                ('Publicado', True, True), ('Borrador', True, False), ('Inactivo', False, True),
+            )
+        }
+
+    def autenticar(self, usuario):
+        token = RefreshToken.for_user(usuario).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    def listado(self):
+        response = self.client.get(reverse('lista_productos'))
+        self.assertEqual(response.status_code, 200)
+        return sorted(producto['nombre'] for producto in response.data)
+
+    def detalle(self, nombre):
+        return self.client.get(reverse('detalle_producto', args=[self.productos[nombre].id]))
+
+    def test_publico_y_compradores_solo_ven_productos_publicados(self):
+        for usuario in (None, self.comprador):
+            with self.subTest(usuario=usuario and usuario.rol):
+                if usuario:
+                    self.autenticar(usuario)
+                self.assertEqual(self.listado(), ['Publicado'])
+                self.assertEqual(self.detalle('Publicado').status_code, 200)
+                for nombre in ('Borrador', 'Inactivo'):
+                    self.assertEqual(self.detalle(nombre).status_code, 404)
+
+    def test_admin_ve_los_borradores_en_el_inventario(self):
+        self.autenticar(self.admin)
+        self.assertEqual(self.listado(), ['Borrador', 'Publicado'])
+        self.assertEqual(self.detalle('Borrador').status_code, 200)

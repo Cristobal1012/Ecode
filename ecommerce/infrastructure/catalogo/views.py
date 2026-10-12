@@ -59,6 +59,9 @@ class ProductoListCreateView(CatalogoAPIView):
 
     def get(self, request):
         productos = Producto.objects.filter(activo=True)
+        if not IsAdministrador().has_permission(request, self):
+            # El público solo ve lo publicado; el admin también ve los borradores (inventario)
+            productos = productos.filter(publicado=True)
         serializer = ProductoSerializer(productos, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -74,6 +77,9 @@ class ProductoDetailView(CatalogoAPIView):
 
     def get(self, request, id):
         producto = self.get_object(id)
+        # Un borrador o un producto inactivo no existe para el público (misma respuesta que uno inexistente)
+        if not (producto.activo and producto.publicado) and not IsAdministrador().has_permission(request, self):
+            raise NotFound('Producto no encontrado.')
         return Response(ProductoSerializer(producto, context={'request': request}).data)
 
     def put(self, request, id):

@@ -5,8 +5,8 @@ import clienteAxios from './auth/axiosConfig';
 
 const NOMBRES_PAGINA = {
   TERMINOS: 'Términos y Condiciones',
-  PRIVACIDAD: 'Políticas de Privacidad',
-  REEMBOLSOS: 'Políticas de Reembolso'
+  PRIVACIDAD: 'Política de Privacidad',
+  REEMBOLSOS: 'Política de Reembolsos'
 };
 
 // En producción la tienda no vende mientras estas dos no estén publicadas

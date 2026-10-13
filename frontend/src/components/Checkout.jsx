@@ -311,7 +311,8 @@ export default function Checkout() {
                 if (usuarioAutenticado) {
                     try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
                 }
-                setTimeout(() => { navigate('/mis-pedidos'); }, 1500);
+                // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
+                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, { replace: true });
             }
         } catch (error) {
             const datos = error.response?.data || {};

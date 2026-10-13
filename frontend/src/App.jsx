@@ -17,6 +17,7 @@ import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el
 import MisDirecciones from './components/MisDirecciones'; // Ajusta la ruta a donde guardaste el archivo
 import PagoExitoso from './components/PagoExitoso';
 import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a donde guardaste el archivo
+import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
 
@@ -111,6 +112,7 @@ function App() {
               <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
               <Route path="/mis-direcciones" element={<MisDirecciones />} />
               <Route path="/pago-exitoso" element={<PagoExitoso />} />
+              <Route path="/pedido-recibido" element={<PedidoRecibido />} />
               <Route path="/pago-cancelado" element={<PagoCancelado />} />
               <Route path="/pago-rechazado" element={<PagoCancelado />} />
               {/* Pantalla de login y registro */}

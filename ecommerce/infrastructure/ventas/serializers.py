@@ -10,11 +10,13 @@ from ecommerce.infrastructure.catalogo.documents import Producto
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
-    ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
+    PROVEEDORES_CON_ORDEN_TRANSPORTE, ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete,
+    SolicitudCotizacion,
 )
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.ventas import (
-    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, paginas_legales_faltantes, transiciones_desde,
+    ErrorPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
+    paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
@@ -379,6 +381,7 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
 
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
+    puede_generar_orden_transporte = serializers.SerializerMethodField()
 
     get_email_cliente = OrdenCompraSerializer.get_email_cliente
 
@@ -387,12 +390,23 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
-            'motivo_cancelacion', 'transiciones_permitidas',
+            'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
+            'error_orden_transporte', 'puede_generar_orden_transporte',
         ]
         read_only_fields = fields
 
     def get_transiciones_permitidas(self, obj):
         return [estado.value for estado in transiciones_desde(obj.estado)]
+
+    def get_puede_generar_orden_transporte(self, obj):
+        """Muestra el botón del panel solo si el backend aceptaría generar la OT."""
+        if obj.proveedor_logistico not in PROVEEDORES_CON_ORDEN_TRANSPORTE or obj.numero_seguimiento_tracking:
+            return False
+        try:
+            validar_generacion_orden_transporte(obj.estado, obj.requiere_revision)
+        except OrdenTransporteNoPermitida:
+            return False
+        return True
 
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):

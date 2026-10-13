@@ -24,7 +24,8 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             ItemSolicitado(detalle.producto_mongo_id, detalle.variante_sku, detalle.cantidad)
             for detalle in orden.detalles.order_by('id')
         )
-        return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado)
+        return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado,
+                               orden.requiere_revision)
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         # Un UPDATE condicional es atómico: de dos cambios simultáneos solo uno se aplica

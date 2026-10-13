@@ -9,7 +9,8 @@ from ecommerce.application.ventas import (
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
-    CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, ProblemaLinea,
+    CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
+    PedidoVacio, ProblemaLinea,
     StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
     VarianteNoDisponible,
 )
@@ -163,7 +164,7 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
     def obtener(self, orden_id):
         datos = self.ordenes.get(orden_id)
         return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'],
-                                         datos['stock_descontado'])
+                                         datos['stock_descontado'], datos['requiere_revision'])
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         datos = self.ordenes[orden_id]
@@ -242,8 +243,27 @@ class GenerarOrdenTransporteTests(SimpleTestCase):
         self.transportista.error = ErrorOrdenTransporte('Sin cobertura')
         self.caso.ejecutar(1)
         self.transportista.error = None
-        self.assertEqual(self.caso.ejecutar(1), 'OT-1')
+        self.assertEqual(self.caso.reintentar(1), 'OT-1')
         self.assertEqual(self.orden['error_ot'], '')
+
+    def test_reintento_fallido_informa_y_guarda_el_error(self):
+        self.transportista.error = ErrorOrdenTransporte('Sin cobertura')
+        with self.assertRaisesMessage(ErrorOrdenTransporte, 'Sin cobertura'):
+            self.caso.reintentar(1)
+        self.assertEqual(self.orden['error_ot'], 'Sin cobertura')
+
+    def test_reintento_solo_en_pedidos_que_admiten_ot(self):
+        with self.assertRaises(OrdenNoEncontrada):
+            self.caso.reintentar(99)
+        self.orden['requiere_revision'] = True
+        with self.assertRaises(OrdenTransporteNoPermitida):
+            self.caso.reintentar(1)
+        self.ordenes.agregar(2, 'CANCELADO', [], proveedor='CHILEXPRESS')
+        self.ordenes.agregar(3, 'PAGADO', [], proveedor='RETIRO_LOCAL')
+        for orden_id in (2, 3):
+            with self.subTest(orden_id=orden_id), self.assertRaises(OrdenTransporteNoPermitida):
+                self.caso.reintentar(orden_id)
+        self.assertEqual(self.transportista.envios, [])
 
 
 class ConfirmarPagoTests(SimpleTestCase):

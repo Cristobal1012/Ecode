@@ -216,6 +216,25 @@ class OrdenRegistrada:
     items: tuple[ItemSolicitado, ...]
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado: bool = False
+    requiere_revision: bool = False
+
+
+# Pagado y aún sin despachar: se puede generar (o reintentar) la orden de transporte
+ESTADOS_CON_ORDEN_TRANSPORTE = frozenset({EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION})
+
+
+class OrdenTransporteNoPermitida(Exception):
+    pass
+
+
+def validar_generacion_orden_transporte(estado, requiere_revision: bool) -> None:
+    """RF-02.3: la OT se genera para pedidos pagados sin despachar y sin una revisión pendiente."""
+    if requiere_revision:
+        raise OrdenTransporteNoPermitida(
+            'Resuelve la revisión del pedido antes de generar la orden de transporte.')
+    if EstadoPedido(estado) not in ESTADOS_CON_ORDEN_TRANSPORTE:
+        raise OrdenTransporteNoPermitida(
+            f'Un pedido {_etiqueta(estado)} no puede generar una orden de transporte.')
 
 
 # RF-04.4: el comprador acepta estas páginas en el checkout, así que deben estar publicadas para vender

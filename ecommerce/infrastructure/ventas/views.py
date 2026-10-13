@@ -16,14 +16,14 @@ from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 
 from ecommerce.application.logistica import ServicioCotizacion
-from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
+from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida, ErrorOrdenTransporte
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
     MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente,
 )
-from ecommerce.domain.ventas import TransicionNoPermitida
+from ecommerce.domain.ventas import OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
@@ -82,6 +82,23 @@ class AdminResolverRevisionView(APIView):
         except SinRevisionPendiente as error:
             return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
         return Response({'id': pk, 'requiere_revision': False})
+
+
+class AdminOrdenTransporteView(APIView):
+    """RF-02.3: el admin genera o reintenta la orden de transporte de un pedido pagado."""
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pk):
+        try:
+            numero_ot = generar_orden_transporte().reintentar(pk)
+        except OrdenNoEncontrada:
+            return Response({'detail': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        except OrdenTransporteNoPermitida as error:
+            return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
+        except ErrorOrdenTransporte as error:
+            # El transportista falló: el error ya quedó guardado en la orden
+            return Response({'detail': str(error)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'id': pk, 'numero_seguimiento_tracking': numero_ot})
 
 
 class AdminOrdenCompraPatchView(APIView):

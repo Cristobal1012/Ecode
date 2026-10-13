@@ -7,6 +7,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
+from ecommerce.domain.logistica import ErrorOrdenTransporte
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
@@ -548,6 +549,72 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(self.resolver().status_code, 403)
         self.orden.refresh_from_db()
         self.assertTrue(self.orden.requiere_revision)
+
+
+class AdminOrdenTransporteTests(APITestCase):
+    """RF-02.3: el admin genera o reintenta la OT desde el panel."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.buyer_token = Token.objects.create(user=create_user())
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+
+    def setUp(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={'comuna': 'PROVIDENCIA'}, subtotal=10000, costo_envio=0,
+            total_final=10000, estado='PAGADO', proveedor_logistico='CHILEXPRESS',
+            error_orden_transporte='Chilexpress no respondió',
+        )
+        parche = patch('ecommerce.infrastructure.ventas.views.ChilexpressOrdenTransporte')
+        self.transportista = parche.start().return_value
+        self.addCleanup(parche.stop)
+        self.transportista.generar_orden_transporte.return_value = '712678904136'
+
+    def generar(self, orden_id=None):
+        return self.client.post(reverse('admin-ordenes-orden-transporte', args=[orden_id or self.orden.id]))
+
+    def listado(self):
+        orden, = self.client.get(reverse('admin-ordenes-list')).data
+        return orden
+
+    def test_panel_ofrece_reintentar_y_el_reintento_guarda_la_ot(self):
+        orden = self.listado()
+        self.assertTrue(orden['puede_generar_orden_transporte'])
+        self.assertEqual(orden['error_orden_transporte'], 'Chilexpress no respondió')
+
+        response = self.generar()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['numero_seguimiento_tracking'], '712678904136')
+        orden = self.listado()
+        self.assertEqual((orden['numero_seguimiento_tracking'], orden['error_orden_transporte']),
+                         ('712678904136', ''))
+        self.assertFalse(orden['puede_generar_orden_transporte'])
+
+    def test_fallo_del_transportista_es_502_y_queda_guardado(self):
+        self.transportista.generar_orden_transporte.side_effect = ErrorOrdenTransporte('Sin cobertura')
+        response = self.generar()
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.data['detail'], 'Sin cobertura')
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.error_orden_transporte, 'Sin cobertura')
+
+    def test_pedido_cancelado_o_en_revision_no_genera_ot(self):
+        for cambios in ({'estado': 'CANCELADO'}, {'requiere_revision': True}):
+            with self.subTest(cambios=cambios):
+                OrdenCompra.objects.filter(id=self.orden.id).update(
+                    **{'estado': 'PAGADO', 'requiere_revision': False, **cambios})
+                self.assertFalse(self.listado()['puede_generar_orden_transporte'])
+                self.assertEqual(self.generar().status_code, 409)
+        self.transportista.generar_orden_transporte.assert_not_called()
+        self.assertEqual(self.generar(orden_id=999999).status_code, 404)
+
+    def test_solo_el_admin_genera_ot(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.buyer_token.key}')
+        self.assertEqual(self.generar().status_code, 403)
+        self.transportista.generar_orden_transporte.assert_not_called()
 
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})

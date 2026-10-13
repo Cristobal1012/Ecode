@@ -9,8 +9,8 @@ import logging
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea, revisar_linea,
-    validar_transicion,
+    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea,
+    revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,21 +154,39 @@ class GenerarOrdenTransporte:
         self.transportista = transportista
 
     def ejecutar(self, orden_id) -> str | None:
+        """Tras confirmarse el pago: nunca lanza, para no afectar la confirmación."""
         envio = self.ordenes.obtener_envio(orden_id)
         if envio is None or not envio.requiere_orden_transporte:
             return None
+        try:
+            return self._generar(envio)
+        except ErrorOrdenTransporte:
+            return None
+
+    def reintentar(self, orden_id) -> str:
+        """El admin la genera desde el panel; lanza el error para mostrárselo."""
+        orden = self.ordenes.obtener(orden_id)
+        if orden is None:
+            raise OrdenNoEncontrada()
+        validar_generacion_orden_transporte(orden.estado, orden.requiere_revision)
+        envio = self.ordenes.obtener_envio(orden_id)
+        if not envio.requiere_orden_transporte:
+            raise OrdenTransporteNoPermitida('Este pedido no se despacha con un transportista.')
+        return self._generar(envio)
+
+    def _generar(self, envio: EnvioSolicitado) -> str:
         if envio.numero_ot:
             return envio.numero_ot
         try:
             numero_ot = self.transportista.generar_orden_transporte(envio)
         except ErrorOrdenTransporte as error:
-            self.ordenes.registrar_orden_transporte(orden_id, error=str(error))
-            return None
+            self.ordenes.registrar_orden_transporte(envio.orden_id, error=str(error))
+            raise
         except Exception:
-            logger.exception('Error inesperado al generar la OT de la orden %s', orden_id)
-            self.ordenes.registrar_orden_transporte(orden_id, error=MOTIVO_ERROR_OT_INESPERADO)
-            return None
-        self.ordenes.registrar_orden_transporte(orden_id, numero_ot)
+            logger.exception('Error inesperado al generar la OT de la orden %s', envio.orden_id)
+            self.ordenes.registrar_orden_transporte(envio.orden_id, error=MOTIVO_ERROR_OT_INESPERADO)
+            raise ErrorOrdenTransporte(MOTIVO_ERROR_OT_INESPERADO) from None
+        self.ordenes.registrar_orden_transporte(envio.orden_id, numero_ot)
         return numero_ot
 
 

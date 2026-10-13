@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
+import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
+import './Checkout.css';
 
 export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
@@ -44,6 +46,10 @@ export default function Checkout() {
     const [cotizando, setCotizando] = useState(false);
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
+    // Tipos de página legal publicados (ej. 'TERMINOS'), para enlazarlos junto al consentimiento
+    const [paginasLegales, setPaginasLegales] = useState([]);
+    // Cambios hechos al carrito porque algo se agotó o cambió de precio
+    const [avisosCarrito, setAvisosCarrito] = useState([]);
 
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
     const navigate = useNavigate();
@@ -64,7 +70,18 @@ export default function Checkout() {
         clienteAxios.get('ventas/checkout/reglas/')
             .then(res => setModoAutenticacion(res.data.modo_autenticacion))
             .catch(() => setMensaje('No se pudieron cargar las opciones de compra.'));
+
+        // Sin enlaces el checkbox sigue funcionando: solo se pierde la opción de leerlas aquí
+        clienteAxios.get('ventas/paginas-legales/')
+            .then(res => setPaginasLegales((res.data || []).map(p => p.tipo_pagina)))
+            .catch(() => setPaginasLegales([]));
     }, []);
+
+    const enlaceLegal = (tipo, texto) => paginasLegales.includes(tipo) ? (
+        <a href={`/legal/${tipo.toLowerCase()}`} target="_blank" rel="noopener noreferrer" aria-label={`${texto} (se abre en otra pestaña)`}>
+            {texto}
+        </a>
+    ) : texto;
 
     // 2. CARGA DE DIRECCIONES GUARDADAS
     useEffect(() => {
@@ -85,6 +102,22 @@ export default function Checkout() {
         }
     }, [usuarioAutenticado, itemsCarrito.length]);
 
+    // RN-03: ajusta el carrito al stock y precios vigentes y avisa qué cambió.
+    // Si la validación falla, se sigue con el carrito tal cual: el backend revalida al crear la orden.
+    const revisarCarrito = async (items) => {
+        if (items.length === 0) return;
+        try {
+            const ajuste = ajustarCarrito(items, await validarCarrito(items));
+            if (ajuste.avisos.length > 0) {
+                setItemsCarrito(ajuste.items);
+                setAvisosCarrito(ajuste.avisos);
+                await guardarCarrito(ajuste.items);
+            }
+        } catch (error) {
+            console.error('No se pudo validar el carrito:', error);
+        }
+    };
+
     // 3. CARGA DEL CARRITO
     useEffect(() => {
         const carritoGuardado = localStorage.getItem('carrito_local');
@@ -92,6 +125,7 @@ export default function Checkout() {
             try {
                 const carritoParseado = JSON.parse(carritoGuardado);
                 setItemsCarrito(carritoParseado);
+                revisarCarrito(carritoParseado);
             } catch (e) { setItemsCarrito([]); }
         }
     }, []);
@@ -229,6 +263,8 @@ export default function Checkout() {
                 calle: `Agencia Chilexpress: ${sucursalSeleccionada.nombre}`,
                 numero: 'S/N',
                 dpto_casa: `Código Oficial: ${sucursalSeleccionada.codigo}`,
+                // La orden de transporte se entrega en esta oficina de Chilexpress
+                codigo_sucursal: sucursalSeleccionada.codigo,
                 comuna: comunaSucursal,
                 ciudad: comunaSucursal,
                 region: ''
@@ -278,7 +314,8 @@ export default function Checkout() {
                 if (usuarioAutenticado) {
                     try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
                 }
-                setTimeout(() => { navigate('/mis-pedidos'); }, 1500);
+                // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
+                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, { replace: true });
             }
         } catch (error) {
             const datos = error.response?.data || {};
@@ -295,6 +332,8 @@ export default function Checkout() {
                     try { await clienteAxios.post('ventas/carrito/', { items: carritoActualizado }); } catch (err) {}
                 }
             }
+            // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
+            if (datos.items) await revisarCarrito(itemsCarrito);
             const detalle = datos.subtotal || datos.items || datos.acepta_terminos;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
@@ -309,6 +348,14 @@ export default function Checkout() {
         <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif' }}>
             <h2>Finalizar Compra</h2>
             {mensaje && <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensaje.includes('Éxito') ? '#d4edda' : '#f8d7da', borderRadius: '4px', color: mensaje.includes('Éxito') ? '#155724' : '#721c24' }}>{mensaje}</div>}
+            {avisosCarrito.length > 0 && (
+                <div role="alert" style={{ padding: '10px 15px', marginBottom: '15px', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '4px', color: '#92400e' }}>
+                    <strong>Actualizamos tu carrito:</strong>
+                    <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                        {avisosCarrito.map(aviso => <li key={aviso}>{aviso}</li>)}
+                    </ul>
+                </div>
+            )}
 
             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>
@@ -333,20 +380,22 @@ export default function Checkout() {
                 )}
                 
                 {/* --- TABS: ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
-                <div style={{ marginBottom: '25px' }}>
-                    <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
+                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
+                    <legend style={{ width: '100%', padding: 0 }}>
+                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
+                    </legend>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} style={{ display: 'none' }} />
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
                             A Domicilio
                         </label>
-                        <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} style={{ display: 'none' }} />
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
                             Sucursal Chilexpress
                         </label>
                         {configTienda?.retiro_en_local_activo && (
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                                <input type="radio" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => {
+                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                                <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => {
                                     setTipoDespacho('RETIRO_LOCAL');
                                     setCostoEnvio(0);
                                     setOpcionesEntrega([{
@@ -361,21 +410,22 @@ export default function Checkout() {
                                         tipo: 'RETIRO',
                                         costo_envio: 0
                                     });
-                                }} style={{ display: 'none' }} />
+                                }} className="checkout-radio-oculto" />
                                 Retiro en Local
                             </label>
                         )}
                     </div>
-                </div>
+                </fieldset>
 
                 {/* --- CONTENIDO SEGÚN EL TAB SELECCIONADO --- */}
                 {tipoDespacho === 'DOMICILIO' ? (
                     <div style={{ marginBottom: '25px' }}>
                         {usuarioAutenticado && direccionesGuardadas.length > 0 && (
-                            <div style={{ marginBottom: '15px' }}>
+                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
+                                <legend className="checkout-solo-lector">Dirección de envío</legend>
                                 {direccionesGuardadas.map(dir => (
                                     <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid #007BFF' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
-                                        <input type="radio" checked={direccionSeleccionadaId === dir.id} onChange={() => handleCambioDireccionGuardada(dir.id)} style={{ marginRight: '10px' }} />
+                                        <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => handleCambioDireccionGuardada(dir.id)} style={{ marginRight: '10px' }} />
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</div>
                                             <div style={{ fontSize: '0.85rem', color: '#666' }}>{dir.comuna}, {dir.ciudad}</div>
@@ -383,10 +433,10 @@ export default function Checkout() {
                                     </label>
                                 ))}
                                 <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid #007BFF' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
-                                    <input type="radio" checked={direccionSeleccionadaId === 'nueva'} onChange={() => handleCambioDireccionGuardada('nueva')} style={{ marginRight: '10px' }} />
+                                    <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => handleCambioDireccionGuardada('nueva')} style={{ marginRight: '10px' }} />
                                     <span style={{ fontWeight: 'bold' }}>Ingresar una nueva dirección</span>
                                 </label>
-                            </div>
+                            </fieldset>
                         )}
 
                         {direccionSeleccionadaId === 'nueva' && (
@@ -445,12 +495,12 @@ export default function Checkout() {
                                 Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
                             </div>
                         ) : sucursalesDisponibles.length > 0 && (
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Oficinas Disponibles</label>
+                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
+                                <legend style={{ fontSize: '0.9rem', fontWeight: 'bold', padding: 0 }}>Oficinas Disponibles</legend>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
                                     {sucursalesDisponibles.map(suc => (
                                         <label key={suc.codigo} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: sucursalSeleccionada?.codigo === suc.codigo ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', backgroundColor: sucursalSeleccionada?.codigo === suc.codigo ? '#f0f7ff' : 'white' }}>
-                                            <input type="radio" checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalSeleccionada(suc)} style={{ marginRight: '12px' }} />
+                                            <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalSeleccionada(suc)} style={{ marginRight: '12px' }} />
                                             <div>
                                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{suc.nombre}</div>
                                                 <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{suc.direccion}</div>
@@ -458,7 +508,7 @@ export default function Checkout() {
                                         </label>
                                     ))}
                                 </div>
-                            </div>
+                            </fieldset>
                         )}
                     </div>
                 ) : (
@@ -491,7 +541,7 @@ export default function Checkout() {
             
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '20px', fontSize: '0.9rem', cursor: 'pointer' }}>
                     <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required style={{ marginTop: '3px' }} />
-                    <span>Acepto los Términos y Condiciones y la Política de Privacidad.</span>
+                    <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
                 </label>
 
                 <div style={{ marginTop: '20px' }}>

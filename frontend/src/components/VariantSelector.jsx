@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
-  const [mensaje, setMensaje] = useState('');
+  // { tipo: 'exito' | 'error', texto }
+  const [mensaje, setMensaje] = useState(null);
   const [cantidad, setCantidad] = useState(1); // Nuevo estado para manejar la cantidad
+  const [agregando, setAgregando] = useState(false);
 
-  // Reinicia la selección cuando cambia el producto
+  // Reinicia la selección cuando cambia el producto (no cuando solo se actualiza su stock)
+  const productoId = producto?.id;
   useEffect(() => {
     setAtributosSeleccionados({});
-    setMensaje('');
+    setMensaje(null);
     setCantidad(1);
-  }, [producto]);
+  }, [productoId]);
+
+  const error = (texto) => setMensaje({ tipo: 'error', texto });
 
   // Si todavía no se ha seleccionado un producto
   if (!producto) {
@@ -77,42 +82,52 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
     const variante = encontrarVariante(nuevosAtributos);
 
     if (!variante) {
-      setMensaje('');
+      setMensaje(null);
       return;
     }
 
     if (Number(variante.stock) === 0) {
-      setMensaje('Esta variante se encuentra agotada.');
+      error('Esta variante se encuentra agotada.');
       return;
     }
 
-    setMensaje('');
+    setMensaje(null);
   };
 
   const varianteSeleccionada = encontrarVariante(atributosSeleccionados);
 
-  const agregarAlCarrito = () => {
+  const agregarAlCarrito = async () => {
     if (!varianteSeleccionada) {
-      setMensaje('Selecciona una variante primero.');
+      error('Selecciona una variante primero.');
       return;
     }
 
     if (Number(varianteSeleccionada.stock) === 0) {
-      setMensaje('Esta variante se encuentra agotada.');
+      error('Esta variante se encuentra agotada.');
+      return;
+    }
+
+    if (!Number.isInteger(cantidad) || cantidad < 1) {
+      error('La cantidad debe ser al menos 1.');
       return;
     }
 
     if (cantidad > Number(varianteSeleccionada.stock)) {
-      setMensaje('No hay suficiente stock para esa cantidad.');
+      error('No hay suficiente stock para esa cantidad.');
       return;
     }
 
-    // Ejecutamos la función que nos pasaron desde DetalleProducto
+    // Ejecutamos la función que nos pasaron desde DetalleProducto; el servidor confirma el stock
     if (onAgregarAlCarrito) {
-      onAgregarAlCarrito(varianteSeleccionada, cantidad);
-      setMensaje(`¡Agregaste ${cantidad} unidad(es) al carrito!`);
+      setAgregando(true);
+      setMensaje(null);
+      const resultado = await onAgregarAlCarrito(varianteSeleccionada, cantidad);
+      setAgregando(false);
+      setMensaje({ tipo: resultado.ok ? 'exito' : 'error', texto: resultado.mensaje });
     }
   };
+
+  const sinStock = !varianteSeleccionada || Number(varianteSeleccionada.stock) === 0;
 
   if (variantes.length === 0) {
     return (
@@ -188,27 +203,34 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
       <button
         onClick={agregarAlCarrito}
-        disabled={!varianteSeleccionada || Number(varianteSeleccionada.stock) === 0}
+        disabled={sinStock || agregando}
         style={{
             marginTop: '20px',
             padding: '12px 24px',
-            backgroundColor: (!varianteSeleccionada || Number(varianteSeleccionada.stock) === 0) ? '#d1d5db' : '#2563eb',
+            backgroundColor: sinStock || agregando ? '#d1d5db' : '#2563eb',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
             fontWeight: 'bold',
-            cursor: (!varianteSeleccionada || Number(varianteSeleccionada.stock) === 0) ? 'not-allowed' : 'pointer',
+            cursor: sinStock || agregando ? 'not-allowed' : 'pointer',
             width: '100%',
             fontSize: '1.1rem',
             transition: 'background-color 0.2s'
         }}
       >
-        Agregar al carrito
+        {agregando ? 'Verificando stock...' : 'Agregar al carrito'}
       </button>
 
       {mensaje && (
-        <p style={{ marginTop: '15px', color: '#16a34a', fontWeight: '600', textAlign: 'center', backgroundColor: '#dcfce7', padding: '10px', borderRadius: '6px' }}>
-          {mensaje}
+        <p
+          role={mensaje.tipo === 'error' ? 'alert' : 'status'}
+          style={{
+            marginTop: '15px', fontWeight: '600', textAlign: 'center', padding: '10px', borderRadius: '6px',
+            color: mensaje.tipo === 'error' ? '#991b1b' : '#166534',
+            backgroundColor: mensaje.tipo === 'error' ? '#fef2f2' : '#dcfce7'
+          }}
+        >
+          {mensaje.texto}
         </p>
       )}
     </div>

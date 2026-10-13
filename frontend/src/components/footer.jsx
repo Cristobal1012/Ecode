@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
 
@@ -74,7 +74,7 @@ export const Footer = () => {
               {paginas.map((pag) => (
                 <li key={pag.id || pag.tipo_pagina}>
                   <Link
-                    to={`/legal/${pag.tipo_pagina || pag.id}`}
+                    to={`/legal/${pag.tipo_pagina.toLowerCase()}`}
                     style={{
                       color: '#60a5fa',
                       textDecoration: 'none',

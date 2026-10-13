@@ -1,7 +1,8 @@
 from django.test import SimpleTestCase
 
 from ecommerce.domain.ventas import (
-    EstadoPedido, TransicionNoPermitida, transiciones_desde, validar_transicion,
+    EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida, paginas_legales_faltantes,
+    transiciones_desde, validar_generacion_orden_transporte, validar_transicion,
 )
 
 E = EstadoPedido
@@ -47,3 +48,21 @@ class MaquinaEstadosPedidoTests(SimpleTestCase):
         with self.assertRaisesMessage(TransicionNoPermitida,
                                       'Un pedido Cancelado no puede pasar a Pagado.'):
             validar_transicion(E.CANCELADO, E.PAGADO)
+
+
+class GeneracionOrdenTransporteTests(SimpleTestCase):
+    def test_solo_pedidos_pagados_sin_despachar_y_sin_revision(self):
+        for estado in (E.PAGADO, E.EN_PREPARACION):
+            validar_generacion_orden_transporte(estado, requiere_revision=False)
+        for estado in (E.PENDIENTE, E.ENVIADO, E.ENTREGADO, E.CANCELADO):
+            with self.subTest(estado=estado), self.assertRaises(OrdenTransporteNoPermitida):
+                validar_generacion_orden_transporte(estado, requiere_revision=False)
+        with self.assertRaisesMessage(OrdenTransporteNoPermitida, 'Resuelve la revisión'):
+            validar_generacion_orden_transporte(E.PAGADO, requiere_revision=True)
+
+
+class PaginasLegalesParaVenderTests(SimpleTestCase):
+    def test_faltan_terminos_y_privacidad_hasta_publicarlas(self):
+        self.assertEqual(paginas_legales_faltantes([]), ['TERMINOS', 'PRIVACIDAD'])
+        self.assertEqual(paginas_legales_faltantes(['REEMBOLSOS', 'PRIVACIDAD']), ['TERMINOS'])
+        self.assertEqual(paginas_legales_faltantes(['PRIVACIDAD', 'TERMINOS']), [])

@@ -82,6 +82,56 @@ export default function GestorPedidos() {
     }
   };
 
+  // RF-02.3: si Chilexpress falló al confirmarse el pago, el admin reintenta la orden de transporte
+  const handleGenerarOT = async (pedido) => {
+    setEnCurso(pedido.id);
+    setAviso(null);
+    try {
+      const { data } = await clienteAxios.post(`ventas/admin/ordenes/${pedido.id}/orden-transporte/`);
+      setAviso({ tipo: 'exito', texto: `Orden de transporte ${data.numero_seguimiento_tracking} generada para el pedido #${pedido.id}.` });
+    } catch (error) {
+      setAviso({ tipo: 'error', texto: `No se pudo generar la orden de transporte del pedido #${pedido.id}: ${mensajeDeError(error)}` });
+    } finally {
+      await cargarPedidos();
+      setEnCurso(null);
+    }
+  };
+
+  const celdaEnvio = (pedido) => {
+    if (pedido.numero_seguimiento_tracking) {
+      return <span>OT {pedido.numero_seguimiento_tracking}</span>;
+    }
+    if (pedido.proveedor_logistico === 'RETIRO_LOCAL') {
+      return <span style={{ color: '#4b5563' }}>Retiro en local</span>;
+    }
+    if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
+      return <span style={{ color: '#4b5563' }}>{pedido.proveedor_logistico || '—'}</span>;
+    }
+    return (
+      <div style={{ fontSize: '0.9rem' }}>
+        {pedido.error_orden_transporte ? (
+          <div style={{ color: '#991b1b' }}>
+            <strong>Sin OT:</strong> {pedido.error_orden_transporte}
+          </div>
+        ) : (
+          <span style={{ color: '#4b5563' }}>Sin OT</span>
+        )}
+        {pedido.puede_generar_orden_transporte && (
+          <div>
+            <button
+              type="button"
+              onClick={() => handleGenerarOT(pedido)}
+              disabled={enCurso === pedido.id}
+              style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: '#fff', color: '#1d4ed8', border: '1px solid #1d4ed8', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              {pedido.error_orden_transporte ? 'Reintentar OT' : 'Generar OT'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (cargando) return <div style={{ padding: '20px' }}>Cargando panel de pedidos...</div>;
 
   return (
@@ -104,6 +154,7 @@ export default function GestorPedidos() {
               <th style={{ padding: '12px' }}>Total</th>
               <th style={{ padding: '12px' }}>Estado Actual</th>
               <th style={{ padding: '12px' }}>Revisión</th>
+              <th style={{ padding: '12px' }}>Envío</th>
             </tr>
           </thead>
           <tbody>
@@ -159,12 +210,13 @@ export default function GestorPedidos() {
                       <span style={{ color: '#6b7280' }}>—</span>
                     )}
                   </td>
+                  <td style={{ padding: '12px' }}>{celdaEnvio(pedido)}</td>
                 </tr>
               );
             })}
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
                   No hay pedidos registrados en la tienda.
                 </td>
               </tr>

@@ -3,6 +3,7 @@ import axios from 'axios';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
+import './Checkout.css';
 
 export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
@@ -377,20 +378,22 @@ export default function Checkout() {
                 )}
                 
                 {/* --- TABS: ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
-                <div style={{ marginBottom: '25px' }}>
-                    <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
+                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
+                    <legend style={{ width: '100%', padding: 0 }}>
+                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
+                    </legend>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} style={{ display: 'none' }} />
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
                             A Domicilio
                         </label>
-                        <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} style={{ display: 'none' }} />
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
                             Sucursal Chilexpress
                         </label>
                         {configTienda?.retiro_en_local_activo && (
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                                <input type="radio" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => {
+                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                                <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => {
                                     setTipoDespacho('RETIRO_LOCAL');
                                     setCostoEnvio(0);
                                     setOpcionesEntrega([{
@@ -405,21 +408,22 @@ export default function Checkout() {
                                         tipo: 'RETIRO',
                                         costo_envio: 0
                                     });
-                                }} style={{ display: 'none' }} />
+                                }} className="checkout-radio-oculto" />
                                 Retiro en Local
                             </label>
                         )}
                     </div>
-                </div>
+                </fieldset>
 
                 {/* --- CONTENIDO SEGÚN EL TAB SELECCIONADO --- */}
                 {tipoDespacho === 'DOMICILIO' ? (
                     <div style={{ marginBottom: '25px' }}>
                         {usuarioAutenticado && direccionesGuardadas.length > 0 && (
-                            <div style={{ marginBottom: '15px' }}>
+                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
+                                <legend className="checkout-solo-lector">Dirección de envío</legend>
                                 {direccionesGuardadas.map(dir => (
                                     <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid #007BFF' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
-                                        <input type="radio" checked={direccionSeleccionadaId === dir.id} onChange={() => handleCambioDireccionGuardada(dir.id)} style={{ marginRight: '10px' }} />
+                                        <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => handleCambioDireccionGuardada(dir.id)} style={{ marginRight: '10px' }} />
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</div>
                                             <div style={{ fontSize: '0.85rem', color: '#666' }}>{dir.comuna}, {dir.ciudad}</div>
@@ -427,10 +431,10 @@ export default function Checkout() {
                                     </label>
                                 ))}
                                 <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid #007BFF' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
-                                    <input type="radio" checked={direccionSeleccionadaId === 'nueva'} onChange={() => handleCambioDireccionGuardada('nueva')} style={{ marginRight: '10px' }} />
+                                    <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => handleCambioDireccionGuardada('nueva')} style={{ marginRight: '10px' }} />
                                     <span style={{ fontWeight: 'bold' }}>Ingresar una nueva dirección</span>
                                 </label>
-                            </div>
+                            </fieldset>
                         )}
 
                         {direccionSeleccionadaId === 'nueva' && (
@@ -489,12 +493,12 @@ export default function Checkout() {
                                 Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
                             </div>
                         ) : sucursalesDisponibles.length > 0 && (
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Oficinas Disponibles</label>
+                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
+                                <legend style={{ fontSize: '0.9rem', fontWeight: 'bold', padding: 0 }}>Oficinas Disponibles</legend>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
                                     {sucursalesDisponibles.map(suc => (
                                         <label key={suc.codigo} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: sucursalSeleccionada?.codigo === suc.codigo ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', backgroundColor: sucursalSeleccionada?.codigo === suc.codigo ? '#f0f7ff' : 'white' }}>
-                                            <input type="radio" checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalSeleccionada(suc)} style={{ marginRight: '12px' }} />
+                                            <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalSeleccionada(suc)} style={{ marginRight: '12px' }} />
                                             <div>
                                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{suc.nombre}</div>
                                                 <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{suc.direccion}</div>
@@ -502,7 +506,7 @@ export default function Checkout() {
                                         </label>
                                     ))}
                                 </div>
-                            </div>
+                            </fieldset>
                         )}
                     </div>
                 ) : (

@@ -6,8 +6,9 @@ from decimal import Decimal
 from enum import StrEnum
 
 from ecommerce.domain.ventas import (
-    ESTADOS_PAGADOS, EstadoPedido, ItemSolicitado, LineaPedido, OrdenRegistrada, PedidoVacio,
-    SubtotalDesactualizado, VarianteCatalogo, armar_linea, validar_transicion,
+    ESTADOS_PAGADOS, EstadoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
+    PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea, revisar_linea,
+    validar_transicion,
 )
 
 
@@ -39,21 +40,36 @@ class PrepararPedido:
         if not items:
             raise PedidoVacio()
 
-        # Varias líneas del mismo SKU deben respetar el stock en conjunto
-        cantidades = {}
-        for item in items:
-            clave = (item.producto_id, item.sku)
-            cantidades[clave] = cantidades.get(clave, 0) + item.cantidad
-
-        lineas = [
-            armar_linea(ItemSolicitado(producto_id, sku, cantidad),
-                        self.catalogo.obtener(producto_id, sku))
-            for (producto_id, sku), cantidad in cantidades.items()
-        ]
+        lineas = [armar_linea(item, self.catalogo.obtener(item.producto_id, item.sku))
+                  for item in agrupar_por_sku(items)]
         subtotal = sum((linea.total for linea in lineas), Decimal('0'))
         if subtotal != Decimal(subtotal_informado):
             raise SubtotalDesactualizado(subtotal, lineas)
         return PedidoPreparado(lineas=lineas, subtotal=subtotal)
+
+
+def agrupar_por_sku(items: list[ItemSolicitado]) -> list[ItemSolicitado]:
+    """Varias líneas del mismo SKU deben respetar el stock en conjunto."""
+    cantidades = {}
+    for item in items:
+        clave = (item.producto_id, item.sku)
+        cantidades[clave] = cantidades.get(clave, 0) + item.cantidad
+    return [ItemSolicitado(producto_id, sku, cantidad)
+            for (producto_id, sku), cantidad in cantidades.items()]
+
+
+class RevisarCarrito:
+    """RN-03 / AGENTS.md §4.1: valida el stock al agregar al carrito y al abrir el checkout.
+
+    No reserva nada: el stock se vuelve a validar al crear la orden y al confirmar el pago.
+    """
+
+    def __init__(self, catalogo: CatalogoVariantes):
+        self.catalogo = catalogo
+
+    def ejecutar(self, items: list[ItemSolicitado]) -> list[LineaRevisada]:
+        return [revisar_linea(item, self.catalogo.obtener(item.producto_id, item.sku))
+                for item in agrupar_por_sku(items)]
 
 
 class InventarioVariantes(ABC):

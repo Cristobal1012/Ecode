@@ -12,7 +12,7 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
     ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
 )
-from ecommerce.application.ventas import PrepararPedido
+from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.ventas import (
     ErrorPedido, ItemSolicitado, SubtotalDesactualizado, paginas_legales_faltantes, transiciones_desde,
 )
@@ -110,6 +110,30 @@ class ItemPedidoSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)
     cantidad = serializers.IntegerField(min_value=1)
+
+
+class RevisionCarritoSerializer(serializers.Serializer):
+    """Entrada de `POST carrito/validar/`; `revisar()` compara el carrito con el catálogo vigente."""
+
+    items = ItemPedidoSerializer(many=True, max_length=100)
+
+    def revisar(self):
+        items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
+                 for i in self.validated_data['items']]
+        lineas = RevisarCarrito(catalogo_variantes()).ejecutar(items)
+        return {
+            'valido': all(linea.problema is None for linea in lineas),
+            'items': [{
+                'producto_mongo_id': linea.producto_id,
+                'variante_sku': linea.sku,
+                'cantidad': linea.cantidad,
+                'disponible': linea.disponible,
+                'nombre': linea.nombre,
+                'precio': None if linea.precio is None else str(linea.precio),
+                'problema': linea.problema,
+                'mensaje': linea.mensaje,
+            } for linea in lineas],
+        }
 
 
 class OrdenCompraSerializer(serializers.ModelSerializer):

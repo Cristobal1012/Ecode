@@ -333,6 +333,42 @@ class CheckoutAccessTests(APITestCase):
         self.assertEqual(self.checkout().status_code, 201)
 
 
+class ValidarCarritoTests(APITestCase):
+    def setUp(self):
+        usar_catalogo_falso(self, {
+            ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa - CAMISA-S', Decimal('10000.00'), 3, True),
+            ('camisa', 'CAMISA-M'): VarianteCatalogo('Camisa - CAMISA-M', Decimal('10000.00'), 0, True),
+        })
+
+    def validar(self, *items):
+        return self.client.post(reverse('carrito-validar'), {'items': [
+            {'producto_mongo_id': producto, 'variante_sku': sku, 'cantidad': cantidad}
+            for producto, sku, cantidad in items
+        ]}, format='json')
+
+    def test_invitado_valida_su_carrito_sin_sesion(self):
+        response = self.validar(('camisa', 'CAMISA-S', 3))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['valido'])
+        linea, = response.data['items']
+        self.assertEqual((linea['disponible'], linea['precio'], linea['problema']), (3, '10000.00', None))
+
+    def test_informa_cada_linea_con_problema(self):
+        response = self.validar(('camisa', 'CAMISA-S', 4), ('camisa', 'CAMISA-M', 1), ('otro', 'X', 1))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['valido'])
+        self.assertEqual([(l['variante_sku'], l['problema'], l['disponible']) for l in response.data['items']], [
+            ('CAMISA-S', 'STOCK_INSUFICIENTE', 3),
+            ('CAMISA-M', 'SIN_STOCK', 0),
+            ('X', 'NO_DISPONIBLE', 0),
+        ])
+        self.assertIn('solo quedan 3', response.data['items'][0]['mensaje'])
+
+    def test_cantidad_invalida_o_sin_items_es_400(self):
+        self.assertEqual(self.validar(('camisa', 'CAMISA-S', 0)).status_code, 400)
+        self.assertEqual(self.client.post(reverse('carrito-validar'), {}, format='json').status_code, 400)
+
+
 @patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter.consultar_estado',
        return_value='En tránsito')
 class SeguimientoEnvioTests(APITestCase):

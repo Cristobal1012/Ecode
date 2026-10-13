@@ -89,6 +89,51 @@ def armar_linea(item: ItemSolicitado, variante: VarianteCatalogo | None) -> Line
     )
 
 
+class ProblemaLinea(StrEnum):
+    NO_DISPONIBLE = 'NO_DISPONIBLE'
+    SIN_STOCK = 'SIN_STOCK'
+    STOCK_INSUFICIENTE = 'STOCK_INSUFICIENTE'
+
+
+@dataclass(frozen=True)
+class LineaRevisada:
+    """Una línea del carrito comparada con el catálogo vigente, antes de crear la orden."""
+
+    producto_id: str
+    sku: str
+    cantidad: int
+    # Unidades que se pueden comprar ahora (0 si la variante no se vende)
+    disponible: int
+    nombre: str | None = None
+    precio: Decimal | None = None
+    problema: ProblemaLinea | None = None
+
+    @property
+    def mensaje(self) -> str | None:
+        if self.problema == ProblemaLinea.NO_DISPONIBLE:
+            return f'El producto {self.sku} ya no está disponible.'
+        if self.problema == ProblemaLinea.SIN_STOCK:
+            return f'{self.nombre} está agotado.'
+        if self.problema == ProblemaLinea.STOCK_INSUFICIENTE:
+            return f'De {self.nombre} solo quedan {self.disponible} unidades.'
+        return None
+
+
+def revisar_linea(item: ItemSolicitado, variante: VarianteCatalogo | None) -> LineaRevisada:
+    """RN-03: misma regla que `armar_linea`, pero informa el problema en vez de rechazar el pedido."""
+    if variante is None or not variante.disponible:
+        return LineaRevisada(item.producto_id, item.sku, item.cantidad, disponible=0,
+                             problema=ProblemaLinea.NO_DISPONIBLE)
+    disponible = max(variante.stock, 0)
+    problema = None
+    if disponible == 0:
+        problema = ProblemaLinea.SIN_STOCK
+    elif item.cantidad > disponible:
+        problema = ProblemaLinea.STOCK_INSUFICIENTE
+    return LineaRevisada(item.producto_id, item.sku, item.cantidad, disponible,
+                         variante.nombre, variante.precio, problema)
+
+
 class EstadoPedido(StrEnum):
     PENDIENTE = 'PENDIENTE'
     PAGADO = 'PAGADO'

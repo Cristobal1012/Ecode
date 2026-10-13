@@ -5,11 +5,12 @@ from django.test import SimpleTestCase
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
     PedidoModificado, PrepararPedido, RepositorioOrdenes, ResolverRevision, ResultadoPago,
-    SinRevisionPendiente,
+    RevisarCarrito, SinRevisionPendiente,
 )
 from ecommerce.domain.ventas import (
-    CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, StockInsuficiente,
-    SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo, VarianteNoDisponible,
+    CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, ProblemaLinea,
+    StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
+    VarianteNoDisponible,
 )
 
 
@@ -72,6 +73,45 @@ class PrepararPedidoTests(SimpleTestCase):
             preparar([], '0')
         with self.assertRaises(CantidadInvalida):
             preparar([('camisa', 'CAMISA-S', 0)], '0')
+
+
+def revisar(items):
+    return RevisarCarrito(CATALOGO).ejecutar([ItemSolicitado(*item) for item in items])
+
+
+class RevisarCarritoTests(SimpleTestCase):
+    def test_linea_con_stock_suficiente_no_tiene_problema(self):
+        linea, = revisar([('camisa', 'CAMISA-S', 2)])
+        self.assertIsNone(linea.problema)
+        self.assertIsNone(linea.mensaje)
+        self.assertEqual(linea.disponible, 2)
+        self.assertEqual(linea.precio, Decimal('20990.00'))
+
+    def test_variante_agotada_aunque_otra_del_mismo_producto_tenga_stock(self):
+        agotada, con_stock = revisar([('camisa', 'CAMISA-M', 1), ('camisa', 'CAMISA-S', 1)])
+        self.assertEqual(agotada.problema, ProblemaLinea.SIN_STOCK)
+        self.assertEqual(agotada.disponible, 0)
+        self.assertIsNone(con_stock.problema)
+
+    def test_cantidad_mayor_al_stock_informa_lo_disponible(self):
+        linea, = revisar([('camisa', 'CAMISA-S', 3)])
+        self.assertEqual(linea.problema, ProblemaLinea.STOCK_INSUFICIENTE)
+        self.assertEqual(linea.disponible, 2)
+        self.assertIn('solo quedan 2', linea.mensaje)
+
+    def test_lineas_repetidas_del_mismo_sku_suman_contra_el_stock(self):
+        linea, = revisar([('camisa', 'CAMISA-S', 2), ('camisa', 'CAMISA-S', 1)])
+        self.assertEqual(linea.cantidad, 3)
+        self.assertEqual(linea.problema, ProblemaLinea.STOCK_INSUFICIENTE)
+
+    def test_variante_inexistente_o_producto_no_publicado_no_esta_disponible(self):
+        for item in (('camisa', 'NO-EXISTE', 1), ('gorro', 'GORRO-U', 1)):
+            with self.subTest(item=item):
+                linea, = revisar([item])
+                self.assertEqual(linea.problema, ProblemaLinea.NO_DISPONIBLE)
+                self.assertEqual(linea.disponible, 0)
+                # No se revelan precio ni nombre de lo que no está a la venta
+                self.assertIsNone(linea.precio)
 
 
 class InventarioFalso(InventarioVariantes):

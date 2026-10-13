@@ -32,6 +32,7 @@ from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
+    RevisionCarritoSerializer,
     DireccionEnvioSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
@@ -118,6 +119,17 @@ class CarritoAPIView(APIView):
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})
+
+
+class ValidarCarritoView(APIView):
+    """RN-03: compara el carrito (también el de invitados, que vive en el navegador) con el stock vigente."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RevisionCarritoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.revisar())
 
 
 class CheckoutAPIView(generics.CreateAPIView):

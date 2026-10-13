@@ -38,6 +38,8 @@ ventas_urlpatterns = [
     
     # RUTA PARA EL CARRITO: GET/POST /api/ventas/carrito/
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
+    # Ruta resultante: POST /api/ventas/carrito/validar/ (pública, también para invitados)
+    path('carrito/validar/', views.ValidarCarritoView.as_view(), name='carrito-validar'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
 # --- RUTAS PARA DIRECCIONES DE ENVÍO ---

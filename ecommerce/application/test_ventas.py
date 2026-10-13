@@ -4,12 +4,13 @@ from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
-    GenerarOrdenTransporte, PedidoModificado, PrepararPedido, RepositorioOrdenes, ResolverRevision,
+    GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
+    ResolverRevision,
     ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
-    CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
+    CantidadInvalida, EstadoPedido, EventoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
     PedidoVacio, ProblemaLinea,
     StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
     VarianteNoDisponible,
@@ -354,6 +355,57 @@ class ConfirmarPagoTests(SimpleTestCase):
         pagada = self.ordenes.agregar(2, 'PAGADO', [])
         self.assertFalse(self.caso.rechazar(2, 'Pago rechazado'))
         self.assertEqual(pagada['estado'], EstadoPedido.PAGADO)
+
+
+class NotificadorFalso(NotificadorPedidos):
+    def __init__(self):
+        self.enviados = []
+
+    def notificar(self, orden_id, evento):
+        self.enviados.append((orden_id, evento))
+
+
+class ConfirmarPagoNotificacionesTests(SimpleTestCase):
+    """RF-04.2: cada resultado del pago avisa al comprador una sola vez."""
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 2})
+        self.notificador = NotificadorFalso()
+        self.caso = ConfirmarPago(self.ordenes, self.inventario, notificador=self.notificador)
+        self.ordenes.agregar(1, 'PENDIENTE', [('camisa', 'CAMISA-S', 1)])
+
+    def test_pago_aprobado_avisa_una_sola_vez_aunque_la_confirmacion_se_repita(self):
+        self.caso.aprobar(1)
+        self.caso.aprobar(1)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.PAGO_APROBADO)])
+
+    def test_pago_sin_stock_o_sobre_orden_cancelada_avisa_revision(self):
+        self.ordenes.agregar(2, 'PENDIENTE', [('camisa', 'CAMISA-S', 5)])
+        self.ordenes.agregar(3, 'CANCELADO', [('camisa', 'CAMISA-S', 1)])
+        self.caso.aprobar(2)
+        self.caso.aprobar(3)
+        self.assertEqual(self.notificador.enviados,
+                         [(2, EventoPedido.PAGO_EN_REVISION), (3, EventoPedido.PAGO_EN_REVISION)])
+
+    def test_error_del_inventario_avisa_revision(self):
+        self.inventario.falla_en = ('camisa', 'CAMISA-S')
+        with self.assertRaises(ConnectionError):
+            self.caso.aprobar(1)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.PAGO_EN_REVISION)])
+
+    def test_rechazo_y_anulacion_avisan_distinto(self):
+        self.ordenes.agregar(2, 'PENDIENTE', [])
+        self.caso.rechazar(1, 'Pago rechazado')
+        self.caso.rechazar(2, 'Pago anulado por el comprador')
+        self.assertEqual(self.notificador.enviados,
+                         [(1, EventoPedido.PAGO_RECHAZADO), (2, EventoPedido.CANCELADO)])
+
+    def test_rechazo_de_una_orden_que_ya_no_esta_pendiente_no_avisa(self):
+        self.caso.aprobar(1)
+        self.notificador.enviados.clear()
+        self.assertFalse(self.caso.rechazar(1, 'Pago rechazado'))
+        self.assertEqual(self.notificador.enviados, [])
 
 
 class CambiarEstadoPedidoTests(SimpleTestCase):

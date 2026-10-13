@@ -8,7 +8,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 
-from ecommerce.application.ventas import NotificadorPedidos
+from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, NotificadorPedidos
 from ecommerce.domain.ventas import EventoPedido
 
 from ..models import ConfiguracionGlobal, OrdenCompra
@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 ASUNTOS = {
     EventoPedido.RECIBIDO: 'Recibimos tu pedido #{id}',
+    EventoPedido.PAGO_APROBADO: 'Pago confirmado: pedido #{id}',
+    EventoPedido.PAGO_EN_REVISION: 'Recibimos el pago de tu pedido #{id}',
+    EventoPedido.PAGO_RECHAZADO: 'No se pudo completar el pago del pedido #{id}',
+    EventoPedido.CANCELADO: 'Tu pedido #{id} fue cancelado',
 }
 
 
@@ -68,6 +72,7 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'costo_envio': pesos(orden.costo_envio),
             'total': pesos(orden.total_final),
             'metodo_pago': orden.get_metodo_pago_display(),
+            'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
             'entrega': CorreoNotificadorPedidos._entrega(orden, config),
             # RF-02.4: el invitado consulta con su número de orden y su correo
             'url_seguimiento': f'{frontend_url}/seguimiento?orden={orden.id}',

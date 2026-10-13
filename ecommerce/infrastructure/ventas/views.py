@@ -43,6 +43,7 @@ from .serializers import (
     PaginaLegalAdminSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
+from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .repositorio_ordenes import DjangoRepositorioOrdenes
@@ -56,8 +57,13 @@ def generar_orden_transporte():
     return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte())
 
 
+def notificador_pedidos():
+    return CorreoNotificadorPedidos()
+
+
 def confirmar_pago():
-    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte())
+    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
+                         notificador_pedidos())
 
 
 def cambiar_estado_pedido():

@@ -48,8 +48,7 @@ export default function PagoExitoso() {
         )}
 
         <p style={{ color: '#6b7280', fontSize: '0.95rem', marginBottom: '40px', lineHeight: '1.5' }}>
-          {/* TODO(PENDIENTE): cuando exista el envío de correos (RF-04.2), avisar aquí que se envió el comprobante */}
-          Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
+          Te enviamos la confirmación a tu correo. Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
         </p>
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>

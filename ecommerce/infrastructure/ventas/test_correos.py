@@ -7,10 +7,11 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
+from ecommerce.application.test_ventas import InventarioFalso
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, OrdenCompra
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
 from .tests import usar_catalogo_falso
 
 CORREO = 'ecommerce.infrastructure.ventas.adapters.correo'
@@ -91,3 +92,63 @@ class CorreoPedidoRecibidoTests(APITestCase):
         self.assertTrue(OrdenCompra.objects.filter(id=response.data['orden_id']).exists())
         # El log no incluye el correo del comprador
         self.assertNotIn('invitado@example.test', '\n'.join(logs.output))
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+class CorreosDelPagoTests(APITestCase):
+    """RF-04.2: el retorno de Transbank avisa el resultado del pago (una vez por orden)."""
+
+    def setUp(self):
+        ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA')
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK', direccion_envio_snapshot={},
+            subtotal=20000, costo_envio=0, total_final=20000, proveedor_logistico='RETIRO_LOCAL',
+        )
+        DetalleOrden.objects.create(
+            orden=self.orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=2,
+        )
+        self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 3})
+        inventario = patch('ecommerce.infrastructure.ventas.views.inventario_variantes',
+                           return_value=self.inventario)
+        inventario.start()
+        self.addCleanup(inventario.stop)
+        transbank = patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion')
+        self.transbank = transbank.start()
+        self.addCleanup(transbank.stop)
+        self.transbank.return_value = {'exito': True, 'aprobado': True,
+                                       'data_completa': {'buy_order': f'ORD-{self.orden.id}'}}
+
+    def retorno(self, **parametros):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.get(reverse('transbank_retorno'), parametros or {'token_ws': 'token-tbk'})
+
+    def test_pago_aprobado_envia_un_solo_correo_aunque_transbank_repita(self):
+        self.retorno()
+        self.retorno()
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'Pago confirmado: pedido #{self.orden.id} | Tienda QA')
+        self.assertIn('Total: $20.000', correo.body)
+
+    def test_pago_en_revision_no_revela_el_motivo_interno(self):
+        self.inventario.stock[('camisa', 'CAMISA-S')] = 1
+        with self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR'):
+            self.retorno()
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'Recibimos el pago de tu pedido #{self.orden.id} | Tienda QA')
+        self.assertIn('necesita revisarlo', correo.body)
+        for interno in ('stock', 'CAMISA-S para', 'revisión del admin'):
+            self.assertNotIn(interno, correo.body + correo.alternatives[0][0])
+
+    def test_pago_rechazado(self):
+        self.transbank.return_value = {**self.transbank.return_value, 'aprobado': False}
+        self.retorno()
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'No se pudo completar el pago del pedido #{self.orden.id} | Tienda QA')
+        self.assertIn('no se\nrealizó ningún cobro', correo.body)
+
+    def test_anulacion_del_comprador_avisa_cancelacion(self):
+        self.retorno(TBK_TOKEN='token-anulado', TBK_ORDEN_COMPRA=f'ORD-{self.orden.id}')
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'Tu pedido #{self.orden.id} fue cancelado | Tienda QA')
+        self.assertIn('Anulaste el pago', correo.body)

@@ -232,13 +232,20 @@ class ConfirmarPago:
     - Postgres (estado) y Mongo (stock) no comparten transacción: la orden pasa a PAGADO ya marcada
       para revisión y la marca se quita al terminar. Si el proceso cae a mitad, el admin la ve.
     - Solo una orden recién pagada con stock genera la orden de transporte (RF-02.3).
+    - RF-04.2: avisa al comprador solo quien cambió la orden; una confirmación repetida no reenvía correos.
     """
 
     def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
-                 orden_transporte: GenerarOrdenTransporte | None = None):
+                 orden_transporte: GenerarOrdenTransporte | None = None,
+                 notificador: NotificadorPedidos | None = None):
         self.ordenes = ordenes
         self.inventario = inventario
         self.orden_transporte = orden_transporte
+        self.notificador = notificador
+
+    def _notificar(self, orden_id, evento: EventoPedido):
+        if self.notificador:
+            self.notificador.notificar(orden_id, evento)
 
     def aprobar(self, orden_id) -> ResultadoPago:
         orden = self.ordenes.obtener(orden_id)
@@ -252,6 +259,7 @@ class ConfirmarPago:
                 return ResultadoPago.REPETIDO
             self.ordenes.marcar_revision(
                 orden.id, MOTIVO_ORDEN_NO_PENDIENTE.format(estado=estado.etiqueta))
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 
         descontados, faltante = [], None
@@ -264,23 +272,31 @@ class ConfirmarPago:
         except Exception:
             reponer_stock(self.inventario, descontados)
             self.ordenes.marcar_revision(orden.id, MOTIVO_ERROR_INVENTARIO)
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             raise
 
         if faltante is not None:
             reponer_stock(self.inventario, descontados)
             self.ordenes.marcar_revision(orden.id, MOTIVO_SIN_STOCK.format(sku=faltante.sku))
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 
         self.ordenes.completar_pago(orden.id)
         if self.orden_transporte:
             self.orden_transporte.ejecutar(orden.id)
+        self._notificar(orden.id, EventoPedido.PAGO_APROBADO)
         return ResultadoPago.PAGADO
 
     def rechazar(self, orden_id, motivo: str) -> bool:
         """Pago rechazado o anulado: la orden pendiente se cancela con su motivo."""
         orden = self.ordenes.obtener(orden_id)
-        return orden is not None and self.ordenes.cambiar_estado(
-            orden.id, EstadoPedido.PENDIENTE, EstadoPedido.CANCELADO, motivo)
+        if orden is None or not self.ordenes.cambiar_estado(
+                orden.id, EstadoPedido.PENDIENTE, EstadoPedido.CANCELADO, motivo):
+            return False
+        # Si el comprador anuló el pago, el aviso es de cancelación, no de un rechazo del banco
+        self._notificar(orden.id, EventoPedido.CANCELADO if motivo == MOTIVO_PAGO_ANULADO
+                        else EventoPedido.PAGO_RECHAZADO)
+        return True
 
 
 def reponer_stock(inventario: InventarioVariantes, items):

@@ -263,6 +263,8 @@ export default function Checkout() {
                 calle: `Agencia Chilexpress: ${sucursalSeleccionada.nombre}`,
                 numero: 'S/N',
                 dpto_casa: `Código Oficial: ${sucursalSeleccionada.codigo}`,
+                // La orden de transporte se entrega en esta oficina de Chilexpress
+                codigo_sucursal: sucursalSeleccionada.codigo,
                 comuna: comunaSucursal,
                 ciudad: comunaSucursal,
                 region: ''

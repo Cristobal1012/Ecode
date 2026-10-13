@@ -19,8 +19,9 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
-    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago, OrdenNoEncontrada,
-    PedidoModificado, ResolverRevision, ResultadoPago, SinRevisionPendiente,
+    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
+    GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
+    SinRevisionPendiente,
 )
 from ecommerce.domain.ventas import TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
@@ -42,6 +43,7 @@ from .serializers import (
     PaginaLegalAdminSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
+from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
@@ -50,12 +52,16 @@ def inventario_variantes():
     return MongoInventarioVariantes()
 
 
+def generar_orden_transporte():
+    return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte())
+
+
 def confirmar_pago():
-    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes())
+    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte())
 
 
 def cambiar_estado_pedido():
-    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes())
+    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte())
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
@@ -223,56 +229,14 @@ class TransbankRetornoView(APIView):
             logger.error(f"La orden {orden.id} requiere revisión del admin: {orden.motivo_revision}")
         elif resultado == ResultadoPago.REPETIDO:
             logger.info(f"Confirmación repetida de la orden {orden.id}; se omite.")
-        elif resultado == ResultadoPago.PAGADO:
-            self._generar_orden_transporte(orden)
+        elif resultado == ResultadoPago.PAGADO and orden.error_orden_transporte:
+            # El pago queda firme; el error queda guardado en la orden
+            logger.error(f"No se generó la OT de la orden {orden.id}: {orden.error_orden_transporte}")
 
         # El comprador sabe que su pago llegó, pero no se le promete un pedido que el admin debe revisar
         revision = '&revision=1' if orden.requiere_revision else ''
         return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
 
-    def _generar_orden_transporte(self, orden):
-        """Genera la OT y etiqueta en Chilexpress para una orden recién pagada."""
-        if orden.proveedor_logistico != 'CHILEXPRESS':
-            return
-        try:
-            config = ConfiguracionGlobal.objects.first()
-            catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
-            
-            comuna_origen_nombre = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
-            codigo_origen = catalogo.get(comuna_origen_nombre.upper(), "PUDA")
-            
-            comuna_destino_nombre = orden.direccion_envio_snapshot.get('comuna', '')
-            codigo_destino = catalogo.get(comuna_destino_nombre.upper(), "PROV")
-
-            datos_envio = {
-                "origen_codigo": codigo_origen,
-                "destino_codigo": codigo_destino,
-                "calle": orden.direccion_envio_snapshot.get('calle', 'SIN CALLE'),
-                "numero": orden.direccion_envio_snapshot.get('numero', '0'),
-                "supplement": orden.direccion_envio_snapshot.get('dpto_casa', ''),
-                "nombre_destinatario": getattr(orden.usuario, 'get_full_name', lambda: 'Cliente E-commerce')() if orden.usuario else 'Cliente Invitado',
-                "telefono": "999999999", 
-                "email": orden.email_invitado or (orden.usuario.email if orden.usuario else 'cliente@correo.cl'),
-                "peso": "1", 
-                "alto": "10",
-                "ancho": "10",
-                "largo": "10",
-                "referencia": f"ORD-{orden.id}",
-                "valor_declarado": int(orden.total_final)
-            }
-
-            respuesta_chx = ProveedorLogisticoAdapter.generar_orden_transporte(datos_envio)
-            
-            if respuesta_chx.get('exito'):
-                orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
-                # El portal de seguimiento (RF-02.4) consulta a Chilexpress con este código
-                orden.numero_seguimiento_tracking = respuesta_chx.get('numero_ot')
-                orden.save(update_fields=['id_transaccion_pasarela', 'numero_seguimiento_tracking'])
-                logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
-            else:
-                logger.error(f"Fallo al generar OT en Chilexpress para orden {orden.id}: {respuesta_chx.get('error')}")
-        except Exception as e:
-            logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
 
 class CotizacionEnvioView(APIView):
     """

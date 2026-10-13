@@ -4,12 +4,16 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+import logging
 
+from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
     PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea, revisar_linea,
     validar_transicion,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CatalogoVariantes(ABC):
@@ -119,6 +123,54 @@ class RepositorioOrdenes(ABC):
         """Quita la marca de revisión y conserva el motivo; False si no estaba marcada."""
         raise NotImplementedError
 
+    @abstractmethod
+    def obtener_envio(self, orden_id) -> EnvioSolicitado | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def registrar_orden_transporte(self, orden_id, numero_ot: str = '', error: str = '') -> None:
+        """Guarda la OT generada, o el error del transportista para reintentarlo."""
+        raise NotImplementedError
+
+
+class TransportistaOrdenes(ABC):
+    """Puerto de salida: genera la orden de transporte (OT) con el transportista."""
+
+    @abstractmethod
+    def generar_orden_transporte(self, envio: EnvioSolicitado) -> str:
+        """Devuelve el número de OT; lanza ErrorOrdenTransporte si el transportista falla."""
+        raise NotImplementedError
+
+
+class GenerarOrdenTransporte:
+    """RF-02.3: al confirmarse el pago se genera la OT con el transportista elegido.
+
+    - Solo para transportistas con OT (no retiro en local) y una sola vez por orden.
+    - Un fallo del transportista no deshace el pago: el error queda en la orden para reintentarlo.
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes, transportista: TransportistaOrdenes):
+        self.ordenes = ordenes
+        self.transportista = transportista
+
+    def ejecutar(self, orden_id) -> str | None:
+        envio = self.ordenes.obtener_envio(orden_id)
+        if envio is None or not envio.requiere_orden_transporte:
+            return None
+        if envio.numero_ot:
+            return envio.numero_ot
+        try:
+            numero_ot = self.transportista.generar_orden_transporte(envio)
+        except ErrorOrdenTransporte as error:
+            self.ordenes.registrar_orden_transporte(orden_id, error=str(error))
+            return None
+        except Exception:
+            logger.exception('Error inesperado al generar la OT de la orden %s', orden_id)
+            self.ordenes.registrar_orden_transporte(orden_id, error=MOTIVO_ERROR_OT_INESPERADO)
+            return None
+        self.ordenes.registrar_orden_transporte(orden_id, numero_ot)
+        return numero_ot
+
 
 class ResultadoPago(StrEnum):
     PAGADO = 'PAGADO'
@@ -135,6 +187,7 @@ MOTIVO_CANCELACION_ADMIN = 'Cancelado por el administrador'
 MOTIVO_SIN_STOCK = 'Pago confirmado sin stock para {sku}'
 MOTIVO_ORDEN_NO_PENDIENTE = 'Pago aprobado sobre una orden en estado {estado}'
 MOTIVO_ERROR_INVENTARIO = 'No se pudo descontar el stock'
+MOTIVO_ERROR_OT_INESPERADO = 'Error inesperado al generar la orden de transporte'
 # Marca provisional mientras se descuenta el stock; solo queda a la vista si el proceso se interrumpe
 MOTIVO_CONFIRMACION_INTERRUMPIDA = (
     'El pago se aprobó, pero la confirmación del stock no terminó. Verifica el stock de la orden.')
@@ -149,11 +202,14 @@ class ConfirmarPago:
     - Un pago aprobado sobre una orden no pendiente ni pagada (ej. cancelada) también va a revisión.
     - Postgres (estado) y Mongo (stock) no comparten transacción: la orden pasa a PAGADO ya marcada
       para revisión y la marca se quita al terminar. Si el proceso cae a mitad, el admin la ve.
+    - Solo una orden recién pagada con stock genera la orden de transporte (RF-02.3).
     """
 
-    def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes):
+    def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
+                 orden_transporte: GenerarOrdenTransporte | None = None):
         self.ordenes = ordenes
         self.inventario = inventario
+        self.orden_transporte = orden_transporte
 
     def aprobar(self, orden_id) -> ResultadoPago:
         orden = self.ordenes.obtener(orden_id)
@@ -187,6 +243,8 @@ class ConfirmarPago:
             return ResultadoPago.EN_REVISION
 
         self.ordenes.completar_pago(orden.id)
+        if self.orden_transporte:
+            self.orden_transporte.ejecutar(orden.id)
         return ResultadoPago.PAGADO
 
     def rechazar(self, orden_id, motivo: str) -> bool:
@@ -217,13 +275,16 @@ class CambiarEstadoPedido:
 
     - Solo se permiten las transiciones de §9 (TransicionNoPermitida).
     - PENDIENTE → PAGADO (ej. transferencia validada, RF-02.2) aplica las mismas reglas que un
-      pago en línea: descuenta stock todo o nada y, si falta, la orden queda en revisión.
+      pago en línea: descuenta stock todo o nada, si falta la orden queda en revisión, y si no
+      se genera la orden de transporte.
     - Al cancelar se repone el stock solo si la orden lo había descontado.
     """
 
-    def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes):
+    def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
+                 orden_transporte: GenerarOrdenTransporte | None = None):
         self.ordenes = ordenes
         self.inventario = inventario
+        self.orden_transporte = orden_transporte
 
     def ejecutar(self, orden_id, nuevo_estado) -> EstadoPedido:
         orden = self.ordenes.obtener(orden_id)
@@ -232,7 +293,8 @@ class CambiarEstadoPedido:
         nuevo = validar_transicion(orden.estado, nuevo_estado)
 
         if nuevo == EstadoPedido.PAGADO:
-            if ConfirmarPago(self.ordenes, self.inventario).aprobar(orden.id) == ResultadoPago.REPETIDO:
+            pago = ConfirmarPago(self.ordenes, self.inventario, self.orden_transporte)
+            if pago.aprobar(orden.id) == ResultadoPago.REPETIDO:
                 raise PedidoModificado()
             return nuevo
 

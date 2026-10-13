@@ -284,6 +284,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # El total siempre lo calcula el servidor: subtotal validado contra el catálogo + envío cotizado
         validated_data['costo_envio'] = costo_envio
         validated_data['total_final'] = float(validated_data['subtotal']) + costo_envio
+        # La orden de transporte se genera con el mismo paquete que se cotizó
+        validated_data['paquete'] = (
+            {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
         
         # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:

@@ -4,9 +4,10 @@ from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
-    PedidoModificado, PrepararPedido, RepositorioOrdenes, ResolverRevision, ResultadoPago,
-    RevisarCarrito, SinRevisionPendiente,
+    GenerarOrdenTransporte, PedidoModificado, PrepararPedido, RepositorioOrdenes, ResolverRevision,
+    ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
 )
+from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, ItemSolicitado, OrdenRegistrada, PedidoVacio, ProblemaLinea,
     StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
@@ -138,13 +139,26 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         # Simula que otro proceso cambia la orden entre la lectura y la escritura
         self.cambio_concurrente = None
 
-    def agregar(self, orden_id, estado, items, stock_descontado=False):
+    def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL'):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
-            'requiere_revision': False,
+            'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
         }
         return self.ordenes[orden_id]
+
+    def obtener_envio(self, orden_id):
+        datos = self.ordenes.get(orden_id)
+        return datos and EnvioSolicitado(
+            orden_id=orden_id, proveedor=datos['proveedor'], comuna='Santiago', calle='Uno', numero='1',
+            complemento='', destinatario='Cliente', email='c@example.test', valor_declarado=1000,
+            numero_ot=datos['numero_ot'])
+
+    def registrar_orden_transporte(self, orden_id, numero_ot='', error=''):
+        if numero_ot:
+            self.ordenes[orden_id].update(numero_ot=numero_ot, error_ot='')
+        else:
+            self.ordenes[orden_id]['error_ot'] = error
 
     def obtener(self, orden_id):
         datos = self.ordenes.get(orden_id)
@@ -180,6 +194,58 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         return True
 
 
+class TransportistaFalso(TransportistaOrdenes):
+    def __init__(self):
+        self.envios = []
+        self.error = None
+
+    def generar_orden_transporte(self, envio):
+        if self.error:
+            raise self.error
+        self.envios.append(envio)
+        return f'OT-{len(self.envios)}'
+
+
+class GenerarOrdenTransporteTests(SimpleTestCase):
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.transportista = TransportistaFalso()
+        self.caso = GenerarOrdenTransporte(self.ordenes, self.transportista)
+        self.orden = self.ordenes.agregar(1, 'PAGADO', [], proveedor='CHILEXPRESS')
+
+    def test_genera_y_guarda_la_ot(self):
+        self.assertEqual(self.caso.ejecutar(1), 'OT-1')
+        self.assertEqual(self.orden['numero_ot'], 'OT-1')
+
+    def test_no_genera_otra_si_la_orden_ya_tiene_ot(self):
+        self.caso.ejecutar(1)
+        self.assertEqual(self.caso.ejecutar(1), 'OT-1')
+        self.assertEqual(len(self.transportista.envios), 1)
+
+    def test_retiro_en_local_no_genera_ot(self):
+        self.ordenes.agregar(2, 'PAGADO', [], proveedor='RETIRO_LOCAL')
+        self.assertIsNone(self.caso.ejecutar(2))
+        self.assertEqual(self.transportista.envios, [])
+
+    def test_fallo_del_transportista_queda_registrado_sin_lanzar(self):
+        self.transportista.error = ErrorOrdenTransporte('Sin cobertura')
+        self.assertIsNone(self.caso.ejecutar(1))
+        self.assertEqual((self.orden['numero_ot'], self.orden['error_ot']), ('', 'Sin cobertura'))
+
+    def test_error_inesperado_tambien_queda_registrado(self):
+        self.transportista.error = ValueError('respuesta inesperada')
+        with self.assertLogs('ecommerce.application.ventas', level='ERROR'):
+            self.assertIsNone(self.caso.ejecutar(1))
+        self.assertEqual(self.orden['error_ot'], 'Error inesperado al generar la orden de transporte')
+
+    def test_reintento_exitoso_limpia_el_error(self):
+        self.transportista.error = ErrorOrdenTransporte('Sin cobertura')
+        self.caso.ejecutar(1)
+        self.transportista.error = None
+        self.assertEqual(self.caso.ejecutar(1), 'OT-1')
+        self.assertEqual(self.orden['error_ot'], '')
+
+
 class ConfirmarPagoTests(SimpleTestCase):
     def setUp(self):
         self.ordenes = RepositorioOrdenesFalso()
@@ -196,6 +262,19 @@ class ConfirmarPagoTests(SimpleTestCase):
         self.assertFalse(self.orden['requiere_revision'])
         self.assertEqual(self.orden['motivo_revision'], '')
         self.assertEqual(self.inventario.stock, {('camisa', 'CAMISA-S'): 0, ('gorro', 'GORRO-U'): 0})
+
+    def test_solo_el_primer_pago_con_stock_genera_la_ot(self):
+        transportista = TransportistaFalso()
+        caso = ConfirmarPago(self.ordenes, self.inventario,
+                             GenerarOrdenTransporte(self.ordenes, transportista))
+        self.orden['proveedor'] = 'CHILEXPRESS'
+        sin_stock = self.ordenes.agregar(2, 'PENDIENTE', [('gorro', 'GORRO-U', 5)], proveedor='CHILEXPRESS')
+
+        self.assertEqual(caso.aprobar(1), ResultadoPago.PAGADO)
+        self.assertEqual(caso.aprobar(1), ResultadoPago.REPETIDO)
+        self.assertEqual(caso.aprobar(2), ResultadoPago.EN_REVISION)
+        self.assertEqual([envio.orden_id for envio in transportista.envios], [1])
+        self.assertEqual((self.orden['numero_ot'], sin_stock['numero_ot']), ('OT-1', ''))
 
     def test_si_el_proceso_cae_al_descontar_la_orden_queda_pagada_y_en_revision(self):
         # Una caída del proceso no pasa por los except: solo queda lo que ya se escribió
@@ -288,6 +367,15 @@ class CambiarEstadoPedidoTests(SimpleTestCase):
         self.assertEqual(orden['estado'], EstadoPedido.PAGADO)
         self.assertTrue(orden['stock_descontado'])
         self.assertEqual(self.stock(), 3)
+
+    def test_transferencia_validada_genera_la_ot_como_un_pago_en_linea(self):
+        transportista = TransportistaFalso()
+        caso = CambiarEstadoPedido(self.ordenes, self.inventario,
+                                   GenerarOrdenTransporte(self.ordenes, transportista))
+        orden = self.orden('PENDIENTE')
+        orden['proveedor'] = 'CHILEXPRESS'
+        caso.ejecutar(1, 'PAGADO')
+        self.assertEqual(orden['numero_ot'], 'OT-1')
 
     def test_pagar_a_mano_sin_stock_deja_la_orden_en_revision(self):
         self.inventario.stock[('camisa', 'CAMISA-S')] = 1

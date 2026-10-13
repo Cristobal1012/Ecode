@@ -14,6 +14,9 @@ from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
 from .serializers import ConfiguracionGlobalSerializer
 
 
+ADAPTADOR_ORDEN_TRANSPORTE = 'ecommerce.infrastructure.ventas.adapters.orden_transporte'
+
+
 def usar_catalogo_falso(test, variantes):
     """Reemplaza el catálogo de MongoDB del checkout por uno en memoria."""
     catalogo = patch('ecommerce.infrastructure.ventas.serializers.catalogo_variantes',
@@ -634,9 +637,10 @@ class PagoAprobadoTransbankTests(APITestCase):
 
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
-        OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
-        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica:
-            logistica._obtener_catalogo_dinamico.return_value = {}
+        OrdenCompra.objects.filter(id=self.orden.id).update(
+            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'})
+        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica:
+            logistica._obtener_catalogo_dinamico.return_value = {'SANTIAGO': 'STGO'}
             logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}
             self.confirmar_pago()
             response = self.confirmar_pago()
@@ -652,7 +656,8 @@ class PagoAprobadoTransbankTests(APITestCase):
     def test_pago_confirmado_sin_stock_queda_pagado_y_en_revision_sin_ot(self):
         self.inventario.stock[('camisa', 'CAMISA-S')] = 1
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
-        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica,                 self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
+        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica, \
+                self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
             response = self.confirmar_pago()
 
         # El comprador ve que su pago llegó y que la tienda revisará el pedido

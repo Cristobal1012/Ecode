@@ -1,9 +1,17 @@
 """Adaptador Django (PostgreSQL) del puerto RepositorioOrdenes."""
 
+from decimal import Decimal
+
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Concat
+
 from ecommerce.application.ventas import RepositorioOrdenes
+from ecommerce.domain.logistica import EnvioSolicitado, Paquete
 from ecommerce.domain.ventas import EstadoPedido, ItemSolicitado, OrdenRegistrada
 
 from .models import OrdenCompra
+
+CAMPOS_PAQUETE = ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm')
 
 
 class DjangoRepositorioOrdenes(RepositorioOrdenes):
@@ -41,3 +49,40 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
     def resolver_revision(self, orden_id):
         return OrdenCompra.objects.filter(id=orden_id, requiere_revision=True).update(
             requiere_revision=False) == 1
+
+    def obtener_envio(self, orden_id):
+        try:
+            orden = OrdenCompra.objects.select_related('usuario').get(id=orden_id)
+        except (OrdenCompra.DoesNotExist, ValueError):
+            return None
+        direccion = orden.direccion_envio_snapshot or {}
+        paquete = orden.paquete
+        return EnvioSolicitado(
+            orden_id=orden.id,
+            proveedor=orden.proveedor_logistico or '',
+            comuna=direccion.get('comuna', ''),
+            calle=direccion.get('calle', ''),
+            numero=str(direccion.get('numero', '')),
+            complemento=direccion.get('dpto_casa', ''),
+            # TODO(PENDIENTE): el checkout no pide nombre ni teléfono del destinatario
+            destinatario=(orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
+            email=orden.email_invitado or (orden.usuario.email if orden.usuario else ''),
+            # Se declara el valor de los productos, no el del envío
+            valor_declarado=int(orden.subtotal),
+            paquete=Paquete(**{campo: Decimal(str(paquete[campo])) for campo in CAMPOS_PAQUETE})
+            if paquete else None,
+            codigo_sucursal=str(direccion.get('codigo_sucursal', '')),
+            numero_ot=orden.numero_seguimiento_tracking or '',
+        )
+
+    def registrar_orden_transporte(self, orden_id, numero_ot='', error=''):
+        if not numero_ot:
+            OrdenCompra.objects.filter(id=orden_id).update(error_orden_transporte=error[:255])
+            return
+        # La descarga de etiquetas y el historial del comprador leen la OT desde este campo
+        OrdenCompra.objects.filter(id=orden_id).update(
+            numero_seguimiento_tracking=numero_ot,
+            error_orden_transporte='',
+            id_transaccion_pasarela=Concat(
+                Coalesce('id_transaccion_pasarela', Value('')), Value(f' | OT: {numero_ot}')),
+        )

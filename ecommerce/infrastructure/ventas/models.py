@@ -131,6 +131,10 @@ class OrdenCompra(models.Model):
     id_transaccion_pasarela = models.CharField(max_length=255, blank=True, null=True)
     proveedor_logistico = models.CharField(max_length=100, blank=True, null=True)
     numero_seguimiento_tracking = models.CharField(max_length=100, blank=True, null=True)
+    # Peso y medidas cotizados en el checkout; la orden de transporte usa los mismos
+    paquete = models.JSONField(null=True, blank=True)
+    # Último error del transportista al generar la OT (vacío si se generó o no aplica)
+    error_orden_transporte = models.CharField(max_length=255, blank=True, default='')
 
     subtotal = models.FloatField()
     costo_envio = models.FloatField()

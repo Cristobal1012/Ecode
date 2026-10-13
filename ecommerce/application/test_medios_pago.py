@@ -83,6 +83,21 @@ class MediosPagoDisponiblesTests(SimpleTestCase):
         self.guardar('TRANSBANK', True, {'ambiente': 'INTEGRACION'})
         self.assertEqual(self.casos.disponibles(), [C.TRANSBANK])
 
+    def test_mercado_pago_completo_no_se_ofrece_mientras_su_integracion_no_este_lista(self):
+        self.guardar('MERCADO_PAGO', True, {'access_token': 'APP_USR-123456789-abcd',
+                                            'webhook_secret': 'secreto-largo-9876'})
+        self.assertEqual(self.repo.obtener('MERCADO_PAGO').faltantes, [])
+        self.assertEqual(self.casos.disponibles(), [])
+        with self.assertRaises(MedioPagoNoDisponible):
+            self.casos.exigir('MERCADO_PAGO')
+
+    def test_el_comprador_solo_recibe_los_datos_que_no_son_secretos(self):
+        self.guardar('TRANSFERENCIA', True, DATOS_BANCO)
+        self.assertEqual(self.repo.obtener('TRANSFERENCIA').datos_para_comprador(), DATOS_BANCO)
+        self.guardar('TRANSBANK', True, {'ambiente': 'PRODUCCION', 'commerce_code': '5970', 'api_key': 'llave'})
+        self.assertEqual(self.repo.obtener('TRANSBANK').datos_para_comprador(),
+                         {'ambiente': 'PRODUCCION', 'commerce_code': '5970'})
+
     def test_medio_inexistente_no_esta_disponible(self):
         for codigo in ('PAYPAL', '', 'transbank'):
             with self.subTest(codigo=codigo), self.assertRaises(MedioPagoNoDisponible):

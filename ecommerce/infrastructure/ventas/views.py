@@ -51,6 +51,7 @@ from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
@@ -190,7 +191,12 @@ class CheckoutAPIView(generics.CreateAPIView):
             if hasattr(orden, 'url_pago') and orden.url_pago:
                 respuesta_data['url_pago'] = orden.url_pago
                 respuesta_data['mensaje'] = "Orden creada. Redirigiendo al pago..."
-            
+
+            # Transferencia: el comprador ve a qué cuenta transferir en /pedido-recibido
+            instrucciones = instrucciones_transferencia(orden)
+            if instrucciones:
+                respuesta_data['instrucciones_pago'] = instrucciones
+
             headers = self.get_success_headers(serializer.data)
             return Response(respuesta_data, status=status.HTTP_201_CREATED, headers=headers)
             

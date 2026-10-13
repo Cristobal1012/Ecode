@@ -1,6 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core import mail
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -53,16 +54,16 @@ class RepositorioMediosPagoTests(TestCase):
         self.assertEqual(self.repo.obtener('TRANSBANK').datos['api_key'], TOKEN_MP)
 
     def test_si_cambia_la_clave_el_medio_queda_incompleto_y_no_se_ofrece(self):
-        self.repo.guardar(MedioPagoConfigurado(CodigoMedioPago.MERCADO_PAGO, True, {
-            'access_token': TOKEN_MP, 'webhook_secret': 'secreto-de-webhook-1234'}))
-        self.assertTrue(self.repo.obtener('MERCADO_PAGO').disponible)
+        self.repo.guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {
+            'ambiente': 'PRODUCCION', 'commerce_code': '597012345678', 'api_key': TOKEN_MP}))
+        self.assertTrue(self.repo.obtener('TRANSBANK').disponible)
 
         with override_settings(CLAVE_CIFRADO_CREDENCIALES='otra-clave'), \
                 self.assertLogs('ecommerce.infrastructure.ventas.repositorio_medios_pago', level='ERROR') as logs:
-            medio = self.repo.obtener('MERCADO_PAGO')
+            medio = self.repo.obtener('TRANSBANK')
 
         self.assertFalse(medio.disponible)
-        self.assertEqual(medio.faltantes, ['access_token', 'webhook_secret'])
+        self.assertEqual(medio.faltantes, ['api_key'])
         # El log no revela credenciales
         self.assertNotIn(TOKEN_MP, '\n'.join(logs.output))
 
@@ -156,6 +157,34 @@ class CheckoutRN02Tests(APITestCase):
             with self.subTest(metodo=metodo):
                 self.assertEqual(self.checkout(metodo).status_code, 400)
 
+    def test_mercado_pago_configurado_no_se_acepta_mientras_su_integracion_no_este_lista(self):
+        habilitar_medios_pago('MERCADO_PAGO')
+        self.assertNotIn('MERCADO_PAGO', self.client.get(reverse('configuracion-global')).data['pasarelas_activas'])
+        self.assertEqual(self.checkout('MERCADO_PAGO').status_code, 400)
+
+    def test_transferencia_entrega_datos_bancarios_monto_y_referencia_en_la_respuesta_y_el_correo(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.checkout('TRANSFERENCIA')
+
+        orden_id = response.data['orden_id']
+        instrucciones = response.data['instrucciones_pago']
+        self.assertEqual((instrucciones['monto'], instrucciones['referencia']), (10000, f'Pedido #{orden_id}'))
+        self.assertIn({'etiqueta': 'Número de cuenta', 'valor': DATOS_MEDIOS_PAGO['TRANSFERENCIA']['numero_cuenta']},
+                      instrucciones['datos'])
+        correo, = mail.outbox
+        self.assertIn('DATOS PARA TRANSFERIR', correo.body)
+        self.assertIn('Transfiere $10.000', correo.body)
+        self.assertIn(f'Número de cuenta: {DATOS_MEDIOS_PAGO["TRANSFERENCIA"]["numero_cuenta"]}', correo.body)
+        self.assertIn('Datos para transferir', correo.alternatives[0][0])
+
+    @patch('ecommerce.infrastructure.ventas.serializers.TransbankWebpayAdapter.iniciar_transaccion',
+           return_value={'exito': True, 'url_pago': 'https://webpay.test/pago', 'token': 'tbk-token'})
+    def test_otros_medios_no_reciben_datos_bancarios(self, _iniciar):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.checkout('TRANSBANK')
+        self.assertNotIn('instrucciones_pago', response.data)
+        self.assertNotIn('DATOS PARA TRANSFERIR', mail.outbox[0].body)
+
     def test_la_configuracion_publica_no_expone_credenciales(self):
         habilitar_medios_pago('MERCADO_PAGO')
         cuerpo = self.client.get(reverse('configuracion-global')).content.decode()
@@ -190,7 +219,9 @@ class AdminMediosPagoAPITests(APITestCase):
         response = self.guardar('mercado_pago', {'habilitado': True, 'datos': {
             'access_token': TOKEN_MP, 'webhook_secret': 'secreto-de-webhook-5678'}})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['disponible'])
+        # Completo y habilitado, pero el checkout aún no cobra con Mercado Pago: no se ofrece
+        self.assertEqual(response.data['faltantes'], [])
+        self.assertEqual((response.data['integracion_lista'], response.data['disponible']), (False, False))
         self.assertEqual(response.data['datos'], {'access_token': '••••abcd', 'webhook_secret': '••••5678'})
         self.assertNotIn(TOKEN_MP, response.content.decode())
 

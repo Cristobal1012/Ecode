@@ -503,7 +503,9 @@ def medio_pago_para_panel(medio):
         'codigo': medio.codigo.value,
         'nombre': medio.definicion.nombre,
         'habilitado': medio.habilitado,
-        # Habilitado y con sus datos completos: se ofrece al comprador
+        # False: el checkout aún no sabe cobrar con este medio (se pueden cargar sus datos, no se ofrece)
+        'integracion_lista': medio.definicion.integracion_lista,
+        # Habilitado, con sus datos completos y con la integración lista: se ofrece al comprador
         'disponible': medio.disponible,
         'faltantes': medio.faltantes,
         'campos': [{

@@ -29,6 +29,13 @@ const esObligatorio = (campo, datos) => campo.obligatorio
 
 function EstadoMedio({ medio }) {
   const etiquetas = Object.fromEntries(medio.campos.map(c => [c.nombre, c.etiqueta]));
+  if (!medio.integracion_lista) {
+    return (
+      <p id={`estado-${medio.codigo}`} style={{ ...ESTILOS_ESTADO.deshabilitado, padding: '8px 12px', borderRadius: '6px', margin: '0 0 15px 0' }}>
+        Integración en desarrollo: todavía no se puede ofrecer a los compradores. Puedes dejar cargadas sus credenciales.
+      </p>
+    );
+  }
   if (medio.disponible) {
     return <p style={{ ...ESTILOS_ESTADO.disponible, padding: '8px 12px', borderRadius: '6px', margin: '0 0 15px 0' }}>Disponible: los compradores lo ven en el checkout.</p>;
   }
@@ -119,10 +126,12 @@ export default function GestorMediosPago() {
 
             <EstadoMedio medio={medio} />
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: 'pointer', color: '#374151' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: medio.integracion_lista ? 'pointer' : 'not-allowed', color: medio.integracion_lista ? '#374151' : '#6b7280' }}>
               <input
                 type="checkbox"
-                checked={formulario.habilitado}
+                checked={formulario.habilitado && medio.integracion_lista}
+                disabled={!medio.integracion_lista}
+                aria-describedby={medio.integracion_lista ? undefined : `estado-${medio.codigo}`}
                 onChange={(e) => editar(medio.codigo, { habilitado: e.target.checked })}
                 style={{ width: '18px', height: '18px' }}
               />

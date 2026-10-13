@@ -50,6 +50,8 @@ class DefinicionMedioPago:
     codigo: CodigoMedioPago
     nombre: str
     campos: tuple[CampoMedioPago, ...]
+    # False mientras el checkout no sepa cobrar con este medio: se pueden cargar sus datos, pero no se ofrece
+    integracion_lista: bool = True
 
     def campo(self, nombre) -> CampoMedioPago | None:
         return next((c for c in self.campos if c.nombre == nombre), None)
@@ -72,7 +74,8 @@ MEDIOS_PAGO = (
         CampoMedioPago('access_token', 'Access token', secreto=True),
         # Valida la firma x-signature de las notificaciones (webhooks)
         CampoMedioPago('webhook_secret', 'Clave secreta de notificaciones', secreto=True),
-    )),
+    # TODO(PENDIENTE): pasar a True al terminar la integración con Mercado Pago (tarea de Checkout Pro)
+    ), integracion_lista=False),
     DefinicionMedioPago(CodigoMedioPago.TRANSFERENCIA, 'Transferencia bancaria', (
         # Datos que ve el comprador para transferir: no son secretos
         CampoMedioPago('banco', 'Banco'),
@@ -120,8 +123,14 @@ class MedioPagoConfigurado:
 
     @property
     def disponible(self) -> bool:
-        """RN-02: se ofrece al comprador solo si está habilitado y tiene todos sus datos obligatorios."""
-        return self.habilitado and not self.faltantes
+        """RN-02: se ofrece al comprador solo si está habilitado, tiene todos sus datos obligatorios y el
+        checkout ya sabe cobrar con él."""
+        return self.definicion.integracion_lista and self.habilitado and not self.faltantes
+
+    def datos_para_comprador(self) -> dict[str, str]:
+        """Lo que el comprador necesita para pagar (ej. los datos bancarios): nunca las credenciales."""
+        return {c.nombre: self.datos[c.nombre] for c in self.definicion.campos
+                if not c.secreto and self.datos.get(c.nombre)}
 
     def datos_visibles(self) -> dict[str, str]:
         """Para el panel del admin: las credenciales van enmascaradas."""

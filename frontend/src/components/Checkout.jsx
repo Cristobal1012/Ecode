@@ -5,6 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
 import './Checkout.css';
 
+// Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
+const NOMBRES_MEDIO_PAGO = {
+    TRANSBANK: 'Webpay (Transbank)',
+    MERCADO_PAGO: 'Mercado Pago',
+    TRANSFERENCIA: 'Transferencia bancaria'
+};
+
 export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
     const [emailInvitado, setEmailInvitado] = useState('');
@@ -315,7 +322,11 @@ export default function Checkout() {
                     try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
                 }
                 // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
-                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, { replace: true });
+                // Con transferencia, el backend envía los datos bancarios para mostrarlos de inmediato
+                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, {
+                    replace: true,
+                    state: { instrucciones: respuesta.data.instrucciones_pago || null }
+                });
             }
         } catch (error) {
             const datos = error.response?.data || {};
@@ -559,7 +570,7 @@ export default function Checkout() {
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}
                                         style={{ width: '100%', padding: '12px', backgroundColor: validadoParaPagar ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: validadoParaPagar ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
                                     >
-                                        Pagar con {pasarela}
+                                        Pagar con {NOMBRES_MEDIO_PAGO[pasarela] || pasarela}
                                     </button>
                                 );
                             })}

@@ -11,6 +11,7 @@ from django.template.loader import render_to_string
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, NotificadorPedidos
 from ecommerce.domain.ventas import EventoPedido
 
+from ..instrucciones_pago import instrucciones_transferencia
 from ..models import ConfiguracionGlobal, OrdenCompra
 
 logger = logging.getLogger(__name__)
@@ -87,10 +88,19 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'transportista': (orden.proveedor_logistico or '').capitalize(),
             # Número de la orden de transporte (RF-02.3), si ya se generó
             'numero_ot': orden.numero_seguimiento_tracking or '',
+            # Datos bancarios, monto y referencia si la orden se paga por transferencia (None si no)
+            'transferencia': CorreoNotificadorPedidos._transferencia(orden),
             'entrega': CorreoNotificadorPedidos._entrega(orden, config),
             # RF-02.4: el invitado consulta con su número de orden y su correo
             'url_seguimiento': f'{frontend_url}/seguimiento?orden={orden.id}',
         }
+
+    @staticmethod
+    def _transferencia(orden):
+        instrucciones = instrucciones_transferencia(orden)
+        if instrucciones:
+            instrucciones['monto'] = pesos(instrucciones['monto'])
+        return instrucciones
 
     @staticmethod
     def _entrega(orden, config):

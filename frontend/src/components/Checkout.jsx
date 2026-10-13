@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
+import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
 
 export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
@@ -46,6 +47,8 @@ export default function Checkout() {
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
     // Tipos de página legal publicados (ej. 'TERMINOS'), para enlazarlos junto al consentimiento
     const [paginasLegales, setPaginasLegales] = useState([]);
+    // Cambios hechos al carrito porque algo se agotó o cambió de precio
+    const [avisosCarrito, setAvisosCarrito] = useState([]);
 
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
     const navigate = useNavigate();
@@ -98,6 +101,22 @@ export default function Checkout() {
         }
     }, [usuarioAutenticado, itemsCarrito.length]);
 
+    // RN-03: ajusta el carrito al stock y precios vigentes y avisa qué cambió.
+    // Si la validación falla, se sigue con el carrito tal cual: el backend revalida al crear la orden.
+    const revisarCarrito = async (items) => {
+        if (items.length === 0) return;
+        try {
+            const ajuste = ajustarCarrito(items, await validarCarrito(items));
+            if (ajuste.avisos.length > 0) {
+                setItemsCarrito(ajuste.items);
+                setAvisosCarrito(ajuste.avisos);
+                await guardarCarrito(ajuste.items);
+            }
+        } catch (error) {
+            console.error('No se pudo validar el carrito:', error);
+        }
+    };
+
     // 3. CARGA DEL CARRITO
     useEffect(() => {
         const carritoGuardado = localStorage.getItem('carrito_local');
@@ -105,6 +124,7 @@ export default function Checkout() {
             try {
                 const carritoParseado = JSON.parse(carritoGuardado);
                 setItemsCarrito(carritoParseado);
+                revisarCarrito(carritoParseado);
             } catch (e) { setItemsCarrito([]); }
         }
     }, []);
@@ -308,6 +328,8 @@ export default function Checkout() {
                     try { await clienteAxios.post('ventas/carrito/', { items: carritoActualizado }); } catch (err) {}
                 }
             }
+            // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
+            if (datos.items) await revisarCarrito(itemsCarrito);
             const detalle = datos.subtotal || datos.items || datos.acepta_terminos;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
@@ -322,6 +344,14 @@ export default function Checkout() {
         <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif' }}>
             <h2>Finalizar Compra</h2>
             {mensaje && <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensaje.includes('Éxito') ? '#d4edda' : '#f8d7da', borderRadius: '4px', color: mensaje.includes('Éxito') ? '#155724' : '#721c24' }}>{mensaje}</div>}
+            {avisosCarrito.length > 0 && (
+                <div role="alert" style={{ padding: '10px 15px', marginBottom: '15px', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '4px', color: '#92400e' }}>
+                    <strong>Actualizamos tu carrito:</strong>
+                    <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                        {avisosCarrito.map(aviso => <li key={aviso}>{aviso}</li>)}
+                    </ul>
+                </div>
+            )}
 
             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>

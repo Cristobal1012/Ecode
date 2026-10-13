@@ -80,7 +80,7 @@ const CarritoCompras = () => {
                     <div style={{ padding: '16px', maxHeight: '300px', overflowY: 'auto' }}>
                         {itemsCarrito.length > 0 ? (
                             itemsCarrito.map((item) => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
+                                <div key={item.sku} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
                                     <div>
                                         <p style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#374151' }}>{item.nombre}</p>
                                         <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>Cant: {item.cantidad}</p>

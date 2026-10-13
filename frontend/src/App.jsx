@@ -18,6 +18,7 @@ import MisDirecciones from './components/MisDirecciones'; // Ajusta la ruta a do
 import PagoExitoso from './components/PagoExitoso';
 import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a donde guardaste el archivo
 import Footer from './components/footer';
+import PaginaLegal from './pages/PaginaLegal';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -115,8 +116,8 @@ function App() {
               {/* Pantalla de login y registro */}
               <Route path="/login" element={<AuthPage />} />
 
-              {/* Vista pública para desplegar páginas legales individuales */}
-              <Route path="/legal/:slug" element={<div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}><h2>Página Legal</h2><p>Contenido legal cargado dinámicamente.</p></div>} />
+              {/* Vista pública para desplegar páginas legales individuales (RF-03.5) */}
+              <Route path="/legal/:tipo" element={<PaginaLegal />} />
 
               {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
               <Route element={<ProtectedRoute />}>

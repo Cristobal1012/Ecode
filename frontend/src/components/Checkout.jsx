@@ -44,6 +44,8 @@ export default function Checkout() {
     const [cotizando, setCotizando] = useState(false);
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
+    // Tipos de página legal publicados (ej. 'TERMINOS'), para enlazarlos junto al consentimiento
+    const [paginasLegales, setPaginasLegales] = useState([]);
 
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
     const navigate = useNavigate();
@@ -64,7 +66,18 @@ export default function Checkout() {
         clienteAxios.get('ventas/checkout/reglas/')
             .then(res => setModoAutenticacion(res.data.modo_autenticacion))
             .catch(() => setMensaje('No se pudieron cargar las opciones de compra.'));
+
+        // Sin enlaces el checkbox sigue funcionando: solo se pierde la opción de leerlas aquí
+        clienteAxios.get('ventas/paginas-legales/')
+            .then(res => setPaginasLegales((res.data || []).map(p => p.tipo_pagina)))
+            .catch(() => setPaginasLegales([]));
     }, []);
+
+    const enlaceLegal = (tipo, texto) => paginasLegales.includes(tipo) ? (
+        <a href={`/legal/${tipo.toLowerCase()}`} target="_blank" rel="noopener noreferrer" aria-label={`${texto} (se abre en otra pestaña)`}>
+            {texto}
+        </a>
+    ) : texto;
 
     // 2. CARGA DE DIRECCIONES GUARDADAS
     useEffect(() => {
@@ -491,7 +504,7 @@ export default function Checkout() {
             
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '20px', fontSize: '0.9rem', cursor: 'pointer' }}>
                     <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required style={{ marginTop: '3px' }} />
-                    <span>Acepto los Términos y Condiciones y la Política de Privacidad.</span>
+                    <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
                 </label>
 
                 <div style={{ marginTop: '20px' }}>

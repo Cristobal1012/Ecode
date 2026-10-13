@@ -1,0 +1,66 @@
+/* Índice lateral de la vista Configuración del panel de administración */
+.config-layout {
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+}
+
+.config-indice {
+  flex: 0 0 220px;
+  position: sticky;
+  top: 20px;
+}
+
+.config-indice ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid #e5e7eb;
+}
+
+.config-indice button {
+  display: block;
+  width: 100%;
+  margin-left: -2px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  text-align: left;
+  font-size: 0.95rem;
+  color: var(--color-text, #374151);
+  cursor: pointer;
+}
+
+.config-indice button:hover,
+.config-indice button:focus-visible {
+  border-left-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+}
+
+.config-secciones {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Deja aire sobre el título al llegar desde el índice; el foco es programático (tabIndex -1) */
+.config-titulo {
+  scroll-margin-top: 20px;
+}
+
+.config-titulo:focus {
+  outline: none;
+}
+
+/* En pantallas angostas el índice va arriba del contenido y deja de ser fijo */
+@media (max-width: 900px) {
+  .config-layout {
+    flex-direction: column;
+  }
+
+  .config-indice {
+    position: static;
+    flex-basis: auto;
+    width: 100%;
+  }
+}

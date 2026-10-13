@@ -22,7 +22,9 @@ export default function FormularioProducto({
     nombre: '',
     descripcion: '',
     categoria: '',
-    publicado: false
+    publicado: false,
+    meta_titulo: '',
+    meta_descripcion: ''
   });
 
   // Imágenes existentes/devueltas por el backend
@@ -60,7 +62,9 @@ export default function FormularioProducto({
         publicado:
           productoAEditar.publicado !== undefined
             ? productoAEditar.publicado
-            : false
+            : false,
+        meta_titulo: productoAEditar.meta_titulo || '',
+        meta_descripcion: productoAEditar.meta_descripcion || ''
       });
 
       // Conservamos las imágenes existentes
@@ -429,6 +433,8 @@ export default function FormularioProducto({
         nombre: producto.nombre.trim(),
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
+        meta_titulo: producto.meta_titulo.trim(),
+        meta_descripcion: producto.meta_descripcion.trim(),
 
         activo: true,
         publicado: producto.publicado,
@@ -830,6 +836,69 @@ export default function FormularioProducto({
               minHeight: '80px'
             }}
           />
+        </div>
+
+        {/* ====================================================
+           METADATOS SEO
+        ===================================================== */}
+
+        <div style={{ gridColumn: '1 / -1' }}>
+          <h4
+            style={{
+              borderBottom: '2px solid var(--color-secondary)',
+              paddingBottom: '5px',
+              color: 'var(--color-text)'
+            }}
+          >
+            Configuración SEO
+          </h4>
+
+          <p style={{ color: '#6b7280', fontSize: '0.9em' }}>
+            Estos datos ayudan a los buscadores a comprender y mostrar
+            tu producto en los resultados de búsqueda.
+          </p>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ fontWeight: 'bold' }}>
+              Título SEO
+            </label>
+
+            <input
+              type="text"
+              name="meta_titulo"
+              value={producto.meta_titulo}
+              onChange={handleChangeProducto}
+              maxLength={60}
+              placeholder="Ej: Zapatillas deportivas para mujer"
+              style={inputStyle}
+            />
+
+            <small style={{ color: '#6b7280' }}>
+              {producto.meta_titulo.length}/60 caracteres
+            </small>
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold' }}>
+              Descripción SEO
+            </label>
+
+            <textarea
+              name="meta_descripcion"
+              value={producto.meta_descripcion}
+              onChange={handleChangeProducto}
+              maxLength={160}
+              placeholder="Describe brevemente el producto para los resultados de búsqueda."
+              style={{
+                ...inputStyle,
+                minHeight: '80px'
+              }}
+            />
+
+            <small style={{ color: '#6b7280' }}>
+              {producto.meta_descripcion.length}/160 caracteres
+            </small>
+          </div>
         </div>
 
         {/* ====================================================

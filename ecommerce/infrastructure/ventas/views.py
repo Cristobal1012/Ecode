@@ -67,7 +67,8 @@ def confirmar_pago():
 
 
 def cambiar_estado_pedido():
-    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte())
+    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
+                               notificador_pedidos())
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):

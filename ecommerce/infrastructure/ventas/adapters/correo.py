@@ -21,6 +21,14 @@ ASUNTOS = {
     EventoPedido.PAGO_EN_REVISION: 'Recibimos el pago de tu pedido #{id}',
     EventoPedido.PAGO_RECHAZADO: 'No se pudo completar el pago del pedido #{id}',
     EventoPedido.CANCELADO: 'Tu pedido #{id} fue cancelado',
+    EventoPedido.EN_PREPARACION: 'Estamos preparando tu pedido #{id}',
+    EventoPedido.DESPACHADO: 'Tu pedido #{id} va en camino',
+    EventoPedido.ENTREGADO: 'Tu pedido #{id} fue entregado',
+}
+# Con retiro en el local "despachado" significa que el pedido ya se puede retirar
+ASUNTOS_RETIRO_LOCAL = {
+    EventoPedido.DESPACHADO: 'Tu pedido #{id} está listo para retirar',
+    EventoPedido.ENTREGADO: 'Retiraste tu pedido #{id}',
 }
 
 
@@ -43,8 +51,10 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
                 return
             contexto = self._contexto(orden)
             plantilla = f'ventas/correos/{evento.value.lower()}'
+            asuntos = ASUNTOS_RETIRO_LOCAL if contexto['es_retiro_local'] else {}
+            asunto = asuntos.get(evento, ASUNTOS[evento]).format(id=orden.id)
             correo = EmailMultiAlternatives(
-                subject=f"{ASUNTOS[evento].format(id=orden.id)} | {contexto['tienda']}",
+                subject=f"{asunto} | {contexto['tienda']}",
                 body=render_to_string(f'{plantilla}.txt', contexto),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[destinatario],
@@ -73,6 +83,10 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'total': pesos(orden.total_final),
             'metodo_pago': orden.get_metodo_pago_display(),
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
+            'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
+            'transportista': (orden.proveedor_logistico or '').capitalize(),
+            # Número de la orden de transporte (RF-02.3), si ya se generó
+            'numero_ot': orden.numero_seguimiento_tracking or '',
             'entrega': CorreoNotificadorPedidos._entrega(orden, config),
             # RF-02.4: el invitado consulta con su número de orden y su correo
             'url_seguimiento': f'{frontend_url}/seguimiento?orden={orden.id}',

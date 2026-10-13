@@ -323,13 +323,16 @@ class CambiarEstadoPedido:
       pago en línea: descuenta stock todo o nada, si falta la orden queda en revisión, y si no
       se genera la orden de transporte.
     - Al cancelar se repone el stock solo si la orden lo había descontado.
+    - RF-04.2: cada cambio aplicado se le avisa al comprador (despacho con enlace de seguimiento).
     """
 
     def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
-                 orden_transporte: GenerarOrdenTransporte | None = None):
+                 orden_transporte: GenerarOrdenTransporte | None = None,
+                 notificador: NotificadorPedidos | None = None):
         self.ordenes = ordenes
         self.inventario = inventario
         self.orden_transporte = orden_transporte
+        self.notificador = notificador
 
     def ejecutar(self, orden_id, nuevo_estado) -> EstadoPedido:
         orden = self.ordenes.obtener(orden_id)
@@ -338,7 +341,7 @@ class CambiarEstadoPedido:
         nuevo = validar_transicion(orden.estado, nuevo_estado)
 
         if nuevo == EstadoPedido.PAGADO:
-            pago = ConfirmarPago(self.ordenes, self.inventario, self.orden_transporte)
+            pago = ConfirmarPago(self.ordenes, self.inventario, self.orden_transporte, self.notificador)
             if pago.aprobar(orden.id) == ResultadoPago.REPETIDO:
                 raise PedidoModificado()
             return nuevo
@@ -350,7 +353,18 @@ class CambiarEstadoPedido:
         if cancelando and orden.stock_descontado:
             reponer_stock(self.inventario, orden.items)
             self.ordenes.registrar_stock_descontado(orden.id, False)
+        if self.notificador:
+            self.notificador.notificar(orden.id, EVENTO_POR_ESTADO[nuevo])
         return nuevo
+
+
+# Aviso al comprador de cada cambio manual del admin (PAGADO pasa por ConfirmarPago)
+EVENTO_POR_ESTADO = {
+    EstadoPedido.EN_PREPARACION: EventoPedido.EN_PREPARACION,
+    EstadoPedido.ENVIADO: EventoPedido.DESPACHADO,
+    EstadoPedido.ENTREGADO: EventoPedido.ENTREGADO,
+    EstadoPedido.CANCELADO: EventoPedido.CANCELADO,
+}
 
 
 class SinRevisionPendiente(Exception):

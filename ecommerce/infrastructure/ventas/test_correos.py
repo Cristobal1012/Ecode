@@ -147,8 +147,86 @@ class CorreosDelPagoTests(APITestCase):
         self.assertEqual(correo.subject, f'No se pudo completar el pago del pedido #{self.orden.id} | Tienda QA')
         self.assertIn('no se\nrealizó ningún cobro', correo.body)
 
+    def test_anulacion_del_comprador_avisa_cancelacion_sin_cobro(self):
+        self.retorno(TBK_TOKEN='token-anulado', TBK_ORDEN_COMPRA=f'ORD-{self.orden.id}')
+        self.assertIn('no se realizó ningún cobro', mail.outbox[0].body)
+
     def test_anulacion_del_comprador_avisa_cancelacion(self):
         self.retorno(TBK_TOKEN='token-anulado', TBK_ORDEN_COMPRA=f'ORD-{self.orden.id}')
         correo, = mail.outbox
         self.assertEqual(correo.subject, f'Tu pedido #{self.orden.id} fue cancelado | Tienda QA')
         self.assertIn('Anulaste el pago', correo.body)
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+class CorreosDelPanelTests(APITestCase):
+    """RF-04.2: los cambios de estado del admin avisan al comprador; el despacho lleva el seguimiento."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+
+    def setUp(self):
+        ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA', calle_origen='Av. Central',
+                                           numero_origen='50', comuna_origen='Providencia')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
+        inventario = patch('ecommerce.infrastructure.ventas.views.inventario_variantes',
+                           return_value=InventarioFalso({('camisa', 'CAMISA-S'): 5}))
+        inventario.start()
+        self.addCleanup(inventario.stop)
+        transportista = patch('ecommerce.infrastructure.ventas.views.ChilexpressOrdenTransporte')
+        transportista.start().return_value.generar_orden_transporte.return_value = '712678904136'
+        self.addCleanup(transportista.stop)
+
+    def crear_orden(self, proveedor):
+        orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSFERENCIA', subtotal=10000, costo_envio=0,
+            total_final=10000, proveedor_logistico=proveedor,
+            direccion_envio_snapshot={'calle': 'Los Olmos', 'numero': '123', 'comuna': 'PROVIDENCIA'},
+        )
+        DetalleOrden.objects.create(
+            orden=orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+            nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000, cantidad=1,
+        )
+        return orden
+
+    def cambiar(self, orden, estado):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.patch(reverse('admin-ordenes-patch', args=[orden.id]), {'estado': estado},
+                                     format='json')
+
+    def test_cada_estado_avisa_y_el_despacho_lleva_ot_y_enlace(self):
+        orden = self.crear_orden('CHILEXPRESS')
+        for estado in ('PAGADO', 'EN_PREPARACION', 'ENVIADO', 'ENTREGADO'):
+            self.assertEqual(self.cambiar(orden, estado).status_code, 200)
+
+        self.assertEqual([correo.subject.split(' | ')[0] for correo in mail.outbox], [
+            f'Pago confirmado: pedido #{orden.id}',
+            f'Estamos preparando tu pedido #{orden.id}',
+            f'Tu pedido #{orden.id} va en camino',
+            f'Tu pedido #{orden.id} fue entregado',
+        ])
+        despacho = mail.outbox[2]
+        self.assertIn('Número de seguimiento: 712678904136', despacho.body)
+        self.assertIn(f'href="http://tienda.test/seguimiento?orden={orden.id}"', despacho.alternatives[0][0])
+
+    def test_retiro_en_local_avisa_que_esta_listo_para_retirar(self):
+        orden = self.crear_orden('RETIRO_LOCAL')
+        for estado in ('PAGADO', 'EN_PREPARACION', 'ENVIADO'):
+            self.cambiar(orden, estado)
+        listo = mail.outbox[-1]
+        self.assertEqual(listo.subject, f'Tu pedido #{orden.id} está listo para retirar | Tienda QA')
+        self.assertIn('Retiro en el local: Av. Central 50 Providencia', listo.body)
+        self.assertNotIn('Número de seguimiento', listo.body)
+
+    def test_cancelacion_del_admin_avisa_devolucion_si_ya_habia_pagado(self):
+        orden = self.crear_orden('RETIRO_LOCAL')
+        self.cambiar(orden, 'CANCELADO')
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'Tu pedido #{orden.id} fue cancelado | Tienda QA')
+        self.assertIn('Tienda QA canceló tu pedido', correo.body)
+
+    def test_transicion_rechazada_no_envia_correo(self):
+        orden = self.crear_orden('RETIRO_LOCAL')
+        self.assertEqual(self.cambiar(orden, 'ENVIADO').status_code, 400)
+        self.assertEqual(mail.outbox, [])

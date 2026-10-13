@@ -408,6 +408,37 @@ class ConfirmarPagoNotificacionesTests(SimpleTestCase):
         self.assertEqual(self.notificador.enviados, [])
 
 
+class CambiarEstadoPedidoNotificacionesTests(SimpleTestCase):
+    """RF-04.2: cada cambio del admin que se aplica avisa al comprador."""
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.notificador = NotificadorFalso()
+        self.caso = CambiarEstadoPedido(self.ordenes, InventarioFalso({('camisa', 'CAMISA-S'): 5}),
+                                        notificador=self.notificador)
+        self.orden = self.ordenes.agregar(1, 'PENDIENTE', [('camisa', 'CAMISA-S', 1)])
+
+    def test_flujo_completo_avisa_cada_hito(self):
+        for estado in ('PAGADO', 'EN_PREPARACION', 'ENVIADO', 'ENTREGADO'):
+            self.caso.ejecutar(1, estado)
+        self.assertEqual([evento for _, evento in self.notificador.enviados], [
+            EventoPedido.PAGO_APROBADO, EventoPedido.EN_PREPARACION, EventoPedido.DESPACHADO,
+            EventoPedido.ENTREGADO])
+
+    def test_cancelacion_del_admin_avisa(self):
+        self.caso.ejecutar(1, 'CANCELADO')
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.CANCELADO)])
+
+    def test_cambio_rechazado_no_avisa(self):
+        with self.assertRaises(TransicionNoPermitida):
+            self.caso.ejecutar(1, 'ENVIADO')
+        self.ordenes.cambio_concurrente = EstadoPedido.CANCELADO
+        self.orden['estado'] = EstadoPedido.PAGADO
+        with self.assertRaises(PedidoModificado):
+            self.caso.ejecutar(1, 'EN_PREPARACION')
+        self.assertEqual(self.notificador.enviados, [])
+
+
 class CambiarEstadoPedidoTests(SimpleTestCase):
     def setUp(self):
         self.ordenes = RepositorioOrdenesFalso()

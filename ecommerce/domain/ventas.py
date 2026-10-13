@@ -219,6 +219,20 @@ class OrdenRegistrada:
     requiere_revision: bool = False
 
 
+class EventoPedido(StrEnum):
+    """RF-04.2: hitos del pedido que se le avisan al comprador."""
+
+    RECIBIDO = 'RECIBIDO'
+    PAGO_APROBADO = 'PAGO_APROBADO'
+    # Pago aprobado, pero el admin debe revisar la orden (ej. sin stock): no se le promete el pedido
+    PAGO_EN_REVISION = 'PAGO_EN_REVISION'
+    PAGO_RECHAZADO = 'PAGO_RECHAZADO'
+    CANCELADO = 'CANCELADO'
+    EN_PREPARACION = 'EN_PREPARACION'
+    DESPACHADO = 'DESPACHADO'
+    ENTREGADO = 'ENTREGADO'
+
+
 # Pagado y aún sin despachar: se puede generar (o reintentar) la orden de transporte
 ESTADOS_CON_ORDEN_TRANSPORTE = frozenset({EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION})
 

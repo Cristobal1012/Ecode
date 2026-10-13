@@ -8,7 +8,7 @@ import logging
 
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
-    ESTADOS_PAGADOS, EstadoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
+    ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
     OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea,
     revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
@@ -130,6 +130,17 @@ class RepositorioOrdenes(ABC):
     @abstractmethod
     def registrar_orden_transporte(self, orden_id, numero_ot: str = '', error: str = '') -> None:
         """Guarda la OT generada, o el error del transportista para reintentarlo."""
+        raise NotImplementedError
+
+
+class NotificadorPedidos(ABC):
+    """Puerto de salida (NotificationSender, AGENTS.md §3.3): avisa al comprador un hito de su pedido.
+
+    El adaptador envía después del commit y nunca lanza: un correo que falla no deshace el cambio.
+    """
+
+    @abstractmethod
+    def notificar(self, orden_id, evento: EventoPedido) -> None:
         raise NotImplementedError
 
 

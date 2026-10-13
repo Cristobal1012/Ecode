@@ -15,13 +15,14 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.ventas import (
-    ErrorPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
+    ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
     paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
 from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
+from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
@@ -111,6 +112,10 @@ class SolicitudCotizacionSerializer(serializers.Serializer):
 def catalogo_variantes():
     """Adaptador del catálogo que usa el checkout; las pruebas lo reemplazan por uno falso."""
     return MongoCatalogoVariantes()
+
+
+def notificador_pedidos():
+    return CorreoNotificadorPedidos()
 
 
 class ItemPedidoSerializer(serializers.Serializer):
@@ -342,6 +347,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
                 })
+
+        # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
+        notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)
 
         # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
         orden.url_pago = url_pago

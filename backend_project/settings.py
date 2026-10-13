@@ -173,11 +173,28 @@ CATALOGO_IMAGEN_MAX_PIXELES = int(os.environ.get('CATALOGO_IMAGEN_MAX_PIXELES', 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
+# Correos al comprador (RF-04.2) por SMTP. TODO(PENDIENTE): proveedor definitivo (AGENTS.md §3.3).
+# Django 6.1 configura el correo con MAILERS: las variables EMAIL_* del .env se leen aquí, no como settings.
+# Sin EMAIL_HOST los correos se imprimen en la consola del runserver en vez de enviarse.
+_smtp_host = os.environ.get('EMAIL_HOST', '').strip()
+_smtp_usuario = os.environ.get('EMAIL_HOST_USER', '').strip()
 MAILERS = {
     'default': {
+        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+        'OPTIONS': {
+            'host': _smtp_host,
+            'port': int(os.environ.get('EMAIL_PORT') or 587),
+            'username': _smtp_usuario,
+            'password': os.environ.get('EMAIL_HOST_PASSWORD', '').strip(),
+            'use_tls': env_bool('EMAIL_USE_TLS', True),
+            # Un servidor de correo lento no debe dejar colgado el checkout ni la confirmación del pago
+            'timeout': int(os.environ.get('EMAIL_TIMEOUT') or 10),
+        },
+    } if _smtp_host else {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '').strip() or _smtp_usuario or 'no-responder@localhost'
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 

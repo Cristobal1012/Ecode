@@ -40,7 +40,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
 
         self.assertEqual(
             set(data),
-            {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
+            {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'layout_catalogo',
              'pasarelas_activas', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
@@ -70,6 +70,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             banner_url='https://example.com/hero.jpg',
         )
 
+    @override_settings(GOOGLE_CLIENT_ID='cliente-qa.apps.googleusercontent.com')
     def test_public_endpoint_matches_frontend_contract(self):
         url = reverse('configuracion-global')
 
@@ -81,6 +82,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
         self.assertEqual(url, '/api/configuracion/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {
+            'google_client_id': 'cliente-qa.apps.googleusercontent.com',
             'texto_bienvenida': 'Bienvenido a Tienda QA',
             'texto_boton_ingreso': 'Ver productos',
             'banner_url': 'https://example.com/hero.jpg',

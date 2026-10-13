@@ -222,4 +222,6 @@ if env_bool('CONFIAR_PROXY_HTTPS', not DEBUG):
 # Variable propia porque el runner de tests fuerza DEBUG=False.
 EXIGIR_PAGINAS_LEGALES = env_bool('EXIGIR_PAGINAS_LEGALES', not DEBUG)
 
-GOOGLE_CLIENT_ID = None  # Reemplazar por tu Client ID (ej: "xxxx.apps.googleusercontent.com") cuando este creado
+# RN-04: inicio de sesión con Google. ID de cliente OAuth (público, termina en .apps.googleusercontent.com).
+# Vacío = la tienda no ofrece Google: el botón no aparece y el endpoint responde 503.
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()

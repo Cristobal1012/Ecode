@@ -31,10 +31,13 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
     pasarelas_activas = serializers.SerializerMethodField()
+    # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
+    google_client_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'google_client_id',
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
@@ -49,6 +52,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'dpto_casa_origen',
             'retiro_en_local_activo',
         ]
+
+    def get_google_client_id(self, obj):
+        return settings.GOOGLE_CLIENT_ID
 
     def get_pasarelas_activas(self, obj):
         if not obj.api_keys_pagos:

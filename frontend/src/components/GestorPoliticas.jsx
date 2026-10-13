@@ -168,6 +168,9 @@ export default function GestorPoliticas() {
         <span style={estiloEtiqueta}>Contenido:</span>
         <ReactQuill
           theme="snow"
+          // HTML interno de Quill: el semántico convierte los espacios en &nbsp; (el texto no se ajusta al ancho)
+          // y quita el marcador de las listas que usa el CSS de la página pública (PaginaLegal.jsx)
+          useSemanticHTML={false}
           value={formulario.contenido}
           onChange={(valor, _delta, origen) => {
             editar('contenido', valor);

@@ -334,7 +334,8 @@ export default function Checkout() {
             }
             // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
             if (datos.items) await revisarCarrito(itemsCarrito);
-            const detalle = datos.subtotal || datos.items || datos.acepta_terminos;
+            // metodo_pago: el admin deshabilitó ese medio mientras el comprador estaba en el checkout (RN-02)
+            const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
         }

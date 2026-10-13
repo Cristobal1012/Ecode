@@ -12,7 +12,7 @@ from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
-from .tests import usar_catalogo_falso
+from .tests import habilitar_medios_pago, usar_catalogo_falso
 
 CORREO = 'ecommerce.infrastructure.ventas.adapters.correo'
 
@@ -22,6 +22,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
     """RF-04.2: al crear la orden el comprador recibe el resumen de la compra."""
 
     def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA', modo_autenticacion='MIXTO')
         usar_catalogo_falso(self, {
             ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa <b>azul</b> - CAMISA-S', Decimal('10000.00'), 5, True),

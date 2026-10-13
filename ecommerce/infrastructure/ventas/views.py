@@ -23,6 +23,8 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente,
 )
+from ecommerce.application.medios_pago import ConfigurarMedioPago
+from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
@@ -41,11 +43,15 @@ from .serializers import (
     PaginaLegalSerializer,
     PaginaLegalDetalleSerializer,
     PaginaLegalAdminSerializer,
+    MedioPagoAdminSerializer,
+    medio_pago_para_panel,
+    medios_pago,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
 
@@ -714,3 +720,36 @@ class AdminPaginaLegalView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(tipo_pagina=tipo)
         return Response(serializer.data, status=status.HTTP_200_OK if pagina else status.HTTP_201_CREATED)
+
+def codigo_medio_pago(codigo):
+    """Código válido de medio de pago (sin distinguir mayúsculas), o None."""
+    try:
+        return CodigoMedioPago(codigo.upper())
+    except ValueError:
+        return None
+
+
+class AdminMediosPagoView(APIView):
+    """RN-02 / AGENTS.md §7: los medios de pago con su estado; las credenciales van enmascaradas."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        return Response([medio_pago_para_panel(medio) for medio in medios_pago().listar()])
+
+
+class AdminMedioPagoView(APIView):
+    """El admin habilita un medio de pago y carga sus datos (se puede guardar incompleto)."""
+    permission_classes = [IsAdministrador]
+
+    def put(self, request, codigo):
+        codigo = codigo_medio_pago(codigo)
+        if codigo is None:
+            return Response({'detail': 'Medio de pago no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = MedioPagoAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            medio = ConfigurarMedioPago(DjangoRepositorioMediosPago()).ejecutar(
+                codigo, serializer.validated_data['habilitado'], serializer.validated_data['datos'])
+        except DatosMedioPagoInvalidos as error:
+            return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(medio_pago_para_panel(medio))

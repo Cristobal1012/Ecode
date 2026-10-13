@@ -13,7 +13,7 @@ from ecommerce.domain.ventas import VarianteCatalogo
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .models import ConfiguracionGlobal, OrdenCompra
 from .repositorio_ordenes import DjangoRepositorioOrdenes
-from .tests import usar_catalogo_falso
+from .tests import habilitar_medios_pago, usar_catalogo_falso
 
 
 PAQUETE = {'peso_kg': '1.50', 'alto_cm': '10', 'ancho_cm': '20', 'largo_cm': '30'}
@@ -113,6 +113,7 @@ ITEMS = [{'producto_mongo_id': 'polera', 'variante_sku': 'POLERA-M', 'cantidad':
 @patch.dict('os.environ', {'CHILEXPRESS_API_KEY_COTIZADOR': 'secreto-chilexpress'})
 class CotizacionesAPITests(APITestCase):
     def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
             api_keys_logistica={'proveedor_activo': 'CHILEXPRESS'},

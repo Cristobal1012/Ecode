@@ -6,12 +6,15 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
+from ecommerce.application.test_medios_pago import DATOS_BANCO
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
 from ecommerce.domain.logistica import ErrorOrdenTransporte
+from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
+from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 
 
@@ -24,6 +27,20 @@ def usar_catalogo_falso(test, variantes):
                      return_value=CatalogoFalso(variantes))
     catalogo.start()
     test.addCleanup(catalogo.stop)
+
+
+DATOS_MEDIOS_PAGO = {
+    'TRANSBANK': {'ambiente': 'INTEGRACION'},
+    'MERCADO_PAGO': {'access_token': 'APP_USR-1234567890-prueba-abcd', 'webhook_secret': 'secreto-webhook-1234'},
+    'TRANSFERENCIA': DATOS_BANCO,
+}
+
+
+def habilitar_medios_pago(*codigos):
+    """RN-02: el checkout solo acepta medios habilitados y configurados."""
+    for codigo in codigos:
+        DjangoRepositorioMediosPago().guardar(
+            MedioPagoConfigurado(CodigoMedioPago(codigo), True, DATOS_MEDIOS_PAGO[codigo]))
 
 
 class ConfiguracionGlobalSerializerTests(APITestCase):
@@ -161,6 +178,7 @@ class CheckoutAccessTests(APITestCase):
                       for user in (cls.buyer, cls.admin)]
 
     def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         usar_catalogo_falso(self, {
             ('camisa', 'CAMISA-S'): VarianteCatalogo(
                 'Camisa - CAMISA-S', Decimal('10000.00'), 3, True),

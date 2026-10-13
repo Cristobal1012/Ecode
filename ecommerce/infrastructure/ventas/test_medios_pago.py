@@ -1,14 +1,23 @@
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
+from rest_framework.authtoken.models import Token
+from rest_framework.test import APITestCase
+from transbank.common.integration_type import IntegrationType
 
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
+from ecommerce.domain.ventas import VarianteCatalogo
+from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
+from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .cifrado import CredencialesIlegibles, cifrar_json, descifrar_json
-from .models import MedioPago
+from .models import ConfiguracionGlobal, MedioPago, OrdenCompra
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
+from .tests import DATOS_MEDIOS_PAGO, habilitar_medios_pago, usar_catalogo_falso
 
 TOKEN_MP = 'APP_USR-1234567890-secreto-abcd'
 
@@ -107,3 +116,126 @@ class MigracionMediosPagoTests(TransactionTestCase):
     def test_sin_configuracion_no_crea_medios(self):
         self.migrar(self.ANTERIOR)
         self.assertFalse(self.migrar(self.COPIA).get_model('ventas', 'MedioPago').objects.exists())
+
+
+class CheckoutRN02Tests(APITestCase):
+    """AGENTS.md §11 (RN-02): solo se ofrecen y aceptan los medios habilitados y configurados."""
+
+    def setUp(self):
+        ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', modo_autenticacion='INVITADO',
+                                           retiro_en_local_activo=True)
+        usar_catalogo_falso(self, {
+            ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa - CAMISA-S', Decimal('10000.00'), 5, True)})
+        habilitar_medios_pago('TRANSBANK', 'TRANSFERENCIA')
+
+    def checkout(self, metodo_pago):
+        return self.client.post(reverse('checkout'), {
+            'items': [{'producto_mongo_id': 'camisa', 'variante_sku': 'CAMISA-S', 'cantidad': 1}],
+            'email_invitado': 'invitado@example.test', 'metodo_pago': metodo_pago,
+            'direccion_envio_snapshot': {}, 'subtotal': 10000, 'proveedor_logistico': 'RETIRO_LOCAL',
+            'acepta_terminos': True,
+        }, format='json')
+
+    def test_con_transbank_y_transferencia_no_se_ofrece_ni_acepta_mercado_pago(self):
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['pasarelas_activas'],
+                         ['TRANSBANK', 'TRANSFERENCIA'])
+        for metodo in ('MERCADO_PAGO', 'PAYPAL', 'LINKIFY'):
+            with self.subTest(metodo=metodo):
+                response = self.checkout(metodo)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('no está disponible', str(response.data['metodo_pago']))
+        self.assertFalse(OrdenCompra.objects.exists())
+        self.assertEqual(self.checkout('TRANSFERENCIA').status_code, 201)
+
+    def test_medio_deshabilitado_o_incompleto_deja_de_aceptarse(self):
+        repo = DjangoRepositorioMediosPago()
+        repo.guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSFERENCIA, False, DATOS_MEDIOS_PAGO['TRANSFERENCIA']))
+        repo.guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {'ambiente': 'PRODUCCION'}))
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['pasarelas_activas'], [])
+        for metodo in ('TRANSFERENCIA', 'TRANSBANK'):
+            with self.subTest(metodo=metodo):
+                self.assertEqual(self.checkout(metodo).status_code, 400)
+
+    def test_la_configuracion_publica_no_expone_credenciales(self):
+        habilitar_medios_pago('MERCADO_PAGO')
+        cuerpo = self.client.get(reverse('configuracion-global')).content.decode()
+        for secreto in (DATOS_MEDIOS_PAGO['MERCADO_PAGO']['access_token'], 'secreto-webhook', 'numero_cuenta'):
+            self.assertNotIn(secreto, cuerpo)
+
+
+class AdminMediosPagoAPITests(APITestCase):
+    """AGENTS.md §7: el admin configura los medios desde el panel y nunca ve una credencial completa."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+        cls.buyer_token = Token.objects.create(user=create_user())
+
+    def setUp(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
+
+    def guardar(self, codigo, cuerpo):
+        return self.client.put(reverse('admin-medio-pago', args=[codigo]), cuerpo, format='json')
+
+    def test_lista_los_medios_con_sus_campos_y_lo_que_falta(self):
+        medios = self.client.get(reverse('admin-medios-pago')).data
+        self.assertEqual([m['codigo'] for m in medios], ['TRANSBANK', 'MERCADO_PAGO', 'TRANSFERENCIA'])
+        transbank = medios[0]
+        self.assertEqual((transbank['habilitado'], transbank['disponible'], transbank['faltantes']),
+                         (False, False, ['ambiente']))
+        api_key = next(c for c in transbank['campos'] if c['nombre'] == 'api_key')
+        self.assertEqual((api_key['secreto'], api_key['obligatorio_si']), (True, ['ambiente', 'PRODUCCION']))
+
+    def test_guardar_devuelve_credenciales_enmascaradas_y_las_conserva_al_reenviarlas(self):
+        response = self.guardar('mercado_pago', {'habilitado': True, 'datos': {
+            'access_token': TOKEN_MP, 'webhook_secret': 'secreto-de-webhook-5678'}})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['disponible'])
+        self.assertEqual(response.data['datos'], {'access_token': '••••abcd', 'webhook_secret': '••••5678'})
+        self.assertNotIn(TOKEN_MP, response.content.decode())
+
+        # El panel reenvía lo que mostró: no debe pisar la credencial con los puntos
+        self.guardar('MERCADO_PAGO', {'habilitado': True, 'datos': response.data['datos']})
+        self.assertEqual(DjangoRepositorioMediosPago().obtener('MERCADO_PAGO').datos['access_token'], TOKEN_MP)
+
+    def test_datos_invalidos_son_400_y_medio_inexistente_404(self):
+        response = self.guardar('TRANSFERENCIA', {'habilitado': True, 'datos': {'tipo_cuenta': 'Cuenta bitcoin'}})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('tipo_cuenta', response.data['datos'])
+        self.assertEqual(self.guardar('PAYPAL', {'habilitado': True}).status_code, 404)
+
+    def test_solo_el_admin_configura_medios_de_pago(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.buyer_token.key}')
+        self.assertEqual(self.client.get(reverse('admin-medios-pago')).status_code, 403)
+        self.assertEqual(self.guardar('TRANSBANK', {'habilitado': True}).status_code, 403)
+        self.client.credentials()
+        self.assertEqual(self.client.get(reverse('admin-medios-pago')).status_code, 401)
+
+
+@patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.Transaction')
+class TransbankConfiguracionTests(TestCase):
+    """Transbank toma el ambiente y las credenciales del panel, no del .env."""
+
+    def opciones(self, transaction):
+        TransbankWebpayAdapter._obtener_instancia()
+        return transaction.call_args.kwargs['options']
+
+    def test_integracion_usa_las_llaves_publicas_de_prueba(self, transaction):
+        habilitar_medios_pago('TRANSBANK')
+        opciones = self.opciones(transaction)
+        self.assertEqual((opciones.commerce_code, opciones.integration_type), ('597055555532', IntegrationType.TEST))
+
+    def test_produccion_usa_las_credenciales_guardadas(self, transaction):
+        DjangoRepositorioMediosPago().guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {
+            'ambiente': 'PRODUCCION', 'commerce_code': '597012345678', 'api_key': TOKEN_MP}))
+        opciones = self.opciones(transaction)
+        self.assertEqual((opciones.commerce_code, opciones.api_key, opciones.integration_type),
+                         ('597012345678', TOKEN_MP, IntegrationType.LIVE))
+
+    def test_produccion_sin_credenciales_no_inicia_el_pago(self, transaction):
+        DjangoRepositorioMediosPago().guardar(
+            MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {'ambiente': 'PRODUCCION'}))
+        with self.assertLogs('ecommerce.infrastructure.ventas.adapters.transbank_adapter', level='ERROR'):
+            resultado = TransbankWebpayAdapter.iniciar_transaccion('1', 1000, 'http://x/retorno/', 's')
+        self.assertFalse(resultado['exito'])
+        transaction.assert_not_called()

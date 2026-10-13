@@ -68,6 +68,9 @@ ventas_urlpatterns = [
     # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
     path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
     path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
+    # Medios de pago (RN-02): GET la lista y PUT /api/ventas/admin/medios-pago/<codigo>/ (ej. transferencia)
+    path('admin/medios-pago/', views.AdminMediosPagoView.as_view(), name='admin-medios-pago'),
+    path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PaletteSelector from '../components/PaletteSelector';
 import clienteAxios from '../components/auth/axiosConfig'; 
@@ -10,6 +10,29 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
+import './Admin.css';
+
+// Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
+// Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
+const SECCIONES_CONFIGURACION = [
+  { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
+  { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' }
+];
+
+const TituloSeccion = ({ id }) => (
+  <h3 id={id} tabIndex={-1} className="config-titulo" style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>
+    {SECCIONES_CONFIGURACION.find(seccion => seccion.id === id).titulo}
+  </h3>
+);
+
+const irASeccion = (id) => {
+  const titulo = document.getElementById(id);
+  if (!titulo) return;
+  const reducirMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  titulo.scrollIntoView({ behavior: reducirMovimiento ? 'auto' : 'smooth', block: 'start' });
+  // El foco acompaña al scroll: teclado y lectores de pantalla llegan a la sección
+  titulo.focus({ preventScroll: true });
+};
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -162,101 +185,115 @@ export default function Admin() {
         return (
           <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Configuración</h2>
-            <div style={{ marginBottom: '30px' }}>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>Paleta de Colores de la Tienda</h3>
-              <PaletteSelector />
-            </div>
+            <div className="config-layout">
+              <nav aria-label="Secciones de configuración" className="config-indice">
+                <ul>
+                  {SECCIONES_CONFIGURACION.map(seccion => (
+                    <li key={seccion.id}>
+                      <button type="button" onClick={() => irASeccion(seccion.id)}>{seccion.titulo}</button>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
 
-            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+              <div className="config-secciones">
+                <div style={{ marginBottom: '30px' }}>
+                  <TituloSeccion id="config-paleta" />
+                  <PaletteSelector />
+                </div>
 
-            <div>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>Dirección del Local y Retiro en Tienda</h3>
-              {mensajeLocal && (
-                <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeLocal.includes('éxito') ? '#d4edda' : '#f8d7da', color: mensajeLocal.includes('éxito') ? '#155724' : '#721c24', borderRadius: '4px', fontSize: '0.9rem' }}>
-                  {mensajeLocal}
-                </div>
-              )}
-              <form onSubmit={handleGuardarConfigLocal} style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'flex', gap: '15px' }}>
-                  <div style={{ flex: 3 }}>
-                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Calle del Local</label>
-                    <input 
-                      type="text" 
-                      value={configLocal.calle_origen} 
-                      onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})} 
-                      required 
-                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                      placeholder="Ej: Av. Principal"
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Número</label>
-                    <input 
-                      type="text" 
-                      value={configLocal.numero_origen} 
-                      onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})} 
-                      required 
-                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                      placeholder="Ej: 123"
-                    />
-                  </div>
-                </div>
+                <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Piso, Oficina, Bodega o Detalle (Opcional)</label>
-                  <input 
-                    type="text" 
-                    value={configLocal.dpto_casa_origen} 
-                    onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})} 
-                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                    placeholder="Ej: Piso 4, Oficina 405"
-                  />
-                </div>
+                  <TituloSeccion id="config-local" />
+                  {mensajeLocal && (
+                    <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeLocal.includes('éxito') ? '#d4edda' : '#f8d7da', color: mensajeLocal.includes('éxito') ? '#155724' : '#721c24', borderRadius: '4px', fontSize: '0.9rem' }}>
+                      {mensajeLocal}
+                    </div>
+                  )}
+                  <form onSubmit={handleGuardarConfigLocal} style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                      <div style={{ flex: 3 }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Calle del Local</label>
+                        <input 
+                          type="text" 
+                          value={configLocal.calle_origen} 
+                          onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})} 
+                          required 
+                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          placeholder="Ej: Av. Principal"
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Número</label>
+                        <input 
+                          type="text" 
+                          value={configLocal.numero_origen} 
+                          onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})} 
+                          required 
+                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          placeholder="Ej: 123"
+                        />
+                      </div>
+                    </div>
 
-                <div style={{ display: 'flex', gap: '15px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Comuna</label>
-                    <input 
-                      type="text" 
-                      value={configLocal.comuna_origen} 
-                      onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})} 
-                      required 
-                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                      placeholder="Ej: Santiago"
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Región</label>
-                    <input 
-                      type="text" 
-                      value={configLocal.region_origen} 
-                      onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})} 
-                      style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                      placeholder="Ej: Metropolitana"
-                    />
-                  </div>
-                </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Piso, Oficina, Bodega o Detalle (Opcional)</label>
+                      <input 
+                        type="text" 
+                        value={configLocal.dpto_casa_origen} 
+                        onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})} 
+                        style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                        placeholder="Ej: Piso 4, Oficina 405"
+                      />
+                    </div>
 
-                <div>
-                  <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', color: '#374151', cursor: 'pointer', marginTop: '5px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={configLocal.retiro_en_local_activo} 
-                      onChange={(e) => setConfigLocal({...configLocal, retiro_en_local_activo: e.target.checked})} 
-                      style={{ marginRight: '10px', width: '18px', height: '18px' }}
-                    />
-                    Permitir a los clientes seleccionar "Retiro en Local" gratuito en el Checkout
-                  </label>
-                </div>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Comuna</label>
+                        <input 
+                          type="text" 
+                          value={configLocal.comuna_origen} 
+                          onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})} 
+                          required 
+                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          placeholder="Ej: Santiago"
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Región</label>
+                        <input 
+                          type="text" 
+                          value={configLocal.region_origen} 
+                          onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})} 
+                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          placeholder="Ej: Metropolitana"
+                        />
+                      </div>
+                    </div>
 
-                <button 
-                  type="submit" 
-                  disabled={guardandoLocal}
-                  style={{ padding: '12px 20px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardandoLocal ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '1rem', marginTop: '10px' }}
-                >
-                  {guardandoLocal ? 'Guardando...' : 'Guardar Dirección y Opciones de Retiro'}
-                </button>
-              </form>
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', color: '#374151', cursor: 'pointer', marginTop: '5px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={configLocal.retiro_en_local_activo} 
+                          onChange={(e) => setConfigLocal({...configLocal, retiro_en_local_activo: e.target.checked})} 
+                          style={{ marginRight: '10px', width: '18px', height: '18px' }}
+                        />
+                        Permitir a los clientes seleccionar "Retiro en Local" gratuito en el Checkout
+                      </label>
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      disabled={guardandoLocal}
+                      style={{ padding: '12px 20px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardandoLocal ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '1rem', marginTop: '10px' }}
+                    >
+                      {guardandoLocal ? 'Guardando...' : 'Guardar Dirección y Opciones de Retiro'}
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         );

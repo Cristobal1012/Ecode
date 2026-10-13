@@ -131,6 +131,10 @@ class OrdenCompra(models.Model):
     id_transaccion_pasarela = models.CharField(max_length=255, blank=True, null=True)
     proveedor_logistico = models.CharField(max_length=100, blank=True, null=True)
     numero_seguimiento_tracking = models.CharField(max_length=100, blank=True, null=True)
+    # Peso y medidas cotizados en el checkout; la orden de transporte usa los mismos
+    paquete = models.JSONField(null=True, blank=True)
+    # Último error del transportista al generar la OT (vacío si se generó o no aplica)
+    error_orden_transporte = models.CharField(max_length=255, blank=True, default='')
 
     subtotal = models.FloatField()
     costo_envio = models.FloatField()
@@ -167,7 +171,10 @@ class PaginaLegal(models.Model):
 
     tipo_pagina = models.CharField(max_length=30, choices=TIPOS_PAGINA, unique=True)
     titulo = models.CharField(max_length=255)
+    # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
     contenido = models.TextField()
+    # RF-03.5: solo las publicadas aparecen en el footer y son visibles al público
+    publicada = models.BooleanField(default=False)
     ultima_actualizacion = models.DateTimeField(auto_now=True)
 
     def __str__(self):

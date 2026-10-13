@@ -7,6 +7,9 @@ export default function PagoExitoso() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ordenId = searchParams.get('orden');
+  // El pago se aprobó pero la orden quedó para revisión del admin (ej. sin stock, AGENTS.md §4.1):
+  // no se le promete el pedido ni se le muestra el motivo interno
+  const enRevision = searchParams.get('revision') === '1';
   // El invitado no tiene historial: se le lleva al seguimiento con su número de orden (RF-02.4)
   const usuarioAutenticado = !!localStorage.getItem('access_token');
 
@@ -30,9 +33,11 @@ export default function PagoExitoso() {
           ✓
         </div>
         
-        <h1 style={{ color: '#1f2937', marginBottom: '10px', fontSize: '2rem' }}>¡Pago Exitoso!</h1>
+        <h1 style={{ color: '#1f2937', marginBottom: '10px', fontSize: '2rem' }}>{enRevision ? '¡Pago recibido!' : '¡Pago Exitoso!'}</h1>
         <p style={{ color: '#4b5563', fontSize: '1.1rem', marginBottom: '30px' }}>
-          Tu compra se ha procesado correctamente.
+          {enRevision
+            ? 'Recibimos tu pago. La tienda revisará tu pedido antes de prepararlo y se pondrá en contacto contigo.'
+            : 'Tu compra se ha procesado correctamente.'}
         </p>
 
         {ordenId && (
@@ -43,14 +48,13 @@ export default function PagoExitoso() {
         )}
 
         <p style={{ color: '#6b7280', fontSize: '0.95rem', marginBottom: '40px', lineHeight: '1.5' }}>
-          {/* TODO(PENDIENTE): cuando exista el envío de correos (RF-04.2), avisar aquí que se envió el comprobante */}
-          Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
+          Te enviamos la confirmación a tu correo. Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
         </p>
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
           <button 
             onClick={() => navigate('/catalogo')}
-            style={{ padding: '12px 24px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1rem', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' }}
+            style={{ padding: '12px 24px', backgroundColor: '#047857', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1rem', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' }}
           >
             Seguir Comprando
           </button>

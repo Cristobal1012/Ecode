@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
 import VariantSelector from '../components/VariantSelector';
+import { guardarCarrito, validarCarrito } from '../components/carrito';
 
 export default function DetalleProducto() {
   const { id } = useParams();
@@ -28,14 +29,19 @@ export default function DetalleProducto() {
       });
   }, [id]);
 
-  //Función unificada para agregar al carrito
+  // Muestra el stock que informó el servidor, que puede ser más reciente que el de la carga
+  const actualizarStock = (sku, stock) => setProducto(actual => ({
+    ...actual,
+    variantes: actual.variantes.map(v => (v.sku === sku ? { ...v, stock } : v))
+  }));
+
+  //Función unificada para agregar al carrito. Devuelve { ok, mensaje } para VariantSelector
   const handleAgregarAlCarrito = async (
     varianteSeleccionada,
     cantidadSeleccionada = 1
   ) => {
     if (!varianteSeleccionada) {
-      alert("Por favor, selecciona una variante válida.");
-      return;
+      return { ok: false, mensaje: 'Selecciona una variante primero.' };
     }
 
     const carritoGuardado = localStorage.getItem('carrito_local');
@@ -43,46 +49,40 @@ export default function DetalleProducto() {
       ? JSON.parse(carritoGuardado)
       : [];
 
-    const indiceProducto = carritoActual.findIndex(
+    const existente = carritoActual.find(
       item => item.sku === varianteSeleccionada.sku
     );
+    const enCarrito = existente ? Number(existente.cantidad) : 0;
+    const linea = {
+      id: producto.id,
+      sku: varianteSeleccionada.sku,
+      nombre: existente?.nombre || `${producto.nombre} - ${
+        varianteSeleccionada.valor || varianteSeleccionada.sku
+      }`,
+      precio: varianteSeleccionada.precio,
+      cantidad: enCarrito + cantidadSeleccionada
+    };
 
-    if (indiceProducto !== -1) {
-      carritoActual[indiceProducto].cantidad += cantidadSeleccionada;
-    } else {
-      carritoActual.push({
-        id: producto.id,
-        sku: varianteSeleccionada.sku,
-        nombre: `${producto.nombre} - ${
-          varianteSeleccionada.valor || varianteSeleccionada.sku
-        }`,
-        precio: varianteSeleccionada.precio,
-        cantidad: cantidadSeleccionada
-      });
+    // RN-03: lo que ya está en el carrito también cuenta contra el stock
+    let revisada;
+    try {
+      ({ items: [revisada] } = await validarCarrito([linea]));
+    } catch (error) {
+      console.error('No se pudo validar el stock:', error);
+      return { ok: false, mensaje: 'No pudimos verificar el stock. Intenta nuevamente.' };
     }
 
-    localStorage.setItem(
-      'carrito_local',
-      JSON.stringify(carritoActual)
-    );
-
-    window.dispatchEvent(new Event('carritoActualizado'));
-
-    const token = localStorage.getItem('access_token');
-
-    if (token) {
-      try {
-        await clienteAxios.post(
-          'ventas/carrito/',
-          { items: carritoActual }
-        );
-      } catch (error) {
-        console.error(
-          'No se pudo sincronizar el carrito con la base de datos:',
-          error
-        );
-      }
+    actualizarStock(linea.sku, revisada.disponible);
+    if (revisada.problema) {
+      const yaTienes = enCarrito > 0 ? ` Ya tienes ${enCarrito} en tu carrito.` : '';
+      return { ok: false, mensaje: `${revisada.mensaje}${yaTienes}` };
     }
+
+    const carritoNuevo = existente
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: revisada.precio } : item))
+      : [...carritoActual, { ...linea, precio: revisada.precio }];
+    await guardarCarrito(carritoNuevo);
+    return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };
   };
 
   // Cambiar a la imagen anterior

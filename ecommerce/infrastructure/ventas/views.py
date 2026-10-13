@@ -16,13 +16,14 @@ from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 
 from ecommerce.application.logistica import ServicioCotizacion
-from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida
+from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida, ErrorOrdenTransporte
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
-    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago, OrdenNoEncontrada,
-    PedidoModificado, ResolverRevision, ResultadoPago, SinRevisionPendiente,
+    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
+    GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
+    SinRevisionPendiente,
 )
-from ecommerce.domain.ventas import TransicionNoPermitida
+from ecommerce.domain.ventas import OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
 from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
@@ -32,13 +33,18 @@ from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
     OrdenCompraSerializer,
+    RevisionCarritoSerializer,
     DireccionEnvioSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
-    PaginaLegalSerializer
+    PaginaLegalSerializer,
+    PaginaLegalDetalleSerializer,
+    PaginaLegalAdminSerializer,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
+from .adapters.correo import CorreoNotificadorPedidos
+from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
@@ -47,12 +53,22 @@ def inventario_variantes():
     return MongoInventarioVariantes()
 
 
+def generar_orden_transporte():
+    return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte())
+
+
+def notificador_pedidos():
+    return CorreoNotificadorPedidos()
+
+
 def confirmar_pago():
-    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes())
+    return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
+                         notificador_pedidos())
 
 
 def cambiar_estado_pedido():
-    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes())
+    return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
+                               notificador_pedidos())
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
@@ -73,6 +89,23 @@ class AdminResolverRevisionView(APIView):
         except SinRevisionPendiente as error:
             return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
         return Response({'id': pk, 'requiere_revision': False})
+
+
+class AdminOrdenTransporteView(APIView):
+    """RF-02.3: el admin genera o reintenta la orden de transporte de un pedido pagado."""
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pk):
+        try:
+            numero_ot = generar_orden_transporte().reintentar(pk)
+        except OrdenNoEncontrada:
+            return Response({'detail': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        except OrdenTransporteNoPermitida as error:
+            return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
+        except ErrorOrdenTransporte as error:
+            # El transportista falló: el error ya quedó guardado en la orden
+            return Response({'detail': str(error)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'id': pk, 'numero_seguimiento_tracking': numero_ot})
 
 
 class AdminOrdenCompraPatchView(APIView):
@@ -116,6 +149,17 @@ class CarritoAPIView(APIView):
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})
+
+
+class ValidarCarritoView(APIView):
+    """RN-03: compara el carrito (también el de invitados, que vive en el navegador) con el stock vigente."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RevisionCarritoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.revisar())
 
 
 class CheckoutAPIView(generics.CreateAPIView):
@@ -209,54 +253,14 @@ class TransbankRetornoView(APIView):
             logger.error(f"La orden {orden.id} requiere revisión del admin: {orden.motivo_revision}")
         elif resultado == ResultadoPago.REPETIDO:
             logger.info(f"Confirmación repetida de la orden {orden.id}; se omite.")
-        elif resultado == ResultadoPago.PAGADO:
-            self._generar_orden_transporte(orden)
+        elif resultado == ResultadoPago.PAGADO and orden.error_orden_transporte:
+            # El pago queda firme; el error queda guardado en la orden
+            logger.error(f"No se generó la OT de la orden {orden.id}: {orden.error_orden_transporte}")
 
-        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
+        # El comprador sabe que su pago llegó, pero no se le promete un pedido que el admin debe revisar
+        revision = '&revision=1' if orden.requiere_revision else ''
+        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
 
-    def _generar_orden_transporte(self, orden):
-        """Genera la OT y etiqueta en Chilexpress para una orden recién pagada."""
-        if orden.proveedor_logistico != 'CHILEXPRESS':
-            return
-        try:
-            config = ConfiguracionGlobal.objects.first()
-            catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
-            
-            comuna_origen_nombre = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
-            codigo_origen = catalogo.get(comuna_origen_nombre.upper(), "PUDA")
-            
-            comuna_destino_nombre = orden.direccion_envio_snapshot.get('comuna', '')
-            codigo_destino = catalogo.get(comuna_destino_nombre.upper(), "PROV")
-
-            datos_envio = {
-                "origen_codigo": codigo_origen,
-                "destino_codigo": codigo_destino,
-                "calle": orden.direccion_envio_snapshot.get('calle', 'SIN CALLE'),
-                "numero": orden.direccion_envio_snapshot.get('numero', '0'),
-                "supplement": orden.direccion_envio_snapshot.get('dpto_casa', ''),
-                "nombre_destinatario": getattr(orden.usuario, 'get_full_name', lambda: 'Cliente E-commerce')() if orden.usuario else 'Cliente Invitado',
-                "telefono": "999999999", 
-                "email": orden.email_invitado or (orden.usuario.email if orden.usuario else 'cliente@correo.cl'),
-                "peso": "1", 
-                "alto": "10",
-                "ancho": "10",
-                "largo": "10",
-                "referencia": f"ORD-{orden.id}",
-                "valor_declarado": int(orden.total_final)
-            }
-
-            respuesta_chx = ProveedorLogisticoAdapter.generar_orden_transporte(datos_envio)
-            
-            if respuesta_chx.get('exito'):
-                orden.id_transaccion_pasarela = f"{orden.id_transaccion_pasarela} | OT: {respuesta_chx.get('numero_ot')}"
-                # El portal de seguimiento (RF-02.4) consulta a Chilexpress con este código
-                orden.numero_seguimiento_tracking = respuesta_chx.get('numero_ot')
-                orden.save(update_fields=['id_transaccion_pasarela', 'numero_seguimiento_tracking'])
-                logger.info(f"Orden de Transporte generada con éxito para la orden {orden.id}: OT #{respuesta_chx.get('numero_ot')}")
-            else:
-                logger.error(f"Fallo al generar OT en Chilexpress para orden {orden.id}: {respuesta_chx.get('error')}")
-        except Exception as e:
-            logger.error(f"Excepción al intentar generar la OT automática: {str(e)}")
 
 class CotizacionEnvioView(APIView):
     """
@@ -657,7 +661,56 @@ class DashboardMetricasView(APIView):
         }, status=status.HTTP_200_OK)
     
 class PaginaLegalListView(generics.ListAPIView):
-    queryset = PaginaLegal.objects.all()
+    # RF-03.5: el footer solo enlaza las páginas publicadas
+    queryset = PaginaLegal.objects.filter(publicada=True)
     serializer_class = PaginaLegalSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
+
+
+def tipo_pagina_legal(tipo):
+    """El tipo llega en la URL en cualquier formato (ej. 'terminos'); None si no es válido."""
+    tipo = tipo.upper()
+    return tipo if tipo in dict(PaginaLegal.TIPOS_PAGINA) else None
+
+
+class PaginaLegalDetalleView(APIView):
+    """Página pública /legal/<tipo>: un borrador responde igual que una página inexistente."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, tipo):
+        pagina = PaginaLegal.objects.filter(tipo_pagina=tipo.upper(), publicada=True).first()
+        if pagina is None:
+            return Response({'detail': 'Página no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PaginaLegalDetalleSerializer(pagina).data)
+
+
+class AdminPaginasLegalesView(APIView):
+    """Las tres páginas legales para el editor del admin, aunque aún no estén redactadas."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        existentes = {pagina.tipo_pagina: pagina for pagina in PaginaLegal.objects.all()}
+        return Response([
+            PaginaLegalAdminSerializer(existentes[tipo]).data if tipo in existentes else {
+                'tipo_pagina': tipo, 'titulo': nombre, 'contenido': '',
+                'publicada': False, 'ultima_actualizacion': None,
+            }
+            for tipo, nombre in PaginaLegal.TIPOS_PAGINA
+        ])
+
+
+class AdminPaginaLegalView(APIView):
+    """RF-03.5: el admin crea o actualiza una página legal por tipo."""
+    permission_classes = [IsAdministrador]
+
+    def put(self, request, tipo):
+        tipo = tipo_pagina_legal(tipo)
+        if tipo is None:
+            return Response({'detail': 'Página no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        pagina = PaginaLegal.objects.filter(tipo_pagina=tipo).first()
+        serializer = PaginaLegalAdminSerializer(pagina, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(tipo_pagina=tipo)
+        return Response(serializer.data, status=status.HTTP_200_OK if pagina else status.HTTP_201_CREATED)

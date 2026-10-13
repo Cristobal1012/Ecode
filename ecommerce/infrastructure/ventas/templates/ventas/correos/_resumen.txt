@@ -1,0 +1,9 @@
+{% autoescape off %}RESUMEN DE TU COMPRA
+{% for detalle in detalles %}- {{ detalle.nombre }}: {{ detalle.cantidad }} x {{ detalle.precio_unitario }} = {{ detalle.total }}
+{% endfor %}
+Subtotal: {{ subtotal }}
+Envío: {{ costo_envio }}
+Total: {{ total }}
+
+Entrega: {{ entrega }}
+Medio de pago: {{ metodo_pago }}{% endautoescape %}

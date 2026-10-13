@@ -29,7 +29,7 @@ staticfiles/
 #Node / Frontend (React)
 # =========================
 node_modules/
-dist/
+dist/   
 build/
 .npm/
 

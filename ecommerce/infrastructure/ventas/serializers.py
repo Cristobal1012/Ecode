@@ -1,6 +1,7 @@
 from decimal import Decimal
 import uuid
 
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
@@ -9,17 +10,21 @@ from ecommerce.infrastructure.catalogo.documents import Producto
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
-    ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete, SolicitudCotizacion,
+    PROVEEDORES_CON_ORDEN_TRANSPORTE, ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete,
+    SolicitudCotizacion,
 )
-from ecommerce.application.ventas import PrepararPedido
+from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.ventas import (
-    ErrorPedido, ItemSolicitado, SubtotalDesactualizado, transiciones_desde,
+    ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
+    paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
 from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
+from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .html_seguro import limpiar_html, tiene_texto
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
 
@@ -27,10 +32,13 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
     pasarelas_activas = serializers.SerializerMethodField()
+    # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
+    google_client_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'google_client_id',
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
@@ -45,6 +53,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'dpto_casa_origen',
             'retiro_en_local_activo',
         ]
+
+    def get_google_client_id(self, obj):
+        return settings.GOOGLE_CLIENT_ID
 
     def get_pasarelas_activas(self, obj):
         if not obj.api_keys_pagos:
@@ -103,11 +114,39 @@ def catalogo_variantes():
     return MongoCatalogoVariantes()
 
 
+def notificador_pedidos():
+    return CorreoNotificadorPedidos()
+
+
 class ItemPedidoSerializer(serializers.Serializer):
     # El nombre y el precio que envía el navegador se ignoran: se toman del catálogo
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)
     cantidad = serializers.IntegerField(min_value=1)
+
+
+class RevisionCarritoSerializer(serializers.Serializer):
+    """Entrada de `POST carrito/validar/`; `revisar()` compara el carrito con el catálogo vigente."""
+
+    items = ItemPedidoSerializer(many=True, max_length=100)
+
+    def revisar(self):
+        items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
+                 for i in self.validated_data['items']]
+        lineas = RevisarCarrito(catalogo_variantes()).ejecutar(items)
+        return {
+            'valido': all(linea.problema is None for linea in lineas),
+            'items': [{
+                'producto_mongo_id': linea.producto_id,
+                'variante_sku': linea.sku,
+                'cantidad': linea.cantidad,
+                'disponible': linea.disponible,
+                'nombre': linea.nombre,
+                'precio': None if linea.precio is None else str(linea.precio),
+                'problema': linea.problema,
+                'mensaje': linea.mensaje,
+            } for linea in lineas],
+        }
 
 
 class OrdenCompraSerializer(serializers.ModelSerializer):
@@ -159,6 +198,17 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     
 
     def validate(self, data):
+        # RF-04.4: el comprador acepta páginas que debe poder leer (en desarrollo no se exige)
+        if settings.EXIGIR_PAGINAS_LEGALES:
+            faltantes = paginas_legales_faltantes(
+                PaginaLegal.objects.filter(publicada=True).values_list('tipo_pagina', flat=True))
+            if faltantes:
+                nombres = dict(PaginaLegal.TIPOS_PAGINA)
+                raise serializers.ValidationError({'acepta_terminos': (
+                    'No es posible comprar todavía: la tienda aún no publica '
+                    f"{' ni '.join(nombres[tipo] for tipo in faltantes)}."
+                )})
+
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             if not data.get('email_invitado'):
@@ -247,6 +297,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # El total siempre lo calcula el servidor: subtotal validado contra el catálogo + envío cotizado
         validated_data['costo_envio'] = costo_envio
         validated_data['total_final'] = float(validated_data['subtotal']) + costo_envio
+        # La orden de transporte se genera con el mismo paquete que se cotizó
+        validated_data['paquete'] = (
+            {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
         
         # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:
@@ -295,6 +348,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
                 })
 
+        # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
+        notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)
+
         # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
         orden.url_pago = url_pago
         return orden
@@ -339,6 +395,7 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
 
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
+    puede_generar_orden_transporte = serializers.SerializerMethodField()
 
     get_email_cliente = OrdenCompraSerializer.get_email_cliente
 
@@ -347,12 +404,23 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
-            'motivo_cancelacion', 'transiciones_permitidas',
+            'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
+            'error_orden_transporte', 'puede_generar_orden_transporte',
         ]
         read_only_fields = fields
 
     def get_transiciones_permitidas(self, obj):
         return [estado.value for estado in transiciones_desde(obj.estado)]
+
+    def get_puede_generar_orden_transporte(self, obj):
+        """Muestra el botón del panel solo si el backend aceptaría generar la OT."""
+        if obj.proveedor_logistico not in PROVEEDORES_CON_ORDEN_TRANSPORTE or obj.numero_seguimiento_tracking:
+            return False
+        try:
+            validar_generacion_orden_transporte(obj.estado, obj.requiere_revision)
+        except OrdenTransporteNoPermitida:
+            return False
+        return True
 
 
 class DireccionEnvioSerializer(serializers.ModelSerializer):
@@ -371,6 +439,35 @@ class DireccionEnvioSerializer(serializers.ModelSerializer):
         ]
 
 class PaginaLegalSerializer(serializers.ModelSerializer):
+    """Listado público (enlaces del footer): sin el contenido."""
+
     class Meta:
         model = PaginaLegal
-        fields = ['id', 'tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']
+        fields = ['id', 'tipo_pagina', 'titulo', 'ultima_actualizacion']
+
+
+class PaginaLegalDetalleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaginaLegal
+        fields = ['tipo_pagina', 'titulo', 'contenido', 'ultima_actualizacion']
+
+
+class PaginaLegalAdminSerializer(serializers.ModelSerializer):
+    """RF-03.5: el admin redacta, guarda como borrador y publica cada página."""
+
+    class Meta:
+        model = PaginaLegal
+        fields = ['tipo_pagina', 'titulo', 'contenido', 'publicada', 'ultima_actualizacion']
+        read_only_fields = ['tipo_pagina', 'ultima_actualizacion']
+        extra_kwargs = {'contenido': {'allow_blank': True}}
+
+    def validate_contenido(self, value):
+        # Se muestra tal cual en la tienda: solo queda el formato del editor (XSS)
+        return limpiar_html(value)
+
+    def validate(self, data):
+        publicada = data.get('publicada', self.instance.publicada if self.instance else False)
+        contenido = data.get('contenido', self.instance.contenido if self.instance else '')
+        if publicada and not tiene_texto(contenido):
+            raise serializers.ValidationError({'contenido': 'No se puede publicar una página sin contenido.'})
+        return data

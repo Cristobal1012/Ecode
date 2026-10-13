@@ -1,16 +1,21 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
+from ecommerce.domain.logistica import ErrorOrdenTransporte
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
 from .serializers import ConfiguracionGlobalSerializer
+
+
+ADAPTADOR_ORDEN_TRANSPORTE = 'ecommerce.infrastructure.ventas.adapters.orden_transporte'
 
 
 def usar_catalogo_falso(test, variantes):
@@ -35,7 +40,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
 
         self.assertEqual(
             set(data),
-            {'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
+            {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'layout_catalogo',
              'pasarelas_activas', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
@@ -65,6 +70,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             banner_url='https://example.com/hero.jpg',
         )
 
+    @override_settings(GOOGLE_CLIENT_ID='cliente-qa.apps.googleusercontent.com')
     def test_public_endpoint_matches_frontend_contract(self):
         url = reverse('configuracion-global')
 
@@ -76,6 +82,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
         self.assertEqual(url, '/api/configuracion/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {
+            'google_client_id': 'cliente-qa.apps.googleusercontent.com',
             'texto_bienvenida': 'Bienvenido a Tienda QA',
             'texto_boton_ingreso': 'Ver productos',
             'banner_url': 'https://example.com/hero.jpg',
@@ -304,6 +311,69 @@ class CheckoutAccessTests(APITestCase):
         )
         self.assertEqual(self.client.get(reverse('checkout')).status_code, 405)
 
+    def publicar(self, tipo):
+        PaginaLegal.objects.create(tipo_pagina=tipo, titulo=tipo, contenido='<p>Texto</p>', publicada=True)
+
+    @override_settings(EXIGIR_PAGINAS_LEGALES=True)
+    def test_en_produccion_no_se_vende_sin_terminos_y_privacidad_publicados(self):
+        self.configure('INVITADO')
+        response = self.checkout()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Términos y Condiciones ni Política de Privacidad', str(response.data['acepta_terminos']))
+
+        # Un borrador o solo una de las dos no basta
+        PaginaLegal.objects.create(tipo_pagina='PRIVACIDAD', titulo='Privacidad', contenido='<p>x</p>')
+        self.publicar('TERMINOS')
+        response = self.checkout()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Política de Privacidad', str(response.data['acepta_terminos']))
+        self.assertNotIn('Términos', str(response.data['acepta_terminos']))
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        PaginaLegal.objects.filter(tipo_pagina='PRIVACIDAD').update(publicada=True)
+        self.assertEqual(self.checkout().status_code, 201)
+
+    @override_settings(EXIGIR_PAGINAS_LEGALES=False)
+    def test_en_desarrollo_se_vende_sin_paginas_legales(self):
+        self.configure('INVITADO')
+        self.assertEqual(self.checkout().status_code, 201)
+
+
+class ValidarCarritoTests(APITestCase):
+    def setUp(self):
+        usar_catalogo_falso(self, {
+            ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa - CAMISA-S', Decimal('10000.00'), 3, True),
+            ('camisa', 'CAMISA-M'): VarianteCatalogo('Camisa - CAMISA-M', Decimal('10000.00'), 0, True),
+        })
+
+    def validar(self, *items):
+        return self.client.post(reverse('carrito-validar'), {'items': [
+            {'producto_mongo_id': producto, 'variante_sku': sku, 'cantidad': cantidad}
+            for producto, sku, cantidad in items
+        ]}, format='json')
+
+    def test_invitado_valida_su_carrito_sin_sesion(self):
+        response = self.validar(('camisa', 'CAMISA-S', 3))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['valido'])
+        linea, = response.data['items']
+        self.assertEqual((linea['disponible'], linea['precio'], linea['problema']), (3, '10000.00', None))
+
+    def test_informa_cada_linea_con_problema(self):
+        response = self.validar(('camisa', 'CAMISA-S', 4), ('camisa', 'CAMISA-M', 1), ('otro', 'X', 1))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['valido'])
+        self.assertEqual([(l['variante_sku'], l['problema'], l['disponible']) for l in response.data['items']], [
+            ('CAMISA-S', 'STOCK_INSUFICIENTE', 3),
+            ('CAMISA-M', 'SIN_STOCK', 0),
+            ('X', 'NO_DISPONIBLE', 0),
+        ])
+        self.assertIn('solo quedan 3', response.data['items'][0]['mensaje'])
+
+    def test_cantidad_invalida_o_sin_items_es_400(self):
+        self.assertEqual(self.validar(('camisa', 'CAMISA-S', 0)).status_code, 400)
+        self.assertEqual(self.client.post(reverse('carrito-validar'), {}, format='json').status_code, 400)
+
 
 @patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter.consultar_estado',
        return_value='En tránsito')
@@ -483,6 +553,72 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertTrue(self.orden.requiere_revision)
 
 
+class AdminOrdenTransporteTests(APITestCase):
+    """RF-02.3: el admin genera o reintenta la OT desde el panel."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.buyer_token = Token.objects.create(user=create_user())
+        cls.admin_token = Token.objects.create(user=create_user('admin@example.test', rol='ADMIN'))
+
+    def setUp(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK',
+            direccion_envio_snapshot={'comuna': 'PROVIDENCIA'}, subtotal=10000, costo_envio=0,
+            total_final=10000, estado='PAGADO', proveedor_logistico='CHILEXPRESS',
+            error_orden_transporte='Chilexpress no respondió',
+        )
+        parche = patch('ecommerce.infrastructure.ventas.views.ChilexpressOrdenTransporte')
+        self.transportista = parche.start().return_value
+        self.addCleanup(parche.stop)
+        self.transportista.generar_orden_transporte.return_value = '712678904136'
+
+    def generar(self, orden_id=None):
+        return self.client.post(reverse('admin-ordenes-orden-transporte', args=[orden_id or self.orden.id]))
+
+    def listado(self):
+        orden, = self.client.get(reverse('admin-ordenes-list')).data
+        return orden
+
+    def test_panel_ofrece_reintentar_y_el_reintento_guarda_la_ot(self):
+        orden = self.listado()
+        self.assertTrue(orden['puede_generar_orden_transporte'])
+        self.assertEqual(orden['error_orden_transporte'], 'Chilexpress no respondió')
+
+        response = self.generar()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['numero_seguimiento_tracking'], '712678904136')
+        orden = self.listado()
+        self.assertEqual((orden['numero_seguimiento_tracking'], orden['error_orden_transporte']),
+                         ('712678904136', ''))
+        self.assertFalse(orden['puede_generar_orden_transporte'])
+
+    def test_fallo_del_transportista_es_502_y_queda_guardado(self):
+        self.transportista.generar_orden_transporte.side_effect = ErrorOrdenTransporte('Sin cobertura')
+        response = self.generar()
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.data['detail'], 'Sin cobertura')
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.error_orden_transporte, 'Sin cobertura')
+
+    def test_pedido_cancelado_o_en_revision_no_genera_ot(self):
+        for cambios in ({'estado': 'CANCELADO'}, {'requiere_revision': True}):
+            with self.subTest(cambios=cambios):
+                OrdenCompra.objects.filter(id=self.orden.id).update(
+                    **{'estado': 'PAGADO', 'requiere_revision': False, **cambios})
+                self.assertFalse(self.listado()['puede_generar_orden_transporte'])
+                self.assertEqual(self.generar().status_code, 409)
+        self.transportista.generar_orden_transporte.assert_not_called()
+        self.assertEqual(self.generar(orden_id=999999).status_code, 404)
+
+    def test_solo_el_admin_genera_ot(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.buyer_token.key}')
+        self.assertEqual(self.generar().status_code, 403)
+        self.transportista.generar_orden_transporte.assert_not_called()
+
+
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class AnulacionTransbankTests(APITestCase):
     def anular(self, orden_compra):
@@ -546,11 +682,34 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.assertFalse(self.orden.requiere_revision)
         self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 1)
 
+    def test_si_el_proceso_cae_al_descontar_la_orden_ya_esta_marcada_para_revision(self):
+        class ProcesoInterrumpido(BaseException):
+            pass
+
+        self.inventario.falla_en = ('camisa', 'CAMISA-S')
+        self.inventario.error = ProcesoInterrumpido()
+        with self.assertRaises(ProcesoInterrumpido):
+            self.confirmar_pago()
+
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PAGADO')
+        self.assertTrue(self.orden.requiere_revision)
+        self.assertIn('la confirmación del stock no terminó', self.orden.motivo_revision)
+        self.assertFalse(self.orden.stock_descontado)
+
+    def test_error_del_inventario_lleva_al_comprador_al_aviso_de_revision(self):
+        self.inventario.falla_en = ('camisa', 'CAMISA-S')
+        with self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR'):
+            response = self.confirmar_pago()
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}&revision=1')
+
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
-        OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
-        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica:
-            logistica._obtener_catalogo_dinamico.return_value = {}
+        OrdenCompra.objects.filter(id=self.orden.id).update(
+            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'})
+        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica:
+            logistica._obtener_catalogo_dinamico.return_value = {'SANTIAGO': 'STGO'}
             logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}
             self.confirmar_pago()
             response = self.confirmar_pago()
@@ -566,10 +725,12 @@ class PagoAprobadoTransbankTests(APITestCase):
     def test_pago_confirmado_sin_stock_queda_pagado_y_en_revision_sin_ot(self):
         self.inventario.stock[('camisa', 'CAMISA-S')] = 1
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
-        with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica,                 self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
+        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica, \
+                self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
             response = self.confirmar_pago()
 
-        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
+        # El comprador ve que su pago llegó y que la tienda revisará el pedido
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}&revision=1')
         self.assertIn('Pago confirmado sin stock para CAMISA-S', logs.output[0])
         logistica.generar_orden_transporte.assert_not_called()
         self.orden.refresh_from_db()

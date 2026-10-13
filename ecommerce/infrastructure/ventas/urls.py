@@ -38,6 +38,8 @@ ventas_urlpatterns = [
     
     # RUTA PARA EL CARRITO: GET/POST /api/ventas/carrito/
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
+    # Ruta resultante: POST /api/ventas/carrito/validar/ (pública, también para invitados)
+    path('carrito/validar/', views.ValidarCarritoView.as_view(), name='carrito-validar'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
 # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
@@ -57,7 +59,15 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/revision/resolver/
     path('admin/ordenes/<int:pk>/revision/resolver/', views.AdminResolverRevisionView.as_view(),
          name='admin-ordenes-resolver-revision'),
+    # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/orden-transporte/ (genera o reintenta la OT)
+    path('admin/ordenes/<int:pk>/orden-transporte/', views.AdminOrdenTransporteView.as_view(),
+         name='admin-ordenes-orden-transporte'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
+    # Ruta resultante: GET /api/ventas/paginas-legales/<tipo>/ (ej. terminos)
+    path('paginas-legales/<str:tipo>/', views.PaginaLegalDetalleView.as_view(), name='pagina-legal-detalle'),
+    # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
+    path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
+    path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

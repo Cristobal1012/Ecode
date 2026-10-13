@@ -89,6 +89,51 @@ def armar_linea(item: ItemSolicitado, variante: VarianteCatalogo | None) -> Line
     )
 
 
+class ProblemaLinea(StrEnum):
+    NO_DISPONIBLE = 'NO_DISPONIBLE'
+    SIN_STOCK = 'SIN_STOCK'
+    STOCK_INSUFICIENTE = 'STOCK_INSUFICIENTE'
+
+
+@dataclass(frozen=True)
+class LineaRevisada:
+    """Una línea del carrito comparada con el catálogo vigente, antes de crear la orden."""
+
+    producto_id: str
+    sku: str
+    cantidad: int
+    # Unidades que se pueden comprar ahora (0 si la variante no se vende)
+    disponible: int
+    nombre: str | None = None
+    precio: Decimal | None = None
+    problema: ProblemaLinea | None = None
+
+    @property
+    def mensaje(self) -> str | None:
+        if self.problema == ProblemaLinea.NO_DISPONIBLE:
+            return f'El producto {self.sku} ya no está disponible.'
+        if self.problema == ProblemaLinea.SIN_STOCK:
+            return f'{self.nombre} está agotado.'
+        if self.problema == ProblemaLinea.STOCK_INSUFICIENTE:
+            return f'De {self.nombre} solo quedan {self.disponible} unidades.'
+        return None
+
+
+def revisar_linea(item: ItemSolicitado, variante: VarianteCatalogo | None) -> LineaRevisada:
+    """RN-03: misma regla que `armar_linea`, pero informa el problema en vez de rechazar el pedido."""
+    if variante is None or not variante.disponible:
+        return LineaRevisada(item.producto_id, item.sku, item.cantidad, disponible=0,
+                             problema=ProblemaLinea.NO_DISPONIBLE)
+    disponible = max(variante.stock, 0)
+    problema = None
+    if disponible == 0:
+        problema = ProblemaLinea.SIN_STOCK
+    elif item.cantidad > disponible:
+        problema = ProblemaLinea.STOCK_INSUFICIENTE
+    return LineaRevisada(item.producto_id, item.sku, item.cantidad, disponible,
+                         variante.nombre, variante.precio, problema)
+
+
 class EstadoPedido(StrEnum):
     PENDIENTE = 'PENDIENTE'
     PAGADO = 'PAGADO'
@@ -171,3 +216,46 @@ class OrdenRegistrada:
     items: tuple[ItemSolicitado, ...]
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado: bool = False
+    requiere_revision: bool = False
+
+
+class EventoPedido(StrEnum):
+    """RF-04.2: hitos del pedido que se le avisan al comprador."""
+
+    RECIBIDO = 'RECIBIDO'
+    PAGO_APROBADO = 'PAGO_APROBADO'
+    # Pago aprobado, pero el admin debe revisar la orden (ej. sin stock): no se le promete el pedido
+    PAGO_EN_REVISION = 'PAGO_EN_REVISION'
+    PAGO_RECHAZADO = 'PAGO_RECHAZADO'
+    CANCELADO = 'CANCELADO'
+    EN_PREPARACION = 'EN_PREPARACION'
+    DESPACHADO = 'DESPACHADO'
+    ENTREGADO = 'ENTREGADO'
+
+
+# Pagado y aún sin despachar: se puede generar (o reintentar) la orden de transporte
+ESTADOS_CON_ORDEN_TRANSPORTE = frozenset({EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION})
+
+
+class OrdenTransporteNoPermitida(Exception):
+    pass
+
+
+def validar_generacion_orden_transporte(estado, requiere_revision: bool) -> None:
+    """RF-02.3: la OT se genera para pedidos pagados sin despachar y sin una revisión pendiente."""
+    if requiere_revision:
+        raise OrdenTransporteNoPermitida(
+            'Resuelve la revisión del pedido antes de generar la orden de transporte.')
+    if EstadoPedido(estado) not in ESTADOS_CON_ORDEN_TRANSPORTE:
+        raise OrdenTransporteNoPermitida(
+            f'Un pedido {_etiqueta(estado)} no puede generar una orden de transporte.')
+
+
+# RF-04.4: el comprador acepta estas páginas en el checkout, así que deben estar publicadas para vender
+PAGINAS_REQUERIDAS_PARA_VENDER = ('TERMINOS', 'PRIVACIDAD')
+
+
+def paginas_legales_faltantes(publicadas) -> list[str]:
+    """Páginas legales requeridas para vender que aún no están publicadas, en orden fijo."""
+    publicadas = set(publicadas)
+    return [tipo for tipo in PAGINAS_REQUERIDAS_PARA_VENDER if tipo not in publicadas]

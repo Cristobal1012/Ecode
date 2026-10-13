@@ -10,13 +10,15 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
+import GestorMediosPago from '../components/GestorMediosPago';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
 const SECCIONES_CONFIGURACION = [
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
-  { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' }
+  { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
+  { id: 'config-medios-pago', titulo: 'Medios de Pago' }
 ];
 
 const TituloSeccion = ({ id }) => (
@@ -292,6 +294,13 @@ export default function Admin() {
                       {guardandoLocal ? 'Guardando...' : 'Guardar Dirección y Opciones de Retiro'}
                     </button>
                   </form>
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+
+                <div>
+                  <TituloSeccion id="config-medios-pago" />
+                  <GestorMediosPago />
                 </div>
               </div>
             </div>

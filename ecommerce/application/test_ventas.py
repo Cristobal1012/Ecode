@@ -118,10 +118,11 @@ class InventarioFalso(InventarioVariantes):
     def __init__(self, stock):
         self.stock = dict(stock)
         self.falla_en = None
+        self.error = ConnectionError('inventario no disponible')
 
     def descontar(self, producto_id, sku, cantidad):
         if (producto_id, sku) == self.falla_en:
-            raise ConnectionError('inventario no disponible')
+            raise self.error
         if self.stock.get((producto_id, sku), 0) < cantidad:
             return False
         self.stock[(producto_id, sku)] -= cantidad
@@ -150,7 +151,7 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'],
                                          datos['stock_descontado'])
 
-    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion=''):
+    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         datos = self.ordenes[orden_id]
         if self.cambio_concurrente:
             datos['estado'], self.cambio_concurrente = self.cambio_concurrente, None
@@ -159,10 +160,15 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         datos['estado'] = EstadoPedido(hacia)
         if motivo_cancelacion:
             datos['motivo_cancelacion'] = motivo_cancelacion
+        if motivo_revision:
+            datos.update(requiere_revision=True, motivo_revision=motivo_revision)
         return True
 
     def registrar_stock_descontado(self, orden_id, descontado=True):
         self.ordenes[orden_id]['stock_descontado'] = descontado
+
+    def completar_pago(self, orden_id):
+        self.ordenes[orden_id].update(stock_descontado=True, requiere_revision=False, motivo_revision='')
 
     def marcar_revision(self, orden_id, motivo):
         self.ordenes[orden_id].update(requiere_revision=True, motivo_revision=motivo)
@@ -186,8 +192,24 @@ class ConfirmarPagoTests(SimpleTestCase):
         self.assertEqual(self.caso.aprobar(1), ResultadoPago.PAGADO)
         self.assertEqual(self.orden['estado'], EstadoPedido.PAGADO)
         self.assertTrue(self.orden['stock_descontado'])
+        # La marca provisional se quita al terminar
+        self.assertFalse(self.orden['requiere_revision'])
         self.assertEqual(self.orden['motivo_revision'], '')
         self.assertEqual(self.inventario.stock, {('camisa', 'CAMISA-S'): 0, ('gorro', 'GORRO-U'): 0})
+
+    def test_si_el_proceso_cae_al_descontar_la_orden_queda_pagada_y_en_revision(self):
+        # Una caída del proceso no pasa por los except: solo queda lo que ya se escribió
+        class ProcesoInterrumpido(BaseException):
+            pass
+
+        self.inventario.falla_en = ('gorro', 'GORRO-U')
+        self.inventario.error = ProcesoInterrumpido()
+        with self.assertRaises(ProcesoInterrumpido):
+            self.caso.aprobar(1)
+        self.assertEqual(self.orden['estado'], EstadoPedido.PAGADO)
+        self.assertTrue(self.orden['requiere_revision'])
+        self.assertIn('la confirmación del stock no terminó', self.orden['motivo_revision'])
+        self.assertFalse(self.orden['stock_descontado'])
 
     def test_confirmacion_repetida_no_descuenta_otra_vez(self):
         self.caso.aprobar(1)

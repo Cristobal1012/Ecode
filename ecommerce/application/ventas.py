@@ -94,12 +94,20 @@ class RepositorioOrdenes(ABC):
 
     @abstractmethod
     def cambiar_estado(self, orden_id, desde: EstadoPedido, hacia: EstadoPedido,
-                       motivo_cancelacion: str = '') -> bool:
-        """Cambia el estado de forma atómica solo si sigue siendo `desde`; False si no."""
+                       motivo_cancelacion: str = '', motivo_revision: str = '') -> bool:
+        """Cambia el estado de forma atómica solo si sigue siendo `desde`; False si no.
+
+        Con `motivo_revision`, el mismo cambio deja la orden marcada para revisión.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def registrar_stock_descontado(self, orden_id, descontado: bool = True) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def completar_pago(self, orden_id) -> None:
+        """Registra el stock descontado y quita la marca de revisión provisional, en un solo paso."""
         raise NotImplementedError
 
     @abstractmethod
@@ -127,6 +135,9 @@ MOTIVO_CANCELACION_ADMIN = 'Cancelado por el administrador'
 MOTIVO_SIN_STOCK = 'Pago confirmado sin stock para {sku}'
 MOTIVO_ORDEN_NO_PENDIENTE = 'Pago aprobado sobre una orden en estado {estado}'
 MOTIVO_ERROR_INVENTARIO = 'No se pudo descontar el stock'
+# Marca provisional mientras se descuenta el stock; solo queda a la vista si el proceso se interrumpe
+MOTIVO_CONFIRMACION_INTERRUMPIDA = (
+    'El pago se aprobó, pero la confirmación del stock no terminó. Verifica el stock de la orden.')
 
 
 class ConfirmarPago:
@@ -136,6 +147,8 @@ class ConfirmarPago:
     - Stock todo o nada: si falta en una línea, se repone lo descontado y la orden queda
       PAGADO marcada para revisión del admin, que decide si reembolsa.
     - Un pago aprobado sobre una orden no pendiente ni pagada (ej. cancelada) también va a revisión.
+    - Postgres (estado) y Mongo (stock) no comparten transacción: la orden pasa a PAGADO ya marcada
+      para revisión y la marca se quita al terminar. Si el proceso cae a mitad, el admin la ve.
     """
 
     def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes):
@@ -147,7 +160,8 @@ class ConfirmarPago:
         if orden is None:
             return ResultadoPago.NO_ENCONTRADA
 
-        if not self.ordenes.cambiar_estado(orden.id, EstadoPedido.PENDIENTE, EstadoPedido.PAGADO):
+        if not self.ordenes.cambiar_estado(orden.id, EstadoPedido.PENDIENTE, EstadoPedido.PAGADO,
+                                           motivo_revision=MOTIVO_CONFIRMACION_INTERRUMPIDA):
             estado = self.ordenes.obtener(orden.id).estado
             if estado in ESTADOS_PAGADOS:
                 return ResultadoPago.REPETIDO
@@ -172,7 +186,7 @@ class ConfirmarPago:
             self.ordenes.marcar_revision(orden.id, MOTIVO_SIN_STOCK.format(sku=faltante.sku))
             return ResultadoPago.EN_REVISION
 
-        self.ordenes.registrar_stock_descontado(orden.id)
+        self.ordenes.completar_pago(orden.id)
         return ResultadoPago.PAGADO
 
     def rechazar(self, orden_id, motivo: str) -> bool:

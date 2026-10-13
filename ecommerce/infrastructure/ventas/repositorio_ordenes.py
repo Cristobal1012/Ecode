@@ -18,16 +18,22 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
         )
         return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado)
 
-    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion=''):
+    def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         # Un UPDATE condicional es atómico: de dos cambios simultáneos solo uno se aplica
         cambios = {'estado': EstadoPedido(hacia).value}
         if motivo_cancelacion:
             cambios['motivo_cancelacion'] = motivo_cancelacion
+        if motivo_revision:
+            cambios.update(requiere_revision=True, motivo_revision=motivo_revision)
         return OrdenCompra.objects.filter(
             id=orden_id, estado=EstadoPedido(desde).value).update(**cambios) == 1
 
     def registrar_stock_descontado(self, orden_id, descontado=True):
         OrdenCompra.objects.filter(id=orden_id).update(stock_descontado=descontado)
+
+    def completar_pago(self, orden_id):
+        OrdenCompra.objects.filter(id=orden_id).update(
+            stock_descontado=True, requiere_revision=False, motivo_revision='')
 
     def marcar_revision(self, orden_id, motivo):
         OrdenCompra.objects.filter(id=orden_id).update(requiere_revision=True, motivo_revision=motivo)

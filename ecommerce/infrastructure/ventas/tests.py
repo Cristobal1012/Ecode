@@ -610,6 +610,21 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.assertFalse(self.orden.requiere_revision)
         self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 1)
 
+    def test_si_el_proceso_cae_al_descontar_la_orden_ya_esta_marcada_para_revision(self):
+        class ProcesoInterrumpido(BaseException):
+            pass
+
+        self.inventario.falla_en = ('camisa', 'CAMISA-S')
+        self.inventario.error = ProcesoInterrumpido()
+        with self.assertRaises(ProcesoInterrumpido):
+            self.confirmar_pago()
+
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PAGADO')
+        self.assertTrue(self.orden.requiere_revision)
+        self.assertIn('la confirmación del stock no terminó', self.orden.motivo_revision)
+        self.assertFalse(self.orden.stock_descontado)
+
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')

@@ -3,7 +3,8 @@ import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 
-export default function Login({ onSwitchToRegister }) {
+// googleHabilitado: la tienda configuró GOOGLE_CLIENT_ID (RN-04); si no, no se ofrece Google
+export default function Login({ onSwitchToRegister, googleHabilitado = false }) {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         email: '',
@@ -78,10 +79,13 @@ export default function Login({ onSwitchToRegister }) {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         const googleToken = credentialResponse.credential;
-        
+
         try {
-            await clienteAxios.post('google-login/', { token: googleToken });
-            
+            const { data } = await clienteAxios.post('usuarios/google/', { id_token: googleToken });
+            // Este endpoint devuelve los JWT dentro de "tokens" (el interceptor solo guarda los del nivel superior)
+            localStorage.setItem('access_token', data.tokens.access);
+            localStorage.setItem('refresh_token', data.tokens.refresh);
+
             const respuestaPerfil = await clienteAxios.get('usuarios/me/');
             const rolUsuario = respuestaPerfil.data.rol;
 
@@ -89,8 +93,13 @@ export default function Login({ onSwitchToRegister }) {
             await sincronizarCarrito();
 
             alert("¡Inicio de sesión con Google exitoso!");
-            
-            if (rolUsuario === 'ADMIN') {
+
+            // Igual que el login con contraseña: vuelve a donde estaba (ej. el checkout)
+            const urlAnterior = localStorage.getItem('url_anterior_login');
+            if (urlAnterior) {
+                localStorage.removeItem('url_anterior_login');
+                navigate(urlAnterior);
+            } else if (rolUsuario === 'ADMIN') {
                 navigate('/admin');
             } else {
                 navigate('/catalogo');
@@ -138,16 +147,20 @@ export default function Login({ onSwitchToRegister }) {
                 </button>
             </form>
 
-            <div style={{ margin: '20px 0', textAlign: 'center', color: '#888', fontSize: '14px' }}>
-                O ingresa con
-            </div>
+            {googleHabilitado && (
+                <>
+                    <div style={{ margin: '20px 0', textAlign: 'center', color: '#4b5563', fontSize: '14px' }}>
+                        O ingresa con
+                    </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={handleGoogleError}
-                />
-            </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <GoogleLogin
+                            onSuccess={handleGoogleSuccess}
+                            onError={handleGoogleError}
+                        />
+                    </div>
+                </>
+            )}
 
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
                 <button 

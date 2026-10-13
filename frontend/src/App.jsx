@@ -35,13 +35,13 @@ const applyPaletteToRoot = (paletteId) => {
 };
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
-function AuthPage() {
+function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
 
   return (
     <div>
       {showLogin ? (
-        <Login onSwitchToRegister={() => setShowLogin(false)} />
+        <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
       ) : (
         <Register onSwitchToLogin={() => setShowLogin(true)} />
       )}
@@ -50,7 +50,8 @@ function AuthPage() {
 }
 
 function App() {
-  const GOOGLE_CLIENT_ID = "tu-client-id-temporal.apps.googleusercontent.com";
+  // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
+  const [googleClientId, setGoogleClientId] = useState('');
 
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
@@ -63,6 +64,7 @@ function App() {
       try {
         const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
+        setGoogleClientId(config?.google_client_id || '');
         if (config && config.tema_seleccionado !== undefined) {
           const serverId = Number(config.tema_seleccionado);
           localStorage.setItem('ecommerce_palette', serverId.toString());
@@ -98,46 +100,49 @@ function App() {
   }, []);
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <BrowserRouter>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <main style={{ flex: 1 }}>
-            <Routes>
-              {/* Vistas públicas */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/seguimiento" element={<SeguimientoEnvio />} />
-              <Route path="/variantes" element={<VariantSelector />} />
-              <Route path="/catalogo" element={<Catalogo />} />
-              <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
-              <Route path="/mis-direcciones" element={<MisDirecciones />} />
-              <Route path="/pago-exitoso" element={<PagoExitoso />} />
-              <Route path="/pedido-recibido" element={<PedidoRecibido />} />
-              <Route path="/pago-cancelado" element={<PagoCancelado />} />
-              <Route path="/pago-rechazado" element={<PagoCancelado />} />
-              {/* Pantalla de login y registro */}
-              <Route path="/login" element={<AuthPage />} />
+    <BrowserRouter>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <main style={{ flex: 1 }}>
+          <Routes>
+            {/* Vistas públicas */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/seguimiento" element={<SeguimientoEnvio />} />
+            <Route path="/variantes" element={<VariantSelector />} />
+            <Route path="/catalogo" element={<Catalogo />} />
+            <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
+            <Route path="/mis-direcciones" element={<MisDirecciones />} />
+            <Route path="/pago-exitoso" element={<PagoExitoso />} />
+            <Route path="/pedido-recibido" element={<PedidoRecibido />} />
+            <Route path="/pago-cancelado" element={<PagoCancelado />} />
+            <Route path="/pago-rechazado" element={<PagoCancelado />} />
+            {/* Pantalla de login y registro */}
+            {/* El script de Google se carga solo aquí y solo si la tienda ofrece Google (RN-04) */}
+            <Route path="/login" element={googleClientId ? (
+              <GoogleOAuthProvider clientId={googleClientId}>
+                <AuthPage googleHabilitado />
+              </GoogleOAuthProvider>
+            ) : <AuthPage googleHabilitado={false} />} />
 
-              {/* Vista pública para desplegar páginas legales individuales (RF-03.5) */}
-              <Route path="/legal/:tipo" element={<PaginaLegal />} />
+            {/* Vista pública para desplegar páginas legales individuales (RF-03.5) */}
+            <Route path="/legal/:tipo" element={<PaginaLegal />} />
 
-              {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/mis-pedidos" element={<HistorialPedidos />} />
-              </Route>
+            {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/mis-pedidos" element={<HistorialPedidos />} />
+            </Route>
 
-              {/* Ruta protegida para usuarios con rol ADMIN */}
-              <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
-                <Route path="/admin" element={<Admin />} />
-              </Route>
-            </Routes>
-          </main>
-          
-          {/* Footer inyectado dinámicamente en toda la aplicación */}
-          <Footer />
-        </div>
-      </BrowserRouter>
-    </GoogleOAuthProvider>
+            {/* Ruta protegida para usuarios con rol ADMIN */}
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+              <Route path="/admin" element={<Admin />} />
+            </Route>
+          </Routes>
+        </main>
+        
+        {/* Footer inyectado dinámicamente en toda la aplicación */}
+        <Footer />
+      </div>
+    </BrowserRouter>
   );
 }
 

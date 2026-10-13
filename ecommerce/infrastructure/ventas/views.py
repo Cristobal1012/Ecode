@@ -226,7 +226,9 @@ class TransbankRetornoView(APIView):
         elif resultado == ResultadoPago.PAGADO:
             self._generar_orden_transporte(orden)
 
-        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}")
+        # El comprador sabe que su pago llegó, pero no se le promete un pedido que el admin debe revisar
+        revision = '&revision=1' if orden.requiere_revision else ''
+        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
 
     def _generar_orden_transporte(self, orden):
         """Genera la OT y etiqueta en Chilexpress para una orden recién pagada."""

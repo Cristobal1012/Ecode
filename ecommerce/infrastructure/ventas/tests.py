@@ -625,6 +625,13 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.assertIn('la confirmación del stock no terminó', self.orden.motivo_revision)
         self.assertFalse(self.orden.stock_descontado)
 
+    def test_error_del_inventario_lleva_al_comprador_al_aviso_de_revision(self):
+        self.inventario.falla_en = ('camisa', 'CAMISA-S')
+        with self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR'):
+            response = self.confirmar_pago()
+
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}&revision=1')
+
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
@@ -648,7 +655,8 @@ class PagoAprobadoTransbankTests(APITestCase):
         with patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter') as logistica,                 self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
             response = self.confirmar_pago()
 
-        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}')
+        # El comprador ve que su pago llegó y que la tienda revisará el pedido
+        self.assertEqual(response['Location'], f'http://tienda.test/pago-exitoso?orden={self.orden.id}&revision=1')
         self.assertIn('Pago confirmado sin stock para CAMISA-S', logs.output[0])
         logistica.generar_orden_transporte.assert_not_called()
         self.orden.refresh_from_db()

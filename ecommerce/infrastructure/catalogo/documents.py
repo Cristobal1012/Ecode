@@ -23,6 +23,8 @@ class Producto(Document):
     nombre = fields.StringField(required=True, max_length=255)
     descripcion = fields.StringField(null=True, blank=True)
     categoria = fields.StringField(required=True)
+    meta_titulo = fields.StringField(max_length=60, null=True, blank=True)
+    meta_descripcion = fields.StringField(max_length=160, null=True, blank=True)
     # Managed images use storage keys internally; serializers expose their URLs.
     # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)

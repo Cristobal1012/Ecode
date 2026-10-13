@@ -26,6 +26,8 @@ class ProductoSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     nombre = serializers.CharField(max_length=255)
     descripcion = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    meta_titulo = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
+    meta_descripcion = serializers.CharField(max_length=160, required=False, allow_blank=True, allow_null=True)
     categoria = serializers.CharField()
     imagenes = serializers.ListField(child=ReferenciaImagenField(), required=False)
     

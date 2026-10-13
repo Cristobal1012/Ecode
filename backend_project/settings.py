@@ -54,6 +54,20 @@ if not DEBUG and (not SECRET_KEY or SECRET_KEY.startswith('django-insecure')):
         'print(get_random_secret_key())". En desarrollo puedes usar DEBUG=True.'
     )
 
+# Cifra en PostgreSQL las credenciales de los medios de pago (AGENTS.md §7). Es independiente de la SECRET_KEY:
+# cambiar la SECRET_KEY no debe dejar ilegibles las credenciales guardadas.
+CLAVE_CIFRADO_CREDENCIALES = os.environ.get('CLAVE_CIFRADO_CREDENCIALES', '').strip()
+if not CLAVE_CIFRADO_CREDENCIALES and DEBUG:
+    CLAVE_CIFRADO_CREDENCIALES = SECRET_KEY
+    warnings.warn('CLAVE_CIFRADO_CREDENCIALES no está definida: las credenciales se cifran con la SECRET_KEY '
+                  '(solo aceptable con DEBUG=True).')
+if not CLAVE_CIFRADO_CREDENCIALES:
+    raise ImproperlyConfigured(
+        'Define CLAVE_CIFRADO_CREDENCIALES en el .env (obligatoria con DEBUG=False). Genérala con: '
+        'python -c "import secrets; print(secrets.token_urlsafe(32))". Si la cambias, hay que volver a '
+        'cargar las credenciales de los medios de pago desde el panel.'
+    )
+
 ALLOWED_HOSTS = env_lista('ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG else '')
 
 

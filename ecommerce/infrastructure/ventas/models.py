@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 
+from ecommerce.domain.medios_pago import MEDIOS_PAGO
+
 class ConfiguracionGlobal(models.Model):
     MODOS_AUTENTICACION = [
         ('INVITADO', 'Invitado'),
@@ -52,12 +54,29 @@ class ConfiguracionGlobal(models.Model):
         default='MIXTO'
     )
     
+    # Obsoleto: los medios de pago viven en MedioPago (credenciales cifradas). Se migró en 0016
     api_keys_pagos = models.JSONField(default=dict, blank=True)
     api_keys_logistica = models.JSONField(default=dict, blank=True)
-    layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3") 
+    layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3")
 
     def __str__(self):
         return self.nombre_tienda
+
+
+class MedioPago(models.Model):
+    """Un medio de pago configurado por el emprendedor (RN-02). Los campos de cada medio los define el dominio."""
+
+    codigo = models.CharField(max_length=30, unique=True,
+                              choices=[(d.codigo.value, d.nombre) for d in MEDIOS_PAGO])
+    habilitado = models.BooleanField(default=False)
+    # Datos que no son secretos (ej. ambiente, datos bancarios que ve el comprador)
+    datos = models.JSONField(default=dict, blank=True)
+    # Credenciales en JSON cifrado con CLAVE_CIFRADO_CREDENCIALES (AGENTS.md §7); nunca en texto plano
+    credenciales_cifradas = models.TextField(blank=True, default='')
+    actualizado = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.get_codigo_display()
 
 class DireccionEnvio(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='direcciones')

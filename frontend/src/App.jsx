@@ -21,6 +21,8 @@ import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
 import TrackingScripts from './components/TrackingScripts';
+import CookieBanner from './components/CookieBanner';
+import useCookieConsent from './hooks/useCookieConsent';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -51,6 +53,10 @@ function AuthPage({ googleHabilitado }) {
 }
 
 function App() {
+  const {
+    consent, isBannerOpen, storageError,
+    acceptCookies, rejectCookies, openPreferences, closePreferences,
+  } = useCookieConsent();
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const [googleClientId, setGoogleClientId] = useState('');
   const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
@@ -107,6 +113,7 @@ function App() {
       <TrackingScripts
         googleAnalyticsId={trackingIds.googleAnalyticsId}
         metaPixelId={trackingIds.metaPixelId}
+        consent={consent}
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <main style={{ flex: 1 }}>
@@ -147,7 +154,15 @@ function App() {
         </main>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer />
+        <Footer onOpenCookiePreferences={openPreferences} />
+        <CookieBanner
+          consent={consent}
+          isOpen={isBannerOpen}
+          storageError={storageError}
+          onAccept={acceptCookies}
+          onReject={rejectCookies}
+          onClose={closePreferences}
+        />
       </div>
     </BrowserRouter>
   );

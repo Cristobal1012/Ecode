@@ -1,10 +1,8 @@
-import os
 import requests
 import logging
 from decimal import Decimal, ROUND_HALF_UP
-from dotenv import load_dotenv
 
-load_dotenv()
+from ..repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +18,19 @@ class ProveedorLogisticoAdapter:
     # CACHÉ EN MEMORIA: Guarda el diccionario para no hacer 16 peticiones en cada cotización
     _CACHE_COBERTURAS = {}
 
+    @staticmethod
+    def _credenciales():
+        """Llaves que carga el admin en el panel (cifradas en PostgreSQL); nunca desde el .env."""
+        return DjangoRepositorioCredencialesChilexpress().obtener()
+
+    @classmethod
+    def _obtener_headers_chilexpress(cls):
+        """Headers de la API de envíos (OT y etiquetas); None si no hay llave cargada."""
+        api_key = cls._credenciales().llave_envios
+        if not api_key:
+            return None
+        return {"Ocp-Apim-Subscription-Key": api_key, "Content-Type": "application/json"}
+
     @classmethod
     def _obtener_catalogo_dinamico(cls):
         """Consume la API de Regiones y luego la de Coberturas para armar el mapa del país"""
@@ -27,10 +38,11 @@ class ProveedorLogisticoAdapter:
         if cls._CACHE_COBERTURAS:
             return cls._CACHE_COBERTURAS
 
-        api_key = os.getenv("CHILEXPRESS_API_KEY_COBERTURAS", "").strip()
+        api_key = cls._credenciales().llave_coberturas
         if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
-            
+            logger.error("Faltan las credenciales de Chilexpress: se cargan en el panel (Configuración).")
+            return {}
+
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
             "Content-Type": "application/json"
@@ -113,7 +125,7 @@ class ProveedorLogisticoAdapter:
             return {"error": f"La comuna '{destino}' no es válida o no tiene cobertura.", "tipo": "cobertura"}
 
         url = "https://testservices.wschilexpress.com/rating/api/v1.0/rates/business"
-        api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().cotizador
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
             "Content-Type": "application/json"
@@ -180,7 +192,7 @@ class ProveedorLogisticoAdapter:
     def _consultar_chilexpress(cls, codigo):
         url = f"https://dev.chilexpress.cl/traking/api/v1.0/tracking/{codigo}" 
         headers = {
-            "Ocp-Apim-Subscription-Key": os.getenv("CHILEXPRESS_API_KEY_ENVIOS", "").strip(), 
+            "Ocp-Apim-Subscription-Key": cls._credenciales().llave_envios,
             "Content-Type": "application/json"
         }
         try:
@@ -209,9 +221,7 @@ class ProveedorLogisticoAdapter:
         # URL oficial ajustada a la documentación de Chilexpress (Type=0 para todas las oficinas)
         url = f"https://testservices.wschilexpress.com/georeference/api/v1.0/offices?Type=0&CountyName={nombre_limpio}"
         
-        api_key = os.getenv("CHILEXPRESS_API_KEY_GEO", "").strip()
-        if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().llave_coberturas
 
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
@@ -255,9 +265,7 @@ class ProveedorLogisticoAdapter:
         """
         url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders"
         
-        api_key = os.getenv("CHILEXPRESS_API_KEY_ENVIOS", "").strip()
-        if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().llave_envios
 
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
@@ -353,9 +361,9 @@ class ProveedorLogisticoAdapter:
     def obtener_etiqueta_chilexpress(cls, numero_ot):
         import requests
         
-        url = "http://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders-labels"
+        url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders-labels"
         
-        # Obtenemos las credenciales (Ocp-Apim-Subscription-Key) igual que en tus otros métodos
+        # Llave de la API de envíos cargada en el panel
         headers = cls._obtener_headers_chilexpress()
         if not headers:
             return {"error": "Credenciales de Chilexpress no configuradas."}

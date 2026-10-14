@@ -7,11 +7,12 @@ from rest_framework.test import APITestCase
 
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.application.ventas import GenerarOrdenTransporte
-from ecommerce.domain.logistica import Paquete, SolicitudCotizacion
+from ecommerce.domain.logistica import CredencialesChilexpress, Paquete, SolicitudCotizacion
 from ecommerce.domain.ventas import VarianteCatalogo
 
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .models import ConfiguracionGlobal, OrdenCompra
+from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
@@ -110,9 +111,10 @@ TARIFA_OK = [{'serviceValue': 3500, 'serviceDescription': 'EXPRESS'}]
 ITEMS = [{'producto_mongo_id': 'polera', 'variante_sku': 'POLERA-M', 'cantidad': 1}]
 
 
-@patch.dict('os.environ', {'CHILEXPRESS_API_KEY_COTIZADOR': 'secreto-chilexpress'})
 class CotizacionesAPITests(APITestCase):
     def setUp(self):
+        # La llave la carga el admin en el panel (cifrada en la base), no el .env
+        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(cotizador='secreto-chilexpress'))
         habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
@@ -269,9 +271,10 @@ class CotizacionesAPITests(APITestCase):
         self.assertFalse(OrdenCompra.objects.exists())
 
 
-@patch.dict('os.environ', {'CHILEXPRESS_API_KEY_ENVIOS': 'secreto-chilexpress'})
 class OrdenTransporteTests(APITestCase):
     def setUp(self):
+        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(
+            cotizador='llave-cotizador', envios='secreto-chilexpress'))
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', comuna_origen='Santiago')
         self.orden = OrdenCompra.objects.create(
             email_invitado='cliente@example.test', metodo_pago='TRANSBANK',

@@ -4,7 +4,9 @@
 > (plataforma administrada, VPS y nube) se agregarán en esta carpeta.
 
 Toda la configuración va por variables de entorno, documentadas en `.env.example`. Las credenciales de los
-medios de pago **no** van en el entorno: el emprendedor las carga desde el panel (Configuración > Medios de pago).
+proveedores **no** van en el entorno: el emprendedor las carga desde el panel (Configuración > Medios de pago y
+Configuración > Envíos con Chilexpress) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Si esa clave
+cambia, hay que volver a cargarlas.
 
 ## Pasos después de cada versión nueva
 

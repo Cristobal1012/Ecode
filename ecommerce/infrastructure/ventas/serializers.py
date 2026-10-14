@@ -532,3 +532,20 @@ def medio_pago_para_panel(medio):
         } for campo in medio.definicion.campos],
         'datos': medio.datos_visibles(),
     }
+
+
+class CredencialesChilexpressSerializer(serializers.Serializer):
+    """Entrada del panel: una llave que vuelve enmascarada se conserva y una vacía se borra."""
+
+    datos = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=500))
+
+
+def chilexpress_para_panel(credenciales):
+    """Lo que ve el admin de las llaves de Chilexpress: nunca una llave completa."""
+    return {
+        'configuradas': credenciales.configuradas,
+        'faltantes': credenciales.faltantes,
+        'campos': [{'nombre': nombre, 'etiqueta': etiqueta, 'obligatorio': obligatorio}
+                   for nombre, etiqueta, obligatorio in credenciales.CAMPOS],
+        'datos': credenciales.visibles(),
+    }

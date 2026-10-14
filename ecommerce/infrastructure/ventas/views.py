@@ -23,7 +23,9 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente,
 )
+from ecommerce.application.chilexpress import ConfigurarChilexpress
 from ecommerce.application.medios_pago import ConfigurarMedioPago
+from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
@@ -44,6 +46,8 @@ from .serializers import (
     PaginaLegalDetalleSerializer,
     PaginaLegalAdminSerializer,
     MedioPagoAdminSerializer,
+    CredencialesChilexpressSerializer,
+    chilexpress_para_panel,
     medio_pago_para_panel,
     medios_pago,
 )
@@ -52,6 +56,7 @@ from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .instrucciones_pago import instrucciones_transferencia
+from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
@@ -528,7 +533,7 @@ class SucursalesChilexpressAPIView(APIView):
 class DescargarEtiquetaView(APIView):
     permission_classes = [IsEmprendedor]
 
-    def get(self, orden_id):
+    def get(self, request, orden_id):
         try:
             orden = OrdenCompra.objects.get(id=orden_id)
         except OrdenCompra.DoesNotExist:
@@ -759,3 +764,21 @@ class AdminMedioPagoView(APIView):
         except DatosMedioPagoInvalidos as error:
             return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
         return Response(medio_pago_para_panel(medio))
+
+
+class AdminChilexpressView(APIView):
+    """RNF-03: el admin carga las llaves de Chilexpress desde el panel; solo se devuelven enmascaradas."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        return Response(chilexpress_para_panel(DjangoRepositorioCredencialesChilexpress().obtener()))
+
+    def put(self, request):
+        serializer = CredencialesChilexpressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            credenciales = ConfigurarChilexpress(DjangoRepositorioCredencialesChilexpress()).ejecutar(
+                serializer.validated_data['datos'])
+        except CredencialesChilexpressInvalidas as error:
+            return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(chilexpress_para_panel(credenciales))

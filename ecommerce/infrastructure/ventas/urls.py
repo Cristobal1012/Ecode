@@ -71,6 +71,8 @@ ventas_urlpatterns = [
     # Medios de pago (RN-02): GET la lista y PUT /api/ventas/admin/medios-pago/<codigo>/ (ej. transferencia)
     path('admin/medios-pago/', views.AdminMediosPagoView.as_view(), name='admin-medios-pago'),
     path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),
+    # Llaves de Chilexpress (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
+    path('admin/chilexpress/', views.AdminChilexpressView.as_view(), name='admin-chilexpress'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

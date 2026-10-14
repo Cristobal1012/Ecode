@@ -78,6 +78,19 @@ class MedioPago(models.Model):
     def __str__(self):
         return self.get_codigo_display()
 
+
+class ProveedorEnvio(models.Model):
+    """Credenciales de un transportista que carga el emprendedor en el panel (ej. las llaves de Chilexpress)."""
+
+    codigo = models.CharField(max_length=30, unique=True, choices=[('CHILEXPRESS', 'Chilexpress')])
+    # JSON cifrado con CLAVE_CIFRADO_CREDENCIALES; nunca en texto plano
+    credenciales_cifradas = models.TextField(blank=True, default='')
+    actualizado = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.get_codigo_display()
+
+
 class DireccionEnvio(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='direcciones')
     calle = models.CharField(max_length=255)

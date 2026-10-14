@@ -177,6 +177,8 @@ ETIQUETAS_ESTADO = {
 
 # AGENTS.md §4.1 (decidido el 2026-10-13): plazo para pagar una transferencia; vencido, la orden se cancela
 PLAZO_PAGO_TRANSFERENCIA = timedelta(hours=48)
+# Si sigue sin pagar cuando falta esto para vencer, se le recuerda al comprador (una sola vez)
+AVISO_ANTES_DEL_VENCIMIENTO = timedelta(hours=24)
 
 
 def vencimiento_pago_transferencia(creada: datetime) -> datetime:
@@ -254,6 +256,8 @@ class EventoPedido(StrEnum):
     # Pago aprobado, pero el admin debe revisar la orden (ej. sin stock): no se le promete el pedido
     PAGO_EN_REVISION = 'PAGO_EN_REVISION'
     PAGO_RECHAZADO = 'PAGO_RECHAZADO'
+    # Transferencia aún sin pagar: quedan 24 h antes de que el pedido se cancele
+    RECORDATORIO_PAGO = 'RECORDATORIO_PAGO'
     CANCELADO = 'CANCELADO'
     EN_PREPARACION = 'EN_PREPARACION'
     DESPACHADO = 'DESPACHADO'

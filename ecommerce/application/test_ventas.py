@@ -7,7 +7,7 @@ from ecommerce.application.ventas import (
     CambiarEstadoPedido, CancelarPagosVencidos, CatalogoVariantes, ConfirmarPago, InventarioVariantes,
     OrdenNoEncontrada,
     GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
-    ResolverRevision,
+    RecordarPagosPorVencer, ResolverRevision,
     ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
@@ -149,14 +149,23 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
-            'metodo_pago': metodo_pago, 'creada': creada,
+            'metodo_pago': metodo_pago, 'creada': creada, 'recordatorio_pago': False,
         }
         return self.ordenes[orden_id]
 
-    def pendientes_de_pago(self, metodo_pago, creadas_antes_de):
+    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
         return [orden_id for orden_id, datos in self.ordenes.items()
                 if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago
-                and datos['creada'] < creadas_antes_de]
+                and datos['creada'] < creadas_antes_de and not (sin_recordatorio and datos['recordatorio_pago'])]
+
+    def marcar_recordatorio_pago(self, orden_id):
+        datos = self.ordenes[orden_id]
+        if self.cambio_concurrente:
+            datos['estado'], self.cambio_concurrente = self.cambio_concurrente, None
+        if datos['estado'] != EstadoPedido.PENDIENTE or datos['recordatorio_pago']:
+            return False
+        datos['recordatorio_pago'] = True
+        return True
 
     def obtener_envio(self, orden_id):
         datos = self.ordenes.get(orden_id)
@@ -570,6 +579,47 @@ class CancelarPagosVencidosTests(SimpleTestCase):
         self.caso.ejecutar(self.AHORA)
         self.assertEqual(self.caso.ejecutar(self.AHORA), [])
         self.assertEqual(len(self.notificador.enviados), 1)
+
+
+class RecordarPagosPorVencerTests(SimpleTestCase):
+    """Plazo de pago: a las 24 h sin pagar se le recuerda al comprador la transferencia, una sola vez."""
+
+    AHORA = datetime(2026, 10, 14, 12, 0)
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.notificador = NotificadorFalso()
+        self.caso = RecordarPagosPorVencer(self.ordenes, self.notificador)
+
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+        return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
+                                    creada=self.AHORA - timedelta(hours=horas))
+
+    def test_recuerda_solo_las_transferencias_pendientes_con_mas_de_24_horas(self):
+        por_vencer = self.agregar(1, 25)
+        reciente = self.agregar(2, 23)
+        self.agregar(3, 30, metodo_pago='TRANSBANK')
+        self.agregar(4, 30, estado='PAGADO')
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1])
+
+        self.assertTrue(por_vencer['recordatorio_pago'])
+        self.assertFalse(reciente['recordatorio_pago'])
+        # El recordatorio no cambia el estado: la orden sigue esperando el pago
+        self.assertEqual(por_vencer['estado'], EstadoPedido.PENDIENTE)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.RECORDATORIO_PAGO)])
+
+    def test_volver_a_ejecutar_no_repite_el_recordatorio(self):
+        self.agregar(1, 25)
+        self.caso.ejecutar(self.AHORA)
+        self.assertEqual(self.caso.ejecutar(self.AHORA + timedelta(hours=1)), [])
+        self.assertEqual(len(self.notificador.enviados), 1)
+
+    def test_no_recuerda_una_orden_que_el_admin_valido_mientras_tanto(self):
+        self.agregar(1, 25)
+        self.ordenes.cambio_concurrente = EstadoPedido.PAGADO
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(self.notificador.enviados, [])
 
 
 class ResolverRevisionTests(SimpleTestCase):

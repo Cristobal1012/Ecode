@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import ConfiguracionGlobal, OrdenCompra
+from .tests import DATOS_MEDIOS_PAGO, habilitar_medios_pago
 
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
@@ -16,6 +17,7 @@ class ComandoCancelarPagosVencidosTests(TestCase):
 
     def setUp(self):
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA')
+        habilitar_medios_pago('TRANSFERENCIA')
 
     def crear(self, horas, metodo_pago='TRANSFERENCIA', estado='PENDIENTE'):
         orden = OrdenCompra.objects.create(
@@ -51,5 +53,31 @@ class ComandoCancelarPagosVencidosTests(TestCase):
 
     def test_sin_ordenes_vencidas_no_hace_nada(self):
         self.crear(1)
-        self.assertIn('No hay órdenes con el pago vencido', self.ejecutar())
+        salida = self.ejecutar()
+        self.assertIn('No hay órdenes con el pago vencido', salida)
+        self.assertNotIn('Recordatorios', salida)
         self.assertEqual(mail.outbox, [])
+
+    def test_a_las_24_horas_recuerda_el_pago_una_sola_vez_con_el_plazo(self):
+        por_vencer = self.crear(25)
+        self.crear(1)
+
+        self.assertIn(f'Recordatorios de pago enviados: #{por_vencer.id}.', self.ejecutar())
+
+        por_vencer.refresh_from_db()
+        self.assertEqual((por_vencer.estado, por_vencer.recordatorio_pago_enviado), ('PENDIENTE', True))
+        correo, = mail.outbox
+        self.assertEqual(correo.subject, f'Recuerda pagar tu pedido #{por_vencer.id} | Tienda QA')
+        vence = timezone.localtime(por_vencer.fecha_creacion + timedelta(hours=48))
+        self.assertIn(f"Tienes hasta el {vence.strftime('%d-%m-%Y a las %H:%M')} para transferir", correo.body)
+        self.assertIn(f'Número de cuenta: {DATOS_MEDIOS_PAGO["TRANSFERENCIA"]["numero_cuenta"]}', correo.body)
+        self.assertIn('Tienes hasta el', correo.alternatives[0][0])
+
+        self.ejecutar()
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_una_orden_vencida_se_cancela_sin_recordatorio(self):
+        self.crear(49)
+        self.assertNotIn('Recordatorios', self.ejecutar())
+        correo, = mail.outbox
+        self.assertIn('fue cancelado', correo.subject)

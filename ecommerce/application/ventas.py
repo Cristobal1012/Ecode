@@ -11,7 +11,8 @@ from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    OrdenTransporteNoPermitida, PedidoVacio, PLAZO_PAGO_TRANSFERENCIA, SubtotalDesactualizado, VarianteCatalogo,
+    AVISO_ANTES_DEL_VENCIMIENTO, OrdenTransporteNoPermitida, PedidoVacio, PLAZO_PAGO_TRANSFERENCIA,
+    SubtotalDesactualizado, VarianteCatalogo,
     armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -135,8 +136,16 @@ class RepositorioOrdenes(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de: datetime) -> list:
-        """Ids de las órdenes Pendientes con ese medio de pago creadas antes de la fecha."""
+    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de: datetime, sin_recordatorio: bool = False) -> list:
+        """Ids de las órdenes Pendientes con ese medio de pago creadas antes de la fecha.
+
+        Con `sin_recordatorio`, solo las que aún no recibieron el recordatorio de pago.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def marcar_recordatorio_pago(self, orden_id) -> bool:
+        """Marca el recordatorio como enviado si la orden sigue Pendiente y sin él; False si no."""
         raise NotImplementedError
 
 
@@ -398,6 +407,30 @@ class CancelarPagosVencidos:
                 self.notificador.notificar(orden_id, EventoPedido.CANCELADO)
             canceladas.append(orden_id)
         return canceladas
+
+
+class RecordarPagosPorVencer:
+    """Plazo de pago de la transferencia: a las 24 h sin pagar se le recuerda al comprador que le quedan 24 h.
+
+    - Se ejecuta después de CancelarPagosVencidos, para no recordar una orden que ya venció.
+    - El UPDATE condicional evita repetir el recordatorio y saltarse una orden que el admin validó mientras tanto.
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes, notificador: NotificadorPedidos | None = None):
+        self.ordenes = ordenes
+        self.notificador = notificador
+
+    def ejecutar(self, ahora: datetime) -> list:
+        recordadas = []
+        creadas_antes_de = ahora - (PLAZO_PAGO_TRANSFERENCIA - AVISO_ANTES_DEL_VENCIMIENTO)
+        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value, creadas_antes_de,
+                                                         sin_recordatorio=True):
+            if not self.ordenes.marcar_recordatorio_pago(orden_id):
+                continue
+            if self.notificador:
+                self.notificador.notificar(orden_id, EventoPedido.RECORDATORIO_PAGO)
+            recordadas.append(orden_id)
+        return recordadas
 
 
 class SinRevisionPendiente(Exception):

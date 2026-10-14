@@ -169,6 +169,8 @@ class OrdenCompra(models.Model):
     motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado = models.BooleanField(default=False)
+    # Transferencia: ya se le recordó al comprador que le quedan 24 h para pagar (se envía una sola vez)
+    recordatorio_pago_enviado = models.BooleanField(default=False)
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario

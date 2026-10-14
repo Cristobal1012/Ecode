@@ -15,18 +15,21 @@ python manage.py migrate
 
 ## Tareas programadas
 
-### Cancelar transferencias no pagadas (cada hora)
+### Plazo de pago de las transferencias (cada hora)
 
-Un pedido pagado por transferencia tiene **48 horas** para pagarse. Vencido el plazo, este comando lo cancela
-con el motivo "Pago no recibido a tiempo" y avisa al comprador por correo:
+Un pedido pagado por transferencia tiene **48 horas** para pagarse. Este comando:
+
+- a las 24 horas sin pago, le envía al comprador un recordatorio con los datos para transferir y la fecha límite
+  (una sola vez por pedido);
+- vencido el plazo, cancela el pedido con el motivo "Pago no recibido a tiempo" y avisa al comprador por correo.
 
 ```bash
 python manage.py cancelar_pagos_vencidos
 ```
 
 Django no lo ejecuta solo: hay que programarlo en el servidor. Se recomienda cada hora; así una orden se
-cancela, a lo más, una hora después de vencer. Correrlo de más no tiene efectos: solo cancela las órdenes por
-transferencia que siguen Pendiente y ya vencieron, y cada orden se avisa una sola vez.
+cancela, a lo más, una hora después de vencer. Correrlo de más no tiene efectos: solo toca las órdenes por
+transferencia que siguen Pendiente, y cada correo (recordatorio o cancelación) se envía una sola vez por orden.
 
 - **VPS (cron):** con `crontab -e`, usando las rutas reales del proyecto y del entorno virtual, y con las
   mismas variables de entorno del backend:

@@ -22,6 +22,7 @@ ASUNTOS = {
     EventoPedido.PAGO_APROBADO: 'Pago confirmado: pedido #{id}',
     EventoPedido.PAGO_EN_REVISION: 'Recibimos el pago de tu pedido #{id}',
     EventoPedido.PAGO_RECHAZADO: 'No se pudo completar el pago del pedido #{id}',
+    EventoPedido.RECORDATORIO_PAGO: 'Recuerda pagar tu pedido #{id}',
     EventoPedido.CANCELADO: 'Tu pedido #{id} fue cancelado',
     EventoPedido.EN_PREPARACION: 'Estamos preparando tu pedido #{id}',
     EventoPedido.DESPACHADO: 'Tu pedido #{id} va en camino',

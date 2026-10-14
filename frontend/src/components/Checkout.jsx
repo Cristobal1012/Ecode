@@ -6,6 +6,14 @@ import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
 import './Checkout.css';
 
 export default function Checkout() {
+    return (
+        <main>
+            <CheckoutContenido />
+        </main>
+    );
+}
+
+function CheckoutContenido() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
     const [emailInvitado, setEmailInvitado] = useState('');
     const [mensaje, setMensaje] = useState('');

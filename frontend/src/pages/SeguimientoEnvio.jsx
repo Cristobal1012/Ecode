@@ -50,7 +50,7 @@ export default function SeguimientoEnvio() {
     const indiceEstadoActual = estados.indexOf(estadoActual);
 
     return (
-        <div
+        <main
             style={{
                 maxWidth: '700px',
                 margin: '40px auto',
@@ -228,6 +228,6 @@ export default function SeguimientoEnvio() {
                     )}
                 </div>
             )}
-        </div>
+        </main>
     );
 }

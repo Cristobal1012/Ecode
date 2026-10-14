@@ -59,6 +59,8 @@ class EnvioSolicitado:
     destinatario: str
     email: str
     valor_declarado: int
+    # +56XXXXXXXXX; vacío en órdenes creadas antes de pedirlo en el checkout
+    telefono: str = ''
     # Paquete cotizado en el checkout (None en órdenes anteriores a guardarlo)
     paquete: Paquete | None = None
     # Oficina del transportista donde retira el comprador; vacío si es a domicilio

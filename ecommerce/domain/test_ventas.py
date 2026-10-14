@@ -1,8 +1,9 @@
 from django.test import SimpleTestCase
 
 from ecommerce.domain.ventas import (
-    EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida, paginas_legales_faltantes,
-    transiciones_desde, validar_generacion_orden_transporte, validar_transicion,
+    EstadoPedido, OrdenTransporteNoPermitida, TelefonoInvalido, TransicionNoPermitida,
+    normalizar_telefono_chile, paginas_legales_faltantes, transiciones_desde,
+    validar_generacion_orden_transporte, validar_transicion,
 )
 
 E = EstadoPedido
@@ -48,6 +49,20 @@ class MaquinaEstadosPedidoTests(SimpleTestCase):
         with self.assertRaisesMessage(TransicionNoPermitida,
                                       'Un pedido Cancelado no puede pasar a Pagado.'):
             validar_transicion(E.CANCELADO, E.PAGADO)
+
+
+class TelefonoDestinatarioTests(SimpleTestCase):
+    def test_acepta_formatos_chilenos_y_normaliza(self):
+        for texto in ('+56 9 1234 5678', '912345678', '56912345678', '(+56) 9-1234-5678'):
+            with self.subTest(texto=texto):
+                self.assertEqual(normalizar_telefono_chile(texto), '+56912345678')
+        # Fijo con código de área (ej. Santiago 2)
+        self.assertEqual(normalizar_telefono_chile('+56 2 2345 6789'), '+56223456789')
+
+    def test_rechaza_lo_que_no_es_un_telefono_chileno(self):
+        for texto in ('', '12345', '+1 555 123 4567', '012345678', 'no tengo', '+56 9 1234 56789'):
+            with self.subTest(texto=texto), self.assertRaises(TelefonoInvalido):
+                normalizar_telefono_chile(texto)
 
 
 class GeneracionOrdenTransporteTests(SimpleTestCase):

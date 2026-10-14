@@ -29,6 +29,9 @@ def usar_catalogo_falso(test, variantes):
     test.addCleanup(catalogo.stop)
 
 
+# RF-02.3: quién recibe o retira; el checkout lo exige
+DESTINATARIO = {'nombre_destinatario': 'Ana Pérez', 'telefono_destinatario': '+56 9 1234 5678'}
+
 DATOS_MEDIOS_PAGO = {
     'TRANSBANK': {'ambiente': 'INTEGRACION'},
     'MERCADO_PAGO': {'access_token': 'APP_USR-1234567890-prueba-abcd', 'webhook_secret': 'secreto-webhook-1234'},
@@ -200,6 +203,7 @@ class CheckoutAccessTests(APITestCase):
             'proveedor_logistico': 'CHILEXPRESS',
             'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
+            **DESTINATARIO,
         }
 
     def configure(self, mode):
@@ -276,6 +280,21 @@ class CheckoutAccessTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('email_invitado', response.data)
         self.assertFalse(OrdenCompra.objects.exists())
+
+    def test_destinatario_es_obligatorio_y_el_telefono_se_normaliza(self):
+        self.configure('INVITADO')
+        for campo, valor in (('nombre_destinatario', ''), ('telefono_destinatario', ''),
+                             ('telefono_destinatario', '+1 555 123 4567')):
+            with self.subTest(campo=campo, valor=valor):
+                response = self.checkout({**self.payload, campo: valor})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(campo, response.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        response = self.checkout()
+        self.assertEqual(response.status_code, 201, response.data)
+        orden = OrdenCompra.objects.get()
+        self.assertEqual((orden.nombre_destinatario, orden.telefono_destinatario), ('Ana Pérez', '+56912345678'))
 
     def test_checkout_rejected_without_accepting_terms(self):
         for valor in (False, None):
@@ -725,7 +744,8 @@ class PagoAprobadoTransbankTests(APITestCase):
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
         OrdenCompra.objects.filter(id=self.orden.id).update(
-            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'})
+            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'},
+            telefono_destinatario='+56912345678')
         with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica:
             logistica._obtener_catalogo_dinamico.return_value = {'SANTIAGO': 'STGO'}
             logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}

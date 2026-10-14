@@ -65,11 +65,13 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             calle=direccion.get('calle', ''),
             numero=str(direccion.get('numero', '')),
             complemento=direccion.get('dpto_casa', ''),
-            # TODO(PENDIENTE): el checkout no pide nombre ni teléfono del destinatario
-            destinatario=(orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
+            # Órdenes anteriores a pedir el destinatario en el checkout: el nombre de la cuenta
+            destinatario=orden.nombre_destinatario
+            or (orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
             email=orden.email_invitado or (orden.usuario.email if orden.usuario else ''),
             # Se declara el valor de los productos, no el del envío
             valor_declarado=int(orden.subtotal),
+            telefono=orden.telefono_destinatario,
             paquete=Paquete(**{campo: Decimal(str(paquete[campo])) for campo in CAMPOS_PAQUETE})
             if paquete else None,
             codigo_sucursal=str(direccion.get('codigo_sucursal', '')),

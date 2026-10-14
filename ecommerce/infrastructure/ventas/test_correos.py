@@ -12,7 +12,7 @@ from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
-from .tests import habilitar_medios_pago, usar_catalogo_falso
+from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 CORREO = 'ecommerce.infrastructure.ventas.adapters.correo'
 
@@ -40,6 +40,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
             'proveedor_logistico': 'CHILEXPRESS',
             'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
+            **DESTINATARIO,
         }
 
     def checkout(self, **cambios):

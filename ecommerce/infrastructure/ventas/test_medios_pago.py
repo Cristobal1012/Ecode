@@ -18,7 +18,7 @@ from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .cifrado import CredencialesIlegibles, cifrar_json, descifrar_json
 from .models import ConfiguracionGlobal, MedioPago, OrdenCompra
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
-from .tests import DATOS_MEDIOS_PAGO, habilitar_medios_pago, usar_catalogo_falso
+from .tests import DATOS_MEDIOS_PAGO, DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 TOKEN_MP = 'APP_USR-1234567890-secreto-abcd'
 
@@ -134,7 +134,7 @@ class CheckoutRN02Tests(APITestCase):
             'items': [{'producto_mongo_id': 'camisa', 'variante_sku': 'CAMISA-S', 'cantidad': 1}],
             'email_invitado': 'invitado@example.test', 'metodo_pago': metodo_pago,
             'direccion_envio_snapshot': {}, 'subtotal': 10000, 'proveedor_logistico': 'RETIRO_LOCAL',
-            'acepta_terminos': True,
+            'acepta_terminos': True, **DESTINATARIO,
         }, format='json')
 
     def test_con_transbank_y_transferencia_no_se_ofrece_ni_acepta_mercado_pago(self):

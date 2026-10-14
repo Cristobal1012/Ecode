@@ -44,6 +44,24 @@ class SubtotalDesactualizado(ErrorPedido):
         super().__init__('Los precios de tu carrito cambiaron. Revisa el nuevo total antes de pagar.')
 
 
+class TelefonoInvalido(ErrorPedido):
+    def __init__(self):
+        super().__init__('Ingresa un teléfono chileno de 9 dígitos, por ejemplo +56 9 1234 5678.')
+
+
+def normalizar_telefono_chile(texto: str) -> str:
+    """RF-02.3: teléfono de contacto del destinatario. Los envíos son dentro de Chile.
+
+    Acepta 9 dígitos con o sin +56 (espacios, guiones y paréntesis se ignoran) y devuelve +56XXXXXXXXX.
+    """
+    digitos = ''.join(c for c in str(texto or '') if c.isdigit())
+    if len(digitos) == 11 and digitos.startswith('56'):
+        digitos = digitos[2:]
+    if len(digitos) != 9 or digitos.startswith('0'):
+        raise TelefonoInvalido()
+    return f'+56{digitos}'
+
+
 @dataclass(frozen=True)
 class ItemSolicitado:
     producto_id: str

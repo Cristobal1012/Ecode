@@ -18,6 +18,7 @@ from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.medios_pago import MedioPagoNoDisponible
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
+    TelefonoInvalido, normalizar_telefono_chile,
     paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
@@ -173,6 +174,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
+    # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
+    nombre_destinatario = serializers.CharField(max_length=120)
+    telefono_destinatario = serializers.CharField(max_length=30)
 
     class Meta:
         model = OrdenCompra
@@ -184,6 +188,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'email_cliente',
             'metodo_pago',
             'direccion_envio_snapshot',
+            'nombre_destinatario',
+            'telefono_destinatario',
             'subtotal',
             'costo_envio',
             'total_final',
@@ -200,6 +206,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'Debes aceptar los Términos y Condiciones y la Política de Privacidad.'
             )
         return value
+
+    def validate_telefono_destinatario(self, value):
+        try:
+            return normalizar_telefono_chile(value)
+        except TelefonoInvalido as error:
+            raise serializers.ValidationError(str(error))
     def get_email_cliente(self, obj):
         if obj.email_invitado:
             return obj.email_invitado

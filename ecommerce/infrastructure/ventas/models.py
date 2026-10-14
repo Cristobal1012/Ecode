@@ -146,6 +146,10 @@ class OrdenCompra(models.Model):
     estado = models.CharField(max_length=50, choices=ESTADOS_PEDIDO, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=50, choices=METODOS_PAGO)
     direccion_envio_snapshot = models.JSONField()
+    # Quién recibe o retira el pedido (RF-02.3); la orden de transporte usa estos datos
+    nombre_destinatario = models.CharField(max_length=120, blank=True, default='')
+    # Normalizado como +56XXXXXXXXX (normalizar_telefono_chile)
+    telefono_destinatario = models.CharField(max_length=15, blank=True, default='')
 
     id_transaccion_pasarela = models.CharField(max_length=255, blank=True, null=True)
     proveedor_logistico = models.CharField(max_length=100, blank=True, null=True)

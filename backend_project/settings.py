@@ -140,6 +140,15 @@ DATABASES = {
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://root:rootpassword@localhost:27017/ecommerce_mongo_db?authSource=admin')
 connect(host=MONGO_URI)
 
+# Contraseñas con Argon2 (RNF-03; requiere argon2-cffi). Los demás solo verifican contraseñas guardadas con ellos
+# (ej. PBKDF2, el de Django por defecto): al iniciar sesión, Django las vuelve a guardar con Argon2.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
+
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 

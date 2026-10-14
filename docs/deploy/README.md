@@ -9,7 +9,7 @@ medios de pago **no** van en el entorno: el emprendedor las carga desde el panel
 ## Pasos después de cada versión nueva
 
 ```bash
-pip install -r requirements.txt   # incluye django-anymail (correo por Resend)
+pip install -r requirements.txt   # ej. django-anymail (correo) y argon2-cffi (sin él no se puede iniciar sesión)
 python manage.py migrate
 ```
 

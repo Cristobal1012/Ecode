@@ -2,6 +2,8 @@ import base64
 import os
 from unittest.mock import Mock, patch
 
+import requests
+
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
@@ -190,3 +192,78 @@ class MigracionCredencialesChilexpressTests(TransactionTestCase):
     @patch.dict('os.environ', ENTORNO_SIN_CHILEXPRESS, clear=True)
     def test_sin_llaves_en_el_env_no_crea_nada(self):
         self.assertFalse(self.copiar().exists())
+
+
+def respuesta_tracking(estado, status_code=200, codigo=0):
+    respuesta = Mock(status_code=status_code)
+    respuesta.json.return_value = {
+        'statusCode': codigo, 'statusDescription': 'Extraccion exitosa',
+        'data': {'transportOrderData': {'transportOrderNumber': '712678906520', 'status': estado}, 'trackingEvents': []},
+    }
+    if status_code >= 400:
+        respuesta.raise_for_status.side_effect = requests.HTTPError(f'{status_code} Client Error')
+    return respuesta
+
+
+@patch(f'{ADAPTADOR}.requests.post')
+class SeguimientoChilexpressTests(TestCase):
+    """RF-02.4: el estado de la OT se consulta al tracking del sandbox y se traduce a la línea de tiempo estándar."""
+
+    def setUp(self):
+        sin_llaves_guardadas()
+        guardar_credenciales(cotizador=COTIZADOR, envios=ENVIOS)
+
+    def consultar(self):
+        return ProveedorLogisticoAdapter.consultar_estado('CHILEXPRESS', '712678906520')
+
+    def test_consulta_por_post_con_la_ot_el_rut_y_la_llave_de_envios(self, post):
+        post.return_value = respuesta_tracking('EN PRE-RECEPCION')
+        self.assertEqual(self.consultar(), 'En origen')
+        url = post.call_args.args[0]
+        self.assertEqual(url, 'https://testservices.wschilexpress.com/transport-orders/api/v1.0/tracking')
+        self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'], ENVIOS)
+        cuerpo = post.call_args.kwargs['json']
+        self.assertEqual((cuerpo['transportOrderNumber'], cuerpo['rut']), (712678906520, 96756430))
+
+    def test_traduce_los_estados_a_la_linea_de_tiempo(self, post):
+        for estado_api, esperado in (('EN PRE-RECEPCION', 'En origen'), ('RECEPCIONADO', 'En origen'),
+                                     ('EN TRÁNSITO', 'En tránsito'), ('EN REPARTO', 'En reparto'),
+                                     ('ENTREGADO', 'Entregado')):
+            with self.subTest(estado_api=estado_api):
+                post.return_value = respuesta_tracking(estado_api)
+                self.assertEqual(self.consultar(), esperado)
+
+    def test_un_estado_sin_equivalencia_se_informa_tal_cual_sin_avanzar_la_linea(self, post):
+        for estado_api in ('PARA RETIRO EN SUCURSAL', 'NO ENTREGADO'):
+            with self.subTest(estado_api=estado_api), self.assertLogs(ADAPTADOR, level='WARNING') as logs:
+                post.return_value = respuesta_tracking(estado_api)
+                self.assertEqual(self.consultar(), estado_api.capitalize())
+                self.assertIn(estado_api, logs.output[0])
+
+    def test_un_error_de_chilexpress_muestra_no_disponible_sin_la_llave_en_el_log(self, post):
+        for respuesta in (respuesta_tracking('', status_code=400, codigo=-41), respuesta_tracking('', codigo=-41),
+                          requests.ConnectionError('sin conexión')):
+            with self.subTest(respuesta=respuesta), self.assertLogs(ADAPTADOR, level='ERROR') as logs:
+                if isinstance(respuesta, Exception):
+                    post.side_effect = respuesta
+                else:
+                    post.side_effect, post.return_value = None, respuesta
+                self.assertEqual(self.consultar(), 'Estado no disponible temporalmente')
+                self.assertNotIn(ENVIOS, '\n'.join(logs.output))
+
+    def test_sin_llaves_no_consulta_a_chilexpress(self, post):
+        sin_llaves_guardadas()
+        self.assertEqual(self.consultar(), 'Estado no disponible temporalmente')
+        post.assert_not_called()
+
+    def test_el_invitado_ve_el_estado_traducido_en_el_portal(self, post):
+        post.return_value = respuesta_tracking('EN PRE-RECEPCION')
+        orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK', estado='PAGADO',
+            direccion_envio_snapshot={}, subtotal=10000, costo_envio=3500, total_final=13500,
+            proveedor_logistico='CHILEXPRESS', numero_seguimiento_tracking='712678906520')
+        response = self.client.post(reverse('tracking-envio'),
+                                    {'numero_orden': orden.id, 'email': 'invitado@example.test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado_actual'], 'En origen')
+        self.assertIn(response.data['estado_actual'], response.data['linea_tiempo_estandar'])

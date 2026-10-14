@@ -1,9 +1,11 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
-    CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
+    CambiarEstadoPedido, CancelarPagosVencidos, CatalogoVariantes, ConfirmarPago, InventarioVariantes,
+    OrdenNoEncontrada,
     GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
     ResolverRevision,
     ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
@@ -141,13 +143,20 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         # Simula que otro proceso cambia la orden entre la lectura y la escritura
         self.cambio_concurrente = None
 
-    def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL'):
+    def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL',
+                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0)):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
+            'metodo_pago': metodo_pago, 'creada': creada,
         }
         return self.ordenes[orden_id]
+
+    def pendientes_de_pago(self, metodo_pago, creadas_antes_de):
+        return [orden_id for orden_id, datos in self.ordenes.items()
+                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago
+                and datos['creada'] < creadas_antes_de]
 
     def obtener_envio(self, orden_id):
         datos = self.ordenes.get(orden_id)
@@ -518,6 +527,49 @@ class CambiarEstadoPedidoTests(SimpleTestCase):
     def test_orden_inexistente(self):
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(99, 'CANCELADO')
+
+
+class CancelarPagosVencidosTests(SimpleTestCase):
+    """AGENTS.md §4.1: una transferencia no pagada en 48 h se cancela y se avisa al comprador."""
+
+    AHORA = datetime(2026, 10, 14, 12, 0)
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.notificador = NotificadorFalso()
+        self.caso = CancelarPagosVencidos(self.ordenes, self.notificador)
+
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+        return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
+                                    creada=self.AHORA - timedelta(hours=horas))
+
+    def test_cancela_y_avisa_solo_las_transferencias_pendientes_con_mas_de_48_horas(self):
+        vencida = self.agregar(1, 49)
+        a_tiempo = self.agregar(2, 47)
+        webpay = self.agregar(3, 72, metodo_pago='TRANSBANK')
+        pagada = self.agregar(4, 72, estado='PAGADO')
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1])
+
+        self.assertEqual((vencida['estado'], vencida['motivo_cancelacion']),
+                         (EstadoPedido.CANCELADO, 'Pago no recibido a tiempo'))
+        for orden in (a_tiempo, webpay):
+            self.assertEqual(orden['estado'], EstadoPedido.PENDIENTE)
+        self.assertEqual(pagada['estado'], EstadoPedido.PAGADO)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.CANCELADO)])
+
+    def test_no_cancela_una_orden_que_el_admin_valido_mientras_tanto(self):
+        self.agregar(1, 49)
+        self.ordenes.cambio_concurrente = EstadoPedido.PAGADO
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(self.ordenes.ordenes[1]['estado'], EstadoPedido.PAGADO)
+        self.assertEqual(self.notificador.enviados, [])
+
+    def test_volver_a_ejecutar_no_repite_cancelaciones_ni_correos(self):
+        self.agregar(1, 49)
+        self.caso.ejecutar(self.AHORA)
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(len(self.notificador.enviados), 1)
 
 
 class ResolverRevisionTests(SimpleTestCase):

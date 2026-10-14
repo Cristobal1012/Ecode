@@ -2,15 +2,17 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 import logging
 
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
+from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea,
-    revisar_linea, validar_generacion_orden_transporte, validar_transicion,
+    OrdenTransporteNoPermitida, PedidoVacio, PLAZO_PAGO_TRANSFERENCIA, SubtotalDesactualizado, VarianteCatalogo,
+    armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,6 +134,11 @@ class RepositorioOrdenes(ABC):
         """Guarda la OT generada, o el error del transportista para reintentarlo."""
         raise NotImplementedError
 
+    @abstractmethod
+    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de: datetime) -> list:
+        """Ids de las órdenes Pendientes con ese medio de pago creadas antes de la fecha."""
+        raise NotImplementedError
+
 
 class NotificadorPedidos(ABC):
     """Puerto de salida (NotificationSender, AGENTS.md §3.3): avisa al comprador un hito de su pedido.
@@ -212,6 +219,7 @@ class ResultadoPago(StrEnum):
 
 MOTIVO_PAGO_RECHAZADO = 'Pago rechazado'
 MOTIVO_PAGO_ANULADO = 'Pago anulado por el comprador'
+MOTIVO_PAGO_VENCIDO = 'Pago no recibido a tiempo'
 MOTIVO_CANCELACION_ADMIN = 'Cancelado por el administrador'
 MOTIVO_SIN_STOCK = 'Pago confirmado sin stock para {sku}'
 MOTIVO_ORDEN_NO_PENDIENTE = 'Pago aprobado sobre una orden en estado {estado}'
@@ -365,6 +373,31 @@ EVENTO_POR_ESTADO = {
     EstadoPedido.ENTREGADO: EventoPedido.ENTREGADO,
     EstadoPedido.CANCELADO: EventoPedido.CANCELADO,
 }
+
+
+class CancelarPagosVencidos:
+    """AGENTS.md §4.1: una transferencia que no se paga dentro del plazo (48 h) se cancela y se avisa.
+
+    - No toca stock: la transferencia no lo reserva mientras está Pendiente.
+    - El UPDATE condicional evita cancelar una orden que el admin validó mientras tanto.
+    - Si el pago llega después, ConfirmarPago deja la orden cancelada en revisión del admin (§9).
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes, notificador: NotificadorPedidos | None = None):
+        self.ordenes = ordenes
+        self.notificador = notificador
+
+    def ejecutar(self, ahora: datetime) -> list:
+        canceladas = []
+        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value,
+                                                         ahora - PLAZO_PAGO_TRANSFERENCIA):
+            if not self.ordenes.cambiar_estado(orden_id, EstadoPedido.PENDIENTE, EstadoPedido.CANCELADO,
+                                               MOTIVO_PAGO_VENCIDO):
+                continue
+            if self.notificador:
+                self.notificador.notificar(orden_id, EventoPedido.CANCELADO)
+            canceladas.append(orden_id)
+        return canceladas
 
 
 class SinRevisionPendiente(Exception):

@@ -1,6 +1,7 @@
 """Reglas para armar un pedido, independientes de HTTP, Django y la base de catálogo."""
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -173,6 +174,14 @@ ETIQUETAS_ESTADO = {
     EstadoPedido.ENTREGADO: 'Entregado',
     EstadoPedido.CANCELADO: 'Cancelado',
 }
+
+# AGENTS.md §4.1 (decidido el 2026-10-13): plazo para pagar una transferencia; vencido, la orden se cancela
+PLAZO_PAGO_TRANSFERENCIA = timedelta(hours=48)
+
+
+def vencimiento_pago_transferencia(creada: datetime) -> datetime:
+    return creada + PLAZO_PAGO_TRANSFERENCIA
+
 
 # Estados en los que el pago ya se confirmó
 ESTADOS_PAGADOS = frozenset({

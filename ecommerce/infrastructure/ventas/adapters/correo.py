@@ -8,7 +8,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 
-from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, NotificadorPedidos
+from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.ventas import EventoPedido
 
 from ..instrucciones_pago import instrucciones_transferencia
@@ -84,6 +84,7 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'total': pesos(orden.total_final),
             'metodo_pago': orden.get_metodo_pago_display(),
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
+            'pago_vencido': orden.motivo_cancelacion == MOTIVO_PAGO_VENCIDO,
             'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
             'transportista': (orden.proveedor_logistico or '').capitalize(),
             # Número de la orden de transporte (RF-02.3), si ya se generó

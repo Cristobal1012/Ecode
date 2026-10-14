@@ -78,6 +78,11 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             numero_ot=orden.numero_seguimiento_tracking or '',
         )
 
+    def pendientes_de_pago(self, metodo_pago, creadas_antes_de):
+        return list(OrdenCompra.objects.filter(
+            estado=EstadoPedido.PENDIENTE.value, metodo_pago=metodo_pago, fecha_creacion__lt=creadas_antes_de,
+        ).order_by('id').values_list('id', flat=True))
+
     def registrar_orden_transporte(self, orden_id, numero_ot='', error=''):
         if not numero_ot:
             OrdenCompra.objects.filter(id=orden_id).update(error_orden_transporte=error[:255])

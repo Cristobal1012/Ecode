@@ -1,5 +1,21 @@
 import clienteAxios from './auth/axiosConfig';
 
+export const leerSnapshotCarrito = () => localStorage.getItem('carrito_local');
+
+export const interpretarCarrito = (snapshot) => {
+  try {
+    const items = JSON.parse(snapshot);
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter(item => item && typeof item === 'object'
+        && Number.isFinite(Number(item.precio)) && Number(item.precio) >= 0
+        && Number.isInteger(Number(item.cantidad)) && Number(item.cantidad) > 0)
+      .map(item => ({ ...item, precio: Number(item.precio), cantidad: Number(item.cantidad) }));
+  } catch {
+    return [];
+  }
+};
+
 // RN-03: compara el carrito con el stock y los precios vigentes. No reserva nada:
 // el backend vuelve a validar al crear la orden y al confirmar el pago.
 export const validarCarrito = async (items) => {
@@ -9,10 +25,7 @@ export const validarCarrito = async (items) => {
   return data;
 };
 
-// Guarda el carrito en el navegador, avisa al mini-carrito y, con sesión, lo sincroniza con la cuenta
-export const guardarCarrito = async (items) => {
-  localStorage.setItem('carrito_local', JSON.stringify(items));
-  window.dispatchEvent(new Event('carritoActualizado'));
+const sincronizarCarrito = async (items) => {
   if (localStorage.getItem('access_token')) {
     try {
       await clienteAxios.post('ventas/carrito/', { items });
@@ -20,6 +33,22 @@ export const guardarCarrito = async (items) => {
       console.error('No se pudo sincronizar el carrito con la base de datos:', error);
     }
   }
+};
+
+// La actualización local es inmediata; una escritura idéntica no dispara otra validación.
+export const guardarCarrito = async (items) => {
+  const snapshot = JSON.stringify(items);
+  if (localStorage.getItem('carrito_local') !== snapshot) {
+    localStorage.setItem('carrito_local', snapshot);
+    window.dispatchEvent(new Event('carritoActualizado'));
+  }
+  await sincronizarCarrito(items);
+};
+
+export const vaciarCarrito = async () => {
+  localStorage.removeItem('carrito_local');
+  window.dispatchEvent(new Event('carritoActualizado'));
+  await sincronizarCarrito([]);
 };
 
 // Ajusta el carrito a lo que se puede comprar ahora: quita lo agotado, baja cantidades y

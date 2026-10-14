@@ -1,28 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import useCarrito from '../hooks/useCarrito';
 
 const CarritoCompras = () => {
     const [isOpen, setIsOpen] = useState(false);
     const carritoRef = useRef(null);
-    const [itemsCarrito, setItemsCarrito] = useState([]); // Estado dinámico
+    const itemsCarrito = useCarrito();
 
     useEffect(() => {
-        // Función para leer los datos actuales
-        const cargarCarrito = () => {
-            const carritoGuardado = localStorage.getItem('carrito_local');
-            if (carritoGuardado) {
-                setItemsCarrito(JSON.parse(carritoGuardado));
-            } else {
-                setItemsCarrito([]);
-            }
-        };
-
-        // Carga inicial
-        cargarCarrito();
-
-        // Escucha un evento para actualizarse al instante si iniciamos/cerramos sesión o agregamos algo
-        window.addEventListener('carritoActualizado', cargarCarrito);
-
         const handleClickOutside = (event) => {
             if (carritoRef.current && !carritoRef.current.contains(event.target)) {
                 setIsOpen(false);
@@ -31,7 +16,6 @@ const CarritoCompras = () => {
         document.addEventListener('mousedown', handleClickOutside);
         
         return () => {
-            window.removeEventListener('carritoActualizado', cargarCarrito);
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);

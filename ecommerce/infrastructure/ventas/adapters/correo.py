@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.ventas import EventoPedido
@@ -101,6 +102,8 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
         instrucciones = instrucciones_transferencia(orden)
         if instrucciones:
             instrucciones['monto'] = pesos(instrucciones['monto'])
+            # Hora de Chile (TIME_ZONE), ej. 16-10-2026 a las 14:30
+            instrucciones['vence'] = timezone.localtime(instrucciones['vence']).strftime('%d-%m-%Y a las %H:%M')
         return instrucciones
 
     @staticmethod

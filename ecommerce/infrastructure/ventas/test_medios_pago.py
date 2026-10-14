@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -6,6 +7,7 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from transbank.common.integration_type import IntegrationType
@@ -176,6 +178,11 @@ class CheckoutRN02Tests(APITestCase):
         self.assertIn('Transfiere $10.000', correo.body)
         self.assertIn(f'Número de cuenta: {DATOS_MEDIOS_PAGO["TRANSFERENCIA"]["numero_cuenta"]}', correo.body)
         self.assertIn('Datos para transferir', correo.alternatives[0][0])
+        # Plazo de pago: el comprador sabe hasta cuándo puede transferir (48 h, hora de Chile en el correo)
+        vence = OrdenCompra.objects.get(id=orden_id).fecha_creacion + timedelta(hours=48)
+        self.assertEqual(instrucciones['vence'], vence)
+        self.assertIn(f"Tienes hasta el {timezone.localtime(vence).strftime('%d-%m-%Y a las %H:%M')} para transferir",
+                      correo.body)
 
     @patch('ecommerce.infrastructure.ventas.serializers.TransbankWebpayAdapter.iniciar_transaccion',
            return_value={'exito': True, 'url_pago': 'https://webpay.test/pago', 'token': 'tbk-token'})

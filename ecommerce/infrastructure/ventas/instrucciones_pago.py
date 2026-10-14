@@ -1,6 +1,7 @@
 """Instrucciones para pagar una orden por transferencia: van en la respuesta del checkout y en el correo."""
 
 from ecommerce.domain.medios_pago import CodigoMedioPago
+from ecommerce.domain.ventas import vencimiento_pago_transferencia
 
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 
@@ -22,4 +23,6 @@ def instrucciones_transferencia(orden) -> dict | None:
         'monto': int(round(orden.total_final)),
         # El comprador la indica al transferir para que la tienda identifique el pago
         'referencia': f'Pedido #{orden.id}',
+        # Plazo de pago (48 h): después de esta fecha la orden se cancela (manage.py cancelar_pagos_vencidos)
+        'vence': vencimiento_pago_transferencia(orden.fecha_creacion),
     }

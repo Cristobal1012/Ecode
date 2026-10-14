@@ -9,7 +9,7 @@ from ...views import notificador_pedidos
 
 class Command(BaseCommand):
     help = ('Cancela las órdenes por transferencia que no se pagaron dentro de 48 horas y avisa al comprador '
-            '(AGENTS.md §4.1). Programarlo para que corra periódicamente, por ejemplo cada hora.')
+            '(ver docs/deploy/README.md). Programarlo para que corra periódicamente, por ejemplo cada hora.')
 
     def handle(self, *args, **options):
         canceladas = CancelarPagosVencidos(DjangoRepositorioOrdenes(), notificador_pedidos()).ejecutar(timezone.now())

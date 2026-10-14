@@ -42,6 +42,12 @@ export default function PedidoRecibido() {
               Transfiere <strong>${Number(instrucciones.monto).toLocaleString('es-CL')}</strong> a esta cuenta e indica
               como referencia <strong>{instrucciones.referencia}</strong>.
             </p>
+            {instrucciones.vence && (
+              <p style={{ margin: '0 0 15px 0', color: '#92400e', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', padding: '8px 12px', lineHeight: '1.5' }}>
+                Tienes hasta el <strong>{new Date(instrucciones.vence).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' })}</strong> para
+                transferir; después el pedido se cancela automáticamente.
+              </p>
+            )}
             <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', margin: 0 }}>
               {instrucciones.datos.map(dato => (
                 <div key={dato.etiqueta} style={{ display: 'contents' }}>

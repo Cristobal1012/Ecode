@@ -553,6 +553,7 @@ class PanelPedidosAdminTests(APITestCase):
             direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
             estado='PAGADO', requiere_revision=True,
             motivo_revision='Pago confirmado sin stock para CAMISA-S',
+            nombre_destinatario='Ana Pérez', telefono_destinatario='+56912345678',
         )
 
     def autenticar(self, token):
@@ -570,6 +571,8 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
         self.assertEqual(orden['transiciones_permitidas'], ['EN_PREPARACION', 'CANCELADO'])
         self.assertEqual(orden['email_cliente'], 'invitado@example.test')
+        # A quién contactar para coordinar la entrega (RF-02.3)
+        self.assertEqual((orden['nombre_destinatario'], orden['telefono_destinatario']), ('Ana Pérez', '+56912345678'))
 
     def test_resolver_revision_quita_la_marca_una_sola_vez(self):
         self.autenticar(self.admin_token)

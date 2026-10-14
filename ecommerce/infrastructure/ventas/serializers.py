@@ -432,6 +432,7 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         model = OrdenCompra
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
+            'nombre_destinatario', 'telefono_destinatario',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',

@@ -15,6 +15,9 @@ const NOMBRES_MEDIO_PAGO = {
 export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
     const [emailInvitado, setEmailInvitado] = useState('');
+    // RF-02.3: quién recibe o retira el pedido (Chilexpress y la tienda lo contactan)
+    const [nombreDestinatario, setNombreDestinatario] = useState('');
+    const [telefonoDestinatario, setTelefonoDestinatario] = useState('');
     const [mensaje, setMensaje] = useState('');
     const [opcionCompra, setOpcionCompra] = useState(null);
     const [itemsCarrito, setItemsCarrito] = useState([]);
@@ -89,6 +92,22 @@ export default function Checkout() {
             {texto}
         </a>
     ) : texto;
+
+    // Con sesión, quién recibe se precarga con los datos de la cuenta (el comprador puede cambiarlos)
+    useEffect(() => {
+        if (!usuarioAutenticado) return;
+        clienteAxios.get('usuarios/me/')
+            .then(({ data }) => {
+                // Algunas cuentas (ej. creadas con Google) ya traen el apellido dentro del nombre
+                const nombre = (data.nombre || '').trim();
+                const apellido = (data.apellido_paterno || '').trim();
+                const completo = !apellido || nombre.toLowerCase().includes(apellido.toLowerCase())
+                    ? nombre : `${nombre} ${apellido}`;
+                setNombreDestinatario(actual => actual || completo);
+                setTelefonoDestinatario(actual => actual || data.telefono || '');
+            })
+            .catch(() => {});
+    }, [usuarioAutenticado]);
 
     // 2. CARGA DE DIRECCIONES GUARDADAS
     useEffect(() => {
@@ -249,6 +268,7 @@ export default function Checkout() {
     const procesarPago = async (metodoSeleccionado) => {
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
+        if (!nombreDestinatario.trim() || !telefonoDestinatario.trim()) return setMensaje('Indica el nombre y el teléfono de quien recibe el pedido.');
         if (!aceptaTerminos) return setMensaje('Debes aceptar los Términos y Condiciones y la Política de Privacidad.');
 
         let dirSnapshot = {};
@@ -299,6 +319,8 @@ export default function Checkout() {
         const payload = {
             metodo_pago: metodoSeleccionado, 
             email_invitado: !usuarioAutenticado && compraComoInvitado ? emailInvitado : null,
+            nombre_destinatario: nombreDestinatario.trim(),
+            telefono_destinatario: telefonoDestinatario.trim(),
             direccion_envio_snapshot: dirSnapshot, 
             subtotal, 
             costo_envio: costoEnvio, 
@@ -346,7 +368,8 @@ export default function Checkout() {
             // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
             if (datos.items) await revisarCarrito(itemsCarrito);
             // metodo_pago: el admin deshabilitó ese medio mientras el comprador estaba en el checkout (RN-02)
-            const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago;
+            const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago
+                || datos.nombre_destinatario || datos.telefono_destinatario;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
         }
@@ -390,6 +413,23 @@ export default function Checkout() {
                         <input id="checkout-email" type="email" autoComplete="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required style={inputStyle} />
                     </div>
                 )}
+
+                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
+                    <legend style={{ width: '100%', padding: 0 }}>
+                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Quién recibe el pedido?</h3>
+                    </legend>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label htmlFor="checkout-destinatario" style={{ fontWeight: 'bold' }}>Nombre de quien recibe o retira</label>
+                        <input id="checkout-destinatario" type="text" autoComplete="name" maxLength={120} value={nombreDestinatario} onChange={(e) => setNombreDestinatario(e.target.value)} required style={inputStyle} />
+                    </div>
+                    <div>
+                        <label htmlFor="checkout-telefono" style={{ fontWeight: 'bold' }}>Teléfono de contacto</label>
+                        <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" style={inputStyle} />
+                        <p id="checkout-telefono-ayuda" style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#4b5563' }}>
+                            Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
+                        </p>
+                    </div>
+                </fieldset>
                 
                 {/* --- TABS: ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
                 <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
@@ -564,7 +604,7 @@ export default function Checkout() {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {pasarelas.map(pasarela => {
-                                const validadoParaPagar = aceptaTerminos && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
                                 return (
                                     <button
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}

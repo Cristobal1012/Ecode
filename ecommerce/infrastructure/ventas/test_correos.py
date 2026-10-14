@@ -58,6 +58,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
         self.assertEqual(correo.subject, f'Recibimos tu pedido #{orden_id} | Tienda QA')
         for texto in ('2 x $10.000 = $20.000', 'Envío: $1.000', 'Total: $21.000', 'Medio de pago: Transferencia',
                       'Despacho a domicilio (Chilexpress): Los Olmos 123, PROVIDENCIA',
+                      'Recibe: Ana Pérez (+56912345678)',
                       f'http://tienda.test/seguimiento?orden={orden_id}'):
             self.assertIn(texto, correo.body)
         html, tipo = correo.alternatives[0]

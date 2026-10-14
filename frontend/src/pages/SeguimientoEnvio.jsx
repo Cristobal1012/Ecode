@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import clienteAxios from '../components/auth/axiosConfig';
+import Header from '../components/header/header';
 
 export default function SeguimientoEnvio() {
     const [searchParams] = useSearchParams(); 
@@ -50,6 +51,8 @@ export default function SeguimientoEnvio() {
     const indiceEstadoActual = estados.indexOf(estadoActual);
 
     return (
+        <>
+        <Header />
         <main
             style={{
                 maxWidth: '700px',
@@ -229,5 +232,6 @@ export default function SeguimientoEnvio() {
                 </div>
             )}
         </main>
+        </>
     );
 }

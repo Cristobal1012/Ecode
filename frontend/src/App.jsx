@@ -23,6 +23,7 @@ import PaginaLegal from './pages/PaginaLegal';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
+import Header from './components/header/header';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -42,13 +43,16 @@ function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
 
   return (
-    <main>
-      {showLogin ? (
-        <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
-      ) : (
-        <Register onSwitchToLogin={() => setShowLogin(true)} />
-      )}
-    </main>
+    <>
+      <Header />
+      <main>
+        {showLogin ? (
+          <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
+        ) : (
+          <Register onSwitchToLogin={() => setShowLogin(true)} />
+        )}
+      </main>
+    </>
   );
 }
 

@@ -4,12 +4,16 @@ import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, validarCarrito } from './carrito';
 import './Checkout.css';
+import Header from './header/header';
 
 export default function Checkout() {
     return (
-        <main>
-            <CheckoutContenido />
-        </main>
+        <>
+            <Header />
+            <main>
+                <CheckoutContenido />
+            </main>
+        </>
     );
 }
 

@@ -12,6 +12,7 @@ from .images import (
 class VarianteSerializer(serializers.Serializer):
     sku = serializers.CharField()
     precio = serializers.DecimalField(max_digits=10, decimal_places=2)
+    precio_oferta = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     stock = serializers.IntegerField(default=0)
     imagen_especifica = ReferenciaImagenField(required=False, allow_blank=True, allow_null=True)
     atributos_variables = serializers.DictField(required=False, default=dict)

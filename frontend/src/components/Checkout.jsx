@@ -49,6 +49,11 @@ export default function Checkout() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
+    const [codigoCupon, setCodigoCupon] = useState('');
+    const [descuentoAplicado, setDescuentoAplicado] = useState(0);
+    const [codigoValidado, setCodigoValidado] = useState(null);
+    const [mensajeCupon, setMensajeCupon] = useState('');
+
     const [cajaCalculada, setCajaCalculada] = useState({ peso_kg: '1.0', alto_cm: '10', ancho_cm: '10', largo_cm: '10' });
     const [opcionesEntrega, setOpcionesEntrega] = useState([]);
     const [opcionEntregaSeleccionada, setOpcionEntregaSeleccionada] = useState(null);
@@ -263,8 +268,26 @@ export default function Checkout() {
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    const totalFinal = subtotal + costoEnvio;
+    const totalFinal = Math.max(0, subtotal - descuentoAplicado) + costoEnvio;
 
+    const aplicarCupon = async () => {
+        if (!codigoCupon.trim()) return;
+        setMensajeCupon('Validando...');
+        try {
+            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { 
+                codigo: codigoCupon,
+                subtotal: subtotal 
+            });
+            
+            setDescuentoAplicado(respuesta.data.descuento);
+            setCodigoValidado(codigoCupon);
+            setMensajeCupon(`¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`);
+        } catch (error) {
+            setDescuentoAplicado(0);
+            setCodigoValidado(null);
+            setMensajeCupon(error.response?.data?.error || 'Código inválido o expirado.');
+        }
+    };
     const procesarPago = async (metodoSeleccionado) => {
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
@@ -328,6 +351,7 @@ export default function Checkout() {
             proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
             paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada,
             acepta_terminos: aceptaTerminos,
+            codigo_promocion: codigoValidado,
             items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
         };
 
@@ -399,8 +423,35 @@ export default function Checkout() {
                         <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
                     </div>
                 )) : <p>No hay productos</p>}
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
+                    <input 
+                        type="text" 
+                        placeholder="Código de descuento" 
+                        value={codigoCupon} 
+                        onChange={(e) => setCodigoCupon(e.target.value.toUpperCase())}
+                        style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                    />
+                    <button 
+                        type="button" 
+                        onClick={aplicarCupon}
+                        style={{ padding: '8px 15px', backgroundColor: '#4b5563', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                        Aplicar
+                    </button>
+                </div>
+                {mensajeCupon && <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: mensajeCupon.includes('inválido') ? '#dc2626' : '#16a34a' }}>{mensajeCupon}</p>}
+                
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
+                
+                {descuentoAplicado > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#dc2626' }}>
+                        <span>Descuento aplicado:</span><span>-${descuentoAplicado.toLocaleString('es-CL')}</span>
+                    </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}><span>Costo de envío:</span><span>{cotizando ? 'Calculando...' : `$${costoEnvio.toLocaleString('es-CL')}`}</span></div>
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>

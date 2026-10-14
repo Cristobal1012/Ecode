@@ -7,6 +7,7 @@ from mongoengine import Document, EmbeddedDocument, fields
 class Variante(EmbeddedDocument):
     sku = fields.StringField(required=True, unique=True)
     precio = fields.DecimalField(required=True, precision=2)
+    precio_oferta = fields.DecimalField(null=True, precision=2)
     stock = fields.IntField(required=True, default=0)
     imagen_especifica = fields.StringField(null=True, blank=True)
     atributos_variables = fields.DictField(default=dict)

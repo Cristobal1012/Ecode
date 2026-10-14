@@ -30,7 +30,7 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalido
 from ecommerce.domain.ventas import OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
-from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal
+from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal, Promocion
 from .permissions import CanCheckout
 from .payment_services import generar_link_pago
 from .serializers import (
@@ -782,3 +782,35 @@ class AdminChilexpressView(APIView):
         except CredencialesChilexpressInvalidas as error:
             return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
         return Response(chilexpress_para_panel(credenciales))
+    
+class ValidarPromocionAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        codigo = request.data.get('codigo', '').strip().upper()
+        subtotal = float(request.data.get('subtotal', 0))
+
+        if not codigo:
+            return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            promo = Promocion.objects.get(codigo__iexact=codigo, is_active=True)
+        except Promocion.DoesNotExist:
+            return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if promo.tipo_descuento == 'PORCENTAJE':
+            descuento = subtotal * (promo.valor_descuento / 100.0)
+        else:  # MONTO_FIJO
+            descuento = promo.valor_descuento
+
+        # El descuento no puede superar el subtotal
+        descuento = min(descuento, subtotal)
+
+        return Response({
+            "codigo": promo.codigo,
+            "tipo_descuento": promo.tipo_descuento,
+            "valor_descuento": promo.valor_descuento,
+            "descuento": round(descuento),
+            "umbral_envio_gratis": promo.umbral_envio_gratis
+        }, status=status.HTTP_200_OK)

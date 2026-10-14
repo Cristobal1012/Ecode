@@ -30,6 +30,26 @@ export default function ProductCardGrid({ producto }) {
         <h4 style={{ margin: '0 0 10px 0', color: 'var(--color-primary)' }}>
           {producto.nombre}
         </h4>
+        
+        <div style={{ marginBottom: '10px' }}>
+          {producto.variantes && producto.variantes[0] && (
+            producto.variantes[0].precio_oferta ? (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.85rem', color: '#999', textDecoration: 'line-through' }}>
+                  ${producto.variantes[0].precio}
+                </span>
+                <span style={{ fontSize: '1.2rem', color: '#e60000', fontWeight: 'bold' }}>
+                  ${producto.variantes[0].precio_oferta}
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                ${producto.variantes[0].precio}
+              </span>
+            )
+          )}
+        </div>
+
         <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 10px 0' }}>
           {producto.categoria}
         </p>

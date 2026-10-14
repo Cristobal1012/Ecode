@@ -171,10 +171,27 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         </div>
       ))}
 
-      {varianteSeleccionada && (
+     {varianteSeleccionada && (
         <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '0 0 10px 0', color: '#1f2937' }}>
-            Precio: ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+          
+          <div style={{ marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>Precio:</span>
+            {varianteSeleccionada.precio_oferta ? (
+              <>
+                <span style={{ fontSize: '1.4rem', color: '#dc2626', fontWeight: 'bold' }}>
+                  ${Number(varianteSeleccionada.precio_oferta).toLocaleString('es-CL')}
+                </span>
+                <span style={{ fontSize: '1rem', color: '#9ca3af', textDecoration: 'line-through' }}>
+                  ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#1f2937' }}>
+                ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+              </span>
+            )}
+          </div>
+          <p style={{ margin: '0 0 10px 0', color: Number(varianteSeleccionada.stock) > 0 ? '#166534' : '#ef4444', fontWeight: '500' }}>
           </p>
           <p style={{ margin: '0 0 10px 0', color: Number(varianteSeleccionada.stock) > 0 ? '#166534' : '#ef4444', fontWeight: '500' }}>
             Stock disponible: {varianteSeleccionada.stock}

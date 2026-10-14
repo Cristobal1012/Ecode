@@ -23,7 +23,7 @@ from ecommerce.domain.ventas import (
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
@@ -173,6 +173,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
+    codigo_promocion = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
     # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
@@ -198,6 +199,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'proveedor_logistico',
             'acepta_terminos',
             'items',
+            'codigo_promocion',
         ]
 
     def validate_acepta_terminos(self, value):
@@ -294,6 +296,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         validated_data.pop('acepta_terminos')
         validated_data.pop('items')
+        codigo_promo = validated_data.pop('codigo_promocion', None)
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
@@ -323,9 +326,31 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
             costo_envio = float(resultado['precio'])
 
-        # El total siempre lo calcula el servidor: subtotal validado contra el catálogo + envío cotizado
+        # APLICAR PROMOCION Y EXPIRAR EL CUPON
+        subtotal_num = float(validated_data['subtotal'])
+        descuento = 0.0
+
+        if codigo_promo:
+            promo = Promocion.objects.filter(
+                codigo__iexact=codigo_promo.strip(), is_active=True
+            ).first()
+            if promo:
+                if promo.tipo_descuento == 'PORCENTAJE':
+                    descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
+                else:
+                    descuento = float(promo.valor_descuento)
+                descuento = min(descuento, subtotal_num)
+
+                if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
+                    costo_envio = 0.0
+
+                # Desactivamos el cupón para que no se pueda volver a usar
+                promo.is_active = False
+                promo.save()
+
+        # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
         validated_data['costo_envio'] = costo_envio
-        validated_data['total_final'] = float(validated_data['subtotal']) + costo_envio
+        validated_data['total_final'] = max(0.0, (subtotal_num - descuento) + costo_envio)
         # La orden de transporte se genera con el mismo paquete que se cotizó
         validated_data['paquete'] = (
             {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
@@ -383,7 +408,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
         orden.url_pago = url_pago
         return orden
-
         
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)

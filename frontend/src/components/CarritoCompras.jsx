@@ -24,8 +24,9 @@ const CarritoCompras = () => {
     const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
 
     return (
-        <div style={{ position: 'relative' }} ref={carritoRef}>
+        <div className="carrito-compras" ref={carritoRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-label={`Carrito de compras, ${cantidadTotal} ${cantidadTotal === 1 ? 'producto' : 'productos'}`}
                 aria-expanded={isOpen}
@@ -42,7 +43,7 @@ const CarritoCompras = () => {
                 {cantidadTotal > 0 && (
                     <span aria-hidden="true" style={{
                         position: 'absolute', top: '0px', right: '0px', backgroundColor: '#ef4444',
-                        color: 'white', fontSize: '12px', fontWeight: 'bold', width: '18px',
+                        color: 'white', fontSize: '12px', fontWeight: 'bold', minWidth: '18px', padding: '0 3px', boxSizing: 'border-box',
                         height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center',
                         justifyContent: 'center'
                     }}>
@@ -52,8 +53,7 @@ const CarritoCompras = () => {
             </button>
 
             {isOpen && (
-                <div style={{
-                    position: 'absolute', top: '100%', right: '0', marginTop: '8px', width: '320px',
+                <div className="carrito-panel" style={{
                     backgroundColor: 'white', borderRadius: '8px',
                     boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', border: '1px solid #f3f4f6', zIndex: 9999
                 }}>
@@ -64,7 +64,7 @@ const CarritoCompras = () => {
                     <div style={{ padding: '16px', maxHeight: '300px', overflowY: 'auto' }}>
                         {itemsCarrito.length > 0 ? (
                             itemsCarrito.map((item) => (
-                                <div key={item.sku} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
+                                <div key={`${item.id}|${item.sku}`} style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
                                     <div>
                                         <p style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#374151' }}>{item.nombre}</p>
                                         <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>Cant: {item.cantidad}</p>

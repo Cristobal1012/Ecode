@@ -1,57 +1,157 @@
 .header {
   width: 100%;
-  background-color: #FFFFFF;
-  color: var(--catalogo-text, #0F172A);
+  background-color: #fff;
+  color: var(--catalogo-text, #0f172a);
   box-sizing: border-box;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #e2e8f0;
   box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
 }
-
-.header-nav a {
-  color: var(--catalogo-text, #0F172A);
-  text-decoration: none;
-  font-size: 16px;
-  font-weight: 600;
-  transition: color 0.2s ease;
-}
-
-.header-nav a:hover {
-  color: var(--catalogo-primary, #1D4ED8);
-}
-
 
 .header-content {
   max-width: 1200px;
   margin: 0 auto;
   padding: 15px 30px;
-
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
 }
 
-.header-logo img {
+.header-logo {
+  flex-shrink: 0;
+}
+
+.header-logo-img {
   width: 150px;
   height: auto;
   display: block;
   object-fit: contain;
 }
 
-.header-nav {
+.header-nav,
+.header-links,
+.header-actions {
   display: flex;
   align-items: center;
-  gap: 30px;
+  gap: 16px;
+  min-width: 0;
+}
+
+.header-nav {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.header-links {
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .header-nav a {
-  color: black;
+  color: var(--catalogo-text, #0f172a);
   text-decoration: none;
   font-size: 16px;
   font-weight: 500;
-
   transition: color 0.2s ease;
 }
 
+.header-links a,
+.header-actions > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .header-nav a:hover {
-  color: #b8d8e8;
+  color: var(--catalogo-primary, #1d4ed8);
+}
+
+.header-nav a:focus-visible,
+.header-nav button:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.header .menu-usuario,
+.header .carrito-compras {
+  position: relative;
+  min-width: 0;
+}
+
+.header .menu-usuario-saludo {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header .carrito-panel,
+.header .menu-usuario-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.header .carrito-panel {
+  width: 320px;
+}
+
+.header .menu-usuario-panel {
+  width: 280px;
+}
+
+.auth-main {
+  padding-inline: 16px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1023px) {
+  .header-content,
+  .header-nav {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  .header-content {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .header-nav,
+  .header-links,
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-links {
+    justify-content: center;
+    gap: 8px 16px;
+  }
+
+  .header-actions {
+    justify-content: flex-end;
+  }
+
+  /* Ambos paneles se anclan a la fila completa de acciones, dentro del viewport. */
+  .header .menu-usuario,
+  .header .carrito-compras {
+    position: static;
+  }
+
+  .header .carrito-panel,
+  .header .menu-usuario-panel {
+    max-width: 100%;
+  }
 }

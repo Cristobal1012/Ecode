@@ -58,8 +58,11 @@ const MenuUsuario = () => {
     };
 
     return (
-        <div style={{ position: 'relative' }} ref={menuRef}>
+        <div className="menu-usuario" ref={menuRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
             <button 
+                type="button"
+                aria-label="Menú de usuario"
+                aria-expanded={isOpen}
                 onClick={() => setIsOpen(!isOpen)}
                 style={{
                     display: 'flex',
@@ -78,19 +81,14 @@ const MenuUsuario = () => {
                     </svg>
                 </div>
                 <div>
-                    <p style={{ margin: 0, color: '#4b5563', fontSize: '14px', lineHeight: '1' }}>Hola, {nombreUsuario}</p>
+                    <p className="menu-usuario-saludo" style={{ margin: 0, color: '#4b5563', fontSize: '14px', lineHeight: '1' }}>Hola, {nombreUsuario}</p>
                     <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px', lineHeight: '1.2' }}>Mi Cuenta</p>
                 </div>
             </button>
 
             {isOpen && (
-                <div 
+                <div className="menu-usuario-panel"
                     style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: '0',
-                        marginTop: '8px',
-                        width: '280px',
                         backgroundColor: 'white',
                         borderRadius: '8px',
                         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',

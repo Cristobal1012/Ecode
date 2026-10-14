@@ -45,7 +45,7 @@ function AuthPage({ googleHabilitado }) {
   return (
     <>
       <Header />
-      <main>
+      <main className="auth-main">
         {showLogin ? (
           <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
         ) : (

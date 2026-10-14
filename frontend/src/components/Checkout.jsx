@@ -28,7 +28,7 @@ export default function Checkout() {
     return (
         <>
             <Header />
-            <main>
+            <main className="checkout-main">
                 <CheckoutContenido />
             </main>
         </>
@@ -335,12 +335,12 @@ function CheckoutContenido() {
     };
 
     if (modoAutenticacion == null) return <p role={mensaje ? 'alert' : undefined} style={{ textAlign: 'center', marginTop: '50px' }}>{mensaje || 'Cargando...'}</p>;
-    if (modoAutenticacion === 'REGISTRO_OBLIGATORIO' && !usuarioAutenticado) return ( <div style={estiloContenedorOpciones}><h2>Finalizar Compra</h2><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
-    if (modoAutenticacion === 'MIXTO' && !usuarioAutenticado && opcionCompra === null) return ( <div style={estiloContenedorOpciones}><h2>Finalizar Compra</h2><button onClick={() => setOpcionCompra('INVITADO')} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '10px' }}>Comprar como invitado</button><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
+    if (modoAutenticacion === 'REGISTRO_OBLIGATORIO' && !usuarioAutenticado) return ( <div className="checkout-card" style={estiloContenedorOpciones}><h1 className="checkout-titulo">Finalizar Compra</h1><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
+    if (modoAutenticacion === 'MIXTO' && !usuarioAutenticado && opcionCompra === null) return ( <div className="checkout-card" style={estiloContenedorOpciones}><h1 className="checkout-titulo">Finalizar Compra</h1><button onClick={() => setOpcionCompra('INVITADO')} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '10px' }}>Comprar como invitado</button><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
 
     return (
-        <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h2>Finalizar Compra</h2>
+        <div className="checkout-card" style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif' }}>
+            <h1 className="checkout-titulo">Finalizar Compra</h1>
             {mensajeVisible && <div role="status" style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeVisible.includes('Éxito') ? '#d4edda' : '#f8d7da', borderRadius: '4px', color: mensajeVisible.includes('Éxito') ? '#155724' : '#721c24' }}>{mensajeVisible}</div>}
             {avisosCarrito.length > 0 && (
                 <div role="alert" style={{ padding: '10px 15px', marginBottom: '15px', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '4px', color: '#92400e' }}>
@@ -354,7 +354,7 @@ function CheckoutContenido() {
             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>
                 {itemsCarrito.length > 0 ? itemsCarrito.map((item) => (
-                    <div key={`${item.id}|${item.sku}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px', color: '#4b5563' }}>
+                    <div className="checkout-resumen-linea" key={`${item.id}|${item.sku}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px', color: '#4b5563' }}>
                         <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
                     </div>
                 )) : <p>No hay productos</p>}
@@ -378,7 +378,7 @@ function CheckoutContenido() {
                     <legend style={{ width: '100%', padding: 0 }}>
                         <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
                     </legend>
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div className="checkout-fila" style={{ display: 'flex', gap: '10px' }}>
                         <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
                             <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
                             A Domicilio
@@ -420,7 +420,7 @@ function CheckoutContenido() {
 
                         {direccionSeleccionadaId === 'nueva' && (
                             <div style={{ padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                                <div className="checkout-fila" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                                     <div style={{ flex: 3 }}>
                                         <label htmlFor="checkout-calle" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Calle</label>
                                         <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required style={inputStyle} placeholder="Ej: Av. Providencia" />
@@ -434,7 +434,7 @@ function CheckoutContenido() {
                                     <label htmlFor="checkout-dpto" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Dpto, Casa o Referencia (Opcional)</label>
                                     <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} style={inputStyle} placeholder="Ej: Depto 505" />
                                 </div>
-                                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                                <div className="checkout-fila" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                                     <div style={{ flex: 1 }}>
                                         <label htmlFor="checkout-comuna" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Comuna</label>
                                         <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>

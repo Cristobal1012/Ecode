@@ -2,8 +2,18 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
+import './SeguimientoEnvio.css';
 
 export default function SeguimientoEnvio() {
+    return (
+        <>
+            <Header />
+            <SeguimientoContenido />
+        </>
+    );
+}
+
+function SeguimientoContenido() {
     const [searchParams] = useSearchParams(); 
     
     // 3. Modificamos el estado inicial para que lea la URL (?orden=123)
@@ -51,16 +61,7 @@ export default function SeguimientoEnvio() {
     const indiceEstadoActual = estados.indexOf(estadoActual);
 
     return (
-        <>
-        <Header />
-        <main
-            style={{
-                maxWidth: '700px',
-                margin: '40px auto',
-                padding: '20px',
-                fontFamily: 'sans-serif'
-            }}
-        >
+        <main className="seguimiento-main">
             <h1>Seguimiento de pedido</h1>
 
             <p>
@@ -69,8 +70,9 @@ export default function SeguimientoEnvio() {
 
             <form onSubmit={consultarSeguimiento}>
                 <div style={{ marginBottom: '15px' }}>
-                    <label>Número de orden</label>
+                    <label htmlFor="seguimiento-orden">Número de orden</label>
                     <input
+                        id="seguimiento-orden"
                         type="text"
                         value={numeroOrden}
                         onChange={(e) => setNumeroOrden(e.target.value)}
@@ -85,8 +87,9 @@ export default function SeguimientoEnvio() {
                 </div>
 
                 <div style={{ marginBottom: '15px' }}>
-                    <label>Correo electrónico</label>
+                    <label htmlFor="seguimiento-email">Correo electrónico</label>
                     <input
+                        id="seguimiento-email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -106,7 +109,7 @@ export default function SeguimientoEnvio() {
             </form>
 
             {mensaje && (
-                <p style={{ color: 'red', marginTop: '20px' }}>
+                <p role="alert" style={{ color: 'red', marginTop: '20px' }}>
                     {mensaje}
                 </p>
             )}
@@ -232,6 +235,5 @@ export default function SeguimientoEnvio() {
                 </div>
             )}
         </main>
-        </>
     );
 }

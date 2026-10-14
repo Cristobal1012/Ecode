@@ -509,7 +509,7 @@ def usar_mongo_de_prueba(cls):
 
 
 class ReducirStockVarianteTests(SimpleTestCase):
-    """RN-03 y AGENTS.md §4.1: el descuento de stock es atómico y condicional."""
+    """RN-03: el descuento de stock es atómico y condicional."""
 
     @classmethod
     def setUpClass(cls):

@@ -122,7 +122,7 @@ class MigracionMediosPagoTests(TransactionTestCase):
 
 
 class CheckoutRN02Tests(APITestCase):
-    """AGENTS.md §11 (RN-02): solo se ofrecen y aceptan los medios habilitados y configurados."""
+    """RN-02: solo se ofrecen y aceptan los medios habilitados y configurados."""
 
     def setUp(self):
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', modo_autenticacion='INVITADO',
@@ -200,7 +200,7 @@ class CheckoutRN02Tests(APITestCase):
 
 
 class AdminMediosPagoAPITests(APITestCase):
-    """AGENTS.md §7: el admin configura los medios desde el panel y nunca ve una credencial completa."""
+    """RN-02: el admin configura los medios desde el panel y nunca ve una credencial completa."""
 
     @classmethod
     def setUpTestData(cls):

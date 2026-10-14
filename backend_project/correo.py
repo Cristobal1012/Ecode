@@ -1,4 +1,4 @@
-"""Elige el servidor de correo (MAILERS de Django 6.1) a partir de las variables de entorno (AGENTS.md §3.3)."""
+"""Elige el servidor de correo (MAILERS de Django 6.1) a partir de las variables de entorno."""
 
 RESEND = 'anymail.backends.resend.EmailBackend'
 SMTP = 'django.core.mail.backends.smtp.EmailBackend'

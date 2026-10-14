@@ -85,7 +85,7 @@ class AdminOrdenCompraListView(generics.ListAPIView):
 
 
 class AdminResolverRevisionView(APIView):
-    """El admin marca como resuelta la revisión de una orden (AGENTS.md §4.1)."""
+    """El admin marca como resuelta la revisión de una orden."""
     permission_classes = [IsAdministrador]
 
     def post(self, request, pk):
@@ -116,7 +116,7 @@ class AdminOrdenTransporteView(APIView):
 
 
 class AdminOrdenCompraPatchView(APIView):
-    """RF-03.3: cambio de estado manual del admin (transiciones de AGENTS.md §9)."""
+    """RF-03.3: cambio de estado manual del admin (solo las transiciones permitidas)."""
     permission_classes = [IsAdministrador]
 
     def patch(self, request, pk):
@@ -252,7 +252,7 @@ class TransbankRetornoView(APIView):
             caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
             return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
 
-        # 2. Estado y stock de la orden (idempotente, stock todo o nada; AGENTS.md §4.1)
+        # 2. Estado y stock de la orden (idempotente, stock todo o nada)
         try:
             resultado = caso.aprobar(orden.id)
         except Exception:
@@ -736,7 +736,7 @@ def codigo_medio_pago(codigo):
 
 
 class AdminMediosPagoView(APIView):
-    """RN-02 / AGENTS.md §7: los medios de pago con su estado; las credenciales van enmascaradas."""
+    """RN-02: los medios de pago con su estado; las credenciales van enmascaradas."""
     permission_classes = [IsAdministrador]
 
     def get(self, request):

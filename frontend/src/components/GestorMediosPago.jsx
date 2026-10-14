@@ -49,7 +49,7 @@ function EstadoMedio({ medio }) {
   return <p style={{ ...ESTILOS_ESTADO.deshabilitado, padding: '8px 12px', borderRadius: '6px', margin: '0 0 15px 0' }}>Deshabilitado: no se muestra a los compradores.</p>;
 }
 
-// RN-02 y AGENTS.md §7: el admin habilita cada medio y carga sus datos; las credenciales llegan enmascaradas
+// RN-02: el admin habilita cada medio y carga sus datos; las credenciales llegan enmascaradas
 // y, si se devuelven sin cambios, el backend conserva las anteriores.
 export default function GestorMediosPago() {
   const [medios, setMedios] = useState([]);

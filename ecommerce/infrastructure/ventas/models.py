@@ -71,7 +71,7 @@ class MedioPago(models.Model):
     habilitado = models.BooleanField(default=False)
     # Datos que no son secretos (ej. ambiente, datos bancarios que ve el comprador)
     datos = models.JSONField(default=dict, blank=True)
-    # Credenciales en JSON cifrado con CLAVE_CIFRADO_CREDENCIALES (AGENTS.md §7); nunca en texto plano
+    # Credenciales en JSON cifrado con CLAVE_CIFRADO_CREDENCIALES; nunca en texto plano
     credenciales_cifradas = models.TextField(blank=True, default='')
     actualizado = models.DateTimeField(auto_now=True)
 

@@ -8,7 +8,7 @@ from ecommerce.domain.ventas import (
 
 E = EstadoPedido
 
-# AGENTS.md §9, escrita a mano para no repetir la tabla del dominio
+# Máquina de estados del pedido, escrita a mano para no repetir la tabla del dominio
 PERMITIDAS = {
     (E.PENDIENTE, E.PAGADO), (E.PENDIENTE, E.CANCELADO),
     (E.PAGADO, E.EN_PREPARACION), (E.PAGADO, E.CANCELADO),

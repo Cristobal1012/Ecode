@@ -539,7 +539,7 @@ class CambiarEstadoPedidoTests(SimpleTestCase):
 
 
 class CancelarPagosVencidosTests(SimpleTestCase):
-    """AGENTS.md §4.1: una transferencia no pagada en 48 h se cancela y se avisa al comprador."""
+    """Plazo de pago: una transferencia no pagada en 48 h se cancela y se avisa al comprador."""
 
     AHORA = datetime(2026, 10, 14, 12, 0)
 

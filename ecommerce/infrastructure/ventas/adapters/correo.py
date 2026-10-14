@@ -42,7 +42,7 @@ def pesos(valor) -> str:
 
 class CorreoNotificadorPedidos(NotificadorPedidos):
     def notificar(self, orden_id, evento):
-        # AGENTS.md RF-04.2: no se avisan cambios que luego hagan rollback
+        # RF-04.2: no se avisan cambios que luego hagan rollback
         transaction.on_commit(lambda: self._enviar(orden_id, EventoPedido(evento)))
 
     def _enviar(self, orden_id, evento):

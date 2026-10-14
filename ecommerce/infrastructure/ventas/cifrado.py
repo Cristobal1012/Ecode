@@ -1,4 +1,4 @@
-"""Cifrado en reposo de credenciales (AGENTS.md §7) con Fernet (AES + HMAC) de `cryptography`."""
+"""Cifrado en reposo de credenciales con Fernet (AES + HMAC) de `cryptography`."""
 
 import base64
 import hashlib

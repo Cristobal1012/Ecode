@@ -56,7 +56,7 @@ if not DEBUG and (not SECRET_KEY or SECRET_KEY.startswith('django-insecure')):
         'print(get_random_secret_key())". En desarrollo puedes usar DEBUG=True.'
     )
 
-# Cifra en PostgreSQL las credenciales de los medios de pago (AGENTS.md §7). Es independiente de la SECRET_KEY:
+# Cifra en PostgreSQL las credenciales de los medios de pago. Es independiente de la SECRET_KEY:
 # cambiar la SECRET_KEY no debe dejar ilegibles las credenciales guardadas.
 CLAVE_CIFRADO_CREDENCIALES = os.environ.get('CLAVE_CIFRADO_CREDENCIALES', '').strip()
 if not CLAVE_CIFRADO_CREDENCIALES and DEBUG:
@@ -189,7 +189,7 @@ CATALOGO_IMAGEN_MAX_PIXELES = int(os.environ.get('CATALOGO_IMAGEN_MAX_PIXELES', 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-# Correos al comprador (RF-04.2). Proveedor decidido: Resend por API (AGENTS.md §3.3).
+# Correos al comprador (RF-04.2). Proveedor decidido: Resend por API.
 # Django 6.1 configura el correo con MAILERS: las variables RESEND_API_KEY y EMAIL_* del .env se leen en
 # backend_project/correo.py (Resend > SMTP > consola del runserver), no como settings.
 MAILERS = {'default': mailer_por_defecto(os.environ)}

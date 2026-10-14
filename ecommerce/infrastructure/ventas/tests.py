@@ -449,7 +449,7 @@ class SeguimientoEnvioTests(APITestCase):
 
 
 class CambioEstadoAdminTests(APITestCase):
-    """RF-03.3 / AGENTS.md §9: el admin solo puede hacer las transiciones permitidas."""
+    """RF-03.3: el admin solo puede hacer las transiciones permitidas."""
 
     @classmethod
     def setUpTestData(cls):
@@ -542,7 +542,7 @@ class CambioEstadoAdminTests(APITestCase):
 
 
 class PanelPedidosAdminTests(APITestCase):
-    """RF-03.3 y AGENTS.md §4.1: listado del panel y resolución de revisiones."""
+    """RF-03.3: listado del panel y resolución de revisiones."""
 
     @classmethod
     def setUpTestData(cls):
@@ -687,7 +687,7 @@ class AnulacionTransbankTests(APITestCase):
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class PagoAprobadoTransbankTests(APITestCase):
-    """RF-02.2 y AGENTS.md §4.1: la vista delega en ConfirmarPago (idempotente, stock todo o nada)."""
+    """RF-02.2: la vista delega en ConfirmarPago (idempotente, stock todo o nada)."""
 
     def setUp(self):
         self.orden = OrdenCompra.objects.create(

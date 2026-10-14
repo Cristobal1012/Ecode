@@ -21,7 +21,7 @@ class RepositorioMediosPago(ABC):
 
 
 class ConfigurarMedioPago:
-    """AGENTS.md §7: el admin habilita un medio y carga sus datos desde el panel.
+    """RN-02: el admin habilita un medio y carga sus datos desde el panel.
 
     Se puede guardar incompleto; mientras le falten datos obligatorios no se ofrece al comprador.
     """

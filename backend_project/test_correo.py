@@ -4,7 +4,7 @@ from .correo import CONSOLA, RESEND, SMTP, mailer_por_defecto, remitente_por_def
 
 
 class MailerPorDefectoTests(SimpleTestCase):
-    """AGENTS.md §3.3: Resend por API; SMTP solo como alternativa (ej. Gmail en desarrollo)."""
+    """Resend por API; SMTP solo como alternativa (ej. Gmail en desarrollo)."""
 
     def test_con_resend_se_usa_su_api_aunque_haya_smtp(self):
         mailer = mailer_por_defecto({'RESEND_API_KEY': ' re_prueba_123 ', 'EMAIL_HOST': 'smtp.gmail.com'})

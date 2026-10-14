@@ -256,7 +256,7 @@ def respuesta_resend(status, cuerpo):
 @override_settings(MAILERS={'default': mailer_por_defecto({'RESEND_API_KEY': 're_prueba_123'})},
                    DEFAULT_FROM_EMAIL='Tienda QA <ventas@tienda.test>')
 class CorreoPorResendTests(APITestCase):
-    """AGENTS.md §3.3: los correos salen por la API HTTPS de Resend (django-anymail), sin SMTP."""
+    """Los correos salen por la API HTTPS de Resend (django-anymail), sin SMTP."""
 
     def setUp(self):
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA')

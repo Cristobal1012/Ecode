@@ -1,4 +1,4 @@
-"""Medios de pago configurables por el emprendedor (RN-02, AGENTS.md §7), independientes de Django."""
+"""Medios de pago configurables por el emprendedor (RN-02), independientes de Django."""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -98,7 +98,7 @@ MASCARA = '••••'
 
 
 def enmascarar(valor: str) -> str:
-    """AGENTS.md §7: una credencial solo se muestra con sus últimos 4 caracteres."""
+    """Una credencial solo se muestra con sus últimos 4 caracteres."""
     if not valor:
         return ''
     return MASCARA + valor[-4:] if len(valor) > 8 else MASCARA

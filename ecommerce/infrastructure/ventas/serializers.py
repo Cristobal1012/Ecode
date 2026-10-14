@@ -415,12 +415,12 @@ class AgregarItemSerializer(serializers.Serializer):
 
         return data
 class AdminOrdenCompraEstadoSerializer(serializers.Serializer):
-    # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido (AGENTS.md §9)
+    # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido
     estado = serializers.ChoiceField(choices=OrdenCompra.ESTADOS_PEDIDO)
 
 
 class AdminOrdenCompraSerializer(serializers.ModelSerializer):
-    """Listado del panel (RF-03.3): incluye la revisión pendiente y las transiciones de §9."""
+    """Listado del panel (RF-03.3): incluye la revisión pendiente y las transiciones permitidas."""
 
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
@@ -511,7 +511,7 @@ class MedioPagoAdminSerializer(serializers.Serializer):
 
 
 def medio_pago_para_panel(medio):
-    """Lo que ve el admin de un medio de pago: nunca una credencial completa (AGENTS.md §7)."""
+    """Lo que ve el admin de un medio de pago: nunca una credencial completa."""
     return {
         'codigo': medio.codigo.value,
         'nombre': medio.definicion.nombre,

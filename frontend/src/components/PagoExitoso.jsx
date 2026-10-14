@@ -7,7 +7,7 @@ export default function PagoExitoso() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ordenId = searchParams.get('orden');
-  // El pago se aprobó pero la orden quedó para revisión del admin (ej. sin stock, AGENTS.md §4.1):
+  // El pago se aprobó pero la orden quedó para revisión del admin (ej. sin stock):
   // no se le promete el pedido ni se le muestra el motivo interno
   const enRevision = searchParams.get('revision') === '1';
   // El invitado no tiene historial: se le lleva al seguimiento con su número de orden (RF-02.4)

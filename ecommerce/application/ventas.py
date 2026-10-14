@@ -66,7 +66,7 @@ def agrupar_por_sku(items: list[ItemSolicitado]) -> list[ItemSolicitado]:
 
 
 class RevisarCarrito:
-    """RN-03 / AGENTS.md §4.1: valida el stock al agregar al carrito y al abrir el checkout.
+    """RN-03: valida el stock al agregar al carrito y al abrir el checkout.
 
     No reserva nada: el stock se vuelve a validar al crear la orden y al confirmar el pago.
     """
@@ -150,7 +150,7 @@ class RepositorioOrdenes(ABC):
 
 
 class NotificadorPedidos(ABC):
-    """Puerto de salida (NotificationSender, AGENTS.md §3.3): avisa al comprador un hito de su pedido.
+    """Puerto de salida (NotificationSender, RF-04.2): avisa al comprador un hito de su pedido.
 
     El adaptador envía después del commit y nunca lanza: un correo que falla no deshace el cambio.
     """
@@ -240,7 +240,7 @@ MOTIVO_CONFIRMACION_INTERRUMPIDA = (
 
 
 class ConfirmarPago:
-    """RF-02.2, RN-03 y AGENTS.md §4.1: aplica el resultado de la pasarela a la orden.
+    """RF-02.2 y RN-03: aplica el resultado de la pasarela a la orden.
 
     - Solo la primera confirmación de una orden PENDIENTE descuenta stock (idempotencia).
     - Stock todo o nada: si falta en una línea, se repone lo descontado y la orden queda
@@ -333,9 +333,9 @@ class PedidoModificado(Exception):
 
 
 class CambiarEstadoPedido:
-    """RF-03.3, AGENTS.md §9 y §4.1: cambio de estado manual desde el panel del admin.
+    """RF-03.3: cambio de estado manual desde el panel del admin.
 
-    - Solo se permiten las transiciones de §9 (TransicionNoPermitida).
+    - Solo se permiten las transiciones de la máquina de estados (TransicionNoPermitida).
     - PENDIENTE → PAGADO (ej. transferencia validada, RF-02.2) aplica las mismas reglas que un
       pago en línea: descuenta stock todo o nada, si falta la orden queda en revisión, y si no
       se genera la orden de transporte.
@@ -385,11 +385,11 @@ EVENTO_POR_ESTADO = {
 
 
 class CancelarPagosVencidos:
-    """AGENTS.md §4.1: una transferencia que no se paga dentro del plazo (48 h) se cancela y se avisa.
+    """Plazo de pago: una transferencia que no se paga dentro del plazo (48 h) se cancela y se avisa.
 
     - No toca stock: la transferencia no lo reserva mientras está Pendiente.
     - El UPDATE condicional evita cancelar una orden que el admin validó mientras tanto.
-    - Si el pago llega después, ConfirmarPago deja la orden cancelada en revisión del admin (§9).
+    - Si el pago llega después, ConfirmarPago deja la orden cancelada en revisión del admin.
     """
 
     def __init__(self, ordenes: RepositorioOrdenes, notificador: NotificadorPedidos | None = None):
@@ -439,7 +439,7 @@ class SinRevisionPendiente(Exception):
 
 
 class ResolverRevision:
-    """AGENTS.md §4.1: el admin marca como resuelta la revisión de una orden (ej. ya reembolsó).
+    """RF-03.3: el admin marca como resuelta la revisión de una orden (ej. ya reembolsó).
 
     El motivo se conserva como historial.
     """

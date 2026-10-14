@@ -13,7 +13,7 @@ from .tests import DATOS_MEDIOS_PAGO, habilitar_medios_pago
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class ComandoCancelarPagosVencidosTests(TestCase):
-    """AGENTS.md §4.1: `manage.py cancelar_pagos_vencidos` cancela las transferencias vencidas y avisa."""
+    """Plazo de pago: `manage.py cancelar_pagos_vencidos` cancela las transferencias vencidas y avisa."""
 
     def setUp(self):
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA')

@@ -15,7 +15,7 @@ class TransbankWebpayAdapter:
     """
     @classmethod
     def _obtener_instancia(cls) -> Transaction:
-        # El ambiente y las credenciales los carga el admin en el panel (AGENTS.md §7), no el .env.
+        # El ambiente y las credenciales los carga el admin en el panel, no el .env.
         # Se lee aunque Transbank esté deshabilitado: un pago ya iniciado debe poder confirmarse.
         datos = DjangoRepositorioMediosPago().obtener(CodigoMedioPago.TRANSBANK).datos
 

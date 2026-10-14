@@ -175,7 +175,7 @@ ETIQUETAS_ESTADO = {
     EstadoPedido.CANCELADO: 'Cancelado',
 }
 
-# AGENTS.md §4.1 (decidido el 2026-10-13): plazo para pagar una transferencia; vencido, la orden se cancela
+# Decidido el 2026-10-13: plazo para pagar una transferencia; vencido, la orden se cancela
 PLAZO_PAGO_TRANSFERENCIA = timedelta(hours=48)
 # Si sigue sin pagar cuando falta esto para vencer, se le recuerda al comprador (una sola vez)
 AVISO_ANTES_DEL_VENCIMIENTO = timedelta(hours=24)
@@ -190,7 +190,7 @@ ESTADOS_PAGADOS = frozenset({
     EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION, EstadoPedido.ENVIADO, EstadoPedido.ENTREGADO,
 })
 
-# AGENTS.md §9: cualquier transición que no esté aquí se rechaza
+# Máquina de estados del pedido (RF-03.3): cualquier transición que no esté aquí se rechaza
 TRANSICIONES_PERMITIDAS = {
     EstadoPedido.PENDIENTE: {EstadoPedido.PAGADO, EstadoPedido.CANCELADO},
     EstadoPedido.PAGADO: {EstadoPedido.EN_PREPARACION, EstadoPedido.CANCELADO},
@@ -226,7 +226,7 @@ def transiciones_desde(estado) -> list[EstadoPedido]:
 
 
 def validar_transicion(actual, nuevo) -> EstadoPedido:
-    """RF-03.3 / AGENTS.md §9: devuelve el nuevo estado si la transición está permitida."""
+    """RF-03.3: devuelve el nuevo estado si la transición está permitida."""
     try:
         actual, nuevo = EstadoPedido(actual), EstadoPedido(nuevo)
     except ValueError:

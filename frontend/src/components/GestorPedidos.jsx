@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
-// Nombres de la interfaz. Las transiciones permitidas las informa el backend (AGENTS.md §9)
+// Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
   PENDIENTE: 'Pendiente',
   PAGADO: 'Pagado',

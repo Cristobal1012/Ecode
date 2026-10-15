@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
-// Nombres de la interfaz. Las transiciones permitidas las informa el backend (AGENTS.md §9)
+// Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
   PENDIENTE: 'Pendiente',
   PAGADO: 'Pagado',
@@ -163,7 +163,18 @@ export default function GestorPedidos() {
               return (
                 <tr key={pedido.id} style={{ borderBottom: '1px solid #e5e7eb', verticalAlign: 'top' }}>
                   <td style={{ padding: '12px', fontWeight: 'bold' }}>#{pedido.id}</td>
-                  <td style={{ padding: '12px' }}>{pedido.email_cliente || 'Usuario Registrado'}</td>
+                  <td style={{ padding: '12px' }}>
+                    {pedido.email_cliente || 'Usuario Registrado'}
+                    {pedido.nombre_destinatario && (
+                      // Quién recibe o retira (RF-02.3): a quién contactar para coordinar la entrega
+                      <div style={{ marginTop: '4px', fontSize: '0.85rem', color: '#4b5563' }}>
+                        Recibe: {pedido.nombre_destinatario}
+                        {pedido.telefono_destinatario && (
+                          <> · <a href={`tel:${pedido.telefono_destinatario}`} style={{ color: '#1d4ed8' }}>{pedido.telefono_destinatario}</a></>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: '12px' }}>${Number(pedido.total_final).toLocaleString('es-CL')}</td>
                   <td style={{ padding: '12px' }}>
                     <select

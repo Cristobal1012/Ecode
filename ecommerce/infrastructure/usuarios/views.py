@@ -98,4 +98,7 @@ class UsuarioActualAPIView(APIView):
             'email': request.user.email,
             'rol': request.user.rol,
             'nombre': request.user.nombre,
+            # El checkout los usa para precargar quién recibe el pedido (RF-02.3)
+            'apellido_paterno': request.user.apellido_paterno,
+            'telefono': request.user.telefono or '',
         })

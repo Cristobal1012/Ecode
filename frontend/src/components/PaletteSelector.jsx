@@ -90,8 +90,9 @@ export default function PaletteSelector() {
   return (
     <div style={{ 
       padding: '2rem', 
-      maxWidth: '850px', 
-      margin: '2rem auto', 
+      maxWidth: '850px',
+      // Alineado a la izquierda como el resto de la vista Configuración del panel
+      margin: '2rem 0',
       backgroundColor: 'var(--color-background, #fff)', 
       color: 'var(--color-text, #333)',
       borderRadius: '12px',

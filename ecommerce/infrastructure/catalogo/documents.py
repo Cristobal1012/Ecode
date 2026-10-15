@@ -41,7 +41,7 @@ class Producto(Document):
 
     @classmethod
     def reducir_stock_variante(cls, producto_id, sku, cantidad):
-        """Descuenta stock de una variante de forma atómica y condicional (RN-03, AGENTS.md §4.1).
+        """Descuenta stock de una variante de forma atómica y condicional (RN-03).
 
         Un único update filtra por stock suficiente, así dos compras simultáneas de la última
         unidad producen una sola venta. Devuelve False si no hay stock o no existe el SKU.

@@ -12,6 +12,10 @@ PAQUETE_POR_DEFECTO = {'peso': '1', 'alto': 10, 'ancho': 10, 'largo': 10}
 
 class ChilexpressOrdenTransporte(TransportistaOrdenes):
     def generar_orden_transporte(self, envio):
+        # Chilexpress contacta al destinatario: no se le envía un teléfono inventado
+        if not envio.telefono:
+            raise ErrorOrdenTransporte('La orden no tiene teléfono del destinatario.')
+
         catalogo = ProveedorLogisticoAdapter._obtener_catalogo_dinamico()
         if not catalogo:
             raise ErrorOrdenTransporte('Servicio de coberturas de Chilexpress no disponible.')
@@ -32,8 +36,8 @@ class ChilexpressOrdenTransporte(TransportistaOrdenes):
             'es_sucursal': bool(envio.codigo_sucursal),
             'sucursal_id': envio.codigo_sucursal,
             'nombre_destinatario': envio.destinatario,
-            # TODO(PENDIENTE): el checkout no pide el teléfono del destinatario
-            'telefono': '999999999',
+            # Número nacional de 9 dígitos, sin el +56 (mismo largo que el valor que aceptó el sandbox)
+            'telefono': envio.telefono.removeprefix('+56'),
             'email': envio.email,
             'referencia': f'ORD-{envio.orden_id}',
             'valor_declarado': envio.valor_declarado,

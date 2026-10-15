@@ -1,6 +1,7 @@
 """Reglas para armar un pedido, independientes de HTTP, Django y la base de catálogo."""
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -42,6 +43,24 @@ class SubtotalDesactualizado(ErrorPedido):
         self.subtotal_vigente = subtotal_vigente
         self.lineas = list(lineas)
         super().__init__('Los precios de tu carrito cambiaron. Revisa el nuevo total antes de pagar.')
+
+
+class TelefonoInvalido(ErrorPedido):
+    def __init__(self):
+        super().__init__('Ingresa un teléfono chileno de 9 dígitos, por ejemplo +56 9 1234 5678.')
+
+
+def normalizar_telefono_chile(texto: str) -> str:
+    """RF-02.3: teléfono de contacto del destinatario. Los envíos son dentro de Chile.
+
+    Acepta 9 dígitos con o sin +56 (espacios, guiones y paréntesis se ignoran) y devuelve +56XXXXXXXXX.
+    """
+    digitos = ''.join(c for c in str(texto or '') if c.isdigit())
+    if len(digitos) == 11 and digitos.startswith('56'):
+        digitos = digitos[2:]
+    if len(digitos) != 9 or digitos.startswith('0'):
+        raise TelefonoInvalido()
+    return f'+56{digitos}'
 
 
 @dataclass(frozen=True)
@@ -156,12 +175,22 @@ ETIQUETAS_ESTADO = {
     EstadoPedido.CANCELADO: 'Cancelado',
 }
 
+# Decidido el 2026-10-13: plazo para pagar una transferencia; vencido, la orden se cancela
+PLAZO_PAGO_TRANSFERENCIA = timedelta(hours=48)
+# Si sigue sin pagar cuando falta esto para vencer, se le recuerda al comprador (una sola vez)
+AVISO_ANTES_DEL_VENCIMIENTO = timedelta(hours=24)
+
+
+def vencimiento_pago_transferencia(creada: datetime) -> datetime:
+    return creada + PLAZO_PAGO_TRANSFERENCIA
+
+
 # Estados en los que el pago ya se confirmó
 ESTADOS_PAGADOS = frozenset({
     EstadoPedido.PAGADO, EstadoPedido.EN_PREPARACION, EstadoPedido.ENVIADO, EstadoPedido.ENTREGADO,
 })
 
-# AGENTS.md §9: cualquier transición que no esté aquí se rechaza
+# Máquina de estados del pedido (RF-03.3): cualquier transición que no esté aquí se rechaza
 TRANSICIONES_PERMITIDAS = {
     EstadoPedido.PENDIENTE: {EstadoPedido.PAGADO, EstadoPedido.CANCELADO},
     EstadoPedido.PAGADO: {EstadoPedido.EN_PREPARACION, EstadoPedido.CANCELADO},
@@ -197,7 +226,7 @@ def transiciones_desde(estado) -> list[EstadoPedido]:
 
 
 def validar_transicion(actual, nuevo) -> EstadoPedido:
-    """RF-03.3 / AGENTS.md §9: devuelve el nuevo estado si la transición está permitida."""
+    """RF-03.3: devuelve el nuevo estado si la transición está permitida."""
     try:
         actual, nuevo = EstadoPedido(actual), EstadoPedido(nuevo)
     except ValueError:
@@ -227,6 +256,8 @@ class EventoPedido(StrEnum):
     # Pago aprobado, pero el admin debe revisar la orden (ej. sin stock): no se le promete el pedido
     PAGO_EN_REVISION = 'PAGO_EN_REVISION'
     PAGO_RECHAZADO = 'PAGO_RECHAZADO'
+    # Transferencia aún sin pagar: quedan 24 h antes de que el pedido se cancele
+    RECORDATORIO_PAGO = 'RECORDATORIO_PAGO'
     CANCELADO = 'CANCELADO'
     EN_PREPARACION = 'EN_PREPARACION'
     DESPACHADO = 'DESPACHADO'

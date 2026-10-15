@@ -7,7 +7,7 @@ REVISION = [('ventas', '0013_revision_y_stock_descontado')]
 
 
 class MigracionRevisionYStockTests(TransactionTestCase):
-    """0013 completa las órdenes existentes según las decisiones de AGENTS.md §4.1."""
+    """0013 completa las órdenes existentes según las reglas de stock decididas el 2026-10-12."""
 
     def migrar(self, destino):
         executor = MigrationExecutor(connection)

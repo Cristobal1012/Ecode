@@ -20,6 +20,7 @@ import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a dond
 import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
+import TrackingScripts from './components/TrackingScripts';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -52,7 +53,7 @@ function AuthPage({ googleHabilitado }) {
 function App() {
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const [googleClientId, setGoogleClientId] = useState('');
-
+  const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
     const saved = localStorage.getItem('ecommerce_palette');
@@ -65,6 +66,8 @@ function App() {
         const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
         setGoogleClientId(config?.google_client_id || '');
+        setTrackingIds({
+        googleAnalyticsId: config?.google_analytics_id || '', metaPixelId: config?.meta_pixel_id || '',});
         if (config && config.tema_seleccionado !== undefined) {
           const serverId = Number(config.tema_seleccionado);
           localStorage.setItem('ecommerce_palette', serverId.toString());
@@ -101,6 +104,10 @@ function App() {
 
   return (
     <BrowserRouter>
+      <TrackingScripts
+        googleAnalyticsId={trackingIds.googleAnalyticsId}
+        metaPixelId={trackingIds.metaPixelId}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <main style={{ flex: 1 }}>
           <Routes>

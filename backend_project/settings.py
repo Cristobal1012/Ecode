@@ -17,6 +17,8 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from mongoengine import connect
 from datetime import timedelta
+
+from .correo import mailer_por_defecto, remitente_por_defecto
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -52,6 +54,20 @@ if not DEBUG and (not SECRET_KEY or SECRET_KEY.startswith('django-insecure')):
         'Define una SECRET_KEY propia en el .env (obligatoria con DEBUG=False). Genérala con: '
         'python -c "from django.core.management.utils import get_random_secret_key; '
         'print(get_random_secret_key())". En desarrollo puedes usar DEBUG=True.'
+    )
+
+# Cifra en PostgreSQL las credenciales de los medios de pago. Es independiente de la SECRET_KEY:
+# cambiar la SECRET_KEY no debe dejar ilegibles las credenciales guardadas.
+CLAVE_CIFRADO_CREDENCIALES = os.environ.get('CLAVE_CIFRADO_CREDENCIALES', '').strip()
+if not CLAVE_CIFRADO_CREDENCIALES and DEBUG:
+    CLAVE_CIFRADO_CREDENCIALES = SECRET_KEY
+    warnings.warn('CLAVE_CIFRADO_CREDENCIALES no está definida: las credenciales se cifran con la SECRET_KEY '
+                  '(solo aceptable con DEBUG=True).')
+if not CLAVE_CIFRADO_CREDENCIALES:
+    raise ImproperlyConfigured(
+        'Define CLAVE_CIFRADO_CREDENCIALES en el .env (obligatoria con DEBUG=False). Genérala con: '
+        'python -c "import secrets; print(secrets.token_urlsafe(32))". Si la cambias, hay que volver a '
+        'cargar las credenciales de los medios de pago desde el panel.'
     )
 
 ALLOWED_HOSTS = env_lista('ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG else '')
@@ -124,6 +140,15 @@ DATABASES = {
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://root:rootpassword@localhost:27017/ecommerce_mongo_db?authSource=admin')
 connect(host=MONGO_URI)
 
+# Contraseñas con Argon2 (RNF-03; requiere argon2-cffi). Los demás solo verifican contraseñas guardadas con ellos
+# (ej. PBKDF2, el de Django por defecto): al iniciar sesión, Django las vuelve a guardar con Argon2.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
+
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 
@@ -173,28 +198,11 @@ CATALOGO_IMAGEN_MAX_PIXELES = int(os.environ.get('CATALOGO_IMAGEN_MAX_PIXELES', 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-# Correos al comprador (RF-04.2) por SMTP. TODO(PENDIENTE): proveedor definitivo (AGENTS.md §3.3).
-# Django 6.1 configura el correo con MAILERS: las variables EMAIL_* del .env se leen aquí, no como settings.
-# Sin EMAIL_HOST los correos se imprimen en la consola del runserver en vez de enviarse.
-_smtp_host = os.environ.get('EMAIL_HOST', '').strip()
-_smtp_usuario = os.environ.get('EMAIL_HOST_USER', '').strip()
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
-        'OPTIONS': {
-            'host': _smtp_host,
-            'port': int(os.environ.get('EMAIL_PORT') or 587),
-            'username': _smtp_usuario,
-            'password': os.environ.get('EMAIL_HOST_PASSWORD', '').strip(),
-            'use_tls': env_bool('EMAIL_USE_TLS', True),
-            # Un servidor de correo lento no debe dejar colgado el checkout ni la confirmación del pago
-            'timeout': int(os.environ.get('EMAIL_TIMEOUT') or 10),
-        },
-    } if _smtp_host else {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '').strip() or _smtp_usuario or 'no-responder@localhost'
+# Correos al comprador (RF-04.2). Proveedor decidido: Resend por API.
+# Django 6.1 configura el correo con MAILERS: las variables RESEND_API_KEY y EMAIL_* del .env se leen en
+# backend_project/correo.py (Resend > SMTP > consola del runserver), no como settings.
+MAILERS = {'default': mailer_por_defecto(os.environ)}
+DEFAULT_FROM_EMAIL = remitente_por_defecto(os.environ)
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 

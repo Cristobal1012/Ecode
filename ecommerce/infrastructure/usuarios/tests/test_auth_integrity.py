@@ -65,7 +65,7 @@ class AuthenticationIntegrityTests(TestCase):
         self.assertFalse(user.check_password("PasswordIncorrecta123!"))
 
         #Comprobamos que se esta encriptando la contraseña mediante hash
-        self.assertTrue(user.password.startswith("pbkdf2_sha256$"))
+        self.assertTrue(user.password.startswith("argon2$"))
 
     def test_jwt_contiene_payload_esperado(self):
         """

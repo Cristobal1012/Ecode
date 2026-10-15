@@ -1,8 +1,11 @@
-import os
 import logging
 from transbank.webpay.webpay_plus.transaction import Transaction
 from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
+
+from ecommerce.domain.medios_pago import AMBIENTE_PRODUCCION, CodigoMedioPago
+
+from ..repositorio_medios_pago import DjangoRepositorioMediosPago
 
 logger = logging.getLogger(__name__)
 
@@ -12,12 +15,16 @@ class TransbankWebpayAdapter:
     """
     @classmethod
     def _obtener_instancia(cls) -> Transaction:
-        entorno = os.getenv("TRANSBANK_ENVIRONMENT", "INTEGRACION").upper()
-        
-        if entorno == "PRODUCCION":
-            commerce_code = os.getenv("TRANSBANK_WEBPAY_COMMERCE_CODE", "")
-            api_key = os.getenv("TRANSBANK_WEBPAY_API_KEY", "")
-            
+        # El ambiente y las credenciales los carga el admin en el panel, no el .env.
+        # Se lee aunque Transbank esté deshabilitado: un pago ya iniciado debe poder confirmarse.
+        datos = DjangoRepositorioMediosPago().obtener(CodigoMedioPago.TRANSBANK).datos
+
+        if datos.get('ambiente') == AMBIENTE_PRODUCCION:
+            commerce_code = datos.get('commerce_code', '')
+            api_key = datos.get('api_key', '')
+            if not commerce_code or not api_key:
+                raise ValueError('Transbank está en producción sin código de comercio o API key.')
+
             # Usamos WebpayOptions para las versiones recientes del SDK
             opciones = WebpayOptions(commerce_code, api_key, IntegrationType.LIVE)
             return Transaction(options=opciones)

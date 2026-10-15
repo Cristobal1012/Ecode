@@ -1,8 +1,12 @@
+import json
+import logging
 from decimal import Decimal
 from smtplib import SMTPException
 from unittest.mock import patch
 
+import requests
 from django.core import mail
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -11,8 +15,12 @@ from ecommerce.application.test_ventas import InventarioFalso
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
+from backend_project.correo import mailer_por_defecto
+from ecommerce.domain.ventas import EventoPedido
+
+from .adapters.correo import CorreoNotificadorPedidos
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
-from .tests import usar_catalogo_falso
+from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 CORREO = 'ecommerce.infrastructure.ventas.adapters.correo'
 
@@ -22,6 +30,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
     """RF-04.2: al crear la orden el comprador recibe el resumen de la compra."""
 
     def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA', modo_autenticacion='MIXTO')
         usar_catalogo_falso(self, {
             ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa <b>azul</b> - CAMISA-S', Decimal('10000.00'), 5, True),
@@ -39,6 +48,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
             'proveedor_logistico': 'CHILEXPRESS',
             'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
+            **DESTINATARIO,
         }
 
     def checkout(self, **cambios):
@@ -56,6 +66,7 @@ class CorreoPedidoRecibidoTests(APITestCase):
         self.assertEqual(correo.subject, f'Recibimos tu pedido #{orden_id} | Tienda QA')
         for texto in ('2 x $10.000 = $20.000', 'Envío: $1.000', 'Total: $21.000', 'Medio de pago: Transferencia',
                       'Despacho a domicilio (Chilexpress): Los Olmos 123, PROVIDENCIA',
+                      'Recibe: Ana Pérez (+56912345678)',
                       f'http://tienda.test/seguimiento?orden={orden_id}'):
             self.assertIn(texto, correo.body)
         html, tipo = correo.alternatives[0]
@@ -230,3 +241,56 @@ class CorreosDelPanelTests(APITestCase):
         orden = self.crear_orden('RETIRO_LOCAL')
         self.assertEqual(self.cambiar(orden, 'ENVIADO').status_code, 400)
         self.assertEqual(mail.outbox, [])
+
+
+def respuesta_resend(status, cuerpo):
+    respuesta = requests.Response()
+    respuesta.status_code = status
+    respuesta._content = json.dumps(cuerpo).encode()
+    respuesta.headers['Content-Type'] = 'application/json'
+    respuesta.encoding = 'utf-8'
+    return respuesta
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+@override_settings(MAILERS={'default': mailer_por_defecto({'RESEND_API_KEY': 're_prueba_123'})},
+                   DEFAULT_FROM_EMAIL='Tienda QA <ventas@tienda.test>')
+class CorreoPorResendTests(APITestCase):
+    """Los correos salen por la API HTTPS de Resend (django-anymail), sin SMTP."""
+
+    def setUp(self):
+        ConfiguracionGlobal.objects.create(id=1, nombre_tienda='Tienda QA')
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK', direccion_envio_snapshot={},
+            subtotal=10000, costo_envio=0, total_final=10000, proveedor_logistico='RETIRO_LOCAL', **{
+                'nombre_destinatario': 'Ana Pérez', 'telefono_destinatario': '+56912345678'})
+        DetalleOrden.objects.create(orden=self.orden, producto_mongo_id='camisa', variante_sku='CAMISA-S',
+                                    nombre_producto_snapshot='Camisa - CAMISA-S', precio_unitario_snapshot=10000,
+                                    cantidad=1)
+
+    def enviar(self):
+        CorreoNotificadorPedidos()._enviar(self.orden.id, EventoPedido.RECIBIDO)
+
+    @patch('requests.Session.request', return_value=respuesta_resend(200, {'id': 'resend-123'}))
+    def test_el_correo_del_pedido_se_envia_por_la_api_de_resend(self, request):
+        self.enviar()
+
+        llamada = request.call_args.kwargs
+        self.assertEqual((llamada['method'].upper(), llamada['url']), ('POST', 'https://api.resend.com/emails'))
+        self.assertEqual(request.call_args.kwargs['headers']['Authorization'], 'Bearer re_prueba_123')
+        cuerpo = json.loads(request.call_args.kwargs['data'])
+        self.assertEqual((cuerpo['from'], cuerpo['to']), ('Tienda QA <ventas@tienda.test>', ['invitado@example.test']))
+        self.assertEqual(cuerpo['subject'], f'Recibimos tu pedido #{self.orden.id} | Tienda QA')
+        self.assertIn('Total: $10.000', cuerpo['text'])
+        self.assertIn('$10.000', cuerpo['html'])
+
+    @patch('requests.Session.request', return_value=respuesta_resend(422, {'message': 'Invalid from address'}))
+    def test_un_error_de_resend_se_registra_sin_afectar_la_orden(self, _request):
+        with self.assertLogs(CORREO, level='ERROR') as logs:
+            self.enviar()
+        self.assertTrue(OrdenCompra.objects.filter(id=self.orden.id).exists())
+        # Ni la API key ni el correo del comprador quedan en el log (incluido el traceback)
+        registro = logs.records[0]
+        texto = '\n'.join(logs.output) + logging.Formatter().formatException(registro.exc_info or (None, None, None))
+        for dato in ('re_prueba_123', 'invitado@example.test'):
+            self.assertNotIn(dato, texto)

@@ -54,6 +54,8 @@ export default function Checkout() {
     const [opcionEntregaSeleccionada, setOpcionEntregaSeleccionada] = useState(null);
     const [costoEnvio, setCostoEnvio] = useState(0);
     const [cotizando, setCotizando] = useState(false);
+    const [codigoInput, setCodigoInput] = useState('');
+    const [descuentoAplicado, setDescuentoAplicado] = useState(null);
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
     // Tipos de página legal publicados (ej. 'TERMINOS'), para enlazarlos junto al consentimiento
@@ -261,9 +263,44 @@ export default function Checkout() {
     const inputStyle = { width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box' };
 
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
+
+    const aplicarCodigo = async () => {
+        if (!codigoInput.trim()) return;
+
+        try {
+            const respuesta = await clienteAxios.post('ventas/checkout/validar-cupon/', { 
+            codigo: codigoInput.trim().toUpperCase() 
+            });
+            
+            setDescuentoAplicado({ 
+            tipo: respuesta.data.tipo_descuento, 
+            valor: Number(respuesta.data.valor_descuento), 
+            codigo: respuesta.data.codigo 
+            });
+            setMensaje('¡Código aplicado con Éxito!');
+            
+        } catch (error) {
+            setDescuentoAplicado(null);
+            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
+        }
+    };
+
+
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    const totalFinal = subtotal + costoEnvio;
+    let montoDescuento = 0;
+    if (descuentoAplicado) {
+    
+        if (descuentoAplicado.tipo === 'PORCENTAJE') {
+            montoDescuento = subtotal * (descuentoAplicado.valor / 100);
+        } 
+        
+        else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
+            montoDescuento = descuentoAplicado.valor;
+        }
+    }
+
+    const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvio;
 
     const procesarPago = async (metodoSeleccionado) => {
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
@@ -396,16 +433,49 @@ export default function Checkout() {
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>
                 {itemsCarrito.length > 0 ? itemsCarrito.map((item, index) => (
                     <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px', color: '#4b5563' }}>
-                        <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
+                    <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
                     </div>
                 )) : <p>No hay productos</p>}
+                
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}><span>Costo de envío:</span><span>{cotizando ? 'Calculando...' : `$${costoEnvio.toLocaleString('es-CL')}`}</span></div>
-                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
-            </div>
+                
+                
+                {descuentoAplicado && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#16a34a', fontWeight: 'bold' }}>
+                    <span>Descuento ({descuentoAplicado.codigo}):</span>
+                    <span>-${(descuentoAplicado.tipo === 'PORCENTAJE' ? subtotal * (descuentoAplicado.valor / 100) : descuentoAplicado.valor).toLocaleString('es-CL')}</span>
+                    </div>
+                )}
+                
 
+                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+
+                
+                <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
+                    <input
+                    className="input-cupon"
+                    type="text"
+                    placeholder="Cupón de descuento"
+                    value={codigoInput}
+                    onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
+                    style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}
+                    />
+                    <button
+                    type="button"
+                    onClick={aplicarCodigo}
+                    style={{ padding: '10px 16px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                    Aplicar
+                    </button>
+                </div>
+
+            </div>
+                
             <form onSubmit={(e) => e.preventDefault()}>
                 {compraComoInvitado && (
                     <div style={{ marginBottom: '20px' }}>

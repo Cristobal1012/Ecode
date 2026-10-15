@@ -33,3 +33,9 @@
   outline: 3px solid #1d4ed8;
   outline-offset: 2px;
 }
+
+/* Estilo para aclarar el texto de ejemplo del cupón */
+.input-cupon::placeholder {
+  color: #9ca3af; 
+  opacity: 1; 
+}

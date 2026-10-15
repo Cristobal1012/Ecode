@@ -12,6 +12,7 @@ import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
 import GestorMediosPago from '../components/GestorMediosPago';
 import GestorChilexpress from '../components/GestorChilexpress';
+import GestorPromociones from '../components/GestorPromociones';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -20,7 +21,8 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
-  { id: 'config-medios-pago', titulo: 'Medios de Pago' }
+  { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-promociones', titulo: 'Promociones y Descuentos' }
 ];
 
 const TituloSeccion = ({ id }) => (
@@ -311,6 +313,14 @@ export default function Admin() {
                   <TituloSeccion id="config-medios-pago" />
                   <GestorMediosPago />
                 </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+        
+                <div>
+                  <TituloSeccion id="config-promociones" />
+                  <GestorPromociones />
+                </div>
+
               </div>
             </div>
           </div>

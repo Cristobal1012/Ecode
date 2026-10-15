@@ -95,12 +95,19 @@ export default function DetalleProducto() {
       item => item.sku === varianteSeleccionada.sku
     );
     const enCarrito = existente ? Number(existente.cantidad) : 0;
+    const atributos = varianteSeleccionada.atributos_variables || {};
+
+    const detalleAtributos = Object.entries(atributos)
+      .map(([nombre, valor]) => `${nombre}: ${valor}`)
+      .join(' · ');
+
     const linea = {
       id: producto.id,
       sku: varianteSeleccionada.sku,
-      nombre: existente?.nombre || `${producto.nombre} - ${
-        varianteSeleccionada.valor || varianteSeleccionada.sku
-      }`,
+      nombre: detalleAtributos
+        ? `${producto.nombre} · ${detalleAtributos}`
+        : producto.nombre,
+      atributos,
       precio: varianteSeleccionada.precio,
       cantidad: enCarrito + cantidadSeleccionada
     };
@@ -121,7 +128,7 @@ export default function DetalleProducto() {
     }
 
     const carritoNuevo = existente
-      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: revisada.precio } : item))
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, nombre: linea.nombre, atributos : linea.atributos, cantidad: linea.cantidad, precio: revisada.precio } : item))
       : [...carritoActual, { ...linea, precio: revisada.precio }];
     await guardarCarrito(carritoNuevo);
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };

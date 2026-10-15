@@ -2,6 +2,7 @@ import { useState } from 'react';
 import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
+import { guardarCarrito } from '../carrito';
 
 // googleHabilitado: la tienda configuró GOOGLE_CLIENT_ID (RN-04); si no, no se ofrece Google
 export default function Login({ onSwitchToRegister, googleHabilitado = false }) {
@@ -19,32 +20,69 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
     };
 
     // Función para descargar el carrito guardado en la base de datos de Django al iniciar sesión
+
+    // Combina el carrito de invitada con el carrito guardado en la cuenta
     const sincronizarCarrito = async () => {
         try {
-            const respuesta = await clienteAxios.get('ventas/carrito/');
-            const carritoData = Array.isArray(respuesta.data) ? respuesta.data : (respuesta.data.items || []);
+            // 1. Recuperamos el carrito que existía antes de iniciar sesión
+            let carritoInvitado = [];
 
-            if (carritoData.length > 0) {
-                const carritoFormateado = carritoData.map(item => ({
-                    id: item.producto_id || item.id, 
-                    sku: item.sku || item.variante_sku || item.id,
-                    nombre: item.nombre || item.producto_nombre || 'Producto',
-                    precio: Number(item.precio),
-                    cantidad: Number(item.cantidad)
-                }));
-                
-                // Guardamos en memoria local del navegador y actualizamos el header
-                localStorage.setItem('carrito_local', JSON.stringify(carritoFormateado));
-                window.dispatchEvent(new Event('carritoActualizado'));
-            } else {
-                // Si en Django el carrito está vacío, limpiamos por si acaso
-                localStorage.removeItem('carrito_local');
-                window.dispatchEvent(new Event('carritoActualizado'));
+            try {
+                const carritoLocal = localStorage.getItem('carrito_local');
+                const datosLocales = carritoLocal ? JSON.parse(carritoLocal) : [];
+                carritoInvitado = Array.isArray(datosLocales) ? datosLocales : [];
+            } catch {
+                carritoInvitado = [];
             }
+
+            // 2. Recuperamos el carrito asociado a la cuenta
+            const respuesta = await clienteAxios.get('ventas/carrito/');
+            const carritoData = Array.isArray(respuesta.data)
+                ? respuesta.data
+                : (respuesta.data?.items || []);
+
+            const carritoCuenta = carritoData.map(item => ({
+                ...item,
+                id: item.producto_mongo_id || item.producto_id || item.id,
+                sku: item.variante_sku || item.sku || item.id,
+                nombre: item.nombre || item.producto_nombre || item.nombre_producto_snapshot || 'Producto',
+                precio: Number(item.precio ?? item.precio_unitario_snapshot ?? 0),
+                cantidad: Number(item.cantidad) || 1
+            }));
+
+            // 3. Partimos con los productos que ya tenía la cuenta
+            const carritoCombinado = carritoCuenta.map(item => ({ ...item }));
+
+            // 4. Agregamos los productos de invitada sin perder cantidades
+            carritoInvitado.forEach(item => {
+                const id = item.id || item.producto_mongo_id || item.producto_id;
+                const sku = item.sku || item.variante_sku || id;
+
+                const existente = carritoCombinado.find(actual =>
+                    String(actual.id) === String(id) &&
+                    String(actual.sku) === String(sku)
+                );
+
+                if (existente) {
+                    existente.cantidad =
+                        Number(existente.cantidad || 0) + Number(item.cantidad || 1);
+                } else {
+                    carritoCombinado.push({
+                        ...item,
+                        id,
+                        sku,
+                        cantidad: Number(item.cantidad) || 1
+                    });
+                }
+            });
+
+            // 5. Guardamos el carrito combinado en el navegador y en Django
+            await guardarCarrito(carritoCombinado);
         } catch (error) {
-            console.error("No se pudo recuperar el carrito de la base de datos:", error);
+            console.error('No se pudo sincronizar el carrito al iniciar sesión:', error);
         }
     };
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();

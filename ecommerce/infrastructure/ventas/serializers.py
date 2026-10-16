@@ -31,6 +31,7 @@ from .html_seguro import limpiar_html, tiene_texto
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
+from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
@@ -326,27 +327,31 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
             costo_envio = float(resultado['precio'])
 
-        # APLICAR PROMOCION Y EXPIRAR EL CUPON
+        # APLICAR PROMOCION Y VALIDAR EL CUPON
         subtotal_num = float(validated_data['subtotal'])
         descuento = 0.0
+        promo_aplicada = None
 
         if codigo_promo:
             promo = Promocion.objects.filter(
                 codigo__iexact=codigo_promo.strip(), is_active=True
             ).first()
-            if promo:
-                if promo.tipo_descuento == 'PORCENTAJE':
-                    descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
-                else:
-                    descuento = float(promo.valor_descuento)
-                descuento = min(descuento, subtotal_num)
+            if not promo or not promo.esta_vigente:
+                raise serializers.ValidationError({
+                    'codigo_promocion': 'El cupón ingresado no es válido o ya expiró.'
+                })
 
-                if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
-                    costo_envio = 0.0
+            if promo.tipo_descuento == 'PORCENTAJE':
+                descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
+            else:
+                descuento = float(promo.valor_descuento)
+            descuento = min(descuento, subtotal_num)
+            descuento = max(0.0, descuento)
 
-                # Desactivamos el cupón para que no se pueda volver a usar
-                promo.is_active = False
-                promo.save()
+            if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
+                costo_envio = 0.0
+
+            promo_aplicada = promo
 
         # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
         validated_data['costo_envio'] = costo_envio
@@ -401,6 +406,50 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
                 })
+
+        elif metodo_pago == 'MERCADO_PAGO':
+            if request:
+                host = request.get_host()
+                scheme = request.scheme
+                base_retorno = f"{scheme}://{host}/api/ventas/mercadopago/retorno/"
+                webhook_url = f"{scheme}://{host}/api/ventas/mercadopago/webhook/"
+            else:
+                base_retorno = "http://localhost:8000/api/ventas/mercadopago/retorno/"
+                webhook_url = "http://localhost:8000/api/ventas/mercadopago/webhook/"
+
+            # Mercado Pago rechaza notification_url si es localhost; solo la enviamos si es una URL pública
+            notification_url = (
+                webhook_url
+                if "localhost" not in webhook_url and "127.0.0.1" not in webhook_url
+                else ""
+            )
+
+            back_urls = {
+                "success": f"{base_retorno}?resultado=success&orden={orden.id}",
+                "failure": f"{base_retorno}?resultado=failure&orden={orden.id}",
+                "pending": f"{base_retorno}?resultado=pending&orden={orden.id}",
+            }
+
+            try:
+                preferencia = MercadoPagoAdapter().crear_preferencia(
+                    orden_id=str(orden.id),
+                    monto=orden.total_final,
+                    back_urls=back_urls,
+                    notification_url=notification_url,
+                )
+                url_pago = preferencia.url_pago
+                orden.id_transaccion_pasarela = preferencia.preference_id
+                orden.save()
+            except ErrorPasarelaPago as exc:
+                orden.delete()
+                raise serializers.ValidationError({
+                    "metodo_pago": f"No se pudo iniciar el pago con Mercado Pago: {exc}"
+                })
+
+        # Desactivamos el cupón solo después de que la orden y la pasarela se iniciaron exitosamente
+        if promo_aplicada:
+            promo_aplicada.is_active = False
+            promo_aplicada.save()
 
         # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
         notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)

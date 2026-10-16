@@ -246,6 +246,7 @@ class OrdenRegistrada:
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado: bool = False
     requiere_revision: bool = False
+    total_final: Decimal = Decimal('0')
 
 
 class EventoPedido(StrEnum):

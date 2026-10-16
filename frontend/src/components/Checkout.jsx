@@ -53,6 +53,7 @@ export default function Checkout() {
     const [descuentoAplicado, setDescuentoAplicado] = useState(0);
     const [codigoValidado, setCodigoValidado] = useState(null);
     const [mensajeCupon, setMensajeCupon] = useState('');
+    const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
 
     const [cajaCalculada, setCajaCalculada] = useState({ peso_kg: '1.0', alto_cm: '10', ancho_cm: '10', largo_cm: '10' });
     const [opcionesEntrega, setOpcionesEntrega] = useState([]);
@@ -67,7 +68,60 @@ export default function Checkout() {
     const [avisosCarrito, setAvisosCarrito] = useState([]);
 
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
+    const [esperandoPago, setEsperandoPago] = useState(null);
+    const [verificando, setVerificando] = useState(false);
     const navigate = useNavigate();
+
+    const verificarEstadoOrden = async (idOrden) => {
+        if (!idOrden) return;
+        setVerificando(true);
+        try {
+            const res = await clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${idOrden}`);
+            if (res.data.pagado) {
+                localStorage.removeItem('carrito_local');
+                localStorage.removeItem('orden_pendiente_pago');
+                window.dispatchEvent(new Event('carritoActualizado'));
+                if (usuarioAutenticado) {
+                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
+                }
+                navigate(`/pago-exitoso?orden=${idOrden}`);
+            } else if (res.data.cancelado) {
+                setEsperandoPago(null);
+                localStorage.removeItem('orden_pendiente_pago');
+                setMensaje('La orden fue cancelada o rechazada.');
+            }
+        } catch (err) {
+            console.error('Error verificando pago:', err);
+        } finally {
+            setVerificando(false);
+        }
+    };
+
+    // Polling cada 3 segundos si esperandoPago está activo
+    useEffect(() => {
+        if (!esperandoPago?.ordenId) return;
+        const interval = setInterval(() => {
+            verificarEstadoOrden(esperandoPago.ordenId);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [esperandoPago?.ordenId]);
+
+    // Verificación de orden pendiente al cargar la página
+    useEffect(() => {
+        const ordenPendiente = localStorage.getItem('orden_pendiente_pago');
+        if (ordenPendiente) {
+            clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${ordenPendiente}`)
+                .then(res => {
+                    if (res.data.pagado) {
+                        localStorage.removeItem('carrito_local');
+                        localStorage.removeItem('orden_pendiente_pago');
+                        window.dispatchEvent(new Event('carritoActualizado'));
+                        navigate(`/pago-exitoso?orden=${ordenPendiente}`);
+                    }
+                })
+                .catch(() => {});
+        }
+    }, []);
 
     // 1. CARGA INICIAL: Configuración de la tienda, Pasarelas y Comunas
     useEffect(() => {
@@ -268,10 +322,22 @@ export default function Checkout() {
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    const totalFinal = Math.max(0, subtotal - descuentoAplicado) + costoEnvio;
+    const tieneEnvioGratisCupon = Boolean(
+        codigoValidado &&
+        umbralEnvioGratis !== null &&
+        subtotal >= umbralEnvioGratis
+    );
+    const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
+    const totalFinal = Math.max(0, subtotal - descuentoAplicado) + costoEnvioFinal;
 
     const aplicarCupon = async () => {
-        if (!codigoCupon.trim()) return;
+        if (!codigoCupon.trim()) {
+            setDescuentoAplicado(0);
+            setCodigoValidado(null);
+            setUmbralEnvioGratis(null);
+            setMensajeCupon('');
+            return;
+        }
         setMensajeCupon('Validando...');
         try {
             const respuesta = await clienteAxios.post('ventas/promociones/validar/', { 
@@ -281,10 +347,20 @@ export default function Checkout() {
             
             setDescuentoAplicado(respuesta.data.descuento);
             setCodigoValidado(codigoCupon);
-            setMensajeCupon(`¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`);
+            const umbral = respuesta.data.umbral_envio_gratis;
+            const tieneUmbral = umbral !== undefined && umbral !== null;
+            const valorUmbral = tieneUmbral ? Number(umbral) : null;
+            setUmbralEnvioGratis(valorUmbral);
+
+            let msg = `¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`;
+            if (tieneUmbral && subtotal >= valorUmbral) {
+                msg += ' + Envío gratis incluido';
+            }
+            setMensajeCupon(msg);
         } catch (error) {
             setDescuentoAplicado(0);
             setCodigoValidado(null);
+            setUmbralEnvioGratis(null);
             setMensajeCupon(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
@@ -346,7 +422,7 @@ export default function Checkout() {
             telefono_destinatario: telefonoDestinatario.trim(),
             direccion_envio_snapshot: dirSnapshot, 
             subtotal, 
-            costo_envio: costoEnvio, 
+            costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
             proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
             paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada,
@@ -359,8 +435,16 @@ export default function Checkout() {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
 
             if (respuesta.data.url_pago) {
-                // El carrito se conserva por si el pago se anula; lo vacía PagoExitoso
-                window.location.href = respuesta.data.url_pago;
+                if (metodoSeleccionado === 'MERCADO_PAGO') {
+                    localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
+                    setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
+                    const ventana = window.open(respuesta.data.url_pago, '_blank');
+                    if (!ventana) {
+                        window.location.href = respuesta.data.url_pago;
+                    }
+                } else {
+                    window.location.href = respuesta.data.url_pago;
+                }
             } else {
                 localStorage.removeItem('carrito_local');
                 window.dispatchEvent(new Event('carritoActualizado'));
@@ -429,7 +513,15 @@ export default function Checkout() {
                         type="text" 
                         placeholder="Código de descuento" 
                         value={codigoCupon} 
-                        onChange={(e) => setCodigoCupon(e.target.value.toUpperCase())}
+                        onChange={(e) => {
+                            setCodigoCupon(e.target.value.toUpperCase());
+                            if (codigoValidado) {
+                                setCodigoValidado(null);
+                                setDescuentoAplicado(0);
+                                setUmbralEnvioGratis(null);
+                                setMensajeCupon('');
+                            }
+                        }}
                         style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                     />
                     <button 
@@ -439,6 +531,22 @@ export default function Checkout() {
                     >
                         Aplicar
                     </button>
+                    {codigoValidado && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCodigoCupon('');
+                                setCodigoValidado(null);
+                                setDescuentoAplicado(0);
+                                setUmbralEnvioGratis(null);
+                                setMensajeCupon('');
+                            }}
+                            style={{ padding: '8px 12px', backgroundColor: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
+                            title="Quitar cupón"
+                        >
+                            Quitar
+                        </button>
+                    )}
                 </div>
                 {mensajeCupon && <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: mensajeCupon.includes('inválido') ? '#dc2626' : '#16a34a' }}>{mensajeCupon}</p>}
                 
@@ -452,7 +560,21 @@ export default function Checkout() {
                     </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}><span>Costo de envío:</span><span>{cotizando ? 'Calculando...' : `$${costoEnvio.toLocaleString('es-CL')}`}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}>
+                    <span>Costo de envío:</span>
+                    <span>
+                        {cotizando ? 'Calculando...' : tieneEnvioGratisCupon ? (
+                            <>
+                                {costoEnvio > 0 && (
+                                    <span style={{ textDecoration: 'line-through', color: '#9ca3af', marginRight: '6px' }}>
+                                        ${costoEnvio.toLocaleString('es-CL')}
+                                    </span>
+                                )}
+                                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>$0 (Envío gratis)</span>
+                            </>
+                        ) : `$${costoEnvio.toLocaleString('es-CL')}`}
+                    </span>
+                </div>
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
             </div>
@@ -669,6 +791,66 @@ export default function Checkout() {
                     )}
                 </div>
             </form>
+
+            {esperandoPago && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', zIndex: 99999, padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff', borderRadius: '12px', padding: '30px',
+                        maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
+                    }}>
+                        <div style={{ width: '64px', height: '64px', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 16px auto' }}>
+                            💳
+                        </div>
+                        <h2 style={{ margin: '0 0 10px 0', fontSize: '1.4rem', color: '#111827' }}>
+                            Completando pago en Mercado Pago
+                        </h2>
+                        <p style={{ color: '#4b5563', fontSize: '0.95rem', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                            Se abrió la ventana de Mercado Pago para la <strong>Orden #{esperandoPago.ordenId}</strong>.
+                            Completa tu pago allá. Esta pantalla detectará tu pago automáticamente tan pronto como se acredite.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => verificarEstadoOrden(esperandoPago.ordenId)}
+                                disabled={verificando}
+                                style={{
+                                    padding: '12px 20px', backgroundColor: '#0284c7', color: 'white',
+                                    border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer'
+                                }}
+                            >
+                                {verificando ? 'Consultando a Mercado Pago...' : 'Ya pagué (Verificar mi pago)'}
+                            </button>
+                            <a
+                                href={esperandoPago.urlPago}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    padding: '10px', color: '#4b5563', fontSize: '0.9rem', textDecoration: 'underline'
+                                }}
+                            >
+                                ¿Se cerró la ventana? Abrir Mercado Pago de nuevo
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEsperandoPago(null);
+                                    localStorage.removeItem('orden_pendiente_pago');
+                                }}
+                                style={{
+                                    padding: '8px', backgroundColor: 'transparent', color: '#9ca3af',
+                                    border: 'none', fontSize: '0.85rem', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar y volver al checkout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

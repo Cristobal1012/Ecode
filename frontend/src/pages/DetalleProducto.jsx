@@ -95,16 +95,20 @@ export default function DetalleProducto() {
       item => item.sku === varianteSeleccionada.sku
     );
     const enCarrito = existente ? Number(existente.cantidad) : 0;
-    const precioEfectivo = varianteSeleccionada.precio_oferta 
+    const tieneOferta = varianteSeleccionada.precio_oferta != null &&
+      Number(varianteSeleccionada.precio_oferta) > 0 &&
+      Number(varianteSeleccionada.precio_oferta) < Number(varianteSeleccionada.precio);
+    const precioEfectivo = tieneOferta 
       ? Number(varianteSeleccionada.precio_oferta) 
       : Number(varianteSeleccionada.precio);
+
+    const valoresAtributos = Object.values(varianteSeleccionada.atributos_variables || {}).join(' / ');
+    const detalleVariante = valoresAtributos || varianteSeleccionada.sku;
 
     const linea = {
       id: producto.id,
       sku: varianteSeleccionada.sku,
-      nombre: existente?.nombre || `${producto.nombre} - ${
-        varianteSeleccionada.valor || varianteSeleccionada.sku
-      }`,
+      nombre: existente?.nombre || `${producto.nombre} - ${detalleVariante}`,
       precio: precioEfectivo,
       cantidad: enCarrito + cantidadSeleccionada
     };
@@ -124,9 +128,13 @@ export default function DetalleProducto() {
       return { ok: false, mensaje: `${revisada.mensaje}${yaTienes}` };
     }
 
+    const precioConfirmado = (revisada?.precio !== undefined && revisada?.precio !== null)
+      ? Number(revisada.precio)
+      : precioEfectivo;
+
     const carritoNuevo = existente
-      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: precioEfectivo } : item))
-      : [...carritoActual, { ...linea, precio: precioEfectivo }];
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: precioConfirmado } : item))
+      : [...carritoActual, { ...linea, precio: precioConfirmado }];
     await guardarCarrito(carritoNuevo);
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };
   };

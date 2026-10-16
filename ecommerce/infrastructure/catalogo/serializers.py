@@ -23,6 +23,18 @@ class VarianteSerializer(serializers.Serializer):
     ancho_cm = serializers.IntegerField(required=False, default=10)
     largo_cm = serializers.IntegerField(required=False, default=10)
 
+    def validate(self, attrs):
+        precio = attrs.get('precio')
+        precio_oferta = attrs.get('precio_oferta')
+        if precio is not None and precio <= 0:
+            raise serializers.ValidationError({"precio": "El precio debe ser mayor a cero."})
+        if precio_oferta is not None:
+            if precio_oferta <= 0:
+                raise serializers.ValidationError({"precio_oferta": "El precio de oferta debe ser mayor a cero."})
+            if precio is not None and precio_oferta >= precio:
+                raise serializers.ValidationError({"precio_oferta": "El precio de oferta debe ser menor al precio normal."})
+        return attrs
+
 class ProductoSerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     nombre = serializers.CharField(max_length=255)
@@ -68,7 +80,14 @@ class ProductoSerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     'variantes': {index: {'imagen_especifica': exc.detail}},
                 }) from exc
+
+        variantes = attrs.get('variantes', [])
+        skus = [str(v.get('sku', '')).strip() for v in variantes if v.get('sku')]
+        if len(skus) != len(set(skus)):
+            raise serializers.ValidationError({'variantes': 'Cada variante de un producto debe tener un código SKU único.'})
+
         return attrs
+
 
     def create(self, validated_data):
         variantes_data = validated_data.pop('variantes', [])

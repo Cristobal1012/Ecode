@@ -14,8 +14,9 @@ export default function PagoExitoso() {
   const usuarioAutenticado = !!localStorage.getItem('access_token');
 
   useEffect(() => {
-    // Limpiar el carrito local una vez que el pago fue exitoso
+    // Limpiar el carrito local y la orden pendiente una vez que el pago fue exitoso
     localStorage.removeItem('carrito_local');
+    localStorage.removeItem('orden_pendiente_pago');
     window.dispatchEvent(new Event('carritoActualizado'));
     if (usuarioAutenticado) {
       clienteAxios.post('ventas/carrito/', { items: [] }).catch(() => {});

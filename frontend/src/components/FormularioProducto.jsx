@@ -386,6 +386,17 @@ export default function FormularioProducto({
         }, {});
 
       // ========================================================
+      // VALIDACIÓN DE SKUS ÚNICOS
+      // ========================================================
+      const listaSkus = variantes.map((v) => v.sku?.trim()).filter(Boolean);
+      const skusDuplicados = listaSkus.filter((sku, index) => listaSkus.indexOf(sku) !== index);
+      if (skusDuplicados.length > 0) {
+        setError(`Cada variante debe tener un SKU único. Hay un SKU duplicado: "${skusDuplicados[0]}".`);
+        setCargando(false);
+        return;
+      }
+
+      // ========================================================
       // VARIANTES
       // ========================================================
 

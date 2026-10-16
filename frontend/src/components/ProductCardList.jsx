@@ -1,10 +1,11 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { obtenerDatosPrecioYStock } from '../utils/precios';
 
 export default function ProductCardList({ producto }) {
   const navigate = useNavigate();
   const id = producto.id || producto._id;
   const imagenPrincipal = producto.imagenes && producto.imagenes.length > 0 ? producto.imagenes[0] : null;
+  const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
 
   return (
     <div
@@ -21,36 +22,60 @@ export default function ProductCardList({ producto }) {
       }}
     >
       <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-        {imagenPrincipal && (
-          <img 
-            src={imagenPrincipal} 
-            alt={producto.nombre} 
-            style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px' }}
-          />
-        )}
+        <div style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+          {imagenPrincipal ? (
+            <img 
+              src={imagenPrincipal} 
+              alt={producto.nombre} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }}
+            />
+          ) : (
+            <div style={{ width: '100%', height: '100%', backgroundColor: '#f3f4f6', borderRadius: '6px' }} />
+          )}
+          {agotado && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '4px',
+                left: '4px',
+                backgroundColor: '#dc2626',
+                color: '#fff',
+                fontSize: '0.65rem',
+                fontWeight: 'bold',
+                padding: '2px 4px',
+                borderRadius: '3px',
+                textTransform: 'uppercase'
+              }}
+            >
+              Agotado
+            </span>
+          )}
+        </div>
         <div>
           <h4 style={{ margin: '0 0 5px 0', color: 'var(--color-primary)' }}>
             {producto.nombre}
           </h4>
 
-        <div style={{ marginBottom: '10px' }}>
-          {producto.variantes && producto.variantes[0] && (
-            producto.variantes[0].precio_oferta ? (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.85rem', color: '#999', textDecoration: 'line-through' }}>
-                  ${producto.variantes[0].precio}
+          <div style={{ marginBottom: '8px' }}>
+            {agotado ? (
+              <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#dc2626' }}>
+                Agotado
+              </span>
+            ) : tieneOferta ? (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <span style={{ fontSize: '1.25rem', color: '#dc2626', fontWeight: 'bold' }}>
+                  {textoPrecio}
                 </span>
-                <span style={{ fontSize: '1.2rem', color: '#e60000', fontWeight: 'bold' }}>
-                  ${producto.variantes[0].precio_oferta}
+                <span style={{ fontSize: '0.85rem', color: '#999', textDecoration: 'line-through' }}>
+                  {precioTachado}
                 </span>
               </div>
             ) : (
-              <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                ${producto.variantes[0].precio}
+              <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                {textoPrecio}
               </span>
-            )
-          )}
-        </div>
+            )}
+          </div>
 
           <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 8px 0' }}>
             Categoría: {producto.categoria}

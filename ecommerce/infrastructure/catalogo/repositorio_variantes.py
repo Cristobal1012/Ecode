@@ -24,12 +24,13 @@ class MongoCatalogoVariantes(CatalogoVariantes):
         if variante is None:
             return None
 
-        # Si la variante tiene precio_oferta válido (> 0), se usa ese como precio vigente
-        precio_vigente = (
-            variante.precio_oferta
-            if getattr(variante, 'precio_oferta', None) is not None and variante.precio_oferta > 0
-            else variante.precio
+        # Si la variante tiene precio_oferta válido (> 0 y menor al precio normal), se usa como precio vigente
+        tiene_oferta = (
+            getattr(variante, 'precio_oferta', None) is not None
+            and variante.precio_oferta > 0
+            and (variante.precio is None or variante.precio_oferta < variante.precio)
         )
+        precio_vigente = variante.precio_oferta if tiene_oferta else variante.precio
 
         return VarianteCatalogo(
             # Mismo nombre que muestra el carrito del frontend

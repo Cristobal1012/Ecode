@@ -20,10 +20,15 @@ ventas_urlpatterns = [
     
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
+    path('checkout/verificar-pago/', views.VerificarEstadoPagoView.as_view(), name='verificar-pago'),
     
     # NUEVA RUTA PARA EL RETORNO DE TRANSBANK
     # Ruta resultante: GET/POST /api/ventas/transbank/retorno/
     path('transbank/retorno/', views.TransbankRetornoView.as_view(), name='transbank_retorno'),
+    # NUEVA RUTA PARA EL WEBHOOK DE MERCADOPAGO
+    path('mercadopago/webhook/', views.MercadoPagoWebhookView.as_view(), name='mercadopago_webhook'),
+    path('mercadopago/retorno/', views.MercadoPagoRetornoView.as_view(), name='mercadopago_retorno'),
+    path('mercadopago/sincronizar/', views.AdminSincronizarPagosView.as_view(), name='mercadopago_sincronizar'),
     
     # Ruta resultante: GET /api/ventas/dashboard/
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),

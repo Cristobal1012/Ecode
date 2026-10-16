@@ -9,6 +9,7 @@ export default function Checkout() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
     const [emailInvitado, setEmailInvitado] = useState('');
     const [mensaje, setMensaje] = useState('');
+    const [errorReglas, setErrorReglas] = useState(false);
     const [opcionCompra, setOpcionCompra] = useState(null);
     const [itemsCarrito, setItemsCarrito] = useState([]);
     
@@ -67,9 +68,15 @@ export default function Checkout() {
             .then(res => setListaComunas(res.data.comunas || []))
             .finally(() => setCargandoComunas(false));
 
+        
         clienteAxios.get('ventas/checkout/reglas/')
-            .then(res => setModoAutenticacion(res.data.modo_autenticacion))
-            .catch(() => setMensaje('No se pudieron cargar las opciones de compra.'));
+            .then(res => {
+                setModoAutenticacion(res.data.modo_autenticacion);
+            })
+            .catch(() => {
+                setMensaje('No se pudieron cargar las opciones de compra.');
+                setErrorReglas(true);
+            });
 
         // Sin enlaces el checkbox sigue funcionando: solo se pierde la opción de leerlas aquí
         clienteAxios.get('ventas/paginas-legales/')
@@ -340,7 +347,21 @@ export default function Checkout() {
         }
     };
 
-    if (modoAutenticacion == null) return <p style={{ textAlign: 'center', marginTop: '50px' }}>Cargando...</p>;
+    if (modoAutenticacion == null) {
+        if (errorReglas) {
+            return (
+                <p role="alert" style={{ textAlign: 'center', marginTop: '50px' }}>
+                    No se pudieron cargar las opciones de compra.
+                </p>
+            );
+        }
+
+        return (
+            <p style={{ textAlign: 'center', marginTop: '50px' }}>
+                Cargando...
+            </p>
+        );
+    }
     if (modoAutenticacion === 'REGISTRO_OBLIGATORIO' && !usuarioAutenticado) return ( <div style={estiloContenedorOpciones}><h2>Finalizar Compra</h2><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
     if (modoAutenticacion === 'MIXTO' && !usuarioAutenticado && opcionCompra === null) return ( <div style={estiloContenedorOpciones}><h2>Finalizar Compra</h2><button onClick={() => setOpcionCompra('INVITADO')} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '10px' }}>Comprar como invitado</button><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
 

@@ -1,6 +1,12 @@
 from abc import ABC, abstractmethod
 import uuid
-#PUERTO de Interface
+
+# Asegúrate de tener estas importaciones arriba si vas a usar los objetos completos
+# from ecommerce.domain.medios_pago import MedioPagoConfigurado
+# from ecommerce.domain.ventas import OrdenCompra
+# from .instrucciones_pago import instrucciones_transferencia
+
+# PUERTO de Interface
 class PuertoPasarelaPago(ABC):
     @abstractmethod
     def inicializar_conexion(self):
@@ -10,24 +16,43 @@ class PuertoPasarelaPago(ABC):
     def generar_link_pago(self, monto, orden_id):
         pass
     """
-    #esto es solo para probar que funciona la interfaz.
+
+# esto es solo para probar que funciona la interfaz.
 class ServicioPagoLinkify(PuertoPasarelaPago):
     def inicializar_conexion(self):
         pass
+
     def generar_link_pago(self, monto, orden_id):
         token = uuid.uuid4().hex[:8]
         return f"https://linkify.cl/simulacion-pago?orden={orden_id}&token={token}&monto={monto}"
+
+    def iniciar_pago(self, orden, medio):
+        """
+        RF-02.2: Nueva implementación del puerto de pagos para Linkify.
+        Retorna la respuesta esperada por el frontend para mostrar los datos de transferencia.
+        """
+        secret = medio.datos.get('linkify_secret', '')
+        # Instanciamos el adaptador pasándole el formato de diccionario que espera
+        adaptador = LinkifyAdapter({'TRANSFERENCIA': {'linkify_secret': secret}})
+        instrucciones = adaptador.generar_instrucciones(orden, medio)
+        
+        return {
+            "url_pago": None,  # No hay redirección, es pago manual en la tienda
+            "instrucciones": instrucciones,
+            "metodo": medio.codigo.value
+        }
+
 
 class ServicioPagoTransbank(PuertoPasarelaPago):
     def inicializar_conexion(self):
         pass
 
     def generar_link_pago(self, monto, orden_id):
-
         token = uuid.uuid4().hex[:8]
         return f"https://webpay3gint.transbank.cl/simulacion-pago?orden={orden_id}&token={token}"
 
-#ADAPTADORES
+
+# ADAPTADORES
 class TransbankAdapter(PuertoPasarelaPago):
     def __init__(self, api_keys_pagos):
         credenciales = api_keys_pagos.get('TRANSBANK', {})
@@ -71,7 +96,9 @@ class PayPalAdapter(PuertoPasarelaPago):
 
 class LinkifyAdapter(PuertoPasarelaPago):
     def __init__(self, api_keys_pagos):
-        credenciales = api_keys_pagos.get('LINKIFY', {})
+        # Adaptado para leer la llave secreta desde la configuración de TRANSFERENCIA
+        credenciales = api_keys_pagos.get('TRANSFERENCIA', api_keys_pagos.get('LINKIFY', {}))
+        self.secret_key = credenciales.get('linkify_secret')
         self.api_key = credenciales.get('api_key')
         self.webhook_secret = credenciales.get('webhook_secret')
 
@@ -81,6 +108,13 @@ class LinkifyAdapter(PuertoPasarelaPago):
     def generar_link_pago(self, monto, orden_id):
         return f"https://linkify.cl/transferencia?orden={orden_id}"
 
+    def generar_instrucciones(self, orden, medio) -> dict:
+        """
+        RF-02.2: Genera las instrucciones de transferencia bancaria usando los datos del medio.
+        """
+        from .instrucciones_pago import instrucciones_transferencia
+        return instrucciones_transferencia(orden, medio)
+
 
 def generar_link_pago(metodo_pago, monto, orden_id, api_keys_pagos):
     """
@@ -88,7 +122,9 @@ def generar_link_pago(metodo_pago, monto, orden_id, api_keys_pagos):
     """
     metodo = metodo_pago.upper() if metodo_pago else ""
     
-    if metodo == 'LINKIFY':
+    # Se añade soporte para el código real de la base de datos (TRANSFERENCIA) 
+    # manteniendo la compatibilidad con el string 'LINKIFY'
+    if metodo in ['LINKIFY', 'TRANSFERENCIA']:
         adaptador = ServicioPagoLinkify()
         return adaptador.generar_link_pago(monto, orden_id)
     elif metodo == 'TRANSBANK':

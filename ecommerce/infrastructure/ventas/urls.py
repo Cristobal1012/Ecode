@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import LinkifyWebhookAPIView
 
 # Todo lo que esté aquí, Django le pondrá '/api/configuracion/' antes
 configuracion_urlpatterns = [
@@ -73,6 +74,8 @@ ventas_urlpatterns = [
     path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),
     # Llaves de Chilexpress (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
     path('admin/chilexpress/', views.AdminChilexpressView.as_view(), name='admin-chilexpress'),
+    # Ruta para las consultas y notificaciones de Linkify
+    path('webhooks/linkify/', LinkifyWebhookAPIView.as_view(), name='webhook-linkify'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

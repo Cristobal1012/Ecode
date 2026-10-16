@@ -264,7 +264,7 @@ class ConfirmarPago:
         if self.notificador:
             self.notificador.notificar(orden_id, evento)
 
-    def aprobar(self, orden_id) -> ResultadoPago:
+    def aprobar(self, orden_id, pago_exacto: bool = True) -> ResultadoPago:
         orden = self.ordenes.obtener(orden_id)
         if orden is None:
             return ResultadoPago.NO_ENCONTRADA
@@ -276,6 +276,13 @@ class ConfirmarPago:
                 return ResultadoPago.REPETIDO
             self.ordenes.marcar_revision(
                 orden.id, MOTIVO_ORDEN_NO_PENDIENTE.format(estado=estado.etiqueta))
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
+            return ResultadoPago.EN_REVISION
+
+        # Si el monto transferido es mayor o menor (underpaid/overpaid), 
+        # marcamos para revisión y abortamos antes de tocar el stock.
+        if not pago_exacto:
+            self.ordenes.marcar_revision(orden.id, "Monto transferido no coincide con el total de la orden.")
             self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 

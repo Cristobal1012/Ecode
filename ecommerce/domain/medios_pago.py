@@ -85,6 +85,12 @@ MEDIOS_PAGO = (
         CampoMedioPago('rut_titular', 'RUT del titular'),
         CampoMedioPago('nombre_titular', 'Nombre del titular'),
         CampoMedioPago('email', 'Correo para el comprobante'),
+        
+        # CONFIGURACIÓN DE LINKIFY 
+        CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify', 
+                       opciones=('No', 'Sí')),
+        CampoMedioPago('linkify_secret', 'Llave secreta de Linkify', secreto=True,
+                       obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),
 )
 

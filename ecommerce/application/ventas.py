@@ -279,12 +279,14 @@ class ConfirmarPago:
             self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 
+    
         # Si el monto transferido es mayor o menor (underpaid/overpaid), 
         # marcamos para revisión y abortamos antes de tocar el stock.
         if not pago_exacto:
             self.ordenes.marcar_revision(orden.id, "Monto transferido no coincide con el total de la orden.")
             self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
+        # --- FIN CRITERIO 4 ---
 
         descontados, faltante = [], None
         try:
@@ -307,7 +309,7 @@ class ConfirmarPago:
 
         self.ordenes.completar_pago(orden.id)
         if self.orden_transporte:
-            self.orden_transporte.ejecutar(orden.id)
+            self.orden_transporte.generar_orden_transporte(envio)
         self._notificar(orden.id, EventoPedido.PAGO_APROBADO)
         return ResultadoPago.PAGADO
 

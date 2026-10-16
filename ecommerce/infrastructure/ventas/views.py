@@ -789,6 +789,7 @@ class AdminChilexpressView(APIView):
 class LinkifyWebhookAPIView(APIView):
     # Permitir que Linkify acceda sin token de usuario
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def _obtener_secret_key(self):
         """Extrae la clave secreta de Linkify desde la configuración de medios de pago"""
@@ -801,21 +802,21 @@ class LinkifyWebhookAPIView(APIView):
             return ''
 
     def verificar_firma(self, request, content):
-        firma_recibida = request.headers.get("X-Linkify-Confirmation")
-        if not firma_recibida:
-            return False
-            
-        secret = self._obtener_secret_key()
-        if not secret:
-            return False
+            firma_recibida = request.headers.get("X-Linkify-Confirmation")
+            if not firma_recibida:
+                return False
+                
+            secret = self._obtener_secret_key()
+            if not secret:
+                return False
 
-        firma_calculada = hmac.new(
-            secret.encode('utf-8'),
-            content,
-            hashlib.sha256
-        ).hexdigest()
-        
-        return hmac.compare_digest(firma_recibida, firma_calculada)
+            firma_calculada = hmac.new(
+                secret.encode('utf-8'),
+                content,
+                hashlib.sha256
+            ).hexdigest()
+            
+            return hmac.compare_digest(firma_recibida, firma_calculada)
 
     def get(self, request, *args, **kwargs):
         """Petición inicial de Linkify para consultar el monto de la orden[cite: 4]"""

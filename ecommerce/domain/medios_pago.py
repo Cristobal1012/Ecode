@@ -76,6 +76,7 @@ MEDIOS_PAGO = (
         CampoMedioPago('webhook_secret', 'Clave secreta de notificaciones', secreto=True),
     # TODO(PENDIENTE): pasar a True al terminar la integración con Mercado Pago (tarea de Checkout Pro)
     ), integracion_lista=False),
+
     DefinicionMedioPago(CodigoMedioPago.TRANSFERENCIA, 'Transferencia bancaria', (
         # Datos que ve el comprador para transferir: no son secretos
         CampoMedioPago('banco', 'Banco'),
@@ -93,7 +94,6 @@ MEDIOS_PAGO = (
                        obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),
 )
-
 
 def definicion_medio(codigo) -> DefinicionMedioPago:
     codigo = CodigoMedioPago(codigo)

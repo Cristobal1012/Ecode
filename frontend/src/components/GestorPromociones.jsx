@@ -9,6 +9,7 @@ export default function GestorPromociones() {
     valor_descuento: '',
     umbral_envio_gratis: ''
   });
+  const [editId, setEditId] = useState(null);
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -35,12 +36,22 @@ export default function GestorPromociones() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const respuesta = await clienteAxios.post('ventas/promociones/', formData);
-      setPromociones([...promociones, respuesta.data]); 
-      setFormData({ codigo: '', tipo_descuento: 'PORCENTAJE', valor: '', umbral_envio_gratis: '' });
+        if (editId) {
+            
+            const respuesta = await clienteAxios.put(`ventas/promociones/${editId}/`, formData);
+            setPromociones(promociones.map(p => p.id === editId ? respuesta.data : p));
+        } else {
+            
+            const respuesta = await clienteAxios.post('ventas/promociones/', formData);
+            setPromociones([...promociones, respuesta.data]);
+        }
+        
+        
+        setFormData({ codigo: '', tipo_descuento: 'PORCENTAJE', valor_descuento: '', umbral_envio_gratis: '' });
+        setEditId(null); 
     } catch (error) {
-      console.error("Error al crear promoción:", error);
-      alert("Hubo un error al crear el código.");
+        console.error("Error al guardar promoción:", error);
+        alert("Hubo un error al guardar el código.");
     }
   };
 
@@ -52,6 +63,15 @@ export default function GestorPromociones() {
     } catch (error) {
       console.error("Error al eliminar:", error);
     }
+  };
+  const cargarPromocionParaEditar = (promo) => {
+    setEditId(promo.id);
+    setFormData({
+        codigo: promo.codigo,
+        tipo_descuento: promo.tipo_descuento,
+        valor_descuento: promo.valor_descuento, 
+        umbral_envio_gratis: promo.umbral_envio_gratis || ''
+    });
   };
 
   return (
@@ -127,12 +147,19 @@ export default function GestorPromociones() {
                         {promo.umbral_envio_gratis ? `$${Number(promo.umbral_envio_gratis).toLocaleString('es-CL')}` : '-'}
                     </td>
                     <td style={{ padding: '12px', borderBottom: '1px solid #eee' }}>
-                        <button 
-                        onClick={() => eliminarPromocion(promo.id)}
-                        style={{ padding: '6px 12px', backgroundColor: '#e11d48', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-                        >
-                        Eliminar
-                        </button>
+                      <button
+                          
+                          onClick={() => cargarPromocionParaEditar(promo)}
+                          style={{ padding: '6px 12px', backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
+                      >
+                          Editar
+                      </button>
+                      <button
+                          onClick={() => eliminarPromocion(promo.id)}
+                          style={{ padding: '6px 12px', backgroundColor: '#e11d48', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                          Eliminar
+                      </button>
                     </td>
                     </tr>
                 ))}

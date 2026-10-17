@@ -97,7 +97,7 @@ def sincronizar_orden_con_mercadopago(orden):
     3. Solo si TODOS los intentos fueron rechazados o cancelados (sin ningún aprobado ni pendiente),
        se procesa el rechazo o anulación.
     """
-    if not orden or orden.estado != EstadoPedido.PENDIENTE or orden.metodo_pago != 'MERCADO_PAGO':
+    if not orden or orden.estado != EstadoPedido.PENDIENTE or (orden.metodo_pago or '').upper() != 'MERCADO_PAGO':
         return getattr(orden, 'estado', None)
 
     adapter = pasarela_mercado_pago()
@@ -557,7 +557,7 @@ class VerificarEstadoPagoView(APIView):
         if not orden:
             return Response({"error": "Orden no encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
-        if orden.estado == EstadoPedido.PENDIENTE and orden.metodo_pago == 'MERCADO_PAGO':
+        if orden.estado == EstadoPedido.PENDIENTE and (orden.metodo_pago or '').upper() == 'MERCADO_PAGO':
             sincronizar_orden_con_mercadopago(orden)
             orden.refresh_from_db()
 

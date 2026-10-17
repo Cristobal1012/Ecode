@@ -21,7 +21,7 @@ export default function PagoExitoso() {
     if (usuarioAutenticado) {
       clienteAxios.post('ventas/carrito/', { items: [] }).catch(() => {});
     }
-  }, []);
+  }, [usuarioAutenticado]);
 
   return (
     <div style={{ backgroundColor: 'var(--color-background, #f3f4f6)', minHeight: '100vh' }}>

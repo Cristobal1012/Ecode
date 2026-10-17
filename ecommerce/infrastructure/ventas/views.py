@@ -91,8 +91,11 @@ def pasarela_mercado_pago():
 def sincronizar_orden_con_mercadopago(orden):
     """
     Sincroniza una orden PENDIENTE con la API de Mercado Pago buscando pagos acreditados.
-    Permite conciliar pagos incluso en desarrollo local (donde no llegan webhooks públicos)
-    o cuando el comprador cierra el navegador tras pagar sin presionar Volver al sitio.
+    Aplica el criterio de conciliación para múltiples intentos bajo una misma referencia (RF-02.2):
+    1. Si existe al menos un intento aprobado (approved), se concilia la aprobación y descuenta stock.
+    2. Si no hay aprobado pero existe un intento pendiente o en proceso, la orden permanece PENDIENTE.
+    3. Solo si TODOS los intentos fueron rechazados o cancelados (sin ningún aprobado ni pendiente),
+       se procesa el rechazo o anulación.
     """
     if not orden or orden.estado != EstadoPedido.PENDIENTE or orden.metodo_pago != 'MERCADO_PAGO':
         return getattr(orden, 'estado', None)
@@ -102,25 +105,57 @@ def sincronizar_orden_con_mercadopago(orden):
         return orden.estado
 
     try:
-        url = f"{adapter.API_BASE_URL}/v1/payments/search?external_reference={orden.id}"
+        url = f"{adapter.API_BASE_URL}/v1/payments/search?external_reference={orden.id}&sort=date_created&criteria=desc"
         resp = requests.get(url, headers=adapter._headers(), timeout=10)
         if resp.status_code == 200:
             results = resp.json().get('results', [])
             if results:
-                pago_data = results[-1]
-                pago_id = str(pago_data.get('id') or '')
-                if pago_id:
-                    pago = adapter.consultar_pago(pago_id)
-                    caso = confirmar_pago()
-                    if pago.estado == 'approved':
-                        caso.aprobar(orden.id, monto_pagado=pago.monto)
-                        orden.refresh_from_db()
-                    elif pago.estado in ('rejected', 'failure'):
-                        caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                        orden.refresh_from_db()
-                    elif pago.estado in ('cancelled', 'refunded', 'charged_back'):
-                        caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-                        orden.refresh_from_db()
+                pago_aprobado = None
+                pago_pendiente = None
+                pago_rechazado = None
+
+                for item in results:
+                    st = str(item.get('status') or '').lower()
+                    if st == 'approved':
+                        if not pago_aprobado:
+                            pago_aprobado = item
+                    elif st in ('pending', 'in_process', 'authorized'):
+                        if not pago_pendiente:
+                            pago_pendiente = item
+                    elif st in ('rejected', 'failure', 'cancelled', 'refunded', 'charged_back'):
+                        if not pago_rechazado:
+                            pago_rechazado = item
+
+                # 1. Prioridad: Conciliar pago aprobado si existe alguno en el historial
+                if pago_aprobado:
+                    pago_id = str(pago_aprobado.get('id') or '')
+                    if pago_id:
+                        pago = adapter.consultar_pago(pago_id)
+                        if pago.estado == 'approved':
+                            caso = confirmar_pago()
+                            caso.aprobar(orden.id, monto_pagado=pago.monto)
+                            orden.refresh_from_db()
+                            return orden.estado
+
+                # 2. Prioridad: Si hay pago pendiente/en proceso, la orden permanece PENDIENTE
+                if pago_pendiente:
+                    return orden.estado
+
+                # 3. Prioridad: Solo si TODOS los intentos fueron rechazados/cancelados
+                if pago_rechazado:
+                    pago_id = str(pago_rechazado.get('id') or '')
+                    if pago_id:
+                        pago = adapter.consultar_pago(pago_id)
+                        caso = confirmar_pago()
+                        if pago.estado in ('rejected', 'failure'):
+                            caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
+                            orden.refresh_from_db()
+                        elif pago.estado in ('cancelled', 'refunded', 'charged_back'):
+                            caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
+                            orden.refresh_from_db()
+                        elif pago.estado == 'approved':
+                            caso.aprobar(orden.id, monto_pagado=pago.monto)
+                            orden.refresh_from_db()
     except Exception as exc:
         logger.warning(f"Error sincronizando orden {orden.id} con Mercado Pago: {exc}")
 
@@ -416,7 +451,12 @@ class MercadoPagoWebhookView(APIView):
 
 
 class MercadoPagoRetornoView(APIView):
-    """Redirige al comprador al volver de Mercado Pago (/pago-exitoso, /pago-rechazado o /pago-cancelado)."""
+    """
+    Redirige al comprador al volver de Mercado Pago (/pago-exitoso, /pago-rechazado o /pago-cancelado).
+    Principio Zero-Trust: los parámetros de retorno de la URL nunca modifican el estado de la orden por sí solos.
+    Si se proporciona un payment_id, se consulta siempre a la API de Mercado Pago para verificar el estado real y
+    la coincidencia de la orden antes de aplicar cualquier aprobación, rechazo o anulación.
+    """
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -428,85 +468,75 @@ class MercadoPagoRetornoView(APIView):
             or ''
         ).replace('ORD-', '').strip()
         payment_id = request.GET.get('payment_id') or request.GET.get('collection_id') or ''
-        status_mp = (
-            request.GET.get('status')
-            or request.GET.get('collection_status')
-            or request.GET.get('resultado')
-            or ''
-        ).lower()
 
         orden = OrdenCompra.objects.filter(id=orden_id).first() if orden_id.isdigit() else None
 
-        # 1. Si el webhook ya procesó y confirmó el pago antes de que volviera el navegador:
+        # 1. Si la orden ya está pagada (ej. el webhook llegó antes que el retorno del navegador):
         if orden and orden.estado in ESTADOS_PAGADOS:
             revision = '&revision=1' if orden.requiere_revision else ''
             return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
 
-        # 2. Si no hay payment_id o el estado en URL indica anulación/cancelación explícita:
-        if not payment_id or status_mp in ('null', 'cancelled', 'aborted'):
-            if orden:
-                confirmar_pago().rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-            sufijo = f"?orden={orden_id}" if orden_id else ""
-            return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
+        # 2. Si viene payment_id: SIEMPRE consultar a Mercado Pago (nunca confiar en query params de la URL)
+        if payment_id:
+            try:
+                pago = pasarela_mercado_pago().consultar_pago(payment_id)
+            except Exception as exc:
+                logger.error("Error consultando pago %s de Mercado Pago en retorno: %s", payment_id, exc)
+                if orden:
+                    orden.refresh_from_db()
+                    if orden.estado in ESTADOS_PAGADOS:
+                        revision = '&revision=1' if orden.requiere_revision else ''
+                        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
+                # Seguridad: NUNCA alterar la orden en BD ante fallos de consulta externa
+                sufijo = f"?orden={orden_id}" if orden_id else ""
+                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
 
-        # 3. Verificación server-to-server contra la API de Mercado Pago:
-        try:
-            pago = pasarela_mercado_pago().consultar_pago(payment_id)
-        except Exception as exc:
-            logger.error("Error consultando pago %s de Mercado Pago en retorno: %s", payment_id, exc)
-            if orden:
-                orden.refresh_from_db()
-                if orden.estado in ESTADOS_PAGADOS:
+            # Validar que el pago pertenezca a la orden indicada (anti-hijacking)
+            if pago.orden_id:
+                if orden_id and str(pago.orden_id) != str(orden_id):
+                    logger.warning(
+                        "Discrepancia de orden en retorno de Mercado Pago: URL=%s vs MP=%s",
+                        orden_id, pago.orden_id
+                    )
+                    return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
+                orden_id = pago.orden_id
+
+            if orden is None and orden_id.isdigit():
+                orden = OrdenCompra.objects.filter(id=orden_id).first()
+
+            caso = confirmar_pago()
+            if pago.estado == 'approved':
+                if orden:
+                    try:
+                        caso.aprobar(orden.id, monto_pagado=pago.monto)
+                    except Exception:
+                        logger.exception("Error al descontar stock de la orden %s", orden.id)
+                    orden.refresh_from_db()
                     revision = '&revision=1' if orden.requiere_revision else ''
                     return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
-            # Seguridad: NUNCA aprobar en base a query params no autenticados si falla la API
-            sufijo = f"?orden={orden_id}" if orden_id else ""
-            return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
+                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso")
 
-        # 4. Validar coincidencia de orden entre Mercado Pago y la URL:
-        if pago.orden_id:
-            if orden_id and str(pago.orden_id) != str(orden_id):
-                logger.warning(
-                    "Discrepancia de orden en retorno de Mercado Pago: URL=%s vs MP=%s",
-                    orden_id, pago.orden_id
-                )
+            if pago.estado in ('rejected', 'failure'):
+                if orden:
+                    caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
+                    return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
+                return HttpResponseRedirect(f"{frontend_url}/pago-rechazado")
+
+            if pago.estado in ('cancelled', 'refunded', 'charged_back'):
+                if orden:
+                    caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
+                    return HttpResponseRedirect(f"{frontend_url}/pago-cancelado?orden={orden.id}")
                 return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
-            orden_id = pago.orden_id
 
-        if orden is None and orden_id.isdigit():
-            orden = OrdenCompra.objects.filter(id=orden_id).first()
+            if pago.estado in ('in_process', 'pending', 'authorized'):
+                sufijo = f"?orden={orden_id}" if orden_id else ""
+                return HttpResponseRedirect(f"{frontend_url}/pedido-recibido{sufijo}")
 
-        # 5. Aplicar resultado verificado:
-        caso = confirmar_pago()
-        if pago.estado == 'approved':
-            if orden:
-                try:
-                    caso.aprobar(orden.id, monto_pagado=pago.monto)
-                except Exception:
-                    logger.exception("Error al descontar stock de la orden %s", orden.id)
-                orden.refresh_from_db()
-                revision = '&revision=1' if orden.requiere_revision else ''
-                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
-            return HttpResponseRedirect(f"{frontend_url}/pago-exitoso")
-
-        if pago.estado in ('rejected', 'failure'):
-            if orden:
-                caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
-            return HttpResponseRedirect(f"{frontend_url}/pago-rechazado")
-
-        if pago.estado in ('cancelled', 'refunded', 'charged_back'):
-            if orden:
-                caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado?orden={orden.id}")
-            return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
-
-        if pago.estado in ('in_process', 'pending', 'authorized'):
-            sufijo = f"?orden={orden_id}" if orden_id else ""
-            return HttpResponseRedirect(f"{frontend_url}/pedido-recibido{sufijo}")
-
+        # 3. Si NO hay payment_id (ej. el comprador abandonó el flujo en la pasarela o canceló):
+        # Los parámetros de retorno de la URL por sí solos NUNCA deben cancelar la orden en la BD.
+        # Se redirige legítimamente al usuario a /pago-cancelado para que pueda reintentar o cambiar de medio.
         sufijo = f"?orden={orden_id}" if orden_id else ""
-        return HttpResponseRedirect(f"{frontend_url}/pago-exitoso{sufijo}")
+        return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
 
 
 class VerificarEstadoPagoView(APIView):

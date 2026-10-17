@@ -438,4 +438,123 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         respuesta = self.client.post("/api/ventas/mercadopago/sincronizar/")
         self.assertIn(respuesta.status_code, (401, 403))
 
+    def test_e01_retorno_status_cancelled_con_pago_aprobado_en_mp_consulta_y_aprueba(self):
+        """E01: Si la URL trae status=cancelled pero payment_id=801 aprobado en MP, se consulta MP y se aprueba."""
+        pago_aprobado = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pasarela = FakePaymentGateway(self.secret, pago_aprobado)
+
+        mock_instancia = MagicMock()
+        mock_instancia.id = 42
+        mock_instancia.estado = EstadoPedido.PENDIENTE
+        mock_instancia.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_instancia
+
+            respuesta = self.client.get(
+                "/api/ventas/mercadopago/retorno/?orden=42&payment_id=801&status=cancelled"
+            )
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-exitoso?orden=42", respuesta.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
+            self.assertEqual(self.inventario.stock, 3)
+
+    def test_e01_retorno_anonimo_sin_payment_id_no_cancela_orden_en_bd(self):
+        """E01: Parámetros de retorno sin payment_id no deben cancelar la orden pendiente en la BD."""
+        mock_instancia = MagicMock()
+        mock_instancia.id = 42
+        mock_instancia.estado = EstadoPedido.PENDIENTE
+        mock_instancia.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_instancia
+
+            respuesta = self.client.get(
+                "/api/ventas/mercadopago/retorno/?orden=42&status=cancelled"
+            )
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-cancelado?orden=42", respuesta.headers["Location"])
+            # La orden en la base de datos NO debe haber sido cancelada
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
+
+    def test_e02_sincronizar_varios_intentos_prioriza_aprobado_sobre_rechazado(self):
+        """E02: Si la búsqueda devuelve [802 aprobado, 801 rechazado], se concilia 802 y se descuenta stock."""
+        pago_802 = PagoConsultado(payment_id="802", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pasarela = MagicMock()
+        pasarela.access_token = "TEST-123"
+        pasarela.API_BASE_URL = "https://api.mercadopago.com"
+        pasarela._headers.return_value = {}
+        pasarela.consultar_pago.return_value = pago_802
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [
+                {"id": 802, "status": "approved", "date_created": "2026-10-16T12:01:00Z"},
+                {"id": 801, "status": "rejected", "date_created": "2026-10-16T12:00:00Z"},
+            ]
+        }
+
+        mock_instancia = MagicMock()
+        mock_instancia.id = 42
+        mock_instancia.estado = EstadoPedido.PENDIENTE
+        mock_instancia.metodo_pago = "MERCADO_PAGO"
+
+        from ecommerce.infrastructure.ventas.views import sincronizar_orden_con_mercadopago
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("requests.get", return_value=mock_resp):
+            sincronizar_orden_con_mercadopago(mock_instancia)
+
+        self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
+        self.assertEqual(self.inventario.stock, 3)
+        pasarela.consultar_pago.assert_called_with("802")
+
+    def test_e02_sincronizar_intento_pendiente_mantiene_orden_pendiente(self):
+        """E02: Si hay un intento pendiente y otro rechazado, la orden no se cancela y se mantiene pendiente."""
+        pasarela = MagicMock()
+        pasarela.access_token = "TEST-123"
+        pasarela.API_BASE_URL = "https://api.mercadopago.com"
+        pasarela._headers.return_value = {}
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [
+                {"id": 803, "status": "in_process", "date_created": "2026-10-16T12:01:00Z"},
+                {"id": 801, "status": "rejected", "date_created": "2026-10-16T12:00:00Z"},
+            ]
+        }
+
+        mock_instancia = MagicMock()
+        mock_instancia.id = 42
+        mock_instancia.estado = EstadoPedido.PENDIENTE
+        mock_instancia.metodo_pago = "MERCADO_PAGO"
+
+        from ecommerce.infrastructure.ventas.views import sincronizar_orden_con_mercadopago
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("requests.get", return_value=mock_resp):
+            sincronizar_orden_con_mercadopago(mock_instancia)
+
+        self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
+        self.assertEqual(self.inventario.stock, 5)
+
+    def test_e03_verificar_pago_incluye_requiere_revision(self):
+        """E03: verificar-pago devuelve la bandera requiere_revision adecuadamente."""
+        mock_orden = MagicMock()
+        mock_orden.id = 42
+        mock_orden.estado = EstadoPedido.PAGADO
+        mock_orden.metodo_pago = 'MERCADO_PAGO'
+        mock_orden.requiere_revision = True
+
+        with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden
+            respuesta = self.client.get("/api/ventas/checkout/verificar-pago/?orden_id=42")
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertTrue(respuesta.json()["pagado"])
+            self.assertTrue(respuesta.json()["requiere_revision"])
+
 

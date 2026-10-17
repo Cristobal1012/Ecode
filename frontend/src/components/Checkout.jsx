@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
@@ -72,7 +72,7 @@ export default function Checkout() {
     const [verificando, setVerificando] = useState(false);
     const navigate = useNavigate();
 
-    const verificarEstadoOrden = async (idOrden) => {
+    const verificarEstadoOrden = useCallback(async (idOrden) => {
         if (!idOrden) return;
         setVerificando(true);
         try {
@@ -82,9 +82,10 @@ export default function Checkout() {
                 localStorage.removeItem('orden_pendiente_pago');
                 window.dispatchEvent(new Event('carritoActualizado'));
                 if (usuarioAutenticado) {
-                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
+                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch { /* vaciado silencioso */ }
                 }
-                navigate(`/pago-exitoso?orden=${idOrden}`);
+                const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
+                navigate(`/pago-exitoso?orden=${idOrden}${sufijoRevision}`);
             } else if (res.data.cancelado) {
                 setEsperandoPago(null);
                 localStorage.removeItem('orden_pendiente_pago');
@@ -95,7 +96,7 @@ export default function Checkout() {
         } finally {
             setVerificando(false);
         }
-    };
+    }, [usuarioAutenticado, navigate]);
 
     // Polling cada 3 segundos si esperandoPago está activo
     useEffect(() => {
@@ -104,7 +105,7 @@ export default function Checkout() {
             verificarEstadoOrden(esperandoPago.ordenId);
         }, 3000);
         return () => clearInterval(interval);
-    }, [esperandoPago?.ordenId]);
+    }, [esperandoPago?.ordenId, verificarEstadoOrden]);
 
     // Verificación de orden pendiente al cargar la página
     useEffect(() => {
@@ -116,12 +117,13 @@ export default function Checkout() {
                         localStorage.removeItem('carrito_local');
                         localStorage.removeItem('orden_pendiente_pago');
                         window.dispatchEvent(new Event('carritoActualizado'));
-                        navigate(`/pago-exitoso?orden=${ordenPendiente}`);
+                        const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
+                        navigate(`/pago-exitoso?orden=${ordenPendiente}${sufijoRevision}`);
                     }
                 })
                 .catch(() => {});
         }
-    }, []);
+    }, [navigate]);
 
     // 1. CARGA INICIAL: Configuración de la tienda, Pasarelas y Comunas
     useEffect(() => {
@@ -440,16 +442,16 @@ export default function Checkout() {
                     setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
                     const ventana = window.open(respuesta.data.url_pago, '_blank');
                     if (!ventana) {
-                        window.location.href = respuesta.data.url_pago;
+                        window.location.assign(respuesta.data.url_pago);
                     }
                 } else {
-                    window.location.href = respuesta.data.url_pago;
+                    window.location.assign(respuesta.data.url_pago);
                 }
             } else {
                 localStorage.removeItem('carrito_local');
                 window.dispatchEvent(new Event('carritoActualizado'));
                 if (usuarioAutenticado) {
-                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch (err) {}
+                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch { /* vaciado silencioso */ }
                 }
                 // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
                 // Con transferencia, el backend envía los datos bancarios para mostrarlos de inmediato

@@ -131,7 +131,8 @@ def sincronizar_orden_con_mercadopago(orden):
                     pago_id = str(pago_aprobado.get('id') or '')
                     if pago_id:
                         pago = adapter.consultar_pago(pago_id)
-                        if pago.estado == 'approved':
+                        pago_orden_id = str(pago.orden_id or "").strip()
+                        if pago_orden_id == str(orden.id) and pago.estado == 'approved':
                             caso = confirmar_pago()
                             caso.aprobar(orden.id, monto_pagado=pago.monto)
                             orden.refresh_from_db()
@@ -146,16 +147,18 @@ def sincronizar_orden_con_mercadopago(orden):
                     pago_id = str(pago_rechazado.get('id') or '')
                     if pago_id:
                         pago = adapter.consultar_pago(pago_id)
-                        caso = confirmar_pago()
-                        if pago.estado in ('rejected', 'failure'):
-                            caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                            orden.refresh_from_db()
-                        elif pago.estado in ('cancelled', 'refunded', 'charged_back'):
-                            caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-                            orden.refresh_from_db()
-                        elif pago.estado == 'approved':
-                            caso.aprobar(orden.id, monto_pagado=pago.monto)
-                            orden.refresh_from_db()
+                        pago_orden_id = str(pago.orden_id or "").strip()
+                        if pago_orden_id == str(orden.id):
+                            caso = confirmar_pago()
+                            if pago.estado in ('rejected', 'failure'):
+                                caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
+                                orden.refresh_from_db()
+                            elif pago.estado in ('cancelled', 'refunded', 'charged_back'):
+                                caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
+                                orden.refresh_from_db()
+                            elif pago.estado == 'approved':
+                                caso.aprobar(orden.id, monto_pagado=pago.monto)
+                                orden.refresh_from_db()
     except Exception as exc:
         logger.warning(f"Error sincronizando orden {orden.id} con Mercado Pago: {exc}")
 

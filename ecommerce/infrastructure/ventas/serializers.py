@@ -2,6 +2,7 @@ from decimal import Decimal
 import uuid
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
@@ -293,6 +294,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context.get('request')
         validated_data.pop('acepta_terminos')

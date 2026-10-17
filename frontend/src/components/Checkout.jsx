@@ -70,6 +70,7 @@ export default function Checkout() {
     const [usuarioAutenticado, setUsuarioAutenticado] = useState(!!localStorage.getItem('access_token'));
     const [esperandoPago, setEsperandoPago] = useState(null);
     const [verificando, setVerificando] = useState(false);
+    const [procesandoPago, setProcesandoPago] = useState(false);
     const navigate = useNavigate();
 
     const verificarEstadoOrden = useCallback(async (idOrden) => {
@@ -415,6 +416,8 @@ export default function Checkout() {
             }
         }
         
+        if (procesandoPago) return;
+        setProcesandoPago(true);
         setMensaje('Procesando...');
 
         const payload = {
@@ -482,6 +485,8 @@ export default function Checkout() {
                 || datos.nombre_destinatario || datos.telefono_destinatario;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
+        } finally {
+            setProcesandoPago(false);
         }
     };
 
@@ -780,12 +785,13 @@ export default function Checkout() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {pasarelas.map(pasarela => {
                                 const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const habilitado = validadoParaPagar && !procesandoPago;
                                 return (
                                     <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}
-                                        style={{ width: '100%', padding: '12px', backgroundColor: validadoParaPagar ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: validadoParaPagar ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
+                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
+                                        style={{ width: '100%', padding: '12px', backgroundColor: habilitado ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: habilitado ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
                                     >
-                                        Pagar con {NOMBRES_MEDIO_PAGO[pasarela] || pasarela}
+                                        {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
                                 );
                             })}

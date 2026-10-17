@@ -46,3 +46,9 @@ Thumbs.db
 .idea/
 *.swp
 .env
+
+# =========================
+#Contenido relacionado a las pruebas
+# =========================
+.coverage
+htmlcov/

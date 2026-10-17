@@ -41,6 +41,8 @@
 .config-secciones {
   flex: 1;
   min-width: 0;
+  /* Formularios: títulos, etiquetas y textos alineados con el inicio de los campos (el panel centra por defecto) */
+  text-align: left;
 }
 
 /* Deja aire sobre el título al llegar desde el índice; el foco es programático (tabIndex -1) */

@@ -1,4 +1,4 @@
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import Header from './header/header';
 
 // Orden creada sin pasar por una pasarela (ej. transferencia, RF-02.2): queda Pendiente
@@ -7,6 +7,9 @@ export default function PedidoRecibido() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ordenId = searchParams.get('orden');
+  // Transferencia: datos bancarios, monto y referencia que envió el checkout. Sobreviven a una recarga
+  // (historial del navegador), pero no si se abre el enlace en otra pestaña: ahí quedan en el correo.
+  const instrucciones = useLocation().state?.instrucciones || null;
   // El invitado no tiene historial: se le lleva al seguimiento con su número de orden (RF-02.4)
   const usuarioAutenticado = !!localStorage.getItem('access_token');
 
@@ -32,8 +35,35 @@ export default function PedidoRecibido() {
           </div>
         )}
 
+        {instrucciones && (
+          <div style={{ padding: '20px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '30px', textAlign: 'left' }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', color: '#1f2937' }}>Datos para transferir</h2>
+            <p style={{ margin: '0 0 15px 0', color: '#374151', lineHeight: '1.5' }}>
+              Transfiere <strong>${Number(instrucciones.monto).toLocaleString('es-CL')}</strong> a esta cuenta e indica
+              como referencia <strong>{instrucciones.referencia}</strong>.
+            </p>
+            {instrucciones.vence && (
+              <p style={{ margin: '0 0 15px 0', color: '#92400e', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', padding: '8px 12px', lineHeight: '1.5' }}>
+                Tienes hasta el <strong>{new Date(instrucciones.vence).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' })}</strong> para
+                transferir; después el pedido se cancela automáticamente.
+              </p>
+            )}
+            <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', margin: 0 }}>
+              {instrucciones.datos.map(dato => (
+                <div key={dato.etiqueta} style={{ display: 'contents' }}>
+                  <dt style={{ color: '#4b5563' }}>{dato.etiqueta}</dt>
+                  <dd style={{ margin: 0, fontWeight: 'bold', color: '#111827', wordBreak: 'break-word' }}>{dato.valor}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+
         <p style={{ color: '#4b5563', fontSize: '0.95rem', marginBottom: '40px', lineHeight: '1.5' }}>
-          Te enviamos el resumen de tu compra a tu correo. Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
+          {instrucciones
+            ? 'También te enviamos estos datos y el resumen de tu compra a tu correo. '
+            : 'Te enviamos el resumen de tu compra a tu correo (si pagas por transferencia, ahí están los datos de la cuenta). '}
+          Guarda tu número de orden: con él y el correo que usaste en la compra puedes consultar el estado de tu pedido en la sección de seguimiento.
         </p>
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>

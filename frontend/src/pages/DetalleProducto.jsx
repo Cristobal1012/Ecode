@@ -29,6 +29,48 @@ export default function DetalleProducto() {
       });
   }, [id]);
 
+  // Actualizar los metadatos SEO del producto
+  useEffect(() => {
+    if (!producto) return;
+
+    const tituloAnterior = document.title;
+    const descripcionMeta = document.querySelector(
+      'meta[name="description"]'
+    );
+
+    const descripcionAnterior = descripcionMeta?.content;
+
+    const tituloSEO =
+      producto.meta_titulo?.trim() || producto.nombre;
+
+    const descripcionSEO =
+      producto.meta_descripcion?.trim() ||
+      producto.descripcion ||
+      '';
+
+    document.title = tituloSEO;
+
+    let metaDescripcion = descripcionMeta;
+
+    if (!metaDescripcion) {
+      metaDescripcion = document.createElement('meta');
+      metaDescripcion.name = 'description';
+      document.head.appendChild(metaDescripcion);
+    }
+
+    metaDescripcion.content = descripcionSEO;
+
+    return () => {
+      document.title = tituloAnterior;
+
+      if (descripcionMeta) {
+        descripcionMeta.content = descripcionAnterior;
+      } else {
+        metaDescripcion.remove();
+      }
+    };
+  }, [producto]);
+
   // Muestra el stock que informó el servidor, que puede ser más reciente que el de la carga
   const actualizarStock = (sku, stock) => setProducto(actual => ({
     ...actual,
@@ -53,12 +95,19 @@ export default function DetalleProducto() {
       item => item.sku === varianteSeleccionada.sku
     );
     const enCarrito = existente ? Number(existente.cantidad) : 0;
+    const atributos = varianteSeleccionada.atributos_variables || {};
+
+    const detalleAtributos = Object.entries(atributos)
+      .map(([nombre, valor]) => `${nombre}: ${valor}`)
+      .join(' · ');
+
     const linea = {
       id: producto.id,
       sku: varianteSeleccionada.sku,
-      nombre: existente?.nombre || `${producto.nombre} - ${
-        varianteSeleccionada.valor || varianteSeleccionada.sku
-      }`,
+      nombre: detalleAtributos
+        ? `${producto.nombre} · ${detalleAtributos}`
+        : producto.nombre,
+      atributos,
       precio: varianteSeleccionada.precio,
       cantidad: enCarrito + cantidadSeleccionada
     };
@@ -79,7 +128,7 @@ export default function DetalleProducto() {
     }
 
     const carritoNuevo = existente
-      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: revisada.precio } : item))
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, nombre: linea.nombre, atributos : linea.atributos, cantidad: linea.cantidad, precio: revisada.precio } : item))
       : [...carritoActual, { ...linea, precio: revisada.precio }];
     await guardarCarrito(carritoNuevo);
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };

@@ -7,10 +7,12 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
+from django.utils import timezone
 
-from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, NotificadorPedidos
+from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.ventas import EventoPedido
 
+from ..instrucciones_pago import instrucciones_transferencia
 from ..models import ConfiguracionGlobal, OrdenCompra
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ ASUNTOS = {
     EventoPedido.PAGO_APROBADO: 'Pago confirmado: pedido #{id}',
     EventoPedido.PAGO_EN_REVISION: 'Recibimos el pago de tu pedido #{id}',
     EventoPedido.PAGO_RECHAZADO: 'No se pudo completar el pago del pedido #{id}',
+    EventoPedido.RECORDATORIO_PAGO: 'Recuerda pagar tu pedido #{id}',
     EventoPedido.CANCELADO: 'Tu pedido #{id} fue cancelado',
     EventoPedido.EN_PREPARACION: 'Estamos preparando tu pedido #{id}',
     EventoPedido.DESPACHADO: 'Tu pedido #{id} va en camino',
@@ -39,7 +42,7 @@ def pesos(valor) -> str:
 
 class CorreoNotificadorPedidos(NotificadorPedidos):
     def notificar(self, orden_id, evento):
-        # AGENTS.md RF-04.2: no se avisan cambios que luego hagan rollback
+        # RF-04.2: no se avisan cambios que luego hagan rollback
         transaction.on_commit(lambda: self._enviar(orden_id, EventoPedido(evento)))
 
     def _enviar(self, orden_id, evento):
@@ -83,14 +86,26 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'total': pesos(orden.total_final),
             'metodo_pago': orden.get_metodo_pago_display(),
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
+            'pago_vencido': orden.motivo_cancelacion == MOTIVO_PAGO_VENCIDO,
             'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
             'transportista': (orden.proveedor_logistico or '').capitalize(),
             # Número de la orden de transporte (RF-02.3), si ya se generó
             'numero_ot': orden.numero_seguimiento_tracking or '',
+            # Datos bancarios, monto y referencia si la orden se paga por transferencia (None si no)
+            'transferencia': CorreoNotificadorPedidos._transferencia(orden),
             'entrega': CorreoNotificadorPedidos._entrega(orden, config),
             # RF-02.4: el invitado consulta con su número de orden y su correo
             'url_seguimiento': f'{frontend_url}/seguimiento?orden={orden.id}',
         }
+
+    @staticmethod
+    def _transferencia(orden):
+        instrucciones = instrucciones_transferencia(orden)
+        if instrucciones:
+            instrucciones['monto'] = pesos(instrucciones['monto'])
+            # Hora de Chile (TIME_ZONE), ej. 16-10-2026 a las 14:30
+            instrucciones['vence'] = timezone.localtime(instrucciones['vence']).strftime('%d-%m-%Y a las %H:%M')
+        return instrucciones
 
     @staticmethod
     def _entrega(orden, config):

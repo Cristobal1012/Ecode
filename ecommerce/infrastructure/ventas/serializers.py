@@ -13,9 +13,12 @@ from ecommerce.domain.logistica import (
     PROVEEDORES_CON_ORDEN_TRANSPORTE, ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete,
     SolicitudCotizacion,
 )
+from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.domain.medios_pago import MedioPagoNoDisponible
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
+    TelefonoInvalido, normalizar_telefono_chile,
     paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
@@ -25,8 +28,14 @@ from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLega
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
+from .repositorio_medios_pago import DjangoRepositorioMediosPago
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
+
+def medios_pago():
+    """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
+    return MediosPagoDisponibles(DjangoRepositorioMediosPago())
+
 
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
@@ -45,6 +54,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'tema_seleccionado', 
             'layout_catalogo',
             'pasarelas_activas',
+            'google_analytics_id',
+            'meta_pixel_id',
             'modo_autenticacion',
             'comuna_origen',
             'region_origen',
@@ -58,9 +69,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
         return settings.GOOGLE_CLIENT_ID
 
     def get_pasarelas_activas(self, obj):
-        if not obj.api_keys_pagos:
-            return []
-        return list(obj.api_keys_pagos.keys())
+        # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
+        return [codigo.value for codigo in medios_pago().disponibles()]
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -74,6 +84,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'favicon',
             'banner',
             'layout_catalogo',
+            'google_analytics_id',
+            'meta_pixel_id',
             'modo_autenticacion',
             'comuna_origen',
             'region_origen',
@@ -162,6 +174,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
+    # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
+    nombre_destinatario = serializers.CharField(max_length=120)
+    telefono_destinatario = serializers.CharField(max_length=30)
 
     class Meta:
         model = OrdenCompra
@@ -173,6 +188,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'email_cliente',
             'metodo_pago',
             'direccion_envio_snapshot',
+            'nombre_destinatario',
+            'telefono_destinatario',
             'subtotal',
             'costo_envio',
             'total_final',
@@ -189,6 +206,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'Debes aceptar los Términos y Condiciones y la Política de Privacidad.'
             )
         return value
+
+    def validate_telefono_destinatario(self, value):
+        try:
+            return normalizar_telefono_chile(value)
+        except TelefonoInvalido as error:
+            raise serializers.ValidationError(str(error))
     def get_email_cliente(self, obj):
         if obj.email_invitado:
             return obj.email_invitado
@@ -208,6 +231,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     'No es posible comprar todavía: la tienda aún no publica '
                     f"{' ni '.join(nombres[tipo] for tipo in faltantes)}."
                 )})
+
+        # RN-02: el backend rechaza un medio que el admin no habilitó o no terminó de configurar
+        try:
+            medios_pago().exigir(data.get('metodo_pago'))
+        except MedioPagoNoDisponible as error:
+            raise serializers.ValidationError({'metodo_pago': str(error)})
 
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -386,12 +415,12 @@ class AgregarItemSerializer(serializers.Serializer):
 
         return data
 class AdminOrdenCompraEstadoSerializer(serializers.Serializer):
-    # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido (AGENTS.md §9)
+    # Solo valida la entrada; las transiciones las decide CambiarEstadoPedido
     estado = serializers.ChoiceField(choices=OrdenCompra.ESTADOS_PEDIDO)
 
 
 class AdminOrdenCompraSerializer(serializers.ModelSerializer):
-    """Listado del panel (RF-03.3): incluye la revisión pendiente y las transiciones de §9."""
+    """Listado del panel (RF-03.3): incluye la revisión pendiente y las transiciones permitidas."""
 
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
@@ -403,6 +432,7 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         model = OrdenCompra
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
+            'nombre_destinatario', 'telefono_destinatario',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',
@@ -471,3 +501,51 @@ class PaginaLegalAdminSerializer(serializers.ModelSerializer):
         if publicada and not tiene_texto(contenido):
             raise serializers.ValidationError({'contenido': 'No se puede publicar una página sin contenido.'})
         return data
+
+class MedioPagoAdminSerializer(serializers.Serializer):
+    """Entrada del panel: las credenciales pueden volver enmascaradas (se conservan) o vacías (se borran)."""
+
+    habilitado = serializers.BooleanField()
+    datos = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=500),
+                                  required=False, default=dict)
+
+
+def medio_pago_para_panel(medio):
+    """Lo que ve el admin de un medio de pago: nunca una credencial completa."""
+    return {
+        'codigo': medio.codigo.value,
+        'nombre': medio.definicion.nombre,
+        'habilitado': medio.habilitado,
+        # False: el checkout aún no sabe cobrar con este medio (se pueden cargar sus datos, no se ofrece)
+        'integracion_lista': medio.definicion.integracion_lista,
+        # Habilitado, con sus datos completos y con la integración lista: se ofrece al comprador
+        'disponible': medio.disponible,
+        'faltantes': medio.faltantes,
+        'campos': [{
+            'nombre': campo.nombre,
+            'etiqueta': campo.etiqueta,
+            'secreto': campo.secreto,
+            'opciones': list(campo.opciones),
+            'obligatorio': campo.obligatorio,
+            # Ej. ['ambiente', 'PRODUCCION']: obligatorio solo con ese valor
+            'obligatorio_si': list(campo.obligatorio_si) if campo.obligatorio_si else None,
+        } for campo in medio.definicion.campos],
+        'datos': medio.datos_visibles(),
+    }
+
+
+class CredencialesChilexpressSerializer(serializers.Serializer):
+    """Entrada del panel: una llave que vuelve enmascarada se conserva y una vacía se borra."""
+
+    datos = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=500))
+
+
+def chilexpress_para_panel(credenciales):
+    """Lo que ve el admin de las llaves de Chilexpress: nunca una llave completa."""
+    return {
+        'configuradas': credenciales.configuradas,
+        'faltantes': credenciales.faltantes,
+        'campos': [{'nombre': nombre, 'etiqueta': etiqueta, 'obligatorio': obligatorio}
+                   for nombre, etiqueta, obligatorio in credenciales.CAMPOS],
+        'datos': credenciales.visibles(),
+    }

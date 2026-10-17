@@ -7,8 +7,8 @@
   box-sizing: border-box;
   color-scheme: light;
   text-align: left;
-  color: var(--catalogo-text, #0F172A);
-  background: var(--catalogo-background, #F8FAFC);
+  color: #111827;
+  background: #F9FAFB;
 }
 
 .catalogo__filtros {
@@ -21,7 +21,7 @@
 .catalogo h2,
 .catalogo h3,
 .catalogo h4 {
-  color: var(--catalogo-text, #0F172A);
+  color: #111827;
 }
 
 .catalogo h3 {
@@ -108,11 +108,11 @@
 
 .catalogo__tarjeta {
   padding: 15px;
-  border: 1px solid var(--catalogo-border, #CBD5E1);
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
-  color: var(--catalogo-text, #0F172A);
-  background: var(--catalogo-surface, #FFFFFF);
-  box-shadow: 2px 2px 8px rgb(0 0 0 / 8%);
+  color: #111827;
+  background: #FFFFFF;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .catalogo__tarjeta h3 {
@@ -125,11 +125,9 @@
 
 .catalogo__ficha {
   margin-top: 15px;
-  padding: 10px;
-  border: 1px solid var(--catalogo-border, #CBD5E1);
-  border-radius: 5px;
-  color: var(--catalogo-muted-text, #475569);
-  background: var(--catalogo-background, #F8FAFC);
+  padding-top: 15px;
+  border-top: 1px solid #E5E7EB;
+  color: #4B5563;
   font-size: 13px;
 }
 

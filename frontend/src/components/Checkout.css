@@ -30,7 +30,7 @@
 
 /* La tarjeta muestra el foco del radio que contiene */
 .checkout-opcion:has(input:focus-visible) {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--color-primary);
   outline-offset: 2px;
 }
 

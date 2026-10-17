@@ -188,7 +188,7 @@ export default function DetalleProducto() {
   return (
     <div
       style={{
-        backgroundColor: 'var(--color-background)',
+        backgroundColor: '#F9FAFB',
         minHeight: '100vh',
         paddingBottom: '50px'
       }}
@@ -414,7 +414,7 @@ export default function DetalleProducto() {
             <h1
               style={{
                 margin: '15px 0 10px 0',
-                color: 'var(--color-primary)',
+                color: '#111827',
                 fontSize: '2rem',
                 lineHeight: '1.2'
               }}
@@ -439,29 +439,25 @@ export default function DetalleProducto() {
                 <div
                   style={{
                     marginBottom: '20px',
-                    padding: '15px',
-                    backgroundColor: '#f9fafb',
-                    borderRadius: '6px',
-                    border: '1px solid #e5e7eb'
+                    paddingTop: '15px',
+                    paddingBottom: '15px',
+                    borderTop: '1px solid #e5e7eb', 
+                    borderBottom: '1px solid #e5e7eb' 
+                    
                   }}
                 >
-                  <strong>Ficha Técnica:</strong>
-
+                  <strong style={{ color: '#4B5563' }}>Ficha Técnica:</strong>
                   <ul
                     style={{
-                      margin: '5px 0 0 0',
+                      margin: '5px 0 0',
                       paddingLeft: '20px',
-                      fontSize: '0.9rem'
+                      fontSize: '0.9rem',
+                      color: '#4B5563' 
                     }}
                   >
-                    {Object.entries(
-                      producto.atributos_globales
-                    ).map(([key, val]) => (
+                    {Object.entries(producto.atributos_globales).map(([key, val]) => (
                       <li key={key}>
-                        <b>
-                          {key.replace('_', ' ')}:
-                        </b>{' '}
-                        {val}
+                        <b>{key.replace('_', ' ')}:</b> {val}
                       </li>
                     ))}
                   </ul>

@@ -60,7 +60,7 @@ export default function ProductCardList({ producto }) {
           />
         )}
         <div>
-          <h4 style={{ margin: '0 0 5px 0', color: 'var(--color-primary)' }}>
+          <h4 style={{ margin: '0 0 5px 0', color: '#111827' }}>
             {producto.nombre}
           </h4>
           <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 8px 0' }}>
@@ -71,7 +71,7 @@ export default function ProductCardList({ producto }) {
             <span style={{
               fontSize: '1.2rem',
               fontWeight: 'bold',
-              color: infoPrecio.agotado ? '#dc2626' : 'var(--color-primary)'
+              color: infoPrecio.agotado ? '#dc2626' : '#111827'
             }}>
               {infoPrecio.texto}
             </span>
@@ -94,7 +94,7 @@ export default function ProductCardList({ producto }) {
           padding: '10px 16px',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
-          backgroundColor: 'var(--color-secondary)',
+          backgroundColor: 'var(--color-primary)',
           color: '#fff',
           border: 'none',
           borderRadius: '4px',

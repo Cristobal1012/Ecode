@@ -62,7 +62,7 @@ export default function ProductCardGrid({ producto }) {
             style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px', marginBottom: '10px' }}
           />
         )}
-        <h4 style={{ margin: '0 0 10px 0', color: 'var(--color-primary)' }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#111827' }}>
           {producto.nombre}
         </h4>
         <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 10px 0' }}>
@@ -76,24 +76,23 @@ export default function ProductCardGrid({ producto }) {
           <span style={{
             fontSize: '1.2rem',
             fontWeight: 'bold',
-            color: infoPrecio.agotado ? '#dc2626' : 'var(--color-primary)' // Rojo si está agotado
+            color: infoPrecio.agotado ? '#dc2626' : '#111827' 
           }}>
             {infoPrecio.texto}
           </span>
         </div>
-        {/* ------------------------------- */}
+        
 
         {producto.atributos_globales && Object.keys(producto.atributos_globales).length > 0 && (
           <div
             style={{
-              marginTop: '10px',
-              padding: '8px',
-              backgroundColor: '#f9f9f9',
-              borderRadius: '5px',
+              marginTop: '15px',
+              paddingTop: '15px',
+              borderTop: '1px solid #E5E7EB'
             }}
           >
-            <strong style={{ fontSize: '12px' }}>Ficha Técnica:</strong>
-            <ul style={{ margin: '5px 0 0 0', paddingLeft: '15px', fontSize: '12px' }}>
+            <strong style={{ fontSize: '12px', color: '#4B5563' }}>Ficha Técnica:</strong>
+            <ul style={{ margin: '5px 0 0', paddingLeft: '15px', fontSize: '12px', color: '#4B5563' }}>
               {Object.entries(producto.atributos_globales).map(([key, val]) => (
                 <li key={key}>
                   <b>{key.replace('_', ' ')}:</b> {val}
@@ -110,7 +109,7 @@ export default function ProductCardGrid({ producto }) {
           marginTop: '15px',
           padding: '10px 12px',
           cursor: 'pointer',
-          backgroundColor: 'var(--color-secondary)',
+          backgroundColor: 'var(--color-primary)',
           color: '#fff',
           border: 'none',
           borderRadius: '4px',

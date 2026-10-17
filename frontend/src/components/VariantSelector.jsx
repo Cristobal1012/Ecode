@@ -155,8 +155,9 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
                   onClick={() => seleccionarAtributo(atributo, valor)}
                   style={{
                     padding: '8px 16px',
-                    border: seleccionado ? '2px solid #2563eb' : '1px solid #d1d5db',
-                    backgroundColor: seleccionado ? '#eff6ff' : 'white',
+                    border: seleccionado ? '2px solid #111827' : '1px solid #d1d5db',
+                    backgroundColor: 'white',
+                    color: seleccionado ? '#111827' : '#4B5563',
                     fontWeight: seleccionado ? 'bold' : 'normal',
                     borderRadius: '4px',
                     cursor: 'pointer',
@@ -172,7 +173,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       ))}
 
       {varianteSeleccionada && (
-        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
           <p style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '0 0 10px 0', color: '#1f2937' }}>
             Precio: ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
           </p>
@@ -207,7 +208,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         style={{
             marginTop: '20px',
             padding: '12px 24px',
-            backgroundColor: sinStock || agregando ? '#d1d5db' : '#2563eb',
+            backgroundColor: sinStock || agregando ? '#d1d5db' : 'var(--color-primary)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',

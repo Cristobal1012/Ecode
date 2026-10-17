@@ -7,13 +7,14 @@ from rest_framework.test import APITestCase
 
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.application.ventas import GenerarOrdenTransporte
-from ecommerce.domain.logistica import Paquete, SolicitudCotizacion
+from ecommerce.domain.logistica import CredencialesChilexpress, Paquete, SolicitudCotizacion
 from ecommerce.domain.ventas import VarianteCatalogo
 
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .models import ConfiguracionGlobal, OrdenCompra
+from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_ordenes import DjangoRepositorioOrdenes
-from .tests import usar_catalogo_falso
+from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 
 PAQUETE = {'peso_kg': '1.50', 'alto_cm': '10', 'ancho_cm': '20', 'largo_cm': '30'}
@@ -110,9 +111,11 @@ TARIFA_OK = [{'serviceValue': 3500, 'serviceDescription': 'EXPRESS'}]
 ITEMS = [{'producto_mongo_id': 'polera', 'variante_sku': 'POLERA-M', 'cantidad': 1}]
 
 
-@patch.dict('os.environ', {'CHILEXPRESS_API_KEY_COTIZADOR': 'secreto-chilexpress'})
 class CotizacionesAPITests(APITestCase):
     def setUp(self):
+        # La llave la carga el admin en el panel (cifrada en la base), no el .env
+        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(cotizador='secreto-chilexpress'))
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
             api_keys_logistica={'proveedor_activo': 'CHILEXPRESS'},
@@ -170,7 +173,7 @@ class CotizacionesAPITests(APITestCase):
         post.return_value = respuesta_chilexpress(TARIFA_OK)
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
-            'acepta_terminos': True, 'items': ITEMS,
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Santiago', 'calle': 'Uno 123'},
             'subtotal': 25000, 'costo_envio': 1, 'total_final': 1,
             'proveedor_logistico': 'CHILEXPRESS', 'paquete': PAQUETE,
@@ -188,7 +191,7 @@ class CotizacionesAPITests(APITestCase):
     def test_checkout_no_permite_retiro_desactivado(self):
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
-            'acepta_terminos': True, 'items': ITEMS,
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {}, 'subtotal': 25000,
             'proveedor_logistico': 'RETIRO_LOCAL',
         }
@@ -202,7 +205,7 @@ class CotizacionesAPITests(APITestCase):
     def test_checkout_retiro_ignora_costo_enviado_por_cliente(self):
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
-            'acepta_terminos': True, 'items': ITEMS,
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {}, 'subtotal': '25000',
             'costo_envio': 9999, 'total_final': 34999,
             'proveedor_logistico': 'RETIRO_LOCAL',
@@ -221,7 +224,7 @@ class CotizacionesAPITests(APITestCase):
     def checkout_con_totales_manipulados(self, **cambios):
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
-            'acepta_terminos': True, 'items': ITEMS,
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Santiago', 'calle': 'Uno 123'},
             'subtotal': 25000, 'costo_envio': 0, 'total_final': 1, **cambios,
         }
@@ -258,7 +261,7 @@ class CotizacionesAPITests(APITestCase):
             [{'serviceValue': '-10', 'serviceDescription': 'EXPRESS'}])
         payload = {
             'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
-            'acepta_terminos': True, 'items': ITEMS,
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Santiago'},
             'subtotal': '25000', 'proveedor_logistico': 'CHILEXPRESS',
             'paquete': PAQUETE,
@@ -268,15 +271,17 @@ class CotizacionesAPITests(APITestCase):
         self.assertFalse(OrdenCompra.objects.exists())
 
 
-@patch.dict('os.environ', {'CHILEXPRESS_API_KEY_ENVIOS': 'secreto-chilexpress'})
 class OrdenTransporteTests(APITestCase):
     def setUp(self):
+        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(
+            cotizador='llave-cotizador', envios='secreto-chilexpress'))
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', comuna_origen='Santiago')
         self.orden = OrdenCompra.objects.create(
             email_invitado='cliente@example.test', metodo_pago='TRANSBANK',
             direccion_envio_snapshot={'comuna': 'SANTIAGO', 'calle': 'Uno', 'numero': '123'},
             subtotal=25000, costo_envio=3500, total_final=28500,
             proveedor_logistico='CHILEXPRESS', id_transaccion_pasarela='token-tbk',
+            nombre_destinatario='Ana Pérez', telefono_destinatario='+56912345678',
         )
         catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ProveedorLogisticoAdapter._obtener_catalogo_dinamico',
                          return_value={'SANTIAGO': 'STGO'})
@@ -335,6 +340,26 @@ class OrdenTransporteTests(APITestCase):
 
         destino = post.call_args.kwargs['json']['details'][0]['addresses'][0]
         self.assertEqual((destino['deliveryOnCommercialOffice'], destino['commercialOfficeId']), (True, 'OF-123'))
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_ot_lleva_el_nombre_y_telefono_del_destinatario(self, post):
+        post.return_value = Mock(status_code=200)
+        post.return_value.json.return_value = {'data': {'detail': [{'transportOrderNumber': 1.0}]}}
+
+        self.generar_ot()
+
+        destinatario = post.call_args.kwargs['json']['details'][0]['contacts'][0]
+        self.assertEqual((destinatario['name'], destinatario['phoneNumber']), ('Ana Pérez', '912345678'))
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_orden_sin_telefono_no_genera_ot_con_datos_inventados(self, post):
+        OrdenCompra.objects.filter(id=self.orden.id).update(telefono_destinatario='')
+
+        self.assertIsNone(self.generar_ot())
+
+        post.assert_not_called()
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.error_orden_transporte, 'La orden no tiene teléfono del destinatario.')
 
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_rechazo_de_chilexpress_queda_en_la_orden_sin_ot(self, post):

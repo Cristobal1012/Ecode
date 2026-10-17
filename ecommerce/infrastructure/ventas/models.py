@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 
+from ecommerce.domain.medios_pago import MEDIOS_PAGO
+
 class ConfiguracionGlobal(models.Model):
     MODOS_AUTENTICACION = [
         ('INVITADO', 'Invitado'),
@@ -52,12 +54,42 @@ class ConfiguracionGlobal(models.Model):
         default='MIXTO'
     )
     
+    # Obsoleto: los medios de pago viven en MedioPago (credenciales cifradas). Se migró en 0016
     api_keys_pagos = models.JSONField(default=dict, blank=True)
     api_keys_logistica = models.JSONField(default=dict, blank=True)
-    layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3") 
+    layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3")
 
     def __str__(self):
         return self.nombre_tienda
+
+
+class MedioPago(models.Model):
+    """Un medio de pago configurado por el emprendedor (RN-02). Los campos de cada medio los define el dominio."""
+
+    codigo = models.CharField(max_length=30, unique=True,
+                              choices=[(d.codigo.value, d.nombre) for d in MEDIOS_PAGO])
+    habilitado = models.BooleanField(default=False)
+    # Datos que no son secretos (ej. ambiente, datos bancarios que ve el comprador)
+    datos = models.JSONField(default=dict, blank=True)
+    # Credenciales en JSON cifrado con CLAVE_CIFRADO_CREDENCIALES; nunca en texto plano
+    credenciales_cifradas = models.TextField(blank=True, default='')
+    actualizado = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.get_codigo_display()
+
+
+class ProveedorEnvio(models.Model):
+    """Credenciales de un transportista que carga el emprendedor en el panel (ej. las llaves de Chilexpress)."""
+
+    codigo = models.CharField(max_length=30, unique=True, choices=[('CHILEXPRESS', 'Chilexpress')])
+    # JSON cifrado con CLAVE_CIFRADO_CREDENCIALES; nunca en texto plano
+    credenciales_cifradas = models.TextField(blank=True, default='')
+    actualizado = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.get_codigo_display()
+
 
 class DireccionEnvio(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='direcciones')
@@ -127,6 +159,10 @@ class OrdenCompra(models.Model):
     estado = models.CharField(max_length=50, choices=ESTADOS_PEDIDO, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=50, choices=METODOS_PAGO)
     direccion_envio_snapshot = models.JSONField()
+    # Quién recibe o retira el pedido (RF-02.3); la orden de transporte usa estos datos
+    nombre_destinatario = models.CharField(max_length=120, blank=True, default='')
+    # Normalizado como +56XXXXXXXXX (normalizar_telefono_chile)
+    telefono_destinatario = models.CharField(max_length=15, blank=True, default='')
 
     id_transaccion_pasarela = models.CharField(max_length=255, blank=True, null=True)
     proveedor_logistico = models.CharField(max_length=100, blank=True, null=True)
@@ -146,6 +182,8 @@ class OrdenCompra(models.Model):
     motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado = models.BooleanField(default=False)
+    # Transferencia: ya se le recordó al comprador que le quedan 24 h para pagar (se envía una sola vez)
+    recordatorio_pago_enviado = models.BooleanField(default=False)
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario

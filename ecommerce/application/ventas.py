@@ -2,15 +2,18 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 import logging
 
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
+from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, armar_linea,
-    revisar_linea, validar_generacion_orden_transporte, validar_transicion,
+    AVISO_ANTES_DEL_VENCIMIENTO, OrdenTransporteNoPermitida, PedidoVacio, PLAZO_PAGO_TRANSFERENCIA,
+    SubtotalDesactualizado, VarianteCatalogo,
+    armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,7 +66,7 @@ def agrupar_por_sku(items: list[ItemSolicitado]) -> list[ItemSolicitado]:
 
 
 class RevisarCarrito:
-    """RN-03 / AGENTS.md §4.1: valida el stock al agregar al carrito y al abrir el checkout.
+    """RN-03: valida el stock al agregar al carrito y al abrir el checkout.
 
     No reserva nada: el stock se vuelve a validar al crear la orden y al confirmar el pago.
     """
@@ -132,9 +135,22 @@ class RepositorioOrdenes(ABC):
         """Guarda la OT generada, o el error del transportista para reintentarlo."""
         raise NotImplementedError
 
+    @abstractmethod
+    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de: datetime, sin_recordatorio: bool = False) -> list:
+        """Ids de las órdenes Pendientes con ese medio de pago creadas antes de la fecha.
+
+        Con `sin_recordatorio`, solo las que aún no recibieron el recordatorio de pago.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def marcar_recordatorio_pago(self, orden_id) -> bool:
+        """Marca el recordatorio como enviado si la orden sigue Pendiente y sin él; False si no."""
+        raise NotImplementedError
+
 
 class NotificadorPedidos(ABC):
-    """Puerto de salida (NotificationSender, AGENTS.md §3.3): avisa al comprador un hito de su pedido.
+    """Puerto de salida (NotificationSender, RF-04.2): avisa al comprador un hito de su pedido.
 
     El adaptador envía después del commit y nunca lanza: un correo que falla no deshace el cambio.
     """
@@ -212,6 +228,7 @@ class ResultadoPago(StrEnum):
 
 MOTIVO_PAGO_RECHAZADO = 'Pago rechazado'
 MOTIVO_PAGO_ANULADO = 'Pago anulado por el comprador'
+MOTIVO_PAGO_VENCIDO = 'Pago no recibido a tiempo'
 MOTIVO_CANCELACION_ADMIN = 'Cancelado por el administrador'
 MOTIVO_SIN_STOCK = 'Pago confirmado sin stock para {sku}'
 MOTIVO_ORDEN_NO_PENDIENTE = 'Pago aprobado sobre una orden en estado {estado}'
@@ -223,7 +240,7 @@ MOTIVO_CONFIRMACION_INTERRUMPIDA = (
 
 
 class ConfirmarPago:
-    """RF-02.2, RN-03 y AGENTS.md §4.1: aplica el resultado de la pasarela a la orden.
+    """RF-02.2 y RN-03: aplica el resultado de la pasarela a la orden.
 
     - Solo la primera confirmación de una orden PENDIENTE descuenta stock (idempotencia).
     - Stock todo o nada: si falta en una línea, se repone lo descontado y la orden queda
@@ -316,9 +333,9 @@ class PedidoModificado(Exception):
 
 
 class CambiarEstadoPedido:
-    """RF-03.3, AGENTS.md §9 y §4.1: cambio de estado manual desde el panel del admin.
+    """RF-03.3: cambio de estado manual desde el panel del admin.
 
-    - Solo se permiten las transiciones de §9 (TransicionNoPermitida).
+    - Solo se permiten las transiciones de la máquina de estados (TransicionNoPermitida).
     - PENDIENTE → PAGADO (ej. transferencia validada, RF-02.2) aplica las mismas reglas que un
       pago en línea: descuenta stock todo o nada, si falta la orden queda en revisión, y si no
       se genera la orden de transporte.
@@ -367,13 +384,62 @@ EVENTO_POR_ESTADO = {
 }
 
 
+class CancelarPagosVencidos:
+    """Plazo de pago: una transferencia que no se paga dentro del plazo (48 h) se cancela y se avisa.
+
+    - No toca stock: la transferencia no lo reserva mientras está Pendiente.
+    - El UPDATE condicional evita cancelar una orden que el admin validó mientras tanto.
+    - Si el pago llega después, ConfirmarPago deja la orden cancelada en revisión del admin.
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes, notificador: NotificadorPedidos | None = None):
+        self.ordenes = ordenes
+        self.notificador = notificador
+
+    def ejecutar(self, ahora: datetime) -> list:
+        canceladas = []
+        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value,
+                                                         ahora - PLAZO_PAGO_TRANSFERENCIA):
+            if not self.ordenes.cambiar_estado(orden_id, EstadoPedido.PENDIENTE, EstadoPedido.CANCELADO,
+                                               MOTIVO_PAGO_VENCIDO):
+                continue
+            if self.notificador:
+                self.notificador.notificar(orden_id, EventoPedido.CANCELADO)
+            canceladas.append(orden_id)
+        return canceladas
+
+
+class RecordarPagosPorVencer:
+    """Plazo de pago de la transferencia: a las 24 h sin pagar se le recuerda al comprador que le quedan 24 h.
+
+    - Se ejecuta después de CancelarPagosVencidos, para no recordar una orden que ya venció.
+    - El UPDATE condicional evita repetir el recordatorio y saltarse una orden que el admin validó mientras tanto.
+    """
+
+    def __init__(self, ordenes: RepositorioOrdenes, notificador: NotificadorPedidos | None = None):
+        self.ordenes = ordenes
+        self.notificador = notificador
+
+    def ejecutar(self, ahora: datetime) -> list:
+        recordadas = []
+        creadas_antes_de = ahora - (PLAZO_PAGO_TRANSFERENCIA - AVISO_ANTES_DEL_VENCIMIENTO)
+        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value, creadas_antes_de,
+                                                         sin_recordatorio=True):
+            if not self.ordenes.marcar_recordatorio_pago(orden_id):
+                continue
+            if self.notificador:
+                self.notificador.notificar(orden_id, EventoPedido.RECORDATORIO_PAGO)
+            recordadas.append(orden_id)
+        return recordadas
+
+
 class SinRevisionPendiente(Exception):
     def __init__(self):
         super().__init__('La orden no tiene una revisión pendiente.')
 
 
 class ResolverRevision:
-    """AGENTS.md §4.1: el admin marca como resuelta la revisión de una orden (ej. ya reembolsó).
+    """RF-03.3: el admin marca como resuelta la revisión de una orden (ej. ya reembolsó).
 
     El motivo se conserva como historial.
     """

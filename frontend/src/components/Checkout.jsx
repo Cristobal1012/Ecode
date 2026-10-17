@@ -24,6 +24,13 @@ const calcularCajaDeEnvio = (items) => {
     return { peso: Number(pesoTotal.toFixed(2)), lado: Math.max(10, ladoMasLargo, Math.ceil(Math.cbrt(volumenTotal))) };
 };
 
+// Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
+const NOMBRES_MEDIO_PAGO = {
+    TRANSBANK: 'Webpay (Transbank)',
+    MERCADO_PAGO: 'Mercado Pago',
+    TRANSFERENCIA: 'Transferencia bancaria'
+};
+
 export default function Checkout() {
     return (
         <>
@@ -38,6 +45,9 @@ export default function Checkout() {
 function CheckoutContenido() {
     const [modoAutenticacion, setModoAutenticacion] = useState(null);
     const [emailInvitado, setEmailInvitado] = useState('');
+    // RF-02.3: quién recibe o retira el pedido (Chilexpress y la tienda lo contactan)
+    const [nombreDestinatario, setNombreDestinatario] = useState('');
+    const [telefonoDestinatario, setTelefonoDestinatario] = useState('');
     const [mensaje, setMensaje] = useState('');
     const [opcionCompra, setOpcionCompra] = useState(null);
     const itemsCarrito = useCarrito();
@@ -112,6 +122,23 @@ function CheckoutContenido() {
         </a>
     ) : texto;
 
+    // Con sesión, quién recibe se precarga con los datos de la cuenta (el comprador puede cambiarlos)
+    useEffect(() => {
+        if (!usuarioAutenticado) return;
+        clienteAxios.get('usuarios/me/')
+            .then(({ data }) => {
+                // Algunas cuentas (ej. creadas con Google) ya traen el apellido dentro del nombre
+                const nombre = (data.nombre || '').trim();
+                const apellido = (data.apellido_paterno || '').trim();
+                const completo = !apellido || nombre.toLowerCase().includes(apellido.toLowerCase())
+                    ? nombre : `${nombre} ${apellido}`;
+                setNombreDestinatario(actual => actual || completo);
+                setTelefonoDestinatario(actual => actual || data.telefono || '');
+            })
+            .catch(() => {});
+    }, [usuarioAutenticado]);
+
+    // 2. CARGA DE DIRECCIONES GUARDADAS
     // Las direcciones se cargan por sesión, sin reiniciar la elección al cambiar el carrito.
     useEffect(() => {
         let vigente = true;
@@ -236,6 +263,7 @@ function CheckoutContenido() {
         const snapshotPedido = leerSnapshotCarrito();
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
+        if (!nombreDestinatario.trim() || !telefonoDestinatario.trim()) return setMensaje('Indica el nombre y el teléfono de quien recibe el pedido.');
         if (!aceptaTerminos) return setMensaje('Debes aceptar los Términos y Condiciones y la Política de Privacidad.');
 
         let dirSnapshot;
@@ -289,6 +317,8 @@ function CheckoutContenido() {
         const payload = {
             metodo_pago: metodoSeleccionado, 
             email_invitado: !usuarioAutenticado && compraComoInvitado ? emailInvitado : null,
+            nombre_destinatario: nombreDestinatario.trim(),
+            telefono_destinatario: telefonoDestinatario.trim(),
             direccion_envio_snapshot: dirSnapshot, 
             subtotal, 
             costo_envio: costoEnvio, 
@@ -298,7 +328,6 @@ function CheckoutContenido() {
             acepta_terminos: aceptaTerminos,
             items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
         };
-
         try {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
 
@@ -308,10 +337,15 @@ function CheckoutContenido() {
             } else {
                 if (snapshotPedido === leerSnapshotCarrito()) await vaciarCarrito();
                 // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
-                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, { replace: true });
+                // Con transferencia, el backend envía los datos bancarios para mostrarlos de inmediato
+                navigate(`/pedido-recibido?orden=${encodeURIComponent(respuesta.data.orden_id)}`, {
+                    replace: true,
+                    state: { instrucciones: respuesta.data.instrucciones_pago || null }
+                });
             }
         } catch (error) {
             const datos = error.response?.data || {};
+
             // Si cambiaron los precios, se actualiza el carrito para que el comprador vea el nuevo total
             if (datos.precios_vigentes && snapshotPedido === leerSnapshotCarrito()) {
                 const carritoActualizado = itemsCarrito.map(item => {
@@ -320,6 +354,7 @@ function CheckoutContenido() {
                 });
                 await guardarCarrito(carritoActualizado);
             }
+
             // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
             if (datos.items) {
                 const ajuste = await revisarCarrito();
@@ -328,7 +363,8 @@ function CheckoutContenido() {
                     await guardarCarrito(ajuste.items);
                 }
             }
-            const detalle = datos.subtotal || datos.items || datos.acepta_terminos;
+            const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago
+                || datos.nombre_destinatario || datos.telefono_destinatario;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
         }
@@ -372,6 +408,23 @@ function CheckoutContenido() {
                         <input id="checkout-email" type="email" autoComplete="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required style={inputStyle} />
                     </div>
                 )}
+
+                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
+                    <legend style={{ width: '100%', padding: 0 }}>
+                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Quién recibe el pedido?</h3>
+                    </legend>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label htmlFor="checkout-destinatario" style={{ fontWeight: 'bold' }}>Nombre de quien recibe o retira</label>
+                        <input id="checkout-destinatario" type="text" autoComplete="name" maxLength={120} value={nombreDestinatario} onChange={(e) => setNombreDestinatario(e.target.value)} required style={inputStyle} />
+                    </div>
+                    <div>
+                        <label htmlFor="checkout-telefono" style={{ fontWeight: 'bold' }}>Teléfono de contacto</label>
+                        <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" style={inputStyle} />
+                        <p id="checkout-telefono-ayuda" style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#4b5563' }}>
+                            Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
+                        </p>
+                    </div>
+                </fieldset>
                 
                 {/* --- TABS: ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
                 <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
@@ -531,13 +584,13 @@ function CheckoutContenido() {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {pasarelas.map(pasarela => {
-                                const validadoParaPagar = aceptaTerminos && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
                                 return (
                                     <button
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}
                                         style={{ width: '100%', padding: '12px', backgroundColor: validadoParaPagar ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: validadoParaPagar ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
                                     >
-                                        Pagar con {pasarela}
+                                        Pagar con {NOMBRES_MEDIO_PAGO[pasarela] || pasarela}
                                     </button>
                                 );
                             })}

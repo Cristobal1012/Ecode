@@ -6,12 +6,15 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
+from ecommerce.application.test_medios_pago import DATOS_BANCO
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
 from ecommerce.domain.logistica import ErrorOrdenTransporte
+from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
+from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 
 
@@ -24,6 +27,23 @@ def usar_catalogo_falso(test, variantes):
                      return_value=CatalogoFalso(variantes))
     catalogo.start()
     test.addCleanup(catalogo.stop)
+
+
+# RF-02.3: quién recibe o retira; el checkout lo exige
+DESTINATARIO = {'nombre_destinatario': 'Ana Pérez', 'telefono_destinatario': '+56 9 1234 5678'}
+
+DATOS_MEDIOS_PAGO = {
+    'TRANSBANK': {'ambiente': 'INTEGRACION'},
+    'MERCADO_PAGO': {'access_token': 'APP_USR-1234567890-prueba-abcd', 'webhook_secret': 'secreto-webhook-1234'},
+    'TRANSFERENCIA': DATOS_BANCO,
+}
+
+
+def habilitar_medios_pago(*codigos):
+    """RN-02: el checkout solo acepta medios habilitados y configurados."""
+    for codigo in codigos:
+        DjangoRepositorioMediosPago().guardar(
+            MedioPagoConfigurado(CodigoMedioPago(codigo), True, DATOS_MEDIOS_PAGO[codigo]))
 
 
 class ConfiguracionGlobalSerializerTests(APITestCase):
@@ -44,7 +64,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'tema_seleccionado', 'layout_catalogo',
              'pasarelas_activas', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
-             'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo'}
+             'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
+             'google_analytics_id', 'meta_pixel_id'}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -96,6 +117,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'numero_origen': '123',
             'dpto_casa_origen': None,
             'retiro_en_local_activo': True,
+            'google_analytics_id': None,
+            'meta_pixel_id': None,
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):
@@ -161,6 +184,7 @@ class CheckoutAccessTests(APITestCase):
                       for user in (cls.buyer, cls.admin)]
 
     def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         usar_catalogo_falso(self, {
             ('camisa', 'CAMISA-S'): VarianteCatalogo(
                 'Camisa - CAMISA-S', Decimal('10000.00'), 3, True),
@@ -182,6 +206,7 @@ class CheckoutAccessTests(APITestCase):
             'proveedor_logistico': 'CHILEXPRESS',
             'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
+            **DESTINATARIO,
         }
 
     def configure(self, mode):
@@ -258,6 +283,21 @@ class CheckoutAccessTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('email_invitado', response.data)
         self.assertFalse(OrdenCompra.objects.exists())
+
+    def test_destinatario_es_obligatorio_y_el_telefono_se_normaliza(self):
+        self.configure('INVITADO')
+        for campo, valor in (('nombre_destinatario', ''), ('telefono_destinatario', ''),
+                             ('telefono_destinatario', '+1 555 123 4567')):
+            with self.subTest(campo=campo, valor=valor):
+                response = self.checkout({**self.payload, campo: valor})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(campo, response.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        response = self.checkout()
+        self.assertEqual(response.status_code, 201, response.data)
+        orden = OrdenCompra.objects.get()
+        self.assertEqual((orden.nombre_destinatario, orden.telefono_destinatario), ('Ana Pérez', '+56912345678'))
 
     def test_checkout_rejected_without_accepting_terms(self):
         for valor in (False, None):
@@ -412,7 +452,7 @@ class SeguimientoEnvioTests(APITestCase):
 
 
 class CambioEstadoAdminTests(APITestCase):
-    """RF-03.3 / AGENTS.md §9: el admin solo puede hacer las transiciones permitidas."""
+    """RF-03.3: el admin solo puede hacer las transiciones permitidas."""
 
     @classmethod
     def setUpTestData(cls):
@@ -505,7 +545,7 @@ class CambioEstadoAdminTests(APITestCase):
 
 
 class PanelPedidosAdminTests(APITestCase):
-    """RF-03.3 y AGENTS.md §4.1: listado del panel y resolución de revisiones."""
+    """RF-03.3: listado del panel y resolución de revisiones."""
 
     @classmethod
     def setUpTestData(cls):
@@ -516,6 +556,7 @@ class PanelPedidosAdminTests(APITestCase):
             direccion_envio_snapshot={}, subtotal=10000, costo_envio=0, total_final=10000,
             estado='PAGADO', requiere_revision=True,
             motivo_revision='Pago confirmado sin stock para CAMISA-S',
+            nombre_destinatario='Ana Pérez', telefono_destinatario='+56912345678',
         )
 
     def autenticar(self, token):
@@ -533,6 +574,8 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
         self.assertEqual(orden['transiciones_permitidas'], ['EN_PREPARACION', 'CANCELADO'])
         self.assertEqual(orden['email_cliente'], 'invitado@example.test')
+        # A quién contactar para coordinar la entrega (RF-02.3)
+        self.assertEqual((orden['nombre_destinatario'], orden['telefono_destinatario']), ('Ana Pérez', '+56912345678'))
 
     def test_resolver_revision_quita_la_marca_una_sola_vez(self):
         self.autenticar(self.admin_token)
@@ -647,7 +690,7 @@ class AnulacionTransbankTests(APITestCase):
 
 @patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
 class PagoAprobadoTransbankTests(APITestCase):
-    """RF-02.2 y AGENTS.md §4.1: la vista delega en ConfirmarPago (idempotente, stock todo o nada)."""
+    """RF-02.2: la vista delega en ConfirmarPago (idempotente, stock todo o nada)."""
 
     def setUp(self):
         self.orden = OrdenCompra.objects.create(
@@ -707,7 +750,8 @@ class PagoAprobadoTransbankTests(APITestCase):
     def test_confirmacion_duplicada_no_descuenta_stock_dos_veces(self):
         # Si la orden fuera de Chilexpress, una segunda OT también sería un efecto duplicado
         OrdenCompra.objects.filter(id=self.orden.id).update(
-            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'})
+            proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'},
+            telefono_destinatario='+56912345678')
         with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica:
             logistica._obtener_catalogo_dinamico.return_value = {'SANTIAGO': 'STGO'}
             logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}

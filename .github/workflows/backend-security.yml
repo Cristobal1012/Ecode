@@ -46,6 +46,8 @@ jobs:
       MONGO_TEST_URI: mongodb://127.0.0.1:27017
       # Los tests corren con DEBUG=False (como producción); llave solo para CI
       SECRET_KEY: ci-only-secret-key-not-used-anywhere-else-0123456789
+      # Obligatoria con DEBUG=False: cifra las credenciales de los medios de pago (solo para CI)
+      CLAVE_CIFRADO_CREDENCIALES: ci-only-clave-de-cifrado-no-usar-en-otro-lugar
       # El cliente de pruebas usa HTTP: sin esto, cada petición recibiría un 301 a HTTPS
       SECURE_SSL_REDIRECT: 'False'
       # Los tests de checkout no crean páginas legales; la regla se prueba con override_settings

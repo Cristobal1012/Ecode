@@ -1,12 +1,16 @@
-import os
 import requests
 import logging
+import unicodedata
 from decimal import Decimal, ROUND_HALF_UP
-from dotenv import load_dotenv
 
-load_dotenv()
+from ..repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 
 logger = logging.getLogger(__name__)
+
+# RUT con el que se generan y se consultan las OT en el sandbox de Chilexpress (deben coincidir).
+# Pendiente: en producción es el RUT de la tienda, junto con el TCC y el remitente.
+RUT_MARKETPLACE = "96756430"
+ESTADO_NO_DISPONIBLE = "Estado no disponible temporalmente"
 
 class ProveedorLogisticoAdapter:
     
@@ -20,6 +24,19 @@ class ProveedorLogisticoAdapter:
     # CACHÉ EN MEMORIA: Guarda el diccionario para no hacer 16 peticiones en cada cotización
     _CACHE_COBERTURAS = {}
 
+    @staticmethod
+    def _credenciales():
+        """Llaves que carga el admin en el panel (cifradas en PostgreSQL); nunca desde el .env."""
+        return DjangoRepositorioCredencialesChilexpress().obtener()
+
+    @classmethod
+    def _obtener_headers_chilexpress(cls):
+        """Headers de la API de envíos (OT y etiquetas); None si no hay llave cargada."""
+        api_key = cls._credenciales().llave_envios
+        if not api_key:
+            return None
+        return {"Ocp-Apim-Subscription-Key": api_key, "Content-Type": "application/json"}
+
     @classmethod
     def _obtener_catalogo_dinamico(cls):
         """Consume la API de Regiones y luego la de Coberturas para armar el mapa del país"""
@@ -27,10 +44,11 @@ class ProveedorLogisticoAdapter:
         if cls._CACHE_COBERTURAS:
             return cls._CACHE_COBERTURAS
 
-        api_key = os.getenv("CHILEXPRESS_API_KEY_COBERTURAS", "").strip()
+        api_key = cls._credenciales().llave_coberturas
         if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
-            
+            logger.error("Faltan las credenciales de Chilexpress: se cargan en el panel (Configuración).")
+            return {}
+
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
             "Content-Type": "application/json"
@@ -113,7 +131,7 @@ class ProveedorLogisticoAdapter:
             return {"error": f"La comuna '{destino}' no es válida o no tiene cobertura.", "tipo": "cobertura"}
 
         url = "https://testservices.wschilexpress.com/rating/api/v1.0/rates/business"
-        api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().cotizador
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
             "Content-Type": "application/json"
@@ -178,26 +196,45 @@ class ProveedorLogisticoAdapter:
 
     @classmethod
     def _consultar_chilexpress(cls, codigo):
-        url = f"https://dev.chilexpress.cl/traking/api/v1.0/tracking/{codigo}" 
-        headers = {
-            "Ocp-Apim-Subscription-Key": os.getenv("CHILEXPRESS_API_KEY_ENVIOS", "").strip(), 
-            "Content-Type": "application/json"
-        }
+        url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/tracking"
+        headers = cls._obtener_headers_chilexpress()
+        if not headers:
+            logger.error("Faltan las credenciales de Chilexpress: se cargan en el panel (Configuración).")
+            return ESTADO_NO_DISPONIBLE
         try:
-            respuesta = requests.get(url, headers=headers, timeout=5)
+            # El RUT debe ser el mismo con que se generó la OT; la referencia es opcional
+            payload = {"transportOrderNumber": int(codigo), "rut": int(RUT_MARKETPLACE), "showTrackingEvents": 0}
+            respuesta = requests.post(url, headers=headers, json=payload, timeout=5)
             respuesta.raise_for_status()
             data = respuesta.json()
-            estado_api = data.get("statusName", "")
-            mapeo = {
-                "RECEPCIONADO": cls.ESTADOS_ESTANDAR["ORIGEN"],
-                "EN_TRANSITO": cls.ESTADOS_ESTANDAR["TRANSITO"],
-                "EN_REPARTO": cls.ESTADOS_ESTANDAR["REPARTO"],
-                "ENTREGADO": cls.ESTADOS_ESTANDAR["ENTREGADO"]
-            }
-            return mapeo.get(estado_api, "En origen")
+            if data.get("statusCode") != 0:
+                raise ValueError(f"Chilexpress respondió {data.get('statusCode')}: {data.get('statusDescription')}")
+            estado_api = str(((data.get("data") or {}).get("transportOrderData") or {}).get("status") or "").strip()
         except Exception as e:
             logger.error(f"Error consultando tracking: {str(e)}")
-            return "Estado no disponible temporalmente"
+            return ESTADO_NO_DISPONIBLE
+
+        estado = cls._estado_estandar(estado_api)
+        if estado is None:
+            # Sin equivalencia no se inventa un avance: se informa el estado de Chilexpress tal cual
+            logger.warning("Estado de Chilexpress sin equivalencia en la línea de tiempo: %r", estado_api)
+            return estado_api.capitalize() or ESTADO_NO_DISPONIBLE
+        return estado
+
+    @classmethod
+    def _estado_estandar(cls, estado_api):
+        """RF-02.4: traduce el estado de Chilexpress a la línea de tiempo estándar, o None si no hay equivalencia.
+
+        Chilexpress no publica la lista completa de estados (ej. "EN PRE-RECEPCION"): se reconocen por palabra clave.
+        """
+        texto = unicodedata.normalize("NFKD", estado_api).encode("ascii", "ignore").decode().upper()
+        if "NO ENTREGAD" in texto:
+            return None
+        for palabra, clave in (("ENTREGAD", "ENTREGADO"), ("REPARTO", "REPARTO"), ("TRANSITO", "TRANSITO"),
+                               ("RECEP", "ORIGEN"), ("ORIGEN", "ORIGEN")):
+            if palabra in texto:
+                return cls.ESTADOS_ESTANDAR[clave]
+        return None
 
     @classmethod
     def obtener_sucursales_por_comuna(cls, nombre_comuna):
@@ -209,9 +246,7 @@ class ProveedorLogisticoAdapter:
         # URL oficial ajustada a la documentación de Chilexpress (Type=0 para todas las oficinas)
         url = f"https://testservices.wschilexpress.com/georeference/api/v1.0/offices?Type=0&CountyName={nombre_limpio}"
         
-        api_key = os.getenv("CHILEXPRESS_API_KEY_GEO", "").strip()
-        if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().llave_coberturas
 
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
@@ -255,9 +290,7 @@ class ProveedorLogisticoAdapter:
         """
         url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders"
         
-        api_key = os.getenv("CHILEXPRESS_API_KEY_ENVIOS", "").strip()
-        if not api_key:
-            api_key = os.getenv("CHILEXPRESS_API_KEY_COTIZADOR", "").strip()
+        api_key = cls._credenciales().llave_envios
 
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
@@ -271,7 +304,7 @@ class ProveedorLogisticoAdapter:
                 "customerCardNumber": "18578680", # TCC de pruebas oficial[cite: 1]
                 "countyOfOriginCoverageCode": datos_envio.get("origen_codigo", "PUDA"),
                 "labelType": 2, # 2 = Imagen en Binario + Datos[cite: 1]
-                "marketplaceRut": "96756430",
+                "marketplaceRut": RUT_MARKETPLACE,
                 "sellerRut": "DEFAULT"
             },
             "details": [{
@@ -353,9 +386,9 @@ class ProveedorLogisticoAdapter:
     def obtener_etiqueta_chilexpress(cls, numero_ot):
         import requests
         
-        url = "http://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders-labels"
+        url = "https://testservices.wschilexpress.com/transport-orders/api/v1.0/transport-orders-labels"
         
-        # Obtenemos las credenciales (Ocp-Apim-Subscription-Key) igual que en tus otros métodos
+        # Llave de la API de envíos cargada en el panel
         headers = cls._obtener_headers_chilexpress()
         if not headers:
             return {"error": "Credenciales de Chilexpress no configuradas."}

@@ -60,6 +60,11 @@ function SeguimientoContenido() {
 
     const indiceEstadoActual = estados.indexOf(estadoActual);
 
+    // El error es genérico (no revela qué dato no coincide), así que marca ambos campos
+    const camposConError = mensaje
+        ? { 'aria-invalid': true, 'aria-describedby': 'seguimiento-error' }
+        : {};
+
     return (
         <main className="seguimiento-main">
             <h1>Seguimiento de pedido</h1>
@@ -77,6 +82,7 @@ function SeguimientoContenido() {
                         value={numeroOrden}
                         onChange={(e) => setNumeroOrden(e.target.value)}
                         required
+                        {...camposConError}
                         style={{
                             display: 'block',
                             width: '100%',
@@ -91,9 +97,11 @@ function SeguimientoContenido() {
                     <input
                         id="seguimiento-email"
                         type="email"
+                        autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        {...camposConError}
                         style={{
                             display: 'block',
                             width: '100%',
@@ -109,7 +117,11 @@ function SeguimientoContenido() {
             </form>
 
             {mensaje && (
-                <p role="alert" style={{ color: 'red', marginTop: '20px' }}>
+                <p
+                    id="seguimiento-error"
+                    role="alert"
+                    style={{ color: '#b91c1c', marginTop: '20px' }}
+                >
                     {mensaje}
                 </p>
             )}

@@ -3,6 +3,8 @@ from google.auth.transport import requests
 from django.conf import settings
 from rest_framework.exceptions import APIException, AuthenticationFailed
 
+TOLERANCIA_RELOJ_SEGUNDOS = 10
+
 
 class GoogleNoConfigurado(APIException):
     status_code = 503
@@ -20,7 +22,10 @@ class GoogleAuthService:
             raise GoogleNoConfigurado()
 
         try:
-            payload = id_token.verify_oauth2_token(token, requests.Request(), audience=client_id)
+            # Tolera unos segundos de desfase entre el reloj del servidor y el de Google: sin esto, un reloj
+            # apenas atrasado rechaza tokens recién emitidos ("Token used too early")
+            payload = id_token.verify_oauth2_token(
+                token, requests.Request(), audience=client_id, clock_skew_in_seconds=TOLERANCIA_RELOJ_SEGUNDOS)
         except ValueError as exc:
             raise AuthenticationFailed(f"Token de Google inválido o expirado: {str(exc)}")
 

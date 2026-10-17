@@ -686,4 +686,27 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
             self.assertEqual(self.inventario.stock, 3)
 
+    def test_crear_preferencia_prioriza_init_point_sobre_sandbox_init_point(self):
+        """Verifica que crear_preferencia entrega init_point para evitar el error /fatal/ de sandbox_init_point."""
+        from ecommerce.infrastructure.ventas.payment_services import MercadoPagoAdapter
+        adapter = MercadoPagoAdapter(access_token="TEST-12345678-abcd", webhook_secret="test_secret")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = {
+            "id": "pref-123",
+            "init_point": "https://www.mercadopago.cl/checkout/v1/redirect?pref_id=pref-123",
+            "sandbox_init_point": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=pref-123",
+        }
+
+        with patch("requests.post", return_value=mock_resp):
+            pref = adapter.crear_preferencia(
+                orden_id="42",
+                monto=10000,
+                back_urls={"success": "http://localhost:8000/api/ventas/mercadopago/retorno/?orden=42"},
+            )
+            # Debe entregar la URL unificada de init_point (no la de sandbox que falla en /fatal/)
+            self.assertEqual(pref.url_pago, "https://www.mercadopago.cl/checkout/v1/redirect?pref_id=pref-123")
+            self.assertEqual(pref.preference_id, "pref-123")
+
 

@@ -30,7 +30,7 @@ Mercado Pago requiere credenciales de prueba para operar en modo Sandbox. Para c
    * **Webhook Secret:** `secreto_prueba_123`
 4. Guarda los cambios. *(Las credenciales se guardan automáticamente cifradas con AES en PostgreSQL).*
 
-> **Nota técnica:** Cuando el backend detecta `DEBUG=True`, el sistema utiliza automáticamente `sandbox_init_point`. Esto permite abrir la pasarela en el entorno de pruebas oficial de Mercado Pago sin generar cobros reales ni exigir tarjetas bancarias verdaderas.
+> **Nota técnica:** El backend entrega la URL oficial unificada `init_point` de Mercado Pago. Al utilizar credenciales y cuentas de prueba TEST, Mercado Pago reconoce automáticamente el entorno de pruebas en su pasarela vigente, permitiendo pagar directamente desde el botón del checkout con las tarjetas ficticias oficiales sin caídas de servidor ni sustituciones manuales de URL.
 
 ---
 

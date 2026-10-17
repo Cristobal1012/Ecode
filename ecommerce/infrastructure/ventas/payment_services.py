@@ -217,12 +217,10 @@ class MercadoPagoAdapter(PaymentGateway):
             raise ErrorPasarelaPago(f"No se pudo crear la preferencia de Mercado Pago: {exc}") from exc
 
         pref_id = str(data.get("id") or "")
-        # En desarrollo local (DEBUG=True) o con tokens que inicien en TEST-, usamos sandbox_init_point
-        # para que Mercado Pago abra en Sandbox y reconozca las tarjetas de prueba ficticias.
-        if (getattr(settings, 'DEBUG', False) or self.access_token.startswith("TEST-")) and data.get("sandbox_init_point"):
-            url_pago = data.get("sandbox_init_point")
-        else:
-            url_pago = data.get("init_point") or data.get("sandbox_init_point") or ""
+        # En el flujo vigente de Mercado Pago con cuentas TEST y producción, init_point
+        # reconoce automáticamente las credenciales de prueba y procesa las tarjetas ficticias
+        # oficiales sin redirigir al subdominio legacy sandbox que colapsa con error fatal.
+        url_pago = data.get("init_point") or data.get("sandbox_init_point") or ""
 
         if not pref_id or not url_pago:
             raise ErrorPasarelaPago("Mercado Pago no devolvió una URL de pago válida.")

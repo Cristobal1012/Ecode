@@ -89,7 +89,7 @@ MEDIOS_PAGO = (
         
         # CONFIGURACIÓN DE LINKIFY 
         CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify', 
-                       opciones=('No', 'Sí')),
+                       opciones=('No', 'Sí'), secreto = True),
         CampoMedioPago('linkify_secret', 'Llave secreta de Linkify', secreto=True,
                        obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),

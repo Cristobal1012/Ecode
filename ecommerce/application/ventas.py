@@ -309,7 +309,7 @@ class ConfirmarPago:
 
         self.ordenes.completar_pago(orden.id)
         if self.orden_transporte:
-            self.orden_transporte.generar_orden_transporte(envio)
+            self.orden_transporte.generar_orden_transporte(orden.id)
         self._notificar(orden.id, EventoPedido.PAGO_APROBADO)
         return ResultadoPago.PAGADO
 

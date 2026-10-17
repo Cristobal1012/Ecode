@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useId, useState } from 'react';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
@@ -6,14 +6,19 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [mensaje, setMensaje] = useState(null);
   const [cantidad, setCantidad] = useState(1); // Nuevo estado para manejar la cantidad
   const [agregando, setAgregando] = useState(false);
+  // Prefijo único para los ids de los títulos de cada grupo de atributos
+  const idBase = useId();
 
-  // Reinicia la selección cuando cambia el producto (no cuando solo se actualiza su stock)
+  // Reinicia la selección cuando cambia el producto (no cuando solo se actualiza su stock).
+  // Se ajusta durante el render, como recomienda React, en vez de usar un efecto.
   const productoId = producto?.id;
-  useEffect(() => {
+  const [productoAnterior, setProductoAnterior] = useState(productoId);
+  if (productoId !== productoAnterior) {
+    setProductoAnterior(productoId);
     setAtributosSeleccionados({});
     setMensaje(null);
     setCantidad(1);
-  }, [productoId]);
+  }
 
   const error = (texto) => setMensaje({ tipo: 'error', texto });
 
@@ -139,19 +144,25 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
   return (
     <div>
-      {nombresAtributos.map((atributo) => (
+      {nombresAtributos.map((atributo, indice) => (
         <div key={atributo} style={{ marginBottom: '15px' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>
+          <h3 id={`${idBase}-atributo-${indice}`} style={{ fontSize: '1.1rem', marginBottom: '10px' }}>
             {atributo.charAt(0).toUpperCase() + atributo.slice(1)}:
           </h3>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div
+            role="group"
+            aria-labelledby={`${idBase}-atributo-${indice}`}
+            style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+          >
             {obtenerValores(atributo).map((valor) => {
               const seleccionado = atributosSeleccionados[atributo] === valor;
 
               return (
                 <button
                   key={valor}
+                  type="button"
+                  aria-pressed={seleccionado}
                   onClick={() => seleccionarAtributo(atributo, valor)}
                   style={{
                     padding: '8px 16px',

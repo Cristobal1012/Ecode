@@ -557,4 +557,133 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertTrue(respuesta.json()["pagado"])
             self.assertTrue(respuesta.json()["requiere_revision"])
 
+    def test_retorno_pago_con_referencia_vacia_no_aprueba_ni_altera_orden(self):
+        """Un pago aprobado con external_reference vacía NO debe aprobar, rechazar ni alterar la orden 42."""
+        pago_sin_ref = PagoConsultado(payment_id="801", orden_id="", estado="approved", monto=Decimal("10000"))
+        pasarela = FakePaymentGateway(self.secret, pago_sin_ref)
+
+        mock_orden = MagicMock()
+        mock_orden.id = 42
+        mock_orden.estado = EstadoPedido.PENDIENTE
+        mock_orden.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden
+
+            respuesta = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-cancelado", respuesta.headers["Location"])
+            # La orden debe seguir en estado PENDIENTE y el stock intacto (5)
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
+            self.assertEqual(self.inventario.stock, 5)
+
+    def test_retorno_pago_con_referencia_nula_no_aprueba_ni_altera_orden(self):
+        """Un pago con external_reference None NO debe aprobar ni alterar la orden 42."""
+        pago_ref_nula = PagoConsultado(payment_id="801", orden_id=None, estado="approved", monto=Decimal("10000"))
+        pasarela = FakePaymentGateway(self.secret, pago_ref_nula)
+
+        mock_orden = MagicMock()
+        mock_orden.id = 42
+        mock_orden.estado = EstadoPedido.PENDIENTE
+        mock_orden.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden
+
+            respuesta = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-cancelado", respuesta.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
+            self.assertEqual(self.inventario.stock, 5)
+
+    def test_retorno_pago_con_referencia_diferente_no_aprueba_ni_altera_orden(self):
+        """Un pago con external_reference='99' NO debe asociarse a la orden 42."""
+        pago_otra_orden = PagoConsultado(payment_id="801", orden_id="99", estado="approved", monto=Decimal("10000"))
+        pasarela = FakePaymentGateway(self.secret, pago_otra_orden)
+
+        mock_orden = MagicMock()
+        mock_orden.id = 42
+        mock_orden.estado = EstadoPedido.PENDIENTE
+        mock_orden.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden
+
+            respuesta = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-cancelado", respuesta.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
+            self.assertEqual(self.inventario.stock, 5)
+
+    def test_retorno_pago_con_referencia_coincidente_aprueba_orden(self):
+        """Un pago con external_reference='42' coincidente aprueba la orden y descuenta stock."""
+        pago_correcto = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pasarela = FakePaymentGateway(self.secret, pago_correcto)
+
+        mock_orden = MagicMock()
+        mock_orden.id = 42
+        mock_orden.estado = EstadoPedido.PENDIENTE
+        mock_orden.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden
+
+            respuesta = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(respuesta.status_code, 302)
+            self.assertIn("/pago-exitoso?orden=42", respuesta.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
+            self.assertEqual(self.inventario.stock, 3)
+
+    def test_retorno_referencia_coincidente_para_invitado_y_registrado(self):
+        """Verifica que el retorno seguro funciona tanto para invitado como para usuario registrado."""
+        pago_correcto = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pasarela = FakePaymentGateway(self.secret, pago_correcto)
+
+        # 1. Comprador Invitado
+        mock_orden_invitado = MagicMock()
+        mock_orden_invitado.id = 42
+        mock_orden_invitado.estado = EstadoPedido.PENDIENTE
+        mock_orden_invitado.email_invitado = "invitado@correo.com"
+        mock_orden_invitado.usuario = None
+        mock_orden_invitado.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden_invitado
+
+            res_invitado = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(res_invitado.status_code, 302)
+            self.assertIn("/pago-exitoso?orden=42", res_invitado.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
+
+        # 2. Comprador Registrado
+        self.repo_ordenes.orden = self.orden_inicial
+        self.inventario.stock = 5
+        mock_orden_registrado = MagicMock()
+        mock_orden_registrado.id = 42
+        mock_orden_registrado.estado = EstadoPedido.PENDIENTE
+        mock_orden_registrado.email_invitado = ""
+        mock_orden_registrado.usuario = MagicMock(id=10, email="registrado@correo.com")
+        mock_orden_registrado.requiere_revision = False
+
+        with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
+             patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
+            mock_filter.return_value.first.return_value = mock_orden_registrado
+
+            res_registrado = self.client.get("/api/ventas/mercadopago/retorno/?orden=42&payment_id=801")
+            self.assertEqual(res_registrado.status_code, 302)
+            self.assertIn("/pago-exitoso?orden=42", res_registrado.headers["Location"])
+            self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
+            self.assertEqual(self.inventario.stock, 3)
+
 

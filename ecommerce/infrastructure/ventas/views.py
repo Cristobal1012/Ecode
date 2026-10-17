@@ -491,18 +491,31 @@ class MercadoPagoRetornoView(APIView):
                 sufijo = f"?orden={orden_id}" if orden_id else ""
                 return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
 
-            # Validar que el pago pertenezca a la orden indicada (anti-hijacking)
-            if pago.orden_id:
-                if orden_id and str(pago.orden_id) != str(orden_id):
-                    logger.warning(
-                        "Discrepancia de orden en retorno de Mercado Pago: URL=%s vs MP=%s",
-                        orden_id, pago.orden_id
-                    )
-                    return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
-                orden_id = pago.orden_id
+            # Validar pertenencia estricta del pago a la orden (anti-hijacking y Zero-Trust):
+            # Un pago sin external_reference (vacía o nula) o con referencia a otra orden NO debe
+            # aprobar, rechazar ni cancelar la orden indicada en la URL.
+            pago_orden_id = str(pago.orden_id or "").strip()
+            if not pago_orden_id:
+                logger.warning(
+                    "Pago %s de Mercado Pago no tiene external_reference válida; no se puede asociar a la orden %s",
+                    payment_id, orden_id
+                )
+                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
 
+            if orden_id and str(pago_orden_id) != str(orden_id):
+                logger.warning(
+                    "Discrepancia de orden en retorno de Mercado Pago: URL=%s vs MP=%s",
+                    orden_id, pago_orden_id
+                )
+                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
+
+            orden_id = pago_orden_id
             if orden is None and orden_id.isdigit():
-                orden = OrdenCompra.objects.filter(id=orden_id).first()
+                orden = OrdenCompra.objects.filter(id=int(orden_id)).first()
+
+            if not orden:
+                logger.warning("Orden %s asociada al pago %s no existe", orden_id, payment_id)
+                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
 
             caso = confirmar_pago()
             if pago.estado == 'approved':

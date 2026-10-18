@@ -68,7 +68,9 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
-             'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen'}
+             'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
+             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'instagram_usuario',
+             *(f'instagram_foto_{numero}' for numero in range(1, 7))}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -134,6 +136,11 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'nosotros_titulo': '',
             'nosotros_texto': '',
             'nosotros_imagen': None,
+            'correo_contacto': '',
+            'horario_atencion': '',
+            'mostrar_direccion_pie': False,
+            'instagram_usuario': '',
+            **{f'instagram_foto_{numero}': None for numero in range(1, 7)},
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):

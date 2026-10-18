@@ -55,6 +55,19 @@ class ConfiguracionGlobal(models.Model):
     nosotros_imagen = models.ImageField(upload_to='negocio/nosotros/', blank=True, null=True)
     banner_url = models.URLField(max_length=500, blank=True, null=True)
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
+    # Contacto y redes: van en el pie de página. La dirección es la del local (arriba) y solo se publica si
+    # el admin lo elige o si hay retiro en local (domain/contacto.py)
+    correo_contacto = models.EmailField(blank=True, default='')
+    horario_atencion = models.TextField(blank=True, default='')
+    mostrar_direccion_pie = models.BooleanField(default=False)
+    # Sección de Instagram de la landing: sin usuario no se muestra; las fotos las sube el admin (no es el feed)
+    instagram_usuario = models.CharField(max_length=30, blank=True, default='')
+    instagram_foto_1 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
+    instagram_foto_2 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
+    instagram_foto_3 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
+    instagram_foto_4 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
+    instagram_foto_5 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
+    instagram_foto_6 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
     modo_autenticacion = models.CharField(
         max_length=25, 
         choices=MODOS_AUTENTICACION, 

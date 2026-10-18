@@ -19,6 +19,7 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.medios_pago import MedioPagoNoDisponible
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -40,6 +41,10 @@ from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
     return MediosPagoDisponibles(DjangoRepositorioMediosPago())
+
+
+CAMPOS_FOTOS_INSTAGRAM = tuple(f'instagram_foto_{numero}' for numero in range(1, 7))
+CAMPOS_DIRECCION_LOCAL = ('calle_origen', 'numero_origen', 'dpto_casa_origen', 'comuna_origen', 'region_origen')
 
 
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
@@ -78,7 +83,21 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'nosotros_titulo',
             'nosotros_texto',
             'nosotros_imagen',
+            # Contacto y redes: pie de página y sección de Instagram
+            'correo_contacto',
+            'horario_atencion',
+            'mostrar_direccion_pie',
+            'instagram_usuario',
+            *CAMPOS_FOTOS_INSTAGRAM,
         ]
+
+    def to_representation(self, instance):
+        datos = super().to_representation(instance)
+        # Sin retiro en local y sin mostrarla en el pie, la dirección del local no se publica
+        if not direccion_es_publica(instance.retiro_en_local_activo, instance.mostrar_direccion_pie):
+            for campo in CAMPOS_DIRECCION_LOCAL:
+                datos.pop(campo, None)
+        return datos
 
     def get_google_client_id(self, obj):
         return settings.GOOGLE_CLIENT_ID
@@ -95,7 +114,7 @@ class ImagenNegocioField(ArchivoImagenField):
         return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
 
 
-CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen')
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM)
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
@@ -104,8 +123,17 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     favicon = ImagenNegocioField(required=False, allow_null=True)
     banner = ImagenNegocioField(required=False, allow_null=True)
     nosotros_imagen = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_1 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_2 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_3 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_4 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_5 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_6 = ImagenNegocioField(required=False, allow_null=True)
     texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
     nosotros_texto = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    horario_atencion = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    # Se acepta '@usuario' o el enlace al perfil; se guarda solo el usuario
+    instagram_usuario = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
     class Meta:
         model = ConfiguracionGlobal
@@ -133,7 +161,18 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'correo_contacto',
+            'horario_atencion',
+            'mostrar_direccion_pie',
+            'instagram_usuario',
+            *CAMPOS_FOTOS_INSTAGRAM,
         ]
+
+    def validate_instagram_usuario(self, valor):
+        try:
+            return normalizar_usuario_instagram(valor)
+        except UsuarioInstagramInvalido as error:
+            raise serializers.ValidationError(str(error))
 
     def update(self, instance, validated_data):
         # Al reemplazar o quitar una imagen se borra el archivo anterior, para no dejar archivos huérfanos

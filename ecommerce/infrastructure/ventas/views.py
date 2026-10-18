@@ -1271,19 +1271,3 @@ class PromocionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdministrador]
     queryset = Promocion.objects.all()
     serializer_class = PromocionSerializer
-
-
-class ValidarCuponView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        codigo = request.data.get('codigo', '').strip().upper()
-        if not codigo:
-            return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
-
-        promocion = Promocion.objects.filter(codigo=codigo, is_active=True).first()
-        if not promocion:
-            return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = PromocionSerializer(promocion)
-        return Response(serializer.data, status=status.HTTP_200_OK)

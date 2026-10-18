@@ -278,6 +278,56 @@ describe('Checkout', () => {
     });
   });
 
+  it('envía al checkout el cupón que validó el servidor para que lo descuente del total', async () => {
+    postMock.mockImplementation((url) => (url === 'ventas/promociones/validar/'
+      ? Promise.resolve({ data: { codigo: 'VERANO20', tipo_descuento: 'PORCENTAJE', valor_descuento: 20,
+                                  descuento: 3000, umbral_envio_gratis: null } })
+      : Promise.resolve({ data: {} })));
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    fireEvent.change(screen.getByPlaceholderText(/cupón de descuento/i), { target: { value: 'verano20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+      'ventas/promociones/validar/', { codigo: 'VERANO20', subtotal: 15000 }));
+    expect(await screen.findByText('-$3.000')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+      'ventas/checkout/', expect.objectContaining({ codigo_promocion: 'VERANO20' })));
+  });
+
+  it('un cupón rechazado por el servidor no descuenta ni viaja en el checkout', async () => {
+    postMock.mockImplementation((url) => (url === 'ventas/promociones/validar/'
+      ? Promise.reject({ response: { data: { error: 'Código inválido o expirado.' } } })
+      : Promise.resolve({ data: {} })));
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    fireEvent.change(screen.getByPlaceholderText(/cupón de descuento/i), { target: { value: 'VENCIDO' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+
+    expect(await screen.findByText('Código inválido o expirado.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Descuento/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+      'ventas/checkout/', expect.objectContaining({ codigo_promocion: null })));
+  });
+
   ///////////////////////////
   it('muestra todos los medios de pago configurados', async () => {
     prepararRespuestas({

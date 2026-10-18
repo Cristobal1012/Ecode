@@ -90,10 +90,9 @@ function CheckoutContenido() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
-    const [codigoCupon, setCodigoCupon] = useState('');
+    // Vista previa del cupón ({ tipo, valor, codigo }) y el código que se envía al checkout
     const [descuentoAplicado, setDescuentoAplicado] = useState(null);
     const [codigoValidado, setCodigoValidado] = useState(null);
-    const [mensajeCupon, setMensajeCupon] = useState('');
     const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
     const [codigoInput, setCodigoInput] = useState('');
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opcion: null, error: '' });
@@ -336,35 +335,11 @@ function CheckoutContenido() {
 
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
 
-    const aplicarCodigo = async () => {
-        if (!codigoInput.trim()) return;
-
-        try {
-            const respuesta = await clienteAxios.post('ventas/checkout/validar-cupon/', { 
-            codigo: codigoInput.trim().toUpperCase() 
-            });
-            
-            setDescuentoAplicado({ 
-            tipo: respuesta.data.tipo_descuento, 
-            valor: Number(respuesta.data.valor_descuento), 
-            codigo: respuesta.data.codigo 
-            });
-            setMensaje('¡Código aplicado con Éxito!');
-            
-        } catch (error) {
-            setDescuentoAplicado(null);
-            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
-        }
-    };
-
-
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
     let montoDescuento = 0;
     if (descuentoAplicado) {
-        if (typeof descuentoAplicado === 'number') {
-            montoDescuento = descuentoAplicado;
-        } else if (descuentoAplicado.tipo === 'PORCENTAJE') {
+        if (descuentoAplicado.tipo === 'PORCENTAJE') {
             montoDescuento = subtotal * (descuentoAplicado.valor / 100);
         } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
             montoDescuento = descuentoAplicado.valor;
@@ -372,45 +347,36 @@ function CheckoutContenido() {
     }
 
     const tieneEnvioGratisCupon = Boolean(
-        (codigoValidado || descuentoAplicado?.codigo) &&
+        codigoValidado &&
         umbralEnvioGratis !== null &&
         subtotal >= umbralEnvioGratis
     );
     const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
     const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
 
-    const aplicarCupon = async () => {
-        if (!codigoCupon.trim()) {
-            setDescuentoAplicado(0);
-            setCodigoValidado(null);
-            setUmbralEnvioGratis(null);
-            setMensajeCupon('');
-            return;
-        }
-        setMensajeCupon('Validando...');
-        try {
-            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { 
-                codigo: codigoCupon,
-                subtotal: subtotal 
-            });
-            
-            setDescuentoAplicado(respuesta.data.descuento);
-            setCodigoValidado(codigoCupon);
-            const umbral = respuesta.data.umbral_envio_gratis;
-            const tieneUmbral = umbral !== undefined && umbral !== null;
-            const valorUmbral = tieneUmbral ? Number(umbral) : null;
-            setUmbralEnvioGratis(valorUmbral);
+    // El cupón se valida en el servidor (vigencia incluida) y su código viaja en el checkout, donde el
+    // servidor vuelve a validarlo y lo descuenta del total: lo que se muestra aquí es solo una vista previa
+    const aplicarCodigo = async () => {
+        const codigo = codigoInput.trim().toUpperCase();
+        if (!codigo) return;
 
-            let msg = `¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`;
-            if (tieneUmbral && subtotal >= valorUmbral) {
-                msg += ' + Envío gratis incluido';
-            }
-            setMensajeCupon(msg);
+        try {
+            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
+            const umbral = respuesta.data.umbral_envio_gratis;
+
+            setDescuentoAplicado({
+                tipo: respuesta.data.tipo_descuento,
+                valor: Number(respuesta.data.valor_descuento),
+                codigo: respuesta.data.codigo
+            });
+            setCodigoValidado(respuesta.data.codigo);
+            setUmbralEnvioGratis(umbral === null || umbral === undefined ? null : Number(umbral));
+            setMensaje('¡Código aplicado con Éxito!');
         } catch (error) {
-            setDescuentoAplicado(0);
+            setDescuentoAplicado(null);
             setCodigoValidado(null);
             setUmbralEnvioGratis(null);
-            setMensajeCupon(error.response?.data?.error || 'Código inválido o expirado.');
+            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
     const procesarPago = async (metodoSeleccionado) => {

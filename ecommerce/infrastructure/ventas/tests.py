@@ -62,7 +62,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
             set(data),
             {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'layout_catalogo',
-             'pasarelas_activas', 'modo_autenticacion',
+             'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
              'google_analytics_id', 'meta_pixel_id'}
@@ -111,6 +111,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'tema_seleccionado': 1,
             'layout_catalogo': 'GRID_3',
             'pasarelas_activas': [],
+            'google_analytics_id': None,
+            'meta_pixel_id': None,
             'modo_autenticacion': 'MIXTO',
             'comuna_origen': 'Santiago',
             'region_origen': 'Metropolitana',

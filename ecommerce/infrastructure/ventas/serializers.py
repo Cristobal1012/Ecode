@@ -2,10 +2,12 @@ from decimal import Decimal
 import uuid
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
+from .models import Promocion
 
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
@@ -23,7 +25,7 @@ from ecommerce.domain.ventas import (
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
@@ -31,6 +33,7 @@ from .html_seguro import limpiar_html, tiene_texto
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
+from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
@@ -173,6 +176,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
+    codigo_promocion = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
     # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
@@ -198,6 +202,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'proveedor_logistico',
             'acepta_terminos',
             'items',
+            'codigo_promocion',
         ]
 
     def validate_acepta_terminos(self, value):
@@ -290,10 +295,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context.get('request')
         validated_data.pop('acepta_terminos')
         validated_data.pop('items')
+        codigo_promo = validated_data.pop('codigo_promocion', None)
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
@@ -323,9 +330,35 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
             costo_envio = float(resultado['precio'])
 
-        # El total siempre lo calcula el servidor: subtotal validado contra el catálogo + envío cotizado
+        # APLICAR PROMOCION Y VALIDAR EL CUPON
+        subtotal_num = float(validated_data['subtotal'])
+        descuento = 0.0
+        promo_aplicada = None
+
+        if codigo_promo:
+            promo = Promocion.objects.filter(
+                codigo__iexact=codigo_promo.strip(), is_active=True
+            ).first()
+            if not promo or not promo.esta_vigente:
+                raise serializers.ValidationError({
+                    'codigo_promocion': 'El cupón ingresado no es válido o ya expiró.'
+                })
+
+            if promo.tipo_descuento == 'PORCENTAJE':
+                descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
+            else:
+                descuento = float(promo.valor_descuento)
+            descuento = min(descuento, subtotal_num)
+            descuento = max(0.0, descuento)
+
+            if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
+                costo_envio = 0.0
+
+            promo_aplicada = promo
+
+        # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
         validated_data['costo_envio'] = costo_envio
-        validated_data['total_final'] = float(validated_data['subtotal']) + costo_envio
+        validated_data['total_final'] = max(0.0, (subtotal_num - descuento) + costo_envio)
         # La orden de transporte se genera con el mismo paquete que se cotizó
         validated_data['paquete'] = (
             {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
@@ -377,13 +410,56 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
                 })
 
+        elif metodo_pago == 'MERCADO_PAGO':
+            if request:
+                host = request.get_host()
+                scheme = request.scheme
+                base_retorno = f"{scheme}://{host}/api/ventas/mercadopago/retorno/"
+                webhook_url = f"{scheme}://{host}/api/ventas/mercadopago/webhook/"
+            else:
+                base_retorno = "http://localhost:8000/api/ventas/mercadopago/retorno/"
+                webhook_url = "http://localhost:8000/api/ventas/mercadopago/webhook/"
+
+            # Mercado Pago rechaza notification_url si es localhost; solo la enviamos si es una URL pública
+            notification_url = (
+                webhook_url
+                if "localhost" not in webhook_url and "127.0.0.1" not in webhook_url
+                else ""
+            )
+
+            back_urls = {
+                "success": f"{base_retorno}?resultado=success&orden={orden.id}",
+                "failure": f"{base_retorno}?resultado=failure&orden={orden.id}",
+                "pending": f"{base_retorno}?resultado=pending&orden={orden.id}",
+            }
+
+            try:
+                preferencia = MercadoPagoAdapter().crear_preferencia(
+                    orden_id=str(orden.id),
+                    monto=orden.total_final,
+                    back_urls=back_urls,
+                    notification_url=notification_url,
+                )
+                url_pago = preferencia.url_pago
+                orden.id_transaccion_pasarela = preferencia.preference_id
+                orden.save()
+            except ErrorPasarelaPago as exc:
+                orden.delete()
+                raise serializers.ValidationError({
+                    "metodo_pago": f"No se pudo iniciar el pago con Mercado Pago: {exc}"
+                })
+
+        # Desactivamos el cupón solo después de que la orden y la pasarela se iniciaron exitosamente
+        if promo_aplicada:
+            promo_aplicada.is_active = False
+            promo_aplicada.save()
+
         # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
         notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)
 
         # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
         orden.url_pago = url_pago
         return orden
-
         
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
@@ -549,3 +625,8 @@ def chilexpress_para_panel(credenciales):
                    for nombre, etiqueta, obligatorio in credenciales.CAMPOS],
         'datos': credenciales.visibles(),
     }
+
+class PromocionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Promocion
+        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'is_active']

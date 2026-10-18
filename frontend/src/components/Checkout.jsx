@@ -79,6 +79,12 @@ function CheckoutContenido() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
+    const [codigoCupon, setCodigoCupon] = useState('');
+    const [descuentoAplicado, setDescuentoAplicado] = useState(null);
+    const [codigoValidado, setCodigoValidado] = useState(null);
+    const [mensajeCupon, setMensajeCupon] = useState('');
+    const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
+    const [codigoInput, setCodigoInput] = useState('');
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opcion: null, error: '' });
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
@@ -89,7 +95,63 @@ function CheckoutContenido() {
     const avisosCarrito = revisionCarrito.snapshot === leerSnapshotCarrito() ? revisionCarrito.avisos : [];
 
     const usuarioAutenticado = !!localStorage.getItem('access_token');
+    const [esperandoPago, setEsperandoPago] = useState(null);
+    const [verificando, setVerificando] = useState(false);
+    const [procesandoPago, setProcesandoPago] = useState(false);
     const navigate = useNavigate();
+
+    const verificarEstadoOrden = useCallback(async (idOrden) => {
+        if (!idOrden) return;
+        setVerificando(true);
+        try {
+            const res = await clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${idOrden}`);
+            if (res.data.pagado) {
+                localStorage.removeItem('carrito_local');
+                localStorage.removeItem('orden_pendiente_pago');
+                window.dispatchEvent(new Event('carritoActualizado'));
+                if (usuarioAutenticado) {
+                    try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch { /* vaciado silencioso */ }
+                }
+                const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
+                navigate(`/pago-exitoso?orden=${idOrden}${sufijoRevision}`);
+            } else if (res.data.cancelado) {
+                setEsperandoPago(null);
+                localStorage.removeItem('orden_pendiente_pago');
+                setMensaje('La orden fue cancelada o rechazada.');
+            }
+        } catch (err) {
+            console.error('Error verificando pago:', err);
+        } finally {
+            setVerificando(false);
+        }
+    }, [usuarioAutenticado, navigate]);
+
+    // Polling cada 3 segundos si esperandoPago está activo
+    useEffect(() => {
+        if (!esperandoPago?.ordenId) return;
+        const interval = setInterval(() => {
+            verificarEstadoOrden(esperandoPago.ordenId);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [esperandoPago?.ordenId, verificarEstadoOrden]);
+
+    // Verificación de orden pendiente al cargar la página
+    useEffect(() => {
+        const ordenPendiente = localStorage.getItem('orden_pendiente_pago');
+        if (ordenPendiente) {
+            clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${ordenPendiente}`)
+                .then(res => {
+                    if (res.data.pagado) {
+                        localStorage.removeItem('carrito_local');
+                        localStorage.removeItem('orden_pendiente_pago');
+                        window.dispatchEvent(new Event('carritoActualizado'));
+                        const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
+                        navigate(`/pago-exitoso?orden=${ordenPendiente}${sufijoRevision}`);
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [navigate]);
 
     // 1. CARGA INICIAL: Configuración de la tienda, Pasarelas y Comunas
     useEffect(() => {
@@ -262,10 +324,84 @@ function CheckoutContenido() {
     const inputStyle = { width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box' };
 
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
+
+    const aplicarCodigo = async () => {
+        if (!codigoInput.trim()) return;
+
+        try {
+            const respuesta = await clienteAxios.post('ventas/checkout/validar-cupon/', { 
+            codigo: codigoInput.trim().toUpperCase() 
+            });
+            
+            setDescuentoAplicado({ 
+            tipo: respuesta.data.tipo_descuento, 
+            valor: Number(respuesta.data.valor_descuento), 
+            codigo: respuesta.data.codigo 
+            });
+            setMensaje('¡Código aplicado con Éxito!');
+            
+        } catch (error) {
+            setDescuentoAplicado(null);
+            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
+        }
+    };
+
+
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    const totalFinal = subtotal + costoEnvio;
+    let montoDescuento = 0;
+    if (descuentoAplicado) {
+        if (typeof descuentoAplicado === 'number') {
+            montoDescuento = descuentoAplicado;
+        } else if (descuentoAplicado.tipo === 'PORCENTAJE') {
+            montoDescuento = subtotal * (descuentoAplicado.valor / 100);
+        } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
+            montoDescuento = descuentoAplicado.valor;
+        }
+    }
 
+    const tieneEnvioGratisCupon = Boolean(
+        (codigoValidado || descuentoAplicado?.codigo) &&
+        umbralEnvioGratis !== null &&
+        subtotal >= umbralEnvioGratis
+    );
+    const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
+    const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
+
+    const aplicarCupon = async () => {
+        if (!codigoCupon.trim()) {
+            setDescuentoAplicado(0);
+            setCodigoValidado(null);
+            setUmbralEnvioGratis(null);
+            setMensajeCupon('');
+            return;
+        }
+        setMensajeCupon('Validando...');
+        try {
+            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { 
+                codigo: codigoCupon,
+                subtotal: subtotal 
+            });
+            
+            setDescuentoAplicado(respuesta.data.descuento);
+            setCodigoValidado(codigoCupon);
+            const umbral = respuesta.data.umbral_envio_gratis;
+            const tieneUmbral = umbral !== undefined && umbral !== null;
+            const valorUmbral = tieneUmbral ? Number(umbral) : null;
+            setUmbralEnvioGratis(valorUmbral);
+
+            let msg = `¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`;
+            if (tieneUmbral && subtotal >= valorUmbral) {
+                msg += ' + Envío gratis incluido';
+            }
+            setMensajeCupon(msg);
+        } catch (error) {
+            setDescuentoAplicado(0);
+            setCodigoValidado(null);
+            setUmbralEnvioGratis(null);
+            setMensajeCupon(error.response?.data?.error || 'Código inválido o expirado.');
+        }
+    };
     const procesarPago = async (metodoSeleccionado) => {
         const snapshotPedido = leerSnapshotCarrito();
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
@@ -316,9 +452,11 @@ function CheckoutContenido() {
             }
         }
         
+        if (procesandoPago) return;
         if (snapshotPedido !== leerSnapshotCarrito()) {
             return setMensaje('El carrito cambió. Revisa el resumen antes de pagar.');
         }
+        setProcesandoPago(true);
         setMensaje('Procesando...');
 
         const payload = {
@@ -328,19 +466,28 @@ function CheckoutContenido() {
             telefono_destinatario: telefonoDestinatario.trim(),
             direccion_envio_snapshot: dirSnapshot, 
             subtotal, 
-            costo_envio: costoEnvio, 
+            costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
             proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
             paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada,
             acepta_terminos: aceptaTerminos,
+            codigo_promocion: codigoValidado,
             items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
         };
         try {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
 
             if (respuesta.data.url_pago) {
-                // El carrito se conserva por si el pago se anula; lo vacía PagoExitoso
-                window.location.assign(respuesta.data.url_pago);
+                if (metodoSeleccionado === 'MERCADO_PAGO') {
+                    localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
+                    setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
+                    const ventana = window.open(respuesta.data.url_pago, '_blank');
+                    if (!ventana) {
+                        window.location.assign(respuesta.data.url_pago);
+                    }
+                } else {
+                    window.location.assign(respuesta.data.url_pago);
+                }
             } else {
                 if (snapshotPedido === leerSnapshotCarrito()) await vaciarCarrito();
                 // Sin pasarela (ej. transferencia) la orden queda Pendiente; el invitado no tiene /mis-pedidos
@@ -374,6 +521,8 @@ function CheckoutContenido() {
                 || datos.nombre_destinatario || datos.telefono_destinatario;
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
+        } finally {
+            setProcesandoPago(false);
         }
     };
 
@@ -416,12 +565,57 @@ function CheckoutContenido() {
                     </div>
                 )) : <p>No hay productos</p>}
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}><span>Costo de envío:</span><span>{cotizando ? 'Calculando...' : `$${costoEnvio.toLocaleString('es-CL')}`}</span></div>
-                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
-            </div>
+                
+                {montoDescuento > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#16a34a', fontWeight: 'bold' }}>
+                        <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
+                        <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
+                    </div>
+                )}
 
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}>
+                    <span>Costo de envío:</span>
+                    <span>
+                        {cotizando ? 'Calculando...' : tieneEnvioGratisCupon ? (
+                            <>
+                                {costoEnvio > 0 && (
+                                    <span style={{ textDecoration: 'line-through', color: '#9ca3af', marginRight: '6px' }}>
+                                        ${costoEnvio.toLocaleString('es-CL')}
+                                    </span>
+                                )}
+                                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>$0 (Envío gratis)</span>
+                            </>
+                        ) : `$${costoEnvio.toLocaleString('es-CL')}`}
+                    </span>
+                </div>
+
+                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+
+                
+                <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
+                    <input
+                    className="input-cupon"
+                    type="text"
+                    placeholder="Cupón de descuento"
+                    value={codigoInput}
+                    onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
+                    style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}
+                    />
+                    <button
+                    type="button"
+                    onClick={aplicarCodigo}
+                    style={{ padding: '10px 16px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                    Aplicar
+                    </button>
+                </div>
+
+            </div>
+                
             <form onSubmit={(e) => e.preventDefault()}>
                 {compraComoInvitado && (
                     <div style={{ marginBottom: '20px' }}>
@@ -453,16 +647,16 @@ function CheckoutContenido() {
                         <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
                     </legend>
                     <div className="checkout-fila" style={{ display: 'flex', gap: '10px' }}>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
                             <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
                             A Domicilio
                         </label>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
                             <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
                             Sucursal Chilexpress
                         </label>
                         {configTienda?.retiro_en_local_activo && (
-                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
                                 <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => setTipoDespacho('RETIRO_LOCAL')} className="checkout-radio-oculto" />
                                 Retiro en Local
                             </label>
@@ -477,7 +671,7 @@ function CheckoutContenido() {
                             <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
                                 <legend className="checkout-solo-lector">Dirección de envío</legend>
                                 {direccionesGuardadas.map(dir => (
-                                    <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid #007BFF' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
+                                    <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid var(--color-primary, #007BFF)' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
                                         <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => setDireccionSeleccionadaId(dir.id)} style={{ marginRight: '10px' }} />
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</div>
@@ -485,7 +679,7 @@ function CheckoutContenido() {
                                         </div>
                                     </label>
                                 ))}
-                                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid #007BFF' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid var(--color-primary, #007BFF)' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
                                     <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => setDireccionSeleccionadaId('nueva')} style={{ marginRight: '10px' }} />
                                     <span style={{ fontWeight: 'bold' }}>Ingresar una nueva dirección</span>
                                 </label>
@@ -542,7 +736,7 @@ function CheckoutContenido() {
                         </div>
                         
                         {cargandoSucursales ? (
-                            <p style={{ color: '#007BFF', fontSize: '0.9rem' }}>Buscando oficinas disponibles...</p>
+                            <p style={{ color: 'var(--color-primary)', fontSize: '0.9rem' }}>Buscando oficinas disponibles...</p>
                         ) : comunaSucursal && sucursalesDisponibles.length === 0 ? (
                             <div style={{ padding: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', color: '#991b1b', fontSize: '0.9rem' }}>
                                 Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
@@ -579,7 +773,7 @@ function CheckoutContenido() {
                     <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
                         <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Costo Logístico</h3>
                         {opcionesEntrega.map((opcion) => (
-                            <div key={opcion.proveedor} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '2px solid #007BFF', borderRadius: '6px', backgroundColor: '#f0f7ff' }}>
+                            <div key={opcion.proveedor} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '2px solid #111827', borderRadius: '6px', backgroundColor: '#F9FAFB' }}>
                                 <div>
                                     <strong>{opcion.nombre}</strong>
                                     <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -606,12 +800,13 @@ function CheckoutContenido() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {pasarelas.map(pasarela => {
                                 const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const habilitado = validadoParaPagar && !procesandoPago;
                                 return (
                                     <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!validadoParaPagar}
-                                        style={{ width: '100%', padding: '12px', backgroundColor: validadoParaPagar ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: validadoParaPagar ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
+                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
+                                        style={{ width: '100%', padding: '12px', backgroundColor: habilitado ? 'var(--color-primary, #007BFF)' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: habilitado ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
                                     >
-                                        Pagar con {NOMBRES_MEDIO_PAGO[pasarela] || pasarela}
+                                        {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
                                 );
                             })}
@@ -619,6 +814,66 @@ function CheckoutContenido() {
                     )}
                 </div>
             </form>
+
+            {esperandoPago && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', zIndex: 99999, padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff', borderRadius: '12px', padding: '30px',
+                        maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
+                    }}>
+                        <div style={{ width: '64px', height: '64px', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 16px auto' }}>
+                            💳
+                        </div>
+                        <h2 style={{ margin: '0 0 10px 0', fontSize: '1.4rem', color: '#111827' }}>
+                            Completando pago en Mercado Pago
+                        </h2>
+                        <p style={{ color: '#4b5563', fontSize: '0.95rem', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                            Se abrió la ventana de Mercado Pago para la <strong>Orden #{esperandoPago.ordenId}</strong>.
+                            Completa tu pago allá. Esta pantalla detectará tu pago automáticamente tan pronto como se acredite.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => verificarEstadoOrden(esperandoPago.ordenId)}
+                                disabled={verificando}
+                                style={{
+                                    padding: '12px 20px', backgroundColor: '#0284c7', color: 'white',
+                                    border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer'
+                                }}
+                            >
+                                {verificando ? 'Consultando a Mercado Pago...' : 'Ya pagué (Verificar mi pago)'}
+                            </button>
+                            <a
+                                href={esperandoPago.urlPago}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    padding: '10px', color: '#4b5563', fontSize: '0.9rem', textDecoration: 'underline'
+                                }}
+                            >
+                                ¿Se cerró la ventana? Abrir Mercado Pago de nuevo
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEsperandoPago(null);
+                                    localStorage.removeItem('orden_pendiente_pago');
+                                }}
+                                style={{
+                                    padding: '8px', backgroundColor: 'transparent', color: '#9ca3af',
+                                    border: 'none', fontSize: '0.85rem', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar y volver al checkout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

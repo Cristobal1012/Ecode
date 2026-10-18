@@ -74,8 +74,7 @@ MEDIOS_PAGO = (
         CampoMedioPago('access_token', 'Access token', secreto=True),
         # Valida la firma x-signature de las notificaciones (webhooks)
         CampoMedioPago('webhook_secret', 'Clave secreta de notificaciones', secreto=True),
-    # TODO(PENDIENTE): pasar a True al terminar la integración con Mercado Pago (tarea de Checkout Pro)
-    ), integracion_lista=False),
+    ), integracion_lista=True),
     DefinicionMedioPago(CodigoMedioPago.TRANSFERENCIA, 'Transferencia bancaria', (
         # Datos que ve el comprador para transferir: no son secretos
         CampoMedioPago('banco', 'Banco'),
@@ -85,9 +84,14 @@ MEDIOS_PAGO = (
         CampoMedioPago('rut_titular', 'RUT del titular'),
         CampoMedioPago('nombre_titular', 'Nombre del titular'),
         CampoMedioPago('email', 'Correo para el comprobante'),
+        
+        # CONFIGURACIÓN DE LINKIFY 
+        CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify', 
+                       opciones=('No', 'Sí'), secreto = True),
+        CampoMedioPago('linkify_secret', 'Llave secreta de Linkify', secreto=True,
+                       obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),
 )
-
 
 def definicion_medio(codigo) -> DefinicionMedioPago:
     codigo = CodigoMedioPago(codigo)

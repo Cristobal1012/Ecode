@@ -95,6 +95,13 @@ export default function DetalleProducto() {
       item => item.sku === varianteSeleccionada.sku
     );
     const enCarrito = existente ? Number(existente.cantidad) : 0;
+    const tieneOferta = varianteSeleccionada.precio_oferta != null &&
+      Number(varianteSeleccionada.precio_oferta) > 0 &&
+      Number(varianteSeleccionada.precio_oferta) < Number(varianteSeleccionada.precio);
+    const precioEfectivo = tieneOferta 
+      ? Number(varianteSeleccionada.precio_oferta) 
+      : Number(varianteSeleccionada.precio);
+
     const atributos = varianteSeleccionada.atributos_variables || {};
 
     const detalleAtributos = Object.entries(atributos)
@@ -108,7 +115,7 @@ export default function DetalleProducto() {
         ? `${producto.nombre} · ${detalleAtributos}`
         : producto.nombre,
       atributos,
-      precio: varianteSeleccionada.precio,
+      precio: precioEfectivo,
       cantidad: enCarrito + cantidadSeleccionada
     };
 
@@ -127,9 +134,13 @@ export default function DetalleProducto() {
       return { ok: false, mensaje: `${revisada.mensaje}${yaTienes}` };
     }
 
+    const precioConfirmado = (revisada?.precio !== undefined && revisada?.precio !== null)
+      ? Number(revisada.precio)
+      : precioEfectivo;
+
     const carritoNuevo = existente
-      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, nombre: linea.nombre, atributos : linea.atributos, cantidad: linea.cantidad, precio: revisada.precio } : item))
-      : [...carritoActual, { ...linea, precio: revisada.precio }];
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, nombre: linea.nombre, atributos: linea.atributos, cantidad: linea.cantidad, precio: precioConfirmado } : item))
+      : [...carritoActual, { ...linea, precio: precioConfirmado }];
     await guardarCarrito(carritoNuevo);
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };
   };
@@ -188,7 +199,7 @@ export default function DetalleProducto() {
   return (
     <div
       style={{
-        backgroundColor: 'var(--color-background)',
+        backgroundColor: '#F9FAFB',
         minHeight: '100vh',
         paddingBottom: '50px'
       }}
@@ -414,7 +425,7 @@ export default function DetalleProducto() {
             <h1
               style={{
                 margin: '15px 0 10px 0',
-                color: 'var(--color-primary)',
+                color: '#111827',
                 fontSize: '2rem',
                 lineHeight: '1.2'
               }}
@@ -439,29 +450,25 @@ export default function DetalleProducto() {
                 <div
                   style={{
                     marginBottom: '20px',
-                    padding: '15px',
-                    backgroundColor: '#f9fafb',
-                    borderRadius: '6px',
-                    border: '1px solid #e5e7eb'
+                    paddingTop: '15px',
+                    paddingBottom: '15px',
+                    borderTop: '1px solid #e5e7eb', 
+                    borderBottom: '1px solid #e5e7eb' 
+                    
                   }}
                 >
-                  <strong>Ficha Técnica:</strong>
-
+                  <strong style={{ color: '#4B5563' }}>Ficha Técnica:</strong>
                   <ul
                     style={{
-                      margin: '5px 0 0 0',
+                      margin: '5px 0 0',
                       paddingLeft: '20px',
-                      fontSize: '0.9rem'
+                      fontSize: '0.9rem',
+                      color: '#4B5563' 
                     }}
                   >
-                    {Object.entries(
-                      producto.atributos_globales
-                    ).map(([key, val]) => (
+                    {Object.entries(producto.atributos_globales).map(([key, val]) => (
                       <li key={key}>
-                        <b>
-                          {key.replace('_', ' ')}:
-                        </b>{' '}
-                        {val}
+                        <b>{key.replace('_', ' ')}:</b> {val}
                       </li>
                     ))}
                   </ul>

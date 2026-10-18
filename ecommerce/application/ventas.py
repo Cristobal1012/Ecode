@@ -234,6 +234,7 @@ MOTIVO_SIN_STOCK = 'Pago confirmado sin stock para {sku}'
 MOTIVO_ORDEN_NO_PENDIENTE = 'Pago aprobado sobre una orden en estado {estado}'
 MOTIVO_ERROR_INVENTARIO = 'No se pudo descontar el stock'
 MOTIVO_ERROR_OT_INESPERADO = 'Error inesperado al generar la orden de transporte'
+MOTIVO_MONTO_DISTINTO = 'El monto pagado (${pagado}) no coincide con el total de la orden (${esperado})'
 # Marca provisional mientras se descuenta el stock; solo queda a la vista si el proceso se interrumpe
 MOTIVO_CONFIRMACION_INTERRUMPIDA = (
     'El pago se aprobó, pero la confirmación del stock no terminó. Verifica el stock de la orden.')
@@ -264,7 +265,12 @@ class ConfirmarPago:
         if self.notificador:
             self.notificador.notificar(orden_id, evento)
 
-    def aprobar(self, orden_id) -> ResultadoPago:
+    def aprobar(
+        self,
+        orden_id,
+        monto_pagado: Decimal | int | float | None = None,
+        pago_exacto: bool = True,
+    ) -> ResultadoPago:
         orden = self.ordenes.obtener(orden_id)
         if orden is None:
             return ResultadoPago.NO_ENCONTRADA
@@ -276,6 +282,24 @@ class ConfirmarPago:
                 return ResultadoPago.REPETIDO
             self.ordenes.marcar_revision(
                 orden.id, MOTIVO_ORDEN_NO_PENDIENTE.format(estado=estado.etiqueta))
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
+            return ResultadoPago.EN_REVISION
+
+        # Si el monto transferido es mayor o menor (Linkify underpaid/overpaid),
+        # marcamos para revisión y abortamos antes de tocar el stock.
+        if not pago_exacto:
+            self.ordenes.marcar_revision(orden.id, "Monto transferido no coincide con el total de la orden.")
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
+            return ResultadoPago.EN_REVISION
+
+        if monto_pagado is not None and Decimal(str(round(float(monto_pagado)))) != orden.total_final:
+            self.ordenes.marcar_revision(
+                orden.id,
+                MOTIVO_MONTO_DISTINTO.format(
+                    pagado=int(round(float(monto_pagado))),
+                    esperado=int(orden.total_final),
+                ),
+            )
             self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 
@@ -300,7 +324,7 @@ class ConfirmarPago:
 
         self.ordenes.completar_pago(orden.id)
         if self.orden_transporte:
-            self.orden_transporte.ejecutar(orden.id)
+            self.orden_transporte.generar_orden_transporte(orden.id)
         self._notificar(orden.id, EventoPedido.PAGO_APROBADO)
         return ResultadoPago.PAGADO
 

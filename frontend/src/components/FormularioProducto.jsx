@@ -5,6 +5,7 @@ import GaleriaImagenes from './GaleriaImagenes';
 const crearVarianteVacia = () => ({
   sku: '',
   precio: '',
+  precio_oferta: '',
   stock: '',
   peso_kg: 1.0,
   alto_cm: 10,
@@ -113,6 +114,7 @@ export default function FormularioProducto({
           return {
             sku: v.sku || '',
             precio: v.precio ?? '',
+            precio_oferta: v.precio_oferta ?? '',
             stock: v.stock ?? 0,
 
             // Campos logísticos
@@ -384,6 +386,17 @@ export default function FormularioProducto({
         }, {});
 
       // ========================================================
+      // VALIDACIÓN DE SKUS ÚNICOS
+      // ========================================================
+      const listaSkus = variantes.map((v) => v.sku?.trim()).filter(Boolean);
+      const skusDuplicados = listaSkus.filter((sku, index) => listaSkus.indexOf(sku) !== index);
+      if (skusDuplicados.length > 0) {
+        setError(`Cada variante debe tener un SKU único. Hay un SKU duplicado: "${skusDuplicados[0]}".`);
+        setCargando(false);
+        return;
+      }
+
+      // ========================================================
       // VARIANTES
       // ========================================================
 
@@ -412,6 +425,7 @@ export default function FormularioProducto({
           sku: v.sku.trim(),
 
           precio: parseFloat(v.precio),
+          precio_oferta: v.precio_oferta ? parseFloat(v.precio_oferta) : null,
           stock: parseInt(v.stock, 10),
 
           // Campos logísticos
@@ -1109,8 +1123,8 @@ export default function FormularioProducto({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns:
-                  '1fr 1fr 1fr',
+                gridTemplateColumns: 
+                '1fr 1fr 1fr 1fr',
                 gap: '15px',
                 marginBottom: '15px'
               }}
@@ -1168,6 +1182,34 @@ export default function FormularioProducto({
                   min="0"
                   step="0.01"
                   required
+                />
+              </div>
+
+              {/* PRECIO OFERTA */}
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.9em',
+                    fontWeight: 'bold',
+                    color: '#e60000'
+                  }}
+                >
+                  Precio Oferta
+                </label>
+
+                <input
+                  type="number"
+                  value={variante.precio_oferta || ''}
+                  onChange={(e) =>
+                    actualizarVariante(
+                      varIndex,
+                      'precio_oferta',
+                      e.target.value
+                    )
+                  }
+                  style={{...inputStyle, border: '1px solid #ffcccc'}}
+                  min="0"
+                  step="0.01"
                 />
               </div>
 

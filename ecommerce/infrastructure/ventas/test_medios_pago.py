@@ -17,6 +17,7 @@ from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .payment_services import PreferenciaPagoCreada
 from .cifrado import CredencialesIlegibles, cifrar_json, descifrar_json
 from .models import ConfiguracionGlobal, MedioPago, OrdenCompra
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -159,10 +160,23 @@ class CheckoutRN02Tests(APITestCase):
             with self.subTest(metodo=metodo):
                 self.assertEqual(self.checkout(metodo).status_code, 400)
 
-    def test_mercado_pago_configurado_no_se_acepta_mientras_su_integracion_no_este_lista(self):
+    @patch('ecommerce.infrastructure.ventas.serializers.MercadoPagoAdapter.crear_preferencia',
+           return_value=PreferenciaPagoCreada(preference_id='pref-123', url_pago='https://mp.test/pago'))
+    def test_mercado_pago_configurado_se_acepta_al_estar_su_integracion_lista(self, _crear):
         habilitar_medios_pago('MERCADO_PAGO')
-        self.assertNotIn('MERCADO_PAGO', self.client.get(reverse('configuracion-global')).data['pasarelas_activas'])
-        self.assertEqual(self.checkout('MERCADO_PAGO').status_code, 400)
+        self.assertIn('MERCADO_PAGO', self.client.get(reverse('configuracion-global')).data['pasarelas_activas'])
+        self.assertEqual(self.checkout('MERCADO_PAGO').status_code, 201)
+
+    def test_medio_con_integracion_no_lista_no_se_acepta(self):
+        from ecommerce.domain.medios_pago import DefinicionMedioPago, definicion_medio
+        def fake_definicion(codigo):
+            d = definicion_medio(codigo)
+            return DefinicionMedioPago(d.codigo, d.nombre, d.campos, integracion_lista=False)
+
+        with patch('ecommerce.domain.medios_pago.definicion_medio', side_effect=fake_definicion):
+            habilitar_medios_pago('MERCADO_PAGO')
+            self.assertNotIn('MERCADO_PAGO', self.client.get(reverse('configuracion-global')).data['pasarelas_activas'])
+            self.assertEqual(self.checkout('MERCADO_PAGO').status_code, 400)
 
     def test_transferencia_entrega_datos_bancarios_monto_y_referencia_en_la_respuesta_y_el_correo(self):
         with self.captureOnCommitCallbacks(execute=True):
@@ -226,9 +240,9 @@ class AdminMediosPagoAPITests(APITestCase):
         response = self.guardar('mercado_pago', {'habilitado': True, 'datos': {
             'access_token': TOKEN_MP, 'webhook_secret': 'secreto-de-webhook-5678'}})
         self.assertEqual(response.status_code, 200)
-        # Completo y habilitado, pero el checkout aún no cobra con Mercado Pago: no se ofrece
+        # Completo y habilitado: la integración está lista y se ofrece
         self.assertEqual(response.data['faltantes'], [])
-        self.assertEqual((response.data['integracion_lista'], response.data['disponible']), (False, False))
+        self.assertEqual((response.data['integracion_lista'], response.data['disponible']), (True, True))
         self.assertEqual(response.data['datos'], {'access_token': '••••abcd', 'webhook_secret': '••••5678'})
         self.assertNotIn(TOKEN_MP, response.content.decode())
 

@@ -230,7 +230,7 @@ const CarritoCompras = () => {
                                 <span style={{ fontWeight: 'bold', color: '#1f2937', fontSize: '18px' }}>${total.toLocaleString('es-CL')}</span>
                             </div>
                             <Link to="/checkout" onClick={() => setIsOpen(false)} style={{
-                                display: 'block', width: '100%', textAlign: 'center', backgroundColor: '#2563eb',
+                                display: 'block', width: '100%', textAlign: 'center', backgroundColor: 'var(--color-primary)',
                                 color: 'white', padding: '10px 0', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold'
                             }}>
                                 Ir a Pagar

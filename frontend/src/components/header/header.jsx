@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import "./header.css";
 import logo from "./logoU.png";
 import MenuUsuario from "../MenuUsuario";
-import CarritoCompras from "../CarritoCompras"; // NUEVA IMPORTACIÓN
+import CarritoCompras from "../CarritoCompras"; 
 
 function Header() {
   // Solo conservamos el rol para saber si mostramos el atajo de admin
@@ -11,7 +11,6 @@ function Header() {
   return (
     <header className="header">
       <div className="header-content">
-
         <div className="header-logo">
           <img
             className="header-logo-img"
@@ -38,7 +37,6 @@ function Header() {
             <CarritoCompras />
           </div>
         </nav>
-
       </div>
     </header>
   );

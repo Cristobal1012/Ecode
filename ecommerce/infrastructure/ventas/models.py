@@ -122,10 +122,20 @@ class Promocion(models.Model):
     tipo_descuento = models.CharField(max_length=20, choices=TIPOS_DESCUENTO)
     valor_descuento = models.FloatField()
     umbral_envio_gratis = models.FloatField(null=True, blank=True)
+    fecha_expiracion = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
+    @property
+    def esta_vigente(self) -> bool:
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        if self.fecha_expiracion and self.fecha_expiracion < timezone.now():
+            return False
+        return True
+
     def __str__(self):
-        estado = "Activa" if self.is_active else "Inactiva"
+        estado = "Activa" if self.esta_vigente else "Inactiva/Expirada"
         return f"{self.codigo} ({estado})"
 
 class OrdenCompra(models.Model):

@@ -1,13 +1,44 @@
-import { useId, useState } from 'react';
+import { useId, useState, useEffect } from 'react';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
   // { tipo: 'exito' | 'error', texto }
   const [mensaje, setMensaje] = useState(null);
-  const [cantidad, setCantidad] = useState(1); // Nuevo estado para manejar la cantidad
+  const [cantidad, setCantidad] = useState(1);
   const [agregando, setAgregando] = useState(false);
   // Prefijo único para los ids de los títulos de cada grupo de atributos
   const idBase = useId();
+
+  // Sincroniza con el carrito local para descontar lo que el usuario ya agregó
+  const [itemsCarrito, setItemsCarrito] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('carrito_local')) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const sincronizarCarrito = () => {
+      try {
+        setItemsCarrito(JSON.parse(localStorage.getItem('carrito_local')) || []);
+      } catch {
+        setItemsCarrito([]);
+      }
+    };
+    window.addEventListener('carritoActualizado', sincronizarCarrito);
+    window.addEventListener('storage', sincronizarCarrito);
+    return () => {
+      window.removeEventListener('carritoActualizado', sincronizarCarrito);
+      window.removeEventListener('storage', sincronizarCarrito);
+    };
+  }, []);
+
+  const obtenerCantidadEnCarrito = (sku) => {
+    if (!sku) return 0;
+    const item = itemsCarrito.find(i => i.sku === sku);
+    return item ? Number(item.cantidad) || 0 : 0;
+  };
 
   // Reinicia la selección cuando cambia el producto (no cuando solo se actualiza su stock).
   // Se ajusta durante el render, como recomienda React, en vez de usar un efecto.
@@ -82,17 +113,25 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
     };
 
     setAtributosSeleccionados(nuevosAtributos);
-    setCantidad(1); // Reiniciamos la cantidad al cambiar de variante
+    setCantidad(1);
 
     const variante = encontrarVariante(nuevosAtributos);
-
     if (!variante) {
       setMensaje(null);
       return;
     }
 
-    if (Number(variante.stock) === 0) {
+    const totalStock = Number(variante.stock) || 0;
+    const enCarro = obtenerCantidadEnCarrito(variante.sku);
+    const disp = Math.max(0, totalStock - enCarro);
+
+    if (totalStock === 0) {
       error('Esta variante se encuentra agotada.');
+      return;
+    }
+
+    if (disp === 0) {
+      error(`Esta opción está agotada: ya tienes las ${totalStock} unidad(es) en tu carrito.`);
       return;
     }
 
@@ -100,6 +139,17 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
   };
 
   const varianteSeleccionada = encontrarVariante(atributosSeleccionados);
+  const stockTotal = varianteSeleccionada ? Number(varianteSeleccionada.stock) || 0 : 0;
+  const enCarrito = varianteSeleccionada ? obtenerCantidadEnCarrito(varianteSeleccionada.sku) : 0;
+  const stockDisponibleParaAgregar = Math.max(0, stockTotal - enCarrito);
+
+  const tieneOferta = Boolean(
+    varianteSeleccionada?.precio_oferta != null &&
+    Number(varianteSeleccionada.precio_oferta) > 0 &&
+    Number(varianteSeleccionada.precio_oferta) < Number(varianteSeleccionada.precio)
+  );
+
+  const sinStock = !varianteSeleccionada || stockTotal === 0 || stockDisponibleParaAgregar === 0;
 
   const agregarAlCarrito = async () => {
     if (!varianteSeleccionada) {
@@ -107,8 +157,13 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       return;
     }
 
-    if (Number(varianteSeleccionada.stock) === 0) {
+    if (stockTotal === 0) {
       error('Esta variante se encuentra agotada.');
+      return;
+    }
+
+    if (stockDisponibleParaAgregar <= 0) {
+      error(`Ya tienes todas las unidades disponibles (${stockTotal}) en tu carrito.`);
       return;
     }
 
@@ -117,8 +172,8 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       return;
     }
 
-    if (cantidad > Number(varianteSeleccionada.stock)) {
-      error('No hay suficiente stock para esa cantidad.');
+    if (cantidad > stockDisponibleParaAgregar) {
+      error(`Solo puedes agregar hasta ${stockDisponibleParaAgregar} unidad(es) más.`);
       return;
     }
 
@@ -129,10 +184,11 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       const resultado = await onAgregarAlCarrito(varianteSeleccionada, cantidad);
       setAgregando(false);
       setMensaje({ tipo: resultado.ok ? 'exito' : 'error', texto: resultado.mensaje });
+      if (resultado.ok) {
+        setCantidad(1);
+      }
     }
   };
-
-  const sinStock = !varianteSeleccionada || Number(varianteSeleccionada.stock) === 0;
 
   if (variantes.length === 0) {
     return (
@@ -157,6 +213,10 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
           >
             {obtenerValores(atributo).map((valor) => {
               const seleccionado = atributosSeleccionados[atributo] === valor;
+              const tentativa = encontrarVariante({ ...atributosSeleccionados, [atributo]: valor });
+              const tentStock = tentativa ? Number(tentativa.stock) || 0 : null;
+              const tentEnCarrito = tentativa ? obtenerCantidadEnCarrito(tentativa.sku) : 0;
+              const tentAgotada = tentativa && (tentStock === 0 || tentStock - tentEnCarrito <= 0);
 
               return (
                 <button
@@ -167,14 +227,16 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
                   style={{
                     padding: '8px 16px',
                     border: seleccionado ? '2px solid #2563eb' : '1px solid #d1d5db',
-                    backgroundColor: seleccionado ? '#eff6ff' : 'white',
+                    backgroundColor: seleccionado ? '#eff6ff' : (tentAgotada ? '#f3f4f6' : 'white'),
+                    color: tentAgotada && !seleccionado ? '#9ca3af' : '#1f2937',
                     fontWeight: seleccionado ? 'bold' : 'normal',
                     borderRadius: '4px',
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}
+                  title={tentAgotada ? 'Opción sin stock disponible' : ''}
                 >
-                  {valor}
+                  {valor} {tentAgotada ? '(Agotado)' : ''}
                 </button>
               );
             })}
@@ -184,27 +246,48 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
       {varianteSeleccionada && (
         <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '0 0 10px 0', color: '#1f2937' }}>
-            Precio: ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+          
+          <div style={{ marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>Precio:</span>
+            {tieneOferta ? (
+              <>
+                <span style={{ fontSize: '1.4rem', color: '#dc2626', fontWeight: 'bold' }}>
+                  ${Number(varianteSeleccionada.precio_oferta).toLocaleString('es-CL')}
+                </span>
+                <span style={{ fontSize: '1rem', color: '#9ca3af', textDecoration: 'line-through' }}>
+                  ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#1f2937' }}>
+                ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
+              </span>
+            )}
+          </div>
+
+          <p style={{ margin: '0 0 10px 0', color: stockDisponibleParaAgregar > 0 ? '#166534' : '#ef4444', fontWeight: '500' }}>
+            {stockTotal === 0
+              ? 'Agotado'
+              : stockDisponibleParaAgregar === 0
+                ? `Agotado (ya tienes las ${stockTotal} unidades disponibles en tu carrito)`
+                : `Stock disponible: ${stockDisponibleParaAgregar}${enCarrito > 0 ? ` (${enCarrito} en tu carrito)` : ''}`}
           </p>
-          <p style={{ margin: '0 0 10px 0', color: Number(varianteSeleccionada.stock) > 0 ? '#166534' : '#ef4444', fontWeight: '500' }}>
-            Stock disponible: {varianteSeleccionada.stock}
-          </p>
+
           <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#6b7280' }}>
             SKU: {varianteSeleccionada.sku}
           </p>
 
           {/* Input numérico para la cantidad */}
-          {Number(varianteSeleccionada.stock) > 0 && (
+          {stockDisponibleParaAgregar > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '15px' }}>
               <label htmlFor="cantidad" style={{ fontWeight: '500', color: '#374151' }}>Cantidad:</label>
               <input 
                 type="number" 
                 id="cantidad"
                 min="1" 
-                max={varianteSeleccionada.stock}
+                max={stockDisponibleParaAgregar}
                 value={cantidad}
-                onChange={(e) => setCantidad(Number(e.target.value))}
+                onChange={(e) => setCantidad(Math.min(stockDisponibleParaAgregar, Math.max(1, Number(e.target.value))))}
                 style={{ width: '70px', padding: '6px', borderRadius: '4px', border: '1px solid #d1d5db', textAlign: 'center' }}
               />
             </div>
@@ -218,7 +301,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         style={{
             marginTop: '20px',
             padding: '12px 24px',
-            backgroundColor: sinStock || agregando ? '#d1d5db' : '#2563eb',
+            backgroundColor: sinStock || agregando ? '#d1d5db' : 'var(--color-primary)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -229,7 +312,13 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
             transition: 'background-color 0.2s'
         }}
       >
-        {agregando ? 'Verificando stock...' : 'Agregar al carrito'}
+        {agregando 
+          ? 'Verificando stock...' 
+          : stockTotal === 0 
+            ? 'Agotado' 
+            : stockDisponibleParaAgregar === 0 
+              ? 'Agotado (en tu carrito)' 
+              : 'Agregar al carrito'}
       </button>
 
       {mensaje && (

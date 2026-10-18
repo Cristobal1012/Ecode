@@ -19,6 +19,15 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
+  // Vitrina de la landing vacía: las secciones de productos no se muestran
+  await page.route('**/api/catalogo/vitrina/', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ mas_vendidos: [], recientes: [] }),
+    });
+  });
+
   // Simular un catálogo vacío, sin modificar la base de datos
   await page.route('**/api/catalogo/productos/', async (route) => {
     await route.fulfill({
@@ -38,15 +47,16 @@ test('la página inicial muestra la bienvenida y el botón de catálogo', async 
     page.getByRole('heading', { name: 'Bienvenido a Ecode QA' }),
   ).toBeVisible();
 
+  // Es un enlace: lleva a otra página
   await expect(
-    page.getByRole('button', { name: 'Ver catálogo' }),
+    page.getByRole('link', { name: 'Ver catálogo' }),
   ).toBeVisible();
 });
 
 test('el botón de bienvenida navega al catálogo', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Ver catálogo' }).click();
+  await page.getByRole('link', { name: 'Ver catálogo' }).click();
 
   await expect(page).toHaveURL(/\/catalogo$/);
 

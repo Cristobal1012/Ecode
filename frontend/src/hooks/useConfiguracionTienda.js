@@ -17,8 +17,9 @@ function cargar() {
         return configuracion;
       })
       .catch((error) => {
-        // Se puede reintentar en el próximo montaje
+        // Sin configuración la tienda igual se muestra, con sus textos por defecto; se reintenta al volver a montar
         peticion = null;
+        oyentes.forEach((avisar) => avisar({}));
         throw error;
       });
   }

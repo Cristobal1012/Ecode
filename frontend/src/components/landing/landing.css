@@ -1,0 +1,139 @@
+/* ---------- Portada ---------- */
+
+.portada {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: min(88vh, 860px);
+  padding: 96px 0;
+  background-color: var(--color-footer);
+  background-size: cover;
+  background-position: center;
+  color: #FFFFFF;
+}
+
+/* Oscurece la foto (más a la izquierda, donde va el texto) para que el texto blanco siempre se lea */
+.portada-velo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(0 0 0 / 62%) 0%, rgb(0 0 0 / 38%) 55%, rgb(0 0 0 / 18%) 100%);
+}
+
+.portada-contenido {
+  position: relative;
+}
+
+.portada-antetitulo {
+  color: #FFFFFF;
+  margin-bottom: 1.5rem;
+}
+
+.portada-titulo {
+  max-width: 14ch;
+  color: #FFFFFF;
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+}
+
+.portada-texto {
+  max-width: 46ch;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: rgb(255 255 255 / 92%);
+  margin-bottom: 2.25rem;
+  white-space: pre-line;
+}
+
+.portada-boton:focus-visible {
+  outline-color: #FFFFFF;
+}
+
+/* ---------- Secciones ---------- */
+
+.seccion-landing {
+  padding: var(--espacio-seccion) 0;
+  background: var(--color-background);
+  /* Al saltar a /#nosotros, la sección no queda tapada por el header fijo */
+  scroll-margin-top: 80px;
+}
+
+.seccion-landing--alterna {
+  background: var(--color-secondary);
+}
+
+.seccion-landing-encabezado {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: clamp(32px, 4vw, 56px);
+}
+
+.seccion-landing-encabezado h2 {
+  margin: 0;
+}
+
+.lista-sin-estilo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- Nosotros ---------- */
+
+.nosotros-contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(32px, 6vw, 96px);
+}
+
+.nosotros-imagen {
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--color-accent);
+}
+
+.nosotros-imagen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nosotros-parrafo {
+  max-width: 52ch;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+/* Sin foto: el texto va centrado en una columna */
+.nosotros--sin-imagen .nosotros-contenido {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+}
+
+.nosotros--sin-imagen .nosotros-parrafo {
+  margin: 0 auto;
+}
+
+@media (max-width: 767px) {
+  .portada {
+    min-height: 72vh;
+    padding: 72px 0;
+  }
+
+  .portada-velo {
+    background: rgb(0 0 0 / 50%);
+  }
+
+  .seccion-landing-encabezado {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nosotros-contenido {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

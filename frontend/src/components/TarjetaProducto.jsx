@@ -39,9 +39,9 @@ export default function TarjetaProducto({ producto, etiqueta }) {
           <>
             <span>{textoPrecio}</span>
             {tieneOferta && (
-              <span className="tarjeta-producto-precio-anterior">
+              <del className="tarjeta-producto-precio-anterior">
                 <span className="visualmente-oculto">Precio anterior: </span>{precioTachado}
-              </span>
+              </del>
             )}
           </>
         )}

@@ -31,7 +31,9 @@ describe('ProductCardList (layout de lista del catálogo)', () => {
     expect(screen.getByRole('heading', { name: 'Zapatillas Runner' })).toBeInTheDocument();
     // Las variantes tienen precios distintos (39.990 en oferta y 49.990): se muestra el menor
     expect(screen.getByText('Desde $39.990')).toBeInTheDocument();
-    expect(screen.getByText('$49.990')).toHaveStyle({ textDecoration: 'line-through' });
+    // El precio normal va tachado como precio anterior (<del>)
+    expect(screen.getByText('$49.990').closest('del')).not.toBeNull();
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/catalogo/producto/zapatillas-1');
   });
 
   it('marca el producto como agotado cuando ninguna variante tiene stock', () => {

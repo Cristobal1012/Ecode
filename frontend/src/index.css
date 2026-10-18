@@ -181,6 +181,12 @@ textarea {
   color: var(--color-primary);
 }
 
+.lista-sin-estilo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 /* Solo para lectores de pantalla */
 .visualmente-oculto {
   position: absolute;

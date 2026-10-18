@@ -1,4 +1,5 @@
 import { useId, useState, useEffect } from 'react';
+import './VariantSelector.css';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
@@ -198,21 +199,23 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
     );
   }
 
+  const formatear = (valor) => `$${Number(valor).toLocaleString('es-CL')}`;
+
   return (
-    <div>
+    <div className="selector-variantes">
       {nombresAtributos.map((atributo, indice) => (
-        <div key={atributo} style={{ marginBottom: '15px' }}>
-          <h3 id={`${idBase}-atributo-${indice}`} style={{ fontSize: '1.1rem', marginBottom: '10px' }}>
-            {atributo.charAt(0).toUpperCase() + atributo.slice(1)}:
+        <div key={atributo} className="selector-variantes-atributo">
+          <h3 id={`${idBase}-atributo-${indice}`} className="selector-variantes-titulo">
+            {atributo.replaceAll('_', ' ')}
+            {atributosSeleccionados[atributo] !== undefined && (
+              <span className="selector-variantes-elegido">: {String(atributosSeleccionados[atributo])}</span>
+            )}
           </h3>
 
-          <div
-            role="group"
-            aria-labelledby={`${idBase}-atributo-${indice}`}
-            style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
-          >
+          <div role="group" aria-labelledby={`${idBase}-atributo-${indice}`} className="selector-variantes-opciones">
             {obtenerValores(atributo).map((valor) => {
               const seleccionado = atributosSeleccionados[atributo] === valor;
+              // Una opción se marca agotada si la combinación no tiene stock o ya está toda en el carrito
               const tentativa = encontrarVariante({ ...atributosSeleccionados, [atributo]: valor });
               const tentStock = tentativa ? Number(tentativa.stock) || 0 : null;
               const tentEnCarrito = tentativa ? obtenerCantidadEnCarrito(tentativa.sku) : 0;
@@ -224,19 +227,10 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
                   type="button"
                   aria-pressed={seleccionado}
                   onClick={() => seleccionarAtributo(atributo, valor)}
-                  style={{
-                    padding: '8px 16px',
-                    border: seleccionado ? '2px solid #2563eb' : '1px solid #d1d5db',
-                    backgroundColor: seleccionado ? '#eff6ff' : (tentAgotada ? '#f3f4f6' : 'white'),
-                    color: tentAgotada && !seleccionado ? '#9ca3af' : '#1f2937',
-                    fontWeight: seleccionado ? 'bold' : 'normal',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`selector-variantes-opcion${tentAgotada ? ' selector-variantes-opcion--agotada' : ''}`}
                   title={tentAgotada ? 'Opción sin stock disponible' : ''}
                 >
-                  {valor} {tentAgotada ? '(Agotado)' : ''}
+                  {valor}{tentAgotada && <span className="selector-variantes-opcion-nota"> (Agotado)</span>}
                 </button>
               );
             })}
@@ -245,27 +239,17 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       ))}
 
       {varianteSeleccionada && (
-        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-          
-          <div style={{ marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'baseline' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>Precio:</span>
-            {tieneOferta ? (
-              <>
-                <span style={{ fontSize: '1.4rem', color: '#dc2626', fontWeight: 'bold' }}>
-                  ${Number(varianteSeleccionada.precio_oferta).toLocaleString('es-CL')}
-                </span>
-                <span style={{ fontSize: '1rem', color: '#9ca3af', textDecoration: 'line-through' }}>
-                  ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
-                </span>
-              </>
-            ) : (
-              <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#1f2937' }}>
-                ${Number(varianteSeleccionada.precio).toLocaleString('es-CL')}
-              </span>
+        <div className="selector-variantes-resumen">
+          <p className="selector-variantes-precio">
+            <span>{formatear(tieneOferta ? varianteSeleccionada.precio_oferta : varianteSeleccionada.precio)}</span>
+            {tieneOferta && (
+              <del className="detalle-precio-anterior">
+                <span className="visualmente-oculto">Precio anterior: </span>{formatear(varianteSeleccionada.precio)}
+              </del>
             )}
-          </div>
+          </p>
 
-          <p style={{ margin: '0 0 10px 0', color: stockDisponibleParaAgregar > 0 ? '#166534' : '#ef4444', fontWeight: '500' }}>
+          <p className={stockDisponibleParaAgregar > 0 ? 'texto-secundario' : 'selector-variantes-agotado'}>
             {stockTotal === 0
               ? 'Agotado'
               : stockDisponibleParaAgregar === 0
@@ -273,22 +257,19 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
                 : `Stock disponible: ${stockDisponibleParaAgregar}${enCarrito > 0 ? ` (${enCarrito} en tu carrito)` : ''}`}
           </p>
 
-          <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#6b7280' }}>
-            SKU: {varianteSeleccionada.sku}
-          </p>
+          <p className="selector-variantes-sku">SKU: {varianteSeleccionada.sku}</p>
 
-          {/* Input numérico para la cantidad */}
+          {/* La cantidad no puede pasar del stock que queda después de lo que ya está en el carrito */}
           {stockDisponibleParaAgregar > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '15px' }}>
-              <label htmlFor="cantidad" style={{ fontWeight: '500', color: '#374151' }}>Cantidad:</label>
-              <input 
-                type="number" 
-                id="cantidad"
-                min="1" 
+            <div className="selector-variantes-cantidad">
+              <label htmlFor={`${idBase}-cantidad`}>Cantidad</label>
+              <input
+                type="number"
+                id={`${idBase}-cantidad`}
+                min="1"
                 max={stockDisponibleParaAgregar}
                 value={cantidad}
                 onChange={(e) => setCantidad(Math.min(stockDisponibleParaAgregar, Math.max(1, Number(e.target.value))))}
-                style={{ width: '70px', padding: '6px', borderRadius: '4px', border: '1px solid #d1d5db', textAlign: 'center' }}
               />
             </div>
           )}
@@ -296,39 +277,24 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       )}
 
       <button
+        type="button"
         onClick={agregarAlCarrito}
         disabled={sinStock || agregando}
-        style={{
-            marginTop: '20px',
-            padding: '12px 24px',
-            backgroundColor: sinStock || agregando ? '#d1d5db' : 'var(--color-primary)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            cursor: sinStock || agregando ? 'not-allowed' : 'pointer',
-            width: '100%',
-            fontSize: '1.1rem',
-            transition: 'background-color 0.2s'
-        }}
+        className="boton boton-primario selector-variantes-agregar"
       >
-        {agregando 
-          ? 'Verificando stock...' 
-          : stockTotal === 0 
-            ? 'Agotado' 
-            : stockDisponibleParaAgregar === 0 
-              ? 'Agotado (en tu carrito)' 
+        {agregando
+          ? 'Verificando stock...'
+          : stockTotal === 0
+            ? 'Agotado'
+            : stockDisponibleParaAgregar === 0
+              ? 'Agotado (en tu carrito)'
               : 'Agregar al carrito'}
       </button>
 
       {mensaje && (
         <p
           role={mensaje.tipo === 'error' ? 'alert' : 'status'}
-          style={{
-            marginTop: '15px', fontWeight: '600', textAlign: 'center', padding: '10px', borderRadius: '6px',
-            color: mensaje.tipo === 'error' ? '#991b1b' : '#166534',
-            backgroundColor: mensaje.tipo === 'error' ? '#fef2f2' : '#dcfce7'
-          }}
+          className={`selector-variantes-mensaje selector-variantes-mensaje--${mensaje.tipo}`}
         >
           {mensaje.texto}
         </p>

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
 import VariantSelector from '../components/VariantSelector';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
+import { obtenerDatosPrecioYStock } from '../utils/precios';
+import './DetalleProducto.css';
 
 export default function DetalleProducto() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [producto, setProducto] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -172,324 +173,122 @@ export default function DetalleProducto() {
     setImagenActual(index);
   };
 
-  if (cargando) {
+  if (cargando || error || !producto) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        Cargando producto...
-      </div>
-    );
-  }
-
-  if (error || !producto) {
-    return (
-      <div
-        style={{
-          padding: '40px',
-          textAlign: 'center',
-          color: '#ef4444'
-        }}
-      >
-        {error || 'Producto no disponible'}
+      <div className="detalle-page">
+        <Header />
+        <main className="contenedor detalle-estado" id="contenido">
+          {cargando ? (
+            <p role="status">Cargando producto...</p>
+          ) : (
+            <>
+              <p role="alert">{error || 'Producto no disponible'}</p>
+              <Link to="/catalogo" className="enlace-flecha">Volver al catálogo <span aria-hidden="true">→</span></Link>
+            </>
+          )}
+        </main>
       </div>
     );
   }
 
   const imagenes = producto.imagenes || [];
+  const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
+  const fichaTecnica = Object.entries(producto.atributos_globales || {});
 
   return (
-    <div
-      style={{
-        backgroundColor: '#F9FAFB',
-        minHeight: '100vh',
-        paddingBottom: '50px'
-      }}
-    >
+    <div className="detalle-page">
       <Header />
+      <main className="contenedor detalle" id="contenido">
+        <nav className="detalle-migas" aria-label="Ruta de navegación">
+          <ol className="lista-sin-estilo">
+            <li><Link to="/catalogo">Catálogo</Link></li>
+            {producto.categoria && <li>{producto.categoria}</li>}
+            <li aria-current="page">{producto.nombre}</li>
+          </ol>
+        </nav>
 
-      <div
-        style={{
-          maxWidth: '1000px',
-          margin: '30px auto',
-          padding: '20px',
-          backgroundColor: '#fff',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}
-      >
-        <button
-          onClick={() => navigate('/catalogo')}
-          style={{
-            marginBottom: '20px',
-            padding: '8px 14px',
-            backgroundColor: '#e5e7eb',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          ← Volver al Catálogo
-        </button>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '30px'
-          }}
-        >
-          {/* ========================= */}
-          {/* COLUMNA DE IMÁGENES */}
-          {/* ========================= */}
-
-          <div>
+        <div className="detalle-contenido">
+          {/* Galería */}
+          <div className="detalle-galeria">
             {imagenes.length > 0 ? (
-              <div>
-                {/* Imagen principal */}
-                <div
-                  style={{
-                    position: 'relative',
-                    width: '100%'
-                  }}
-                >
-                  <img
-                    src={imagenes[imagenActual]}
-                    alt={`${producto.nombre} - Imagen ${
-                      imagenActual + 1
-                    }`}
-                    style={{
-                      width: '100%',
-                      height: '400px',
-                      objectFit: 'cover',
-                      borderRadius: '8px',
-                      border: '1px solid #e5e7eb'
-                    }}
-                  />
-
-                  {/* Botón anterior */}
+              <>
+                <div className="detalle-imagen-principal">
+                  <img src={imagenes[imagenActual]} alt={`${producto.nombre}, imagen ${imagenActual + 1} de ${imagenes.length}`} />
                   {imagenes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={imagenAnterior}
-                      aria-label="Imagen anterior"
-                      style={{
-                        position: 'absolute',
-                        left: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                        color: '#fff',
-                        fontSize: '24px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      ‹
-                    </button>
-                  )}
-
-                  {/* Botón siguiente */}
-                  {imagenes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={imagenSiguiente}
-                      aria-label="Imagen siguiente"
-                      style={{
-                        position: 'absolute',
-                        right: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                        color: '#fff',
-                        fontSize: '24px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      ›
-                    </button>
-                  )}
-
-                  {/* Contador */}
-                  {imagenes.length > 1 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: '10px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                        color: '#fff',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {imagenActual + 1} / {imagenes.length}
-                    </div>
+                    <>
+                      <button type="button" className="detalle-flecha detalle-flecha--anterior"
+                        onClick={imagenAnterior} aria-label="Imagen anterior">‹</button>
+                      <button type="button" className="detalle-flecha detalle-flecha--siguiente"
+                        onClick={imagenSiguiente} aria-label="Imagen siguiente">›</button>
+                      <span className="detalle-contador" aria-hidden="true">{imagenActual + 1} / {imagenes.length}</span>
+                    </>
                   )}
                 </div>
-
-                {/* Miniaturas */}
                 {imagenes.length > 1 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '10px',
-                      marginTop: '12px',
-                      overflowX: 'auto',
-                      paddingBottom: '5px'
-                    }}
-                  >
+                  <ul className="detalle-miniaturas lista-sin-estilo">
                     {imagenes.map((imagen, index) => (
-                      <button
-                        key={imagen || index}
-                        type="button"
-                        onClick={() => seleccionarImagen(index)}
-                        aria-label={`Ver imagen ${index + 1}`}
-                        style={{
-                          padding: '2px',
-                          border:
-                            index === imagenActual
-                              ? '3px solid var(--color-primary)'
-                              : '1px solid #d1d5db',
-                          borderRadius: '6px',
-                          backgroundColor: '#fff',
-                          cursor: 'pointer',
-                          flexShrink: 0
-                        }}
-                      >
-                        <img
-                          src={imagen}
-                          alt={`Miniatura ${index + 1}`}
-                          style={{
-                            width: '70px',
-                            height: '70px',
-                            objectFit: 'cover',
-                            borderRadius: '4px',
-                            display: 'block'
-                          }}
-                        />
-                      </button>
+                      <li key={imagen || index}>
+                        <button type="button" onClick={() => seleccionarImagen(index)}
+                          aria-label={`Ver imagen ${index + 1}`} aria-pressed={index === imagenActual}
+                          className="detalle-miniatura">
+                          <img src={imagen} alt="" />
+                        </button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
-              </div>
+              </>
             ) : (
-              <div
-                style={{
-                  width: '100%',
-                  height: '400px',
-                  backgroundColor: '#f3f4f6',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9ca3af'
-                }}
-              >
-                Sin imagen disponible
+              <div className="detalle-sin-imagen">
+                <span aria-hidden="true">{producto.nombre?.charAt(0)}</span>
+                <p className="visualmente-oculto">Sin imagen disponible</p>
               </div>
             )}
           </div>
 
-          {/* ========================= */}
-          {/* INFORMACIÓN DEL PRODUCTO */}
-          {/* ========================= */}
+          {/* Información y compra */}
+          <div className="detalle-info">
+            {producto.categoria && <span className="antetitulo">{producto.categoria}</span>}
+            <h1 className="detalle-nombre">{producto.nombre}</h1>
 
-          <div>
-            <span
-              style={{
-                backgroundColor: '#e5e7eb',
-                padding: '4px 10px',
-                borderRadius: '12px',
-                fontSize: '0.85rem',
-                fontWeight: 'bold'
-              }}
-            >
-              {producto.categoria}
-            </span>
-
-            <h1
-              style={{
-                margin: '15px 0 10px 0',
-                color: '#111827',
-                fontSize: '2rem',
-                lineHeight: '1.2'
-              }}
-            >
-              {producto.nombre}
-            </h1>
-
-            <p
-              style={{
-                color: '#4b5563',
-                lineHeight: '1.6',
-                marginBottom: '20px'
-              }}
-            >
-              {producto.descripcion ||
-                'Sin descripción disponible.'}
+            <p className="detalle-precio">
+              {agotado ? (
+                <span className="texto-secundario">Sin stock</span>
+              ) : (
+                <>
+                  <span>{textoPrecio}</span>
+                  {tieneOferta && (
+                    <del className="detalle-precio-anterior">
+                      <span className="visualmente-oculto">Precio anterior: </span>{precioTachado}
+                    </del>
+                  )}
+                </>
+              )}
             </p>
 
-            {/* Ficha Técnica */}
-            {producto.atributos_globales &&
-              Object.keys(producto.atributos_globales).length > 0 && (
-                <div
-                  style={{
-                    marginBottom: '20px',
-                    paddingTop: '15px',
-                    paddingBottom: '15px',
-                    borderTop: '1px solid #e5e7eb', 
-                    borderBottom: '1px solid #e5e7eb' 
-                    
-                  }}
-                >
-                  <strong style={{ color: '#4B5563' }}>Ficha Técnica:</strong>
-                  <ul
-                    style={{
-                      margin: '5px 0 0',
-                      paddingLeft: '20px',
-                      fontSize: '0.9rem',
-                      color: '#4B5563' 
-                    }}
-                  >
-                    {Object.entries(producto.atributos_globales).map(([key, val]) => (
-                      <li key={key}>
-                        <b>{key.replace('_', ' ')}:</b> {val}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <hr className="detalle-separador" />
 
-            {/* Selector de variantes */}
-            <div
-              style={{
-                borderTop: '1px solid #e5e7eb',
-                paddingTop: '20px'
-              }}
-            >
-              <VariantSelector
-                producto={producto}
-                onAgregarAlCarrito={handleAgregarAlCarrito}
-              />
+            <p className="detalle-descripcion texto-secundario">
+              {producto.descripcion || 'Sin descripción disponible.'}
+            </p>
+
+            {fichaTecnica.length > 0 && (
+              <dl className="detalle-ficha">
+                {fichaTecnica.map(([clave, valor]) => (
+                  <div key={clave}>
+                    <dt>{clave.replaceAll('_', ' ')}</dt>
+                    <dd>{String(valor)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            <div className="detalle-compra">
+              <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

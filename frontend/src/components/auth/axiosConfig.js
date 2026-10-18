@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Agregamos /api/ a la base URL para que todas las peticiones apunten correctamente
-const BASE_URL = 'http://localhost:8000/api/';
+// Dirección de la API (termina en /api/). En la tienda publicada es relativa (/api/): el mismo servidor entrega el
+// frontend y la API, así que no hay CORS. Se fija al compilar con VITE_API_URL (ver frontend/.env.example).
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/';
 
 const clienteAxios = axios.create({
     baseURL: BASE_URL,

@@ -20,7 +20,7 @@ export default function PaletteSelector() {
   useEffect(() => {
     const fetchTema = async () => {
       try {
-        // Tu cliente ya tiene el baseURL http://localhost:8000/api/
+        // clienteAxios ya incluye la dirección de la API (VITE_API_URL)
         const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
         if (config && config.tema_seleccionado !== undefined) {

@@ -106,6 +106,21 @@ class IdentidadTiendaTests(APITestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn(campo, response.data)
 
+    def test_el_admin_elige_la_tipografia_y_la_tienda_la_recibe(self):
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['tipografia_seleccionada'], 1)
+
+        self.assertEqual(self.client.patch(self.url, {'tipografia_seleccionada': 4}, format='json').status_code, 200)
+
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['tipografia_seleccionada'], 4)
+
+    def test_rechaza_una_tipografia_que_no_existe(self):
+        for valor in (0, 6, 'serif'):
+            with self.subTest(valor=valor):
+                response = self.client.patch(self.url, {'tipografia_seleccionada': valor}, format='json')
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('tipografia_seleccionada', response.data)
+        self.assertEqual(ConfiguracionGlobal.objects.get(pk=1).tipografia_seleccionada, 1)
+
     def test_un_comprador_no_puede_cambiar_la_identidad(self):
         self.client.force_authenticate(create_user('comprador-identidad@example.test'))
         self.assertEqual(self.subir(logo=imagen_png()).status_code, 403)

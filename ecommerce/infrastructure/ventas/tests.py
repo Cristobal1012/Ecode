@@ -62,7 +62,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
         self.assertEqual(
             set(data),
             {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
-             'tema_seleccionado', 'layout_catalogo',
+             'tema_seleccionado', 'tipografia_seleccionada', 'layout_catalogo',
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
@@ -114,6 +114,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'texto_boton_ingreso': 'Ver productos',
             'banner_url': 'https://example.com/hero.jpg',
             'tema_seleccionado': 1,
+            'tipografia_seleccionada': 1,
             'layout_catalogo': 'GRID_3',
             'pasarelas_activas': [],
             'google_analytics_id': None,

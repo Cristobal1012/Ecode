@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.conf import settings
 
@@ -35,7 +36,11 @@ class ConfiguracionGlobal(models.Model):
     retiro_en_local_activo = models.BooleanField(default=True, help_text="Permite a los clientes seleccionar retiro gratuito en local")
 
     tema_seleccionado = models.IntegerField(default=1)
-    logo = models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
+    # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
+    # frontend/src/constants/tipografias.js; 1 es la Editorial (Cormorant Garamond + Inter)
+    tipografia_seleccionada = models.PositiveSmallIntegerField(
+        default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    logo =models.ImageField(upload_to='negocio/logos/', blank=True, null=True)
     favicon = models.ImageField(upload_to='negocio/favicons/', blank=True, null=True)
     google_analytics_id = models.CharField(max_length=50, blank=True, null=True)
     meta_pixel_id = models.CharField(max_length=50, blank=True, null=True)

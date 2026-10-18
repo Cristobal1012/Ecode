@@ -1,15 +1,29 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
+import { guardarCarrito } from '../carrito';
+
+// Mensaje según la causa: credenciales incorrectas o la tienda no responde
+const mensajeDeError = (error) => {
+    if (error.response?.status === 401) return 'Correo o contraseña incorrectos.';
+    if (!error.response) return 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.';
+    return 'No pudimos iniciar sesión. Inténtalo de nuevo.';
+};
 
 // googleHabilitado: la tienda configuró GOOGLE_CLIENT_ID (RN-04); si no, no se ofrece Google
-export default function Login({ onSwitchToRegister, googleHabilitado = false }) {
+// aviso: { texto, email } que deja el registro al crear la cuenta
+export default function Login({ onSwitchToRegister, googleHabilitado = false, aviso = null }) {
     const navigate = useNavigate();
+    // Prefijo único para asociar cada etiqueta con su campo
+    const id = useId();
     const [formData, setFormData] = useState({
-        email: '',
+        email: aviso?.email || '',
         password: ''
     });
+    // Los mensajes van en el formulario (no en alert()) para que el lector de pantalla los anuncie
+    const [error, setError] = useState('');
+    const [enviando, setEnviando] = useState(false);
 
     const handleChange = (e) => {
         setFormData({
@@ -19,35 +33,74 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
     };
 
     // Función para descargar el carrito guardado en la base de datos de Django al iniciar sesión
+
+    // Combina el carrito de invitada con el carrito guardado en la cuenta
     const sincronizarCarrito = async () => {
         try {
-            const respuesta = await clienteAxios.get('ventas/carrito/');
-            const carritoData = Array.isArray(respuesta.data) ? respuesta.data : (respuesta.data.items || []);
+            // 1. Recuperamos el carrito que existía antes de iniciar sesión
+            let carritoInvitado = [];
 
-            if (carritoData.length > 0) {
-                const carritoFormateado = carritoData.map(item => ({
-                    id: item.producto_id || item.id, 
-                    sku: item.sku || item.variante_sku || item.id,
-                    nombre: item.nombre || item.producto_nombre || 'Producto',
-                    precio: Number(item.precio),
-                    cantidad: Number(item.cantidad)
-                }));
-                
-                // Guardamos en memoria local del navegador y actualizamos el header
-                localStorage.setItem('carrito_local', JSON.stringify(carritoFormateado));
-                window.dispatchEvent(new Event('carritoActualizado'));
-            } else {
-                // Si en Django el carrito está vacío, limpiamos por si acaso
-                localStorage.removeItem('carrito_local');
-                window.dispatchEvent(new Event('carritoActualizado'));
+            try {
+                const carritoLocal = localStorage.getItem('carrito_local');
+                const datosLocales = carritoLocal ? JSON.parse(carritoLocal) : [];
+                carritoInvitado = Array.isArray(datosLocales) ? datosLocales : [];
+            } catch {
+                carritoInvitado = [];
             }
+
+            // 2. Recuperamos el carrito asociado a la cuenta
+            const respuesta = await clienteAxios.get('ventas/carrito/');
+            const carritoData = Array.isArray(respuesta.data)
+                ? respuesta.data
+                : (respuesta.data?.items || []);
+
+            const carritoCuenta = carritoData.map(item => ({
+                ...item,
+                id: item.producto_mongo_id || item.producto_id || item.id,
+                sku: item.variante_sku || item.sku || item.id,
+                nombre: item.nombre || item.producto_nombre || item.nombre_producto_snapshot || 'Producto',
+                precio: Number(item.precio ?? item.precio_unitario_snapshot ?? 0),
+                cantidad: Number(item.cantidad) || 1
+            }));
+
+            // 3. Partimos con los productos que ya tenía la cuenta
+            const carritoCombinado = carritoCuenta.map(item => ({ ...item }));
+
+            // 4. Agregamos los productos de invitada sin perder cantidades
+            carritoInvitado.forEach(item => {
+                const id = item.id || item.producto_mongo_id || item.producto_id;
+                const sku = item.sku || item.variante_sku || id;
+
+                const existente = carritoCombinado.find(actual =>
+                    String(actual.id) === String(id) &&
+                    String(actual.sku) === String(sku)
+                );
+
+                if (existente) {
+                    existente.cantidad =
+                        Number(existente.cantidad || 0) + Number(item.cantidad || 1);
+                } else {
+                    carritoCombinado.push({
+                        ...item,
+                        id,
+                        sku,
+                        cantidad: Number(item.cantidad) || 1
+                    });
+                }
+            });
+
+            // 5. Guardamos el carrito combinado en el navegador y en Django
+            await guardarCarrito(carritoCombinado);
         } catch (error) {
-            console.error("No se pudo recuperar el carrito de la base de datos:", error);
+            console.error('No se pudo sincronizar el carrito al iniciar sesión:', error);
         }
     };
 
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        setEnviando(true);
         try {
             // 1. Obtenemos los tokens y el interceptor los guarda
             await clienteAxios.post('usuarios/token/', formData);
@@ -58,8 +111,6 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
 
             // 3. Descargamos el carrito asociado a este usuario desde Django
             await sincronizarCarrito();
-
-            alert("¡Login exitoso!");
 
             const urlAnterior = localStorage.getItem('url_anterior_login');
             if (urlAnterior) {
@@ -73,12 +124,14 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
 
         } catch (error) {
             console.error("Axios interceptó un error:", error);
-            alert("Error al iniciar sesión. Verifica tus credenciales.");
+            setError(mensajeDeError(error));
+            setEnviando(false);
         }
     };
 
     const handleGoogleSuccess = async (credentialResponse) => {
         const googleToken = credentialResponse.credential;
+        setError('');
 
         try {
             const { data } = await clienteAxios.post('usuarios/google/', { id_token: googleToken });
@@ -92,8 +145,6 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
             // Descargamos el carrito también para Google
             await sincronizarCarrito();
 
-            alert("¡Inicio de sesión con Google exitoso!");
-
             // Igual que el login con contraseña: vuelve a donde estaba (ej. el checkout)
             const urlAnterior = localStorage.getItem('url_anterior_login');
             if (urlAnterior) {
@@ -106,54 +157,65 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
             }
         } catch (error) {
             console.error("Axios interceptó un error con Google:", error);
-            alert("No se pudo completar el acceso con Google.");
+            setError('No se pudo completar el acceso con Google.');
         }
     };
 
     const handleGoogleError = () => {
         console.error("Error al iniciar sesión con Google");
-        alert("No se pudo completar el acceso con Google.");
+        setError('No se pudo completar el acceso con Google.');
     };
 
+    // Las credenciales no se distinguen por campo: el error describe a los dos
+    const camposConError = error
+        ? { 'aria-invalid': true, 'aria-describedby': `${id}-error` }
+        : {};
+
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h2 style={{ textAlign: 'center' }}>Iniciar Sesión</h2>
-            
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Correo Electrónico:</label><br/>
-                    <input 
-                        type="email" 
+        <div className="auth-tarjeta">
+            <span className="antetitulo">Mi cuenta</span>
+            <h1 className="auth-titulo">Iniciar sesión</h1>
+
+            {aviso && !error && <p role="status" className="auth-aviso auth-aviso--exito">{aviso.texto}</p>}
+            {error && <p id={`${id}-error`} role="alert" className="auth-aviso auth-aviso--error">{error}</p>}
+
+            <form onSubmit={handleSubmit} className="auth-formulario">
+                <div className="auth-campo">
+                    <label htmlFor={`${id}-email`}>Correo electrónico</label>
+                    <input
+                        id={`${id}-email`}
+                        type="email"
                         name="email"
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
+                        autoComplete="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                        {...camposConError}
                     />
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Contraseña:</label><br/>
-                    <input 
-                        type="password" 
+                <div className="auth-campo">
+                    <label htmlFor={`${id}-password`}>Contraseña</label>
+                    <input
+                        id={`${id}-password`}
+                        type="password"
                         name="password"
-                        value={formData.password} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
+                        autoComplete="current-password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        {...camposConError}
                     />
                 </div>
-                <button type="submit" style={{ width: '100%', padding: '10px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                    Entrar
+                <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
+                    {enviando ? 'Entrando...' : 'Entrar'}
                 </button>
             </form>
 
             {googleHabilitado && (
                 <>
-                    <div style={{ margin: '20px 0', textAlign: 'center', color: '#4b5563', fontSize: '14px' }}>
-                        O ingresa con
-                    </div>
+                    <p className="auth-separador"><span>O ingresa con</span></p>
 
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div className="auth-google">
                         <GoogleLogin
                             onSuccess={handleGoogleSuccess}
                             onError={handleGoogleError}
@@ -162,14 +224,12 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
                 </>
             )}
 
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <button 
-                    onClick={onSwitchToRegister}
-                    style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                    ¿No tienes cuenta? Regístrate aquí
+            <p className="auth-cambiar">
+                ¿No tienes cuenta?{' '}
+                <button type="button" className="boton-texto auth-cambiar-boton" onClick={onSwitchToRegister}>
+                    Regístrate aquí
                 </button>
-            </div>
+            </p>
         </div>
     );
 }

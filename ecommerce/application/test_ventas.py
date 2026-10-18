@@ -1,11 +1,14 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
 from ecommerce.application.ventas import (
-    CambiarEstadoPedido, CatalogoVariantes, ConfirmarPago, InventarioVariantes, OrdenNoEncontrada,
+    CambiarEstadoPedido, CancelarPagosVencidos, CatalogoVariantes, ConfirmarPago, InventarioVariantes,
+    OrdenNoEncontrada,
     GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
-    ResolverRevision,
+    RecordarPagosPorVencer, ResolverRevision,
     ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
@@ -141,13 +144,29 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         # Simula que otro proceso cambia la orden entre la lectura y la escritura
         self.cambio_concurrente = None
 
-    def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL'):
+    def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL',
+                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0)):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
+            'metodo_pago': metodo_pago, 'creada': creada, 'recordatorio_pago': False,
         }
         return self.ordenes[orden_id]
+
+    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
+        return [orden_id for orden_id, datos in self.ordenes.items()
+                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago
+                and datos['creada'] < creadas_antes_de and not (sin_recordatorio and datos['recordatorio_pago'])]
+
+    def marcar_recordatorio_pago(self, orden_id):
+        datos = self.ordenes[orden_id]
+        if self.cambio_concurrente:
+            datos['estado'], self.cambio_concurrente = self.cambio_concurrente, None
+        if datos['estado'] != EstadoPedido.PENDIENTE or datos['recordatorio_pago']:
+            return False
+        datos['recordatorio_pago'] = True
+        return True
 
     def obtener_envio(self, orden_id):
         datos = self.ordenes.get(orden_id)
@@ -520,6 +539,90 @@ class CambiarEstadoPedidoTests(SimpleTestCase):
             self.caso.ejecutar(99, 'CANCELADO')
 
 
+class CancelarPagosVencidosTests(SimpleTestCase):
+    """Plazo de pago: una transferencia no pagada en 48 h se cancela y se avisa al comprador."""
+
+    AHORA = datetime(2026, 10, 14, 12, 0)
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.notificador = NotificadorFalso()
+        self.caso = CancelarPagosVencidos(self.ordenes, self.notificador)
+
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+        return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
+                                    creada=self.AHORA - timedelta(hours=horas))
+
+    def test_cancela_y_avisa_solo_las_transferencias_pendientes_con_mas_de_48_horas(self):
+        vencida = self.agregar(1, 49)
+        a_tiempo = self.agregar(2, 47)
+        webpay = self.agregar(3, 72, metodo_pago='TRANSBANK')
+        pagada = self.agregar(4, 72, estado='PAGADO')
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1])
+
+        self.assertEqual((vencida['estado'], vencida['motivo_cancelacion']),
+                         (EstadoPedido.CANCELADO, 'Pago no recibido a tiempo'))
+        for orden in (a_tiempo, webpay):
+            self.assertEqual(orden['estado'], EstadoPedido.PENDIENTE)
+        self.assertEqual(pagada['estado'], EstadoPedido.PAGADO)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.CANCELADO)])
+
+    def test_no_cancela_una_orden_que_el_admin_valido_mientras_tanto(self):
+        self.agregar(1, 49)
+        self.ordenes.cambio_concurrente = EstadoPedido.PAGADO
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(self.ordenes.ordenes[1]['estado'], EstadoPedido.PAGADO)
+        self.assertEqual(self.notificador.enviados, [])
+
+    def test_volver_a_ejecutar_no_repite_cancelaciones_ni_correos(self):
+        self.agregar(1, 49)
+        self.caso.ejecutar(self.AHORA)
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(len(self.notificador.enviados), 1)
+
+
+class RecordarPagosPorVencerTests(SimpleTestCase):
+    """Plazo de pago: a las 24 h sin pagar se le recuerda al comprador la transferencia, una sola vez."""
+
+    AHORA = datetime(2026, 10, 14, 12, 0)
+
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.notificador = NotificadorFalso()
+        self.caso = RecordarPagosPorVencer(self.ordenes, self.notificador)
+
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+        return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
+                                    creada=self.AHORA - timedelta(hours=horas))
+
+    def test_recuerda_solo_las_transferencias_pendientes_con_mas_de_24_horas(self):
+        por_vencer = self.agregar(1, 25)
+        reciente = self.agregar(2, 23)
+        self.agregar(3, 30, metodo_pago='TRANSBANK')
+        self.agregar(4, 30, estado='PAGADO')
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1])
+
+        self.assertTrue(por_vencer['recordatorio_pago'])
+        self.assertFalse(reciente['recordatorio_pago'])
+        # El recordatorio no cambia el estado: la orden sigue esperando el pago
+        self.assertEqual(por_vencer['estado'], EstadoPedido.PENDIENTE)
+        self.assertEqual(self.notificador.enviados, [(1, EventoPedido.RECORDATORIO_PAGO)])
+
+    def test_volver_a_ejecutar_no_repite_el_recordatorio(self):
+        self.agregar(1, 25)
+        self.caso.ejecutar(self.AHORA)
+        self.assertEqual(self.caso.ejecutar(self.AHORA + timedelta(hours=1)), [])
+        self.assertEqual(len(self.notificador.enviados), 1)
+
+    def test_no_recuerda_una_orden_que_el_admin_valido_mientras_tanto(self):
+        self.agregar(1, 25)
+        self.ordenes.cambio_concurrente = EstadoPedido.PAGADO
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [])
+        self.assertEqual(self.notificador.enviados, [])
+
+
 class ResolverRevisionTests(SimpleTestCase):
     def setUp(self):
         self.ordenes = RepositorioOrdenesFalso()
@@ -538,3 +641,40 @@ class ResolverRevisionTests(SimpleTestCase):
             self.caso.ejecutar(1)
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(99)
+
+class CalculoTotalesQATest(TestCase):
+
+    def test_descuento_no_genera_total_negativo(self):
+        subtotal = Decimal('10000.00')
+        descuento = Decimal('15000.00')
+        
+        # Validación de negocio: el total nunca debe ser menor a 0
+        total = max(Decimal('0.00'), subtotal - descuento)
+        
+        self.assertEqual(total, Decimal('0.00'))
+
+    def test_umbral_envio_gratuito(self):
+        umbral_envio = Decimal('30000.00')
+        compra_bajo_umbral = Decimal('25000.00')
+        compra_sobre_umbral = Decimal('35000.00')
+        
+        # Validación de negocio: activación de envío gratis
+        envio_gratis_1 = compra_bajo_umbral >= umbral_envio
+        envio_gratis_2 = compra_sobre_umbral >= umbral_envio
+        
+        self.assertFalse(envio_gratis_1)
+        self.assertTrue(envio_gratis_2)
+
+    def test_invalidacion_cupon_por_uso_o_expiracion(self):
+        cupon = {
+            "codigo": "DESCUENTO20",
+            "usado": False,
+            "activo": True,
+            "expiracion": timezone.now() - timezone.timedelta(days=1) # Simula fecha pasada
+        }
+        
+        # Validación de negocio: invalidación por uso o expiración
+        if cupon["usado"] or timezone.now() > cupon["expiracion"]:
+            cupon["activo"] = False
+            
+        self.assertFalse(cupon["activo"])

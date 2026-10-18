@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PaletteSelector from '../components/PaletteSelector';
+import TipografiaSelector from '../components/TipografiaSelector';
 import clienteAxios from '../components/auth/axiosConfig'; 
-import { PALETTES } from '../constants/palettes';
+import { aplicarPaleta } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
 import TablaInventario from '../components/TablaInventario';
 import Dashboard from '../components/Dashboard';
@@ -10,17 +11,27 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
+import GestorMediosPago from '../components/GestorMediosPago';
+import GestorChilexpress from '../components/GestorChilexpress';
+import GestorPromociones from '../components/GestorPromociones';
+import GestorContacto from '../components/GestorContacto';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
 const SECCIONES_CONFIGURACION = [
+  { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
-  { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' }
+  { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
+  { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
+  { id: 'config-contacto', titulo: 'Contacto y Redes' },
+  { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
+  { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-promociones', titulo: 'Promociones y Descuentos' }
 ];
 
 const TituloSeccion = ({ id }) => (
-  <h3 id={id} tabIndex={-1} className="config-titulo" style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-text)' }}>
+  <h3 id={id} tabIndex={-1} className="config-titulo">
     {SECCIONES_CONFIGURACION.find(seccion => seccion.id === id).titulo}
   </h3>
 );
@@ -56,20 +67,7 @@ export default function Admin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedPaletteId = Number(localStorage.getItem('ecommerce_palette')) || 1;
-    const activePalette = PALETTES.find((p) => p.id === savedPaletteId) || PALETTES[0];
-
-    const applyColors = (colors) => {
-      if (!colors) return;
-      const root = document.documentElement;
-      root.style.setProperty('--color-primary', colors.primary);
-      root.style.setProperty('--color-secondary', colors.secondary);
-      root.style.setProperty('--color-accent', colors.accent);
-      root.style.setProperty('--color-background', colors.background);
-      root.style.setProperty('--color-text', colors.text);
-    };
-
-    applyColors(activePalette.colors);
+    aplicarPaleta(Number(localStorage.getItem('ecommerce_palette')) || 1);
 
     const fetchTema = async () => {
       try {
@@ -79,8 +77,7 @@ export default function Admin() {
           if (config.tema_seleccionado !== undefined) {
             const temaId = Number(config.tema_seleccionado);
             localStorage.setItem('ecommerce_palette', temaId.toString());
-            const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-            applyColors(palette.colors);
+            aplicarPaleta(temaId);
           }
           // Cargar datos de la tienda para el formulario de retiro local
           setConfigLocal({
@@ -100,9 +97,7 @@ export default function Admin() {
     fetchTema();
 
     const handleThemeChanged = (e) => {
-      const temaId = e.detail.temaId;
-      const newPalette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-      applyColors(newPalette.colors);
+      aplicarPaleta(e.detail.temaId);
     };
 
     window.addEventListener('themeChanged', handleThemeChanged);
@@ -131,31 +126,19 @@ export default function Admin() {
       case 'inventario':
         return (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '1.5rem', color: 'var(--color-primary)', margin: 0 }}>Inventario</h2>
+            <div className="admin-encabezado-vista">
+              <h2 className="admin-titulo">Inventario</h2>
               {!mostrandoFormulario && !productoAEditar && (
-                <button 
-                  onClick={() => setMostrandoFormulario(true)}
-                  style={{ 
-                    padding: '10px 20px', 
-                    backgroundColor: 'var(--color-accent)', 
-                    color: '#fff', 
-                    border: 'none', 
-                    borderRadius: '4px', 
-                    cursor: 'pointer', 
-                    fontWeight: 'bold',
-                    transition: 'opacity 0.2s'
-                  }}
-                  onMouseOver={(e) => e.target.style.opacity = '0.9'}
-                  onMouseOut={(e) => e.target.style.opacity = '1'}
-                >
-                  + Agregar Producto
+                <button type="button" className="boton boton-primario" onClick={() => setMostrandoFormulario(true)}>
+                  + Agregar producto
                 </button>
               )}
             </div>
 
             {mostrandoFormulario || productoAEditar ? (
-              <FormularioProducto 
+              <FormularioProducto
+                // Un formulario nuevo por producto: lee sus datos una sola vez al montarse
+                key={productoAEditar ? (productoAEditar.id || productoAEditar._id) : 'nuevo'}
                 productoAEditar={productoAEditar}
                 alCancelar={() => {
                   setMostrandoFormulario(false);
@@ -176,7 +159,7 @@ export default function Admin() {
       case 'ventas':
         return (
           <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Ventas</h2>
+            <h2 className="admin-titulo">Ventas</h2>
             <GestorPedidos/>
           </div>
         );
@@ -184,7 +167,7 @@ export default function Admin() {
       case 'configuracion':
         return (
           <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--color-primary)' }}>Configuración</h2>
+            <h2 className="admin-titulo">Configuración</h2>
             <div className="config-layout">
               <nav aria-label="Secciones de configuración" className="config-indice">
                 <ul>
@@ -197,102 +180,121 @@ export default function Admin() {
               </nav>
 
               <div className="config-secciones">
-                <div style={{ marginBottom: '30px' }}>
+                {/* RF-01.1: la landing, el logo y el favicon se editan en la misma página, viendo cómo quedan */}
+                <div>
+                  <TituloSeccion id="config-landing" />
+                  <p className="texto-secundario admin-descripcion">
+                    Cambia el nombre de tu tienda, el logo, el favicon y los textos e imágenes de la página de
+                    inicio directamente sobre ella. Nada se publica hasta que guardes.
+                  </p>
+                  <button type="button" className="boton boton-primario" onClick={() => navigate('/?editar=1')}>
+                    Editar página de inicio
+                  </button>
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
                   <TituloSeccion id="config-paleta" />
                   <PaletteSelector />
                 </div>
 
-                <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-tipografia" />
+                  <TipografiaSelector />
+                </div>
+
+                <hr className="admin-separador" />
 
                 <div>
                   <TituloSeccion id="config-local" />
                   {mensajeLocal && (
-                    <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeLocal.includes('éxito') ? '#d4edda' : '#f8d7da', color: mensajeLocal.includes('éxito') ? '#155724' : '#721c24', borderRadius: '4px', fontSize: '0.9rem' }}>
+                    <div role="status" className={`admin-aviso ${mensajeLocal.includes('éxito') ? 'admin-aviso--exito' : 'admin-aviso--error'}`}>
                       {mensajeLocal}
                     </div>
                   )}
-                  <form onSubmit={handleGuardarConfigLocal} style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <div style={{ display: 'flex', gap: '15px' }}>
-                      <div style={{ flex: 3 }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Calle del Local</label>
-                        <input 
-                          type="text" 
-                          value={configLocal.calle_origen} 
-                          onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})} 
-                          required 
-                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                          placeholder="Ej: Av. Principal"
-                        />
+                  <form onSubmit={handleGuardarConfigLocal} className="admin-formulario">
+                    <div className="admin-fila">
+                      <div className="admin-campo admin-campo--ancho">
+                        <label htmlFor="local-calle">Calle del local</label>
+                        <input id="local-calle" type="text" value={configLocal.calle_origen}
+                          onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})}
+                          required placeholder="Ej: Av. Principal" />
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Número</label>
-                        <input 
-                          type="text" 
-                          value={configLocal.numero_origen} 
-                          onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})} 
-                          required 
-                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                          placeholder="Ej: 123"
-                        />
+                      <div className="admin-campo">
+                        <label htmlFor="local-numero">Número</label>
+                        <input id="local-numero" type="text" value={configLocal.numero_origen}
+                          onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})}
+                          required placeholder="Ej: 123" />
                       </div>
                     </div>
+
+                    <div className="admin-campo">
+                      <label htmlFor="local-detalle">Piso, oficina, bodega o detalle (opcional)</label>
+                      <input id="local-detalle" type="text" value={configLocal.dpto_casa_origen}
+                        onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})}
+                        placeholder="Ej: Piso 4, Oficina 405" />
+                    </div>
+
+                    <div className="admin-fila">
+                      <div className="admin-campo">
+                        <label htmlFor="local-comuna">Comuna</label>
+                        <input id="local-comuna" type="text" value={configLocal.comuna_origen}
+                          onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})}
+                          required placeholder="Ej: Santiago" />
+                      </div>
+                      <div className="admin-campo">
+                        <label htmlFor="local-region">Región</label>
+                        <input id="local-region" type="text" value={configLocal.region_origen}
+                          onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})}
+                          placeholder="Ej: Metropolitana" />
+                      </div>
+                    </div>
+
+                    <label className="admin-casilla">
+                      <input type="checkbox" checked={configLocal.retiro_en_local_activo}
+                        onChange={(e) => setConfigLocal({...configLocal, retiro_en_local_activo: e.target.checked})} />
+                      Permitir a los clientes seleccionar "Retiro en Local" gratuito en el Checkout
+                    </label>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Piso, Oficina, Bodega o Detalle (Opcional)</label>
-                      <input 
-                        type="text" 
-                        value={configLocal.dpto_casa_origen} 
-                        onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})} 
-                        style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                        placeholder="Ej: Piso 4, Oficina 405"
-                      />
+                      <button type="submit" disabled={guardandoLocal} className="boton boton-primario">
+                        {guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
+                      </button>
                     </div>
-
-                    <div style={{ display: 'flex', gap: '15px' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Comuna</label>
-                        <input 
-                          type="text" 
-                          value={configLocal.comuna_origen} 
-                          onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})} 
-                          required 
-                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                          placeholder="Ej: Santiago"
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' }}>Región</label>
-                        <input 
-                          type="text" 
-                          value={configLocal.region_origen} 
-                          onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})} 
-                          style={{ width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                          placeholder="Ej: Metropolitana"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.95rem', color: '#374151', cursor: 'pointer', marginTop: '5px' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={configLocal.retiro_en_local_activo} 
-                          onChange={(e) => setConfigLocal({...configLocal, retiro_en_local_activo: e.target.checked})} 
-                          style={{ marginRight: '10px', width: '18px', height: '18px' }}
-                        />
-                        Permitir a los clientes seleccionar "Retiro en Local" gratuito en el Checkout
-                      </label>
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={guardandoLocal}
-                      style={{ padding: '12px 20px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardandoLocal ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '1rem', marginTop: '10px' }}
-                    >
-                      {guardandoLocal ? 'Guardando...' : 'Guardar Dirección y Opciones de Retiro'}
-                    </button>
                   </form>
                 </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-contacto" />
+                  <GestorContacto />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-chilexpress" />
+                  <GestorChilexpress />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-medios-pago" />
+                  <GestorMediosPago />
+                </div>
+
+                <hr className="admin-separador" />
+        
+                <div>
+                  <TituloSeccion id="config-promociones" />
+                  <GestorPromociones />
+                </div>
+
               </div>
             </div>
           </div>
@@ -304,66 +306,26 @@ export default function Admin() {
             </div>
           );
       default:
-        return <h2 style={{ color: 'var(--color-text)' }}>Bienvenido al Panel</h2>;
+        return <h2 className="admin-titulo">Bienvenido al Panel</h2>;
     }
   };
 
   return (
-  <div
-    style={{
-      display: 'flex',
-      minHeight: '100vh',
-      width: '100%',
-      backgroundColor: '#f3f4f6',
-      fontFamily: "'Inter', sans-serif"
-    }}
-  >
-    
-    {/* SIDEBAR */}
-    <AdminSidebar
-      vistaActiva={vistaActiva}
-      setVistaActiva={setVistaActiva}
-      setMostrandoFormulario={setMostrandoFormulario}
-      setProductoAEditar={setProductoAEditar}
-      navigate={navigate}
-    />
+    <div className="admin">
+      <AdminSidebar
+        vistaActiva={vistaActiva}
+        setVistaActiva={setVistaActiva}
+        setMostrandoFormulario={setMostrandoFormulario}
+        setProductoAEditar={setProductoAEditar}
+        navigate={navigate}
+      />
 
-    {/* CONTENIDO PRINCIPAL */}
-    <main
-      style={{
-        flex: 1,
-        minWidth: 0,
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'background-color 0.3s'
-      }}
-    >
-      
-      {/* TOP NAVBAR */}
-      <AdminTopbar />
-
-      {/* CONTENEDOR VISTAS */}
-      <div
-        style={{
-          flex: 1,
-          padding: '0 40px 40px 40px'
-        }}
-      >
-        <div
-          style={{
-            background: '#ffffff',
-            padding: '30px',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            minHeight: '100%',
-            boxSizing: 'border-box'
-          }}
-        >
+      <main className="admin-principal">
+        <AdminTopbar />
+        <div className="admin-contenido">
           {renderizarContenido()}
         </div>
-      </div>
-    </main>
-  </div>
-);
+      </main>
+    </div>
+  );
 }

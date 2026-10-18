@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
-// Nombres de la interfaz. Las transiciones permitidas las informa el backend (AGENTS.md §9)
+// Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
   PENDIENTE: 'Pendiente',
   PAGADO: 'Pagado',
@@ -102,10 +102,10 @@ export default function GestorPedidos() {
       return <span>OT {pedido.numero_seguimiento_tracking}</span>;
     }
     if (pedido.proveedor_logistico === 'RETIRO_LOCAL') {
-      return <span style={{ color: '#4b5563' }}>Retiro en local</span>;
+      return <span style={{ color: 'var(--color-muted)' }}>Retiro en local</span>;
     }
     if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
-      return <span style={{ color: '#4b5563' }}>{pedido.proveedor_logistico || '—'}</span>;
+      return <span style={{ color: 'var(--color-muted)' }}>{pedido.proveedor_logistico || '—'}</span>;
     }
     return (
       <div style={{ fontSize: '0.9rem' }}>
@@ -114,7 +114,7 @@ export default function GestorPedidos() {
             <strong>Sin OT:</strong> {pedido.error_orden_transporte}
           </div>
         ) : (
-          <span style={{ color: '#4b5563' }}>Sin OT</span>
+          <span style={{ color: 'var(--color-muted)' }}>Sin OT</span>
         )}
         {pedido.puede_generar_orden_transporte && (
           <div>
@@ -122,7 +122,7 @@ export default function GestorPedidos() {
               type="button"
               onClick={() => handleGenerarOT(pedido)}
               disabled={enCurso === pedido.id}
-              style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: '#fff', color: '#1d4ed8', border: '1px solid #1d4ed8', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
             >
               {pedido.error_orden_transporte ? 'Reintentar OT' : 'Generar OT'}
             </button>
@@ -145,9 +145,9 @@ export default function GestorPedidos() {
         </div>
       )}
 
-      <div style={{ backgroundColor: '#fff', borderRadius: '8px', overflowX: 'auto' }}>
+      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-          <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+          <thead style={{ backgroundColor: 'var(--color-secondary)', borderBottom: '2px solid var(--color-border)' }}>
             <tr>
               <th style={{ padding: '12px' }}>Nº Orden</th>
               <th style={{ padding: '12px' }}>Cliente</th>
@@ -161,9 +161,20 @@ export default function GestorPedidos() {
             {pedidos.map(pedido => {
               const transiciones = pedido.transiciones_permitidas || [];
               return (
-                <tr key={pedido.id} style={{ borderBottom: '1px solid #e5e7eb', verticalAlign: 'top' }}>
+                <tr key={pedido.id} style={{ borderBottom: '1px solid var(--color-border)', verticalAlign: 'top' }}>
                   <td style={{ padding: '12px', fontWeight: 'bold' }}>#{pedido.id}</td>
-                  <td style={{ padding: '12px' }}>{pedido.email_cliente || 'Usuario Registrado'}</td>
+                  <td style={{ padding: '12px' }}>
+                    {pedido.email_cliente || 'Usuario Registrado'}
+                    {pedido.nombre_destinatario && (
+                      // Quién recibe o retira (RF-02.3): a quién contactar para coordinar la entrega
+                      <div style={{ marginTop: '4px', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+                        Recibe: {pedido.nombre_destinatario}
+                        {pedido.telefono_destinatario && (
+                          <> · <a href={`tel:${pedido.telefono_destinatario}`} style={{ color: 'var(--color-primary)' }}>{pedido.telefono_destinatario}</a></>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: '12px' }}>${Number(pedido.total_final).toLocaleString('es-CL')}</td>
                   <td style={{ padding: '12px' }}>
                     <select
@@ -174,7 +185,7 @@ export default function GestorPedidos() {
                       style={{
                         padding: '6px',
                         borderRadius: '4px',
-                        border: '1px solid #ccc',
+                        border: '1px solid var(--color-border)',
                         cursor: transiciones.length === 0 ? 'not-allowed' : 'pointer'
                       }}
                     >
@@ -186,7 +197,7 @@ export default function GestorPedidos() {
                       ))}
                     </select>
                     {pedido.estado === 'CANCELADO' && pedido.motivo_cancelacion && (
-                      <div style={{ marginTop: '6px', fontSize: '0.85rem', color: '#4b5563' }}>
+                      <div style={{ marginTop: '6px', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
                         {pedido.motivo_cancelacion}
                       </div>
                     )}
@@ -200,14 +211,14 @@ export default function GestorPedidos() {
                             type="button"
                             onClick={() => handleResolverRevision(pedido)}
                             disabled={enCurso === pedido.id}
-                            style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: '#fff', color: '#92400e', border: '1px solid #d97706', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                            style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'var(--color-surface)', color: '#92400e', border: '1px solid #d97706', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                           >
                             Marcar como revisada
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <span style={{ color: '#6b7280' }}>—</span>
+                      <span style={{ color: 'var(--color-muted)' }}>—</span>
                     )}
                   </td>
                   <td style={{ padding: '12px' }}>{celdaEnvio(pedido)}</td>
@@ -216,7 +227,7 @@ export default function GestorPedidos() {
             })}
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+                <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-muted)' }}>
                   No hay pedidos registrados en la tienda.
                 </td>
               </tr>

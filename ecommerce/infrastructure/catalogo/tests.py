@@ -509,7 +509,7 @@ def usar_mongo_de_prueba(cls):
 
 
 class ReducirStockVarianteTests(SimpleTestCase):
-    """RN-03 y AGENTS.md §4.1: el descuento de stock es atómico y condicional."""
+    """RN-03: el descuento de stock es atómico y condicional."""
 
     @classmethod
     def setUpClass(cls):
@@ -620,3 +620,74 @@ class CatalogoPublicoTests(APITestCase):
         self.autenticar(self.admin)
         self.assertEqual(self.listado(), ['Borrador', 'Publicado'])
         self.assertEqual(self.detalle('Borrador').status_code, 200)
+
+
+class VariantePrecioOfertaTests(SimpleTestCase):
+    """Pruebas para E01 de SCRUM-136: validación de límites de precio_oferta."""
+
+    def test_variante_acepta_precio_oferta_valido(self):
+        from .serializers import VarianteSerializer
+        serializer = VarianteSerializer(data={
+            'sku': 'QA-VALIDO',
+            'precio': '10000.00',
+            'precio_oferta': '8000.00',
+            'stock': 5,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(float(serializer.validated_data['precio_oferta']), 8000.0)
+
+    def test_variante_rechaza_precio_oferta_cero(self):
+        from .serializers import VarianteSerializer
+        serializer = VarianteSerializer(data={
+            'sku': 'QA-CERO',
+            'precio': '10000.00',
+            'precio_oferta': '0.00',
+            'stock': 5,
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('precio_oferta', serializer.errors)
+
+    def test_variante_rechaza_precio_oferta_negativo(self):
+        from .serializers import VarianteSerializer
+        serializer = VarianteSerializer(data={
+            'sku': 'QA-NEGATIVO',
+            'precio': '10000.00',
+            'precio_oferta': '-500.00',
+            'stock': 5,
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('precio_oferta', serializer.errors)
+
+    def test_variante_rechaza_precio_oferta_mayor_o_igual_a_precio(self):
+        from .serializers import VarianteSerializer
+        serializer_mayor = VarianteSerializer(data={
+            'sku': 'QA-MAYOR',
+            'precio': '10000.00',
+            'precio_oferta': '12000.00',
+            'stock': 5,
+        })
+        self.assertFalse(serializer_mayor.is_valid())
+        self.assertIn('precio_oferta', serializer_mayor.errors)
+
+        serializer_igual = VarianteSerializer(data={
+            'sku': 'QA-IGUAL',
+            'precio': '10000.00',
+            'precio_oferta': '10000.00',
+            'stock': 5,
+        })
+        self.assertFalse(serializer_igual.is_valid())
+        self.assertIn('precio_oferta', serializer_igual.errors)
+
+    def test_producto_rechaza_skus_duplicados_en_variantes(self):
+        from .serializers import ProductoSerializer
+        serializer = ProductoSerializer(data={
+            'nombre': 'Consola Test',
+            'categoria': 'Videojuegos',
+            'variantes': [
+                {'sku': 'SKU-DUP', 'precio': '10000.00', 'stock': 5},
+                {'sku': 'SKU-DUP', 'precio': '20000.00', 'stock': 2},
+            ]
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('variantes', serializer.errors)
+

@@ -23,4 +23,5 @@
   </tr>
 </table>
 <p style="margin:16px 0 4px 0; font-size:14px;"><strong>Entrega:</strong> {{ entrega }}</p>
+{% if orden.nombre_destinatario %}<p style="margin:0 0 4px 0; font-size:14px;"><strong>Recibe:</strong> {{ orden.nombre_destinatario }}{% if orden.telefono_destinatario %} ({{ orden.telefono_destinatario }}){% endif %}</p>{% endif %}
 <p style="margin:0; font-size:14px;"><strong>Medio de pago:</strong> {{ metodo_pago }}</p>

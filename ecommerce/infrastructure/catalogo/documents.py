@@ -7,6 +7,7 @@ from mongoengine import Document, EmbeddedDocument, fields
 class Variante(EmbeddedDocument):
     sku = fields.StringField(required=True, unique=True)
     precio = fields.DecimalField(required=True, precision=2)
+    precio_oferta = fields.DecimalField(null=True, precision=2)
     stock = fields.IntField(required=True, default=0)
     imagen_especifica = fields.StringField(null=True, blank=True)
     atributos_variables = fields.DictField(default=dict)
@@ -23,6 +24,8 @@ class Producto(Document):
     nombre = fields.StringField(required=True, max_length=255)
     descripcion = fields.StringField(null=True, blank=True)
     categoria = fields.StringField(required=True)
+    meta_titulo = fields.StringField(max_length=60, null=True, blank=True)
+    meta_descripcion = fields.StringField(max_length=160, null=True, blank=True)
     # Managed images use storage keys internally; serializers expose their URLs.
     # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)
@@ -39,7 +42,7 @@ class Producto(Document):
 
     @classmethod
     def reducir_stock_variante(cls, producto_id, sku, cantidad):
-        """Descuenta stock de una variante de forma atómica y condicional (RN-03, AGENTS.md §4.1).
+        """Descuenta stock de una variante de forma atómica y condicional (RN-03).
 
         Un único update filtra por stock suficiente, así dos compras simultáneas de la última
         unidad producen una sola venta. Devuelve False si no hay stock o no existe el SKU.

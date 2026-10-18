@@ -3,18 +3,13 @@ import { Navigate, Outlet } from 'react-router-dom';
 import clienteAxios from "./auth/axiosConfig";
 
 export default function ProtectedRoute({ allowedRoles }) {
-    const [cargando, setCargando] = useState(true);
+    // Sin token no hay nada que verificar: se redirige al login de inmediato
+    const [cargando, setCargando] = useState(() => Boolean(localStorage.getItem('access_token')));
     const [autenticado, setAutenticado] = useState(false);
     const [rol, setRol] = useState(null);
 
     useEffect(() => {
-        // Buscamos la llave correcta
-        const token = localStorage.getItem('access_token');
-
-        if (!token) {
-            setCargando(false);
-            return;
-        }
+        if (!localStorage.getItem('access_token')) return;
 
         // Usamos la ruta relativa, clienteAxios pone el baseURL y el Header
         clienteAxios.get('usuarios/me/')

@@ -1,110 +1,211 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import useCarrito from '../hooks/useCarrito';
+import { guardarCarrito, validarCarrito } from './carrito';
 
 const CarritoCompras = () => {
     const [isOpen, setIsOpen] = useState(false);
     const carritoRef = useRef(null);
-    const [itemsCarrito, setItemsCarrito] = useState([]); // Estado dinámico
+    const itemsCarrito = useCarrito();
+    const [aviso, setAviso] = useState('');
+    const [tipoAviso, setTipoAviso] = useState('status');
+    const [actualizando, setActualizando] = useState(false);
 
     useEffect(() => {
-        // Función para leer los datos actuales
-        const cargarCarrito = () => {
-            const carritoGuardado = localStorage.getItem('carrito_local');
-            if (carritoGuardado) {
-                setItemsCarrito(JSON.parse(carritoGuardado));
-            } else {
-                setItemsCarrito([]);
-            }
-        };
-
-        // Carga inicial
-        cargarCarrito();
-
-        // Escucha un evento para actualizarse al instante si iniciamos/cerramos sesión o agregamos algo
-        window.addEventListener('carritoActualizado', cargarCarrito);
-
         const handleClickOutside = (event) => {
             if (carritoRef.current && !carritoRef.current.contains(event.target)) {
                 setIsOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        
+
         return () => {
-            window.removeEventListener('carritoActualizado', cargarCarrito);
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
+
+    const mostrarAviso = (mensaje, tipo = 'status') => {
+        setAviso(mensaje);
+        setTipoAviso(tipo);
+    };
+
+    const cambiarCantidad = async (item, incremento) => {
+        if (actualizando) return;
+
+        const cantidadNueva = Number(item.cantidad) + incremento;
+        if (cantidadNueva < 1) return;
+
+        if (incremento < 0) {
+            const nuevoCarrito = itemsCarrito.map(actual =>
+                actual.id === item.id && actual.sku === item.sku
+                    ? { ...actual, cantidad: cantidadNueva }
+                    : actual
+            );
+
+            await guardarCarrito(nuevoCarrito);
+            mostrarAviso('Cantidad actualizada.');
+            return;
+        }
+
+        setActualizando(true);
+        setAviso('');
+
+        try {
+            const candidato = itemsCarrito.map(actual =>
+                actual.id === item.id && actual.sku === item.sku
+                    ? { ...actual, cantidad: cantidadNueva }
+                    : actual
+            );
+
+            const revision = await validarCarrito(candidato);
+            const revisada = revision.items?.find(
+                linea =>
+                    linea.producto_mongo_id === item.id &&
+                    linea.variante_sku === item.sku
+            );
+
+            if (!revisada) {
+                mostrarAviso('No pudimos comprobar el stock. Inténtalo nuevamente.', 'alert');
+                return;
+            }
+
+            if (revisada.problema || revisada.disponible < cantidadNueva) {
+                mostrarAviso(
+                    revisada.problema === 'STOCK_INSUFICIENTE'
+                        ? `Solo quedan ${revisada.disponible} unidades.`
+                        : revisada.mensaje || 'No se pudo aumentar la cantidad.',
+                    'alert'
+                );
+                return;
+            }
+
+            const carritoNuevo = candidato.map(actual =>
+                actual.id === item.id && actual.sku === item.sku
+                    ? { ...actual, precio: revisada.precio ?? actual.precio }
+                    : actual
+            );
+
+            await guardarCarrito(carritoNuevo);
+            mostrarAviso('Cantidad actualizada.');
+        } catch (error) {
+            console.error('Error al actualizar el carrito:', error);
+            mostrarAviso('No pudimos comprobar el stock. Inténtalo nuevamente.', 'alert');
+        } finally {
+            setActualizando(false);
+        }
+    };
+
+    const quitarProducto = async (item) => {
+        if (actualizando) return;
+
+        const nuevoCarrito = itemsCarrito.filter(
+            actual => !(actual.id === item.id && actual.sku === item.sku)
+        );
+
+        await guardarCarrito(nuevoCarrito);
+        mostrarAviso('Producto quitado del carrito.');
+    };
 
     const total = itemsCarrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
     const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
 
     return (
-        <div style={{ position: 'relative' }} ref={carritoRef}>
+        <div className="carrito-compras" ref={carritoRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
             <button
+                type="button"
+                className="header-icono"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-label={`Carrito de compras, ${cantidadTotal} ${cantidadTotal === 1 ? 'producto' : 'productos'}`}
                 aria-expanded={isOpen}
-                style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '8px', backgroundColor: 'transparent', border: 'none',
-                    cursor: 'pointer', position: 'relative'
-                }}
             >
-                <svg aria-hidden="true" style={{ width: '28px', height: '28px', color: '#1f2937' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                {/* Bolsa de compras de trazo fino, como el resto de los íconos del header */}
+                <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 7h12l-1 13H7L6 7Z" />
+                    <path d="M9 7a3 3 0 0 1 6 0" />
                 </svg>
-                
+
                 {cantidadTotal > 0 && (
-                    <span aria-hidden="true" style={{
-                        position: 'absolute', top: '0px', right: '0px', backgroundColor: '#ef4444',
-                        color: 'white', fontSize: '12px', fontWeight: 'bold', width: '18px',
-                        height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        {cantidadTotal}
-                    </span>
+                    <span aria-hidden="true" className="header-icono-contador">{cantidadTotal}</span>
                 )}
             </button>
 
             {isOpen && (
-                <div style={{
-                    position: 'absolute', top: '100%', right: '0', marginTop: '8px', width: '320px',
-                    backgroundColor: 'white', borderRadius: '8px',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', border: '1px solid #f3f4f6', zIndex: 9999
-                }}>
-                    <div style={{ padding: '16px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb', borderRadius: '8px 8px 0 0' }}>
-                        <h3 style={{ margin: 0, fontWeight: 'bold', color: '#1f2937' }}>Mi Carrito</h3>
+                <div className="carrito-panel panel-header">
+                    <div className="panel-header-encabezado">
+                        <h3>Mi Carrito</h3>
                     </div>
 
-                    <div style={{ padding: '16px', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div className="carrito-panel-lista">
+                        {aviso && (
+                            <p role={tipoAviso} className={`carrito-aviso${tipoAviso === 'alert' ? ' carrito-aviso--error' : ''}`}>
+                                {aviso}
+                            </p>
+                        )}
+
                         {itemsCarrito.length > 0 ? (
-                            itemsCarrito.map((item) => (
-                                <div key={item.sku} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
-                                    <div>
-                                        <p style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#374151' }}>{item.nombre}</p>
-                                        <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>Cant: {item.cantidad}</p>
-                                    </div>
-                                    <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#1f2937' }}>
-                                        ${(item.precio * item.cantidad).toLocaleString('es-CL')}
+                            itemsCarrito.map(item => (
+                                <div key={`${item.id}-${item.sku}`} className="carrito-item">
+                                    <p className="carrito-item-nombre">{item.nombre}</p>
+
+                                    <p className="carrito-item-precio">
+                                        ${(Number(item.precio) * item.cantidad).toLocaleString('es-CL')}
                                     </p>
+
+                                    <div className="carrito-item-acciones">
+                                        <div className="carrito-cantidad">
+                                            <button
+                                                type="button"
+                                                onClick={() => cambiarCantidad(item, -1)}
+                                                disabled={item.cantidad <= 1 || actualizando}
+                                                aria-label={`Disminuir cantidad de ${item.nombre}`}
+                                            >
+                                                −
+                                            </button>
+
+                                            <span aria-label={`Cantidad: ${item.cantidad}`}>
+                                                {item.cantidad}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => cambiarCantidad(item, 1)}
+                                                disabled={actualizando}
+                                                aria-label={`Aumentar cantidad de ${item.nombre}`}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="carrito-quitar"
+                                            onClick={() => quitarProducto(item)}
+                                            disabled={actualizando}
+                                            aria-label={`Quitar ${item.nombre} del carrito`}
+                                        >
+                                            Quitar
+                                        </button>
+                                    </div>
                                 </div>
                             ))
                         ) : (
-                            <p style={{ margin: 0, textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Tu carrito está vacío</p>
+                            <div className="carrito-vacio">
+                                <p>Tu carrito está vacío</p>
+                                <Link to="/catalogo" className="enlace-flecha" onClick={() => setIsOpen(false)}>
+                                    Ver catálogo <span aria-hidden="true">→</span>
+                                </Link>
+                            </div>
                         )}
                     </div>
 
                     {itemsCarrito.length > 0 && (
-                        <div style={{ padding: '16px', borderTop: '1px solid #f3f4f6' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <span style={{ fontWeight: 'bold', color: '#374151' }}>Total:</span>
-                                <span style={{ fontWeight: 'bold', color: '#1f2937', fontSize: '18px' }}>${total.toLocaleString('es-CL')}</span>
+                        <div className="carrito-panel-pie">
+                            <div className="carrito-total">
+                                <span>Total:</span>
+                                <span>${total.toLocaleString('es-CL')}</span>
                             </div>
-                            <Link to="/checkout" onClick={() => setIsOpen(false)} style={{
-                                display: 'block', width: '100%', textAlign: 'center', backgroundColor: '#2563eb',
-                                color: 'white', padding: '10px 0', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold'
-                            }}>
+                            <Link to="/checkout" onClick={() => setIsOpen(false)} className="boton boton-primario carrito-pagar">
                                 Ir a Pagar
                             </Link>
                         </div>

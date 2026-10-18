@@ -3,12 +3,14 @@
 ## Flujo actual (Chilexpress)
 
 La cotización y el checkout usan `ProveedorLogisticoAdapter`
-(`ecommerce/infrastructure/ventas/adapters/logistica.py`), que consulta la API de Chilexpress con las claves
-definidas en `.env`:
+(`ecommerce/infrastructure/ventas/adapters/logistica.py`), que consulta la API de Chilexpress con las llaves que
+carga el admin en el panel (Configuración > Envíos con Chilexpress). Se guardan cifradas en `ProveedorEnvio`
+(`DjangoRepositorioCredencialesChilexpress`) y el panel solo ve sus últimos 4 caracteres
+(`GET`/`PUT /api/ventas/admin/chilexpress/`):
 
-- `CHILEXPRESS_API_KEY_COTIZADOR`: tarifas (`rating/api/v1.0/rates/business`).
-- `CHILEXPRESS_API_KEY_COBERTURAS`: regiones y comunas (`georeference`). Si falta, se usa la del cotizador.
-- `CHILEXPRESS_API_KEY_ENVIOS`: órdenes de transporte y seguimiento.
+- Cotizador (obligatoria): tarifas (`rating/api/v1.0/rates/business`).
+- Coberturas: regiones, comunas y sucursales (`georeference`). Si falta, se usa la del cotizador.
+- Envíos: órdenes de transporte, etiquetas y seguimiento. Si falta, se usa la del cotizador.
 
 El catálogo de comunas (nombre → código de cobertura) se descarga desde Chilexpress y se guarda en memoria.
 

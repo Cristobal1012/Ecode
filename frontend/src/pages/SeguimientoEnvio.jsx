@@ -1,23 +1,40 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom'; 
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
+import Header from '../components/header/header';
+import './SeguimientoEnvio.css';
 
 export default function SeguimientoEnvio() {
-    const [searchParams] = useSearchParams(); 
-    
-    // 3. Modificamos el estado inicial para que lea la URL (?orden=123)
+    return (
+        <>
+            <Header />
+            <SeguimientoContenido />
+        </>
+    );
+}
+
+const ESTADOS = [
+    'En origen',
+    'En tránsito',
+    'En reparto',
+    'Entregado'
+];
+
+function SeguimientoContenido() {
+    const [searchParams] = useSearchParams();
+
+    // El número de orden puede venir en la URL (?orden=123) desde el historial o la página de compra
     const [numeroOrden, setNumeroOrden] = useState(searchParams.get('orden') || '');
-    
+
     const [email, setEmail] = useState('');
     const [seguimiento, setSeguimiento] = useState(null);
     const [mensaje, setMensaje] = useState('');
+    const tituloResultado = useRef(null);
 
-    const estados = [
-        'En origen',
-        'En tránsito',
-        'En reparto',
-        'Entregado'
-    ];
+    // Al llegar el resultado, el foco pasa a su título para que el lector de pantalla lo anuncie
+    useEffect(() => {
+        if (seguimiento) tituloResultado.current?.focus();
+    }, [seguimiento]);
 
     const consultarSeguimiento = async (e) => {
         e.preventDefault();
@@ -47,187 +64,115 @@ export default function SeguimientoEnvio() {
     const pendienteDeDespacho =
         estadoActual === 'Pendiente de despacho';
 
-    const indiceEstadoActual = estados.indexOf(estadoActual);
+    const indiceEstadoActual = ESTADOS.indexOf(estadoActual);
+
+    // El error es genérico (no revela qué dato no coincide), así que marca ambos campos
+    const camposConError = mensaje
+        ? { 'aria-invalid': true, 'aria-describedby': 'seguimiento-error' }
+        : {};
 
     return (
-        <div
-            style={{
-                maxWidth: '700px',
-                margin: '40px auto',
-                padding: '20px',
-                fontFamily: 'sans-serif'
-            }}
-        >
-            <h1>Seguimiento de pedido</h1>
+        <main className="seguimiento-main">
+            <div className="seguimiento">
+                <span className="antetitulo">Tu pedido</span>
+                <h1 className="seguimiento-titulo">Seguimiento de pedido</h1>
 
-            <p>
-                Ingresa el número de orden y el correo utilizado en la compra.
-            </p>
-
-            <form onSubmit={consultarSeguimiento}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Número de orden</label>
-                    <input
-                        type="text"
-                        value={numeroOrden}
-                        onChange={(e) => setNumeroOrden(e.target.value)}
-                        required
-                        style={{
-                            display: 'block',
-                            width: '100%',
-                            padding: '10px',
-                            marginTop: '5px'
-                        }}
-                    />
-                </div>
-
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Correo electrónico</label>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        style={{
-                            display: 'block',
-                            width: '100%',
-                            padding: '10px',
-                            marginTop: '5px'
-                        }}
-                    />
-                </div>
-
-                <button type="submit">
-                    Consultar seguimiento
-                </button>
-            </form>
-
-            {mensaje && (
-                <p style={{ color: 'red', marginTop: '20px' }}>
-                    {mensaje}
+                <p className="seguimiento-intro">
+                    Ingresa el número de orden y el correo utilizado en la compra.
                 </p>
-            )}
 
-            {seguimiento && (
-                <div style={{ marginTop: '40px' }}>
-                    <h2>Pedido #{seguimiento.numero_orden}</h2>
+                <form className="seguimiento-formulario" onSubmit={consultarSeguimiento}>
+                    <div className="seguimiento-campo">
+                        <label htmlFor="seguimiento-orden">Número de orden</label>
+                        <input
+                            id="seguimiento-orden"
+                            type="text"
+                            inputMode="numeric"
+                            value={numeroOrden}
+                            onChange={(e) => setNumeroOrden(e.target.value)}
+                            required
+                            {...camposConError}
+                        />
+                    </div>
 
-                    <p>
-                        <strong>Proveedor:</strong>{' '}
-                        {seguimiento.proveedor}
+                    <div className="seguimiento-campo">
+                        <label htmlFor="seguimiento-email">Correo electrónico</label>
+                        <input
+                            id="seguimiento-email"
+                            type="email"
+                            autoComplete="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            {...camposConError}
+                        />
+                    </div>
+
+                    <button type="submit" className="boton boton-primario">
+                        Consultar seguimiento
+                    </button>
+                </form>
+
+                {mensaje && (
+                    <p id="seguimiento-error" role="alert" className="seguimiento-error">
+                        {mensaje}
                     </p>
+                )}
 
-                    <p>
-                        <strong>Código de seguimiento:</strong>{' '}
-                        {seguimiento.codigo_seguimiento || 'Pendiente'}
-                    </p>
+                {seguimiento && (
+                    <section className="seguimiento-resultado" aria-labelledby="seguimiento-resultado-titulo">
+                        <h2 id="seguimiento-resultado-titulo" ref={tituloResultado} tabIndex={-1}>
+                            Pedido #{seguimiento.numero_orden}
+                        </h2>
 
-                    <p>
-                        <strong>Estado actual:</strong>{' '}
-                        {seguimiento.estado_actual}
-                    </p>
+                        <dl className="seguimiento-datos">
+                            <dt>Proveedor</dt>
+                            <dd className="seguimiento-proveedor">{seguimiento.proveedor}</dd>
+                            <dt>Código de seguimiento</dt>
+                            <dd>{seguimiento.codigo_seguimiento || 'Pendiente'}</dd>
+                            <dt>Estado actual</dt>
+                            <dd>{seguimiento.estado_actual}</dd>
+                        </dl>
 
-                    <h3 style={{ marginTop: '30px' }}>
-                        Estado del envío
-                    </h3>
+                        <h3>Estado del envío</h3>
 
-                    {pendienteDeDespacho ? (
-                        <div
-                            style={{
-                                marginTop: '20px',
-                                padding: '15px',
-                                border: '1px solid #ccc',
-                                borderRadius: '8px'
-                            }}
-                        >
-                            <strong>Pendiente de despacho</strong>
+                        {pendienteDeDespacho ? (
+                            <div className="seguimiento-aviso">
+                                <strong>Pendiente de despacho</strong>
+                                <p>El pedido aún no ha sido entregado al proveedor logístico.</p>
+                            </div>
+                        ) : (
+                            <ol className="seguimiento-linea">
+                                {ESTADOS.map((estado, index) => {
+                                    const completado = index <= indiceEstadoActual;
+                                    const actual = index === indiceEstadoActual;
+                                    const clases = [
+                                        'seguimiento-paso',
+                                        completado && 'seguimiento-paso--hecho',
+                                        actual && 'seguimiento-paso--actual'
+                                    ].filter(Boolean).join(' ');
 
-                            <p style={{ marginBottom: 0 }}>
-                                El pedido aún no ha sido entregado
-                                al proveedor logístico.
-                            </p>
-                        </div>
-                    ) : (
-                        <div style={{ marginTop: '20px' }}>
-                            {estados.map((estado, index) => {
-                                const completado =
-                                    index <= indiceEstadoActual;
-
-                                const esUltimo =
-                                    index === estados.length - 1;
-
-                                return (
-                                    <div
-                                        key={estado}
-                                        style={{
-                                            display: 'flex',
-                                            minHeight: esUltimo
-                                                ? '40px'
-                                                : '70px'
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                marginRight: '15px'
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    width: '25px',
-                                                    height: '25px',
-                                                    borderRadius: '50%',
-                                                    backgroundColor:
-                                                        completado
-                                                            ? 'green'
-                                                            : '#ccc',
-                                                    color: 'white',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontSize: '14px',
-                                                    flexShrink: 0
-                                                }}
-                                            >
-                                                {completado ? '✓' : ''}
-                                            </div>
-
-                                            {!esUltimo && (
-                                                <div
-                                                    style={{
-                                                        width: '3px',
-                                                        flex: 1,
-                                                        backgroundColor:
-                                                            index <
-                                                            indiceEstadoActual
-                                                                ? 'green'
-                                                                : '#ccc',
-                                                        marginTop: '4px'
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
-
-                                        <span
-                                            style={{
-                                                fontWeight:
-                                                    estado === estadoActual
-                                                        ? 'bold'
-                                                        : 'normal',
-                                                paddingTop: '3px'
-                                            }}
-                                        >
-                                            {estado}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
+                                    return (
+                                        <li key={estado} className={clases} aria-current={actual ? 'step' : undefined}>
+                                            <span className="seguimiento-marca" aria-hidden="true">
+                                                {completado && (
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M5 12.5l4.5 4.5L19 7.5" />
+                                                    </svg>
+                                                )}
+                                            </span>
+                                            <span className="seguimiento-paso-nombre">
+                                                {estado}
+                                                {completado && !actual && <span className="visualmente-oculto"> (completado)</span>}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ol>
+                        )}
+                    </section>
+                )}
+            </div>
+        </main>
     );
 }

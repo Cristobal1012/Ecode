@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import LinkifyWebhookAPIView
 
 # Todo lo que esté aquí, Django le pondrá '/api/configuracion/' antes
 configuracion_urlpatterns = [
@@ -20,10 +21,16 @@ ventas_urlpatterns = [
     
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
-    
+    path('checkout/verificar-pago/', views.VerificarEstadoPagoView.as_view(), name='verificar-pago'),
+    path('promociones/', views.PromocionListCreateView.as_view(), name='promociones-list-create'),
+    path('promociones/<int:pk>/', views.PromocionDetailView.as_view(), name='promociones-detail'),
     # NUEVA RUTA PARA EL RETORNO DE TRANSBANK
     # Ruta resultante: GET/POST /api/ventas/transbank/retorno/
     path('transbank/retorno/', views.TransbankRetornoView.as_view(), name='transbank_retorno'),
+    # NUEVA RUTA PARA EL WEBHOOK DE MERCADOPAGO
+    path('mercadopago/webhook/', views.MercadoPagoWebhookView.as_view(), name='mercadopago_webhook'),
+    path('mercadopago/retorno/', views.MercadoPagoRetornoView.as_view(), name='mercadopago_retorno'),
+    path('mercadopago/sincronizar/', views.AdminSincronizarPagosView.as_view(), name='mercadopago_sincronizar'),
     
     # Ruta resultante: GET /api/ventas/dashboard/
     path('dashboard/', views.DashboardOperativoView.as_view(), name='dashboard'),
@@ -40,6 +47,8 @@ ventas_urlpatterns = [
     path('carrito/', views.CarritoAPIView.as_view(), name='carrito-usuario'),
     # Ruta resultante: POST /api/ventas/carrito/validar/ (pública, también para invitados)
     path('carrito/validar/', views.ValidarCarritoView.as_view(), name='carrito-validar'),
+    #para validar promociones
+    path('promociones/validar/', views.ValidarPromocionAPIView.as_view(), name='validar-promocion'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
 # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
@@ -68,6 +77,13 @@ ventas_urlpatterns = [
     # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
     path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
     path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
+    # Medios de pago (RN-02): GET la lista y PUT /api/ventas/admin/medios-pago/<codigo>/ (ej. transferencia)
+    path('admin/medios-pago/', views.AdminMediosPagoView.as_view(), name='admin-medios-pago'),
+    path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),
+    # Llaves de Chilexpress (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
+    path('admin/chilexpress/', views.AdminChilexpressView.as_view(), name='admin-chilexpress'),
+    # Ruta para las consultas y notificaciones de Linkify
+    path('webhooks/linkify/', LinkifyWebhookAPIView.as_view(), name='webhook-linkify'),
 ]
 
 urlpatterns = configuracion_urlpatterns + ventas_urlpatterns

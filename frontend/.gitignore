@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+#Informe de los Vitest
+coverage/
+test-results/
+playwright-report/

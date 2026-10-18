@@ -41,6 +41,12 @@ class GoogleLoginTests(APITestCase):
         self.login()
         self.assertEqual(verificar.call_args.kwargs['audience'], CLIENT_ID)
 
+    def test_tolera_unos_segundos_de_desfase_del_reloj(self, verificar):
+        # Con el reloj del servidor un poco atrasado, Google rechazaba los tokens recién emitidos
+        verificar.return_value = payload_google()
+        self.assertEqual(self.login().status_code, 200)
+        self.assertEqual(verificar.call_args.kwargs['clock_skew_in_seconds'], 10)
+
     def test_correo_sin_verificar_no_entra_ni_se_vincula_a_una_cuenta_existente(self, verificar):
         admin = create_user('admin@example.test', rol='ADMIN')
         for verificado in (False, None):

@@ -10,7 +10,8 @@ import VariantSelector from './components/VariantSelector';
 import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
-import { PALETTES } from './constants/palettes';
+import { aplicarPaleta } from './constants/palettes';
+import { aplicarTipografia, CLAVE_TIPOGRAFIA } from './constants/tipografias';
 import DetalleProducto from './pages/DetalleProducto';
 import SeguimientoEnvio from './pages/SeguimientoEnvio';
 import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
@@ -20,39 +21,56 @@ import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a dond
 import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
+import TrackingScripts from './components/TrackingScripts';
+import CookieBanner from './components/CookieBanner';
+import useCookieConsent from './hooks/useCookieConsent';
+import Header from './components/header/header';
+import useConfiguracionTienda from './hooks/useConfiguracionTienda';
+import { PORTADA_POR_DEFECTO } from './components/landing/textosPorDefecto';
+import './components/auth/auth.css';
 
-// Inyecta las variables CSS directamente en :root
-const applyPaletteToRoot = (paletteId) => {
-  const activePalette = PALETTES.find((p) => p.id === Number(paletteId)) || PALETTES[0];
-  if (activePalette) {
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', activePalette.colors.primary);
-    root.style.setProperty('--color-secondary', activePalette.colors.secondary);
-    root.style.setProperty('--color-accent', activePalette.colors.accent);
-    root.style.setProperty('--color-background', activePalette.colors.background);
-    root.style.setProperty('--color-text', activePalette.colors.text);
-  }
-};
+const applyPaletteToRoot = aplicarPaleta;
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
+  // Aviso que deja el registro para el login ("Tu cuenta quedó creada...", con el correo ya escrito)
+  const [avisoLogin, setAvisoLogin] = useState(null);
+  // La misma portada de la landing acompaña al formulario (decorativa: el nombre ya está en el header)
+  const configuracion = useConfiguracionTienda();
+  const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
 
   return (
-    <div>
-      {showLogin ? (
-        <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
-      ) : (
-        <Register onSwitchToLogin={() => setShowLogin(true)} />
-      )}
-    </div>
+    <>
+      <Header />
+      <main className="auth-main">
+        <div className="auth-imagen" aria-hidden="true" style={{ backgroundImage: `url("${portada}")` }}>
+          {configuracion?.nombre_tienda && <span className="auth-imagen-nombre">{configuracion.nombre_tienda}</span>}
+        </div>
+        <div className="auth-contenido">
+          {showLogin ? (
+            <Login
+              onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
+              googleHabilitado={googleHabilitado}
+              aviso={avisoLogin}
+            />
+          ) : (
+            <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
+          )}
+        </div>
+      </main>
+    </>
   );
 }
 
 function App() {
+  const {
+    consent, isBannerOpen, storageError,
+    acceptCookies, rejectCookies, openPreferences, closePreferences,
+  } = useCookieConsent();
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const [googleClientId, setGoogleClientId] = useState('');
-
+  const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
     const saved = localStorage.getItem('ecommerce_palette');
@@ -65,10 +83,17 @@ function App() {
         const response = await clienteAxios.get('configuracion/');
         const config = Array.isArray(response.data) ? response.data[0] : response.data;
         setGoogleClientId(config?.google_client_id || '');
+        setTrackingIds({
+        googleAnalyticsId: config?.google_analytics_id || '', metaPixelId: config?.meta_pixel_id || '',});
         if (config && config.tema_seleccionado !== undefined) {
           const serverId = Number(config.tema_seleccionado);
           localStorage.setItem('ecommerce_palette', serverId.toString());
           applyPaletteToRoot(serverId);
+        }
+        // RF-01.2: la tipografía elegida por el admin se aplica aquí, en un solo lugar (main.jsx pinta la última conocida)
+        if (config?.tipografia_seleccionada !== undefined) {
+          localStorage.setItem(CLAVE_TIPOGRAFIA, String(config.tipografia_seleccionada));
+          aplicarTipografia(config.tipografia_seleccionada);
         }
       } catch (error) {
         console.error('Error al sincronizar tema global en App:', error);
@@ -101,8 +126,13 @@ function App() {
 
   return (
     <BrowserRouter>
+      <TrackingScripts
+        googleAnalyticsId={trackingIds.googleAnalyticsId}
+        metaPixelId={trackingIds.metaPixelId}
+        consent={consent}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <main style={{ flex: 1 }}>
+        <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
             <Route path="/" element={<LandingPage />} />
@@ -137,10 +167,18 @@ function App() {
               <Route path="/admin" element={<Admin />} />
             </Route>
           </Routes>
-        </main>
+        </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer />
+        <Footer onOpenCookiePreferences={openPreferences} />
+        <CookieBanner
+          consent={consent}
+          isOpen={isBannerOpen}
+          storageError={storageError}
+          onAccept={acceptCookies}
+          onReject={rejectCookies}
+          onClose={closePreferences}
+        />
       </div>
     </BrowserRouter>
   );

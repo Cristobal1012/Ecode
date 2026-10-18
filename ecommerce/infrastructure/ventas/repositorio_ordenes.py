@@ -25,7 +25,8 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             for detalle in orden.detalles.order_by('id')
         )
         return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado,
-                               orden.requiere_revision)
+                               orden.requiere_revision, Decimal(str(round(orden.total_final))),
+                               )
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         # Un UPDATE condicional es atómico: de dos cambios simultáneos solo uno se aplica
@@ -65,16 +66,30 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             calle=direccion.get('calle', ''),
             numero=str(direccion.get('numero', '')),
             complemento=direccion.get('dpto_casa', ''),
-            # TODO(PENDIENTE): el checkout no pide nombre ni teléfono del destinatario
-            destinatario=(orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
+            # Órdenes anteriores a pedir el destinatario en el checkout: el nombre de la cuenta
+            destinatario=orden.nombre_destinatario
+            or (orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
             email=orden.email_invitado or (orden.usuario.email if orden.usuario else ''),
             # Se declara el valor de los productos, no el del envío
             valor_declarado=int(orden.subtotal),
+            telefono=orden.telefono_destinatario,
             paquete=Paquete(**{campo: Decimal(str(paquete[campo])) for campo in CAMPOS_PAQUETE})
             if paquete else None,
             codigo_sucursal=str(direccion.get('codigo_sucursal', '')),
             numero_ot=orden.numero_seguimiento_tracking or '',
         )
+
+    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
+        ordenes = OrdenCompra.objects.filter(
+            estado=EstadoPedido.PENDIENTE.value, metodo_pago=metodo_pago, fecha_creacion__lt=creadas_antes_de)
+        if sin_recordatorio:
+            ordenes = ordenes.filter(recordatorio_pago_enviado=False)
+        return list(ordenes.order_by('id').values_list('id', flat=True))
+
+    def marcar_recordatorio_pago(self, orden_id):
+        return OrdenCompra.objects.filter(
+            id=orden_id, estado=EstadoPedido.PENDIENTE.value, recordatorio_pago_enviado=False,
+        ).update(recordatorio_pago_enviado=True) == 1
 
     def registrar_orden_transporte(self, orden_id, numero_ot='', error=''):
         if not numero_ot:

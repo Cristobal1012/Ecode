@@ -17,6 +17,8 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
+        # Sin 'rol': el registro es público y siempre crea un comprador (valor por defecto del modelo).
+        # El administrador se crea con createsuperuser; si el rol viniera en la petición, cualquiera sería ADMIN.
         fields = (
             'id', 
             'email', 
@@ -24,7 +26,6 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
             'apellido_paterno', 
             'apellido_materno', 
             'telefono', 
-            'rol', 
             'acepta_cookies', 
             'password', 
             'password2'
@@ -35,7 +36,6 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
             'apellido_paterno': {'required': True},
             'apellido_materno': {'required': False},
             'telefono': {'required': False},
-            'rol': {'required': False},
             'acepta_cookies': {'required': False},
         }
 

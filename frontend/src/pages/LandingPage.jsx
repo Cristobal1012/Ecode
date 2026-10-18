@@ -1,229 +1,134 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import clienteAxios from "../components/auth/axiosConfig";
 import Header from "../components/header/header";
-import { PALETTES } from "../constants/palettes";
+import Portada from "../components/landing/Portada";
+import SeccionProductos from "../components/landing/SeccionProductos";
+import SeccionNosotros from "../components/landing/SeccionNosotros";
+import SeccionInstagram from "../components/landing/SeccionInstagram";
+import BarraEdicion from "../components/landing/BarraEdicion";
+import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
+import useEdicionLanding from "../hooks/useEdicionLanding";
+import "../components/landing/landing.css";
 
-const DEFAULT_BANNER =
-  "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
+const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados.";
 
+// RF-01.1: la raíz del dominio muestra la landing (nunca el catálogo directo). El admin la edita en su mismo
+// lugar (modo edición); los productos salen de la vitrina (más vendidos y últimos agregados).
 function LandingPage() {
-  const navigate = useNavigate();
-
-  const [configuracion, setConfiguracion] =
-    useState(null);
-
-  const [loading, setLoading] = useState(true);
-
-  // Aplicar la paleta guardada
-  useEffect(() => {
-    const savedPaletteId =
-      Number(localStorage.getItem("ecommerce_palette")) ||
-      1;
-
-    const activePalette =
-      PALETTES.find(
-        (p) => p.id === savedPaletteId
-      ) || PALETTES[0];
-
-    if (activePalette) {
-      const root = document.documentElement;
-
-      root.style.setProperty(
-        "--color-primary",
-        activePalette.colors.primary
-      );
-
-      root.style.setProperty(
-        "--color-secondary",
-        activePalette.colors.secondary
-      );
-
-      root.style.setProperty(
-        "--color-accent",
-        activePalette.colors.accent
-      );
-
-      root.style.setProperty(
-        "--color-background",
-        activePalette.colors.background
-      );
-
-      root.style.setProperty(
-        "--color-text",
-        activePalette.colors.text
-      );
-    }
-  }, []);
+  const configuracion = useConfiguracionTienda();
+  const edicion = useEdicionLanding(configuracion);
+  // null mientras carga: así se sabe cuándo ya están dibujadas las secciones de productos
+  const [vitrina, setVitrina] = useState(null);
+  const { hash } = useLocation();
+  const [parametros, setParametros] = useSearchParams();
+  // El rol solo decide si se ofrece el botón; quien de verdad autoriza los cambios es el backend
+  const esAdmin = localStorage.getItem("rol") === "ADMIN";
 
   useEffect(() => {
-    const obtenerConfiguracion =
-      async () => {
-        try {
-          const response = await clienteAxios.get(
-            "configuracion/"
-          );
-
-          setConfiguracion(response.data);
-
-          // Sincronizar la paleta con el backend
-          const paletaId =
-            response.data?.paleta_id ||
-            response.data?.paleta;
-
-          if (paletaId) {
-            const paletaBackend =
-              PALETTES.find(
-                (p) =>
-                  p.id === Number(paletaId)
-              );
-
-            if (paletaBackend) {
-              const root =
-                document.documentElement;
-
-              root.style.setProperty(
-                "--color-primary",
-                paletaBackend.colors.primary
-              );
-
-              root.style.setProperty(
-                "--color-secondary",
-                paletaBackend.colors.secondary
-              );
-
-              root.style.setProperty(
-                "--color-accent",
-                paletaBackend.colors.accent
-              );
-
-              root.style.setProperty(
-                "--color-background",
-                paletaBackend.colors.background
-              );
-
-              root.style.setProperty(
-                "--color-text",
-                paletaBackend.colors.text
-              );
-
-              localStorage.setItem(
-                "ecommerce_palette",
-                paletaBackend.id.toString()
-              );
-            }
-          }
-        } catch (error) {
-          console.error(
-            "Error al obtener la configuración:",
-            error
-          );
-
-          // Datos de ejemplo mientras el backend no responde
-          setConfiguracion({
-            texto_bienvenida:
-              "Bienvenido a nuestra tienda",
-
-            texto_boton_ingreso:
-              "Ver Catálogo",
-
-            banner_url: DEFAULT_BANNER,
-          });
-        } finally {
-          setLoading(false);
-        }
-      };
-
-    obtenerConfiguracion();
+    clienteAxios.get("catalogo/vitrina/")
+      .then(({ data }) => setVitrina(data))
+      .catch((error) => {
+        console.error("No se pudieron cargar los productos de la portada:", error);
+        setVitrina({ mas_vendidos: [], recientes: [] });
+      });
   }, []);
 
-  if (loading) {
-    return (
-      <p
-        style={{
-          textAlign: "center",
-          padding: "2rem",
-        }}
-      >
-        Cargando...
-      </p>
-    );
+  // El enlace "Nosotros" del header lleva a /#nosotros. Se baja cuando ya está todo lo de arriba (portada y
+  // productos); si no, el contenido que llega después corre la sección
+  useEffect(() => {
+    if (!hash || !configuracion || !vitrina) return;
+    document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash, configuracion, vitrina]);
+
+  // El panel abre la landing directo en modo edición con /?editar=1. Se abre una sola vez, en el render (no en
+  // un efecto), apenas llega la configuración
+  const [abrirEdicion, setAbrirEdicion] = useState(() => parametros.get("editar") === "1");
+  if (abrirEdicion && configuracion) {
+    setAbrirEdicion(false);
+    if (esAdmin) edicion.iniciar();
   }
 
-  const bannerFondo =
-    configuracion?.banner_url?.trim()
-      ? configuracion.banner_url
-      : DEFAULT_BANNER;
+  // Se quita ?editar=1 de la URL, para que recargar la página no vuelva a abrir el modo edición
+  useEffect(() => {
+    if (parametros.has("editar")) setParametros({}, { replace: true });
+  }, [parametros, setParametros]);
+
+  // Con cambios sin guardar se avisa antes de cerrar la pestaña o de seguir un enlace
+  useEffect(() => {
+    if (!edicion.hayCambios) return;
+    const alSalir = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    const alHacerClic = (e) => {
+      const enlace = e.target.closest?.("a[href]");
+      if (enlace && !window.confirm("Tienes cambios sin guardar en la página de inicio. ¿Salir y descartarlos?")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", alSalir);
+    document.addEventListener("click", alHacerClic, true);
+    return () => {
+      window.removeEventListener("beforeunload", alSalir);
+      document.removeEventListener("click", alHacerClic, true);
+    };
+  }, [edicion.hayCambios]);
+
+  const vista = edicion.vista;
 
   return (
     <>
-      <Header />
-
-      <main
-        style={{
-          minHeight: "100vh",
-
-          backgroundImage: `
-            linear-gradient(
-              rgba(0, 0, 0, 0.4),
-              rgba(0, 0, 0, 0.4)
-            ),
-            url(${bannerFondo})
-          `,
-
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "sans-serif",
-            textAlign: "center",
-            padding: "20px",
-          }}
-        >
-          <h1
-            style={{
-              color: "white",
-              fontSize: "2.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            {configuracion?.texto_bienvenida ||
-              "Bienvenido a nuestra tienda"}
-          </h1>
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate("/catalogo")
-            }
-            style={{
-              padding: "12px 28px",
-              fontSize: "1.1rem",
-              fontWeight: "bold",
-              color: "#ffffff",
-              backgroundColor:
-                "var(--color-primary, #2E7D32)",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              boxShadow:
-                "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
-              transition:
-                "background-color 0.2s ease",
-            }}
-          >
-            {configuracion?.texto_boton_ingreso ||
-              "Ver Catálogo"}
-          </button>
-        </div>
+      <Header vistaPrevia={edicion.editando ? { nombre_tienda: vista.nombre_tienda, logo: vista.logo } : undefined} />
+      <main id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
+        {configuracion ? (
+          <>
+            {edicion.editando && (
+              <div className="contenedor landing-nombre-edicion">
+                <CampoNombreTienda edicion={edicion} />
+              </div>
+            )}
+            <Portada configuracion={vista} edicion={edicion} />
+            <SeccionProductos id="mas-vendidos" antetitulo="Lo más elegido" titulo="Más vendidos"
+              productos={vitrina?.mas_vendidos} alterna nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+            <SeccionProductos id="recientes" antetitulo="Recién llegados" titulo="Últimos agregados"
+              productos={vitrina?.recientes} etiqueta="Nuevo"
+              nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+            <SeccionNosotros configuracion={vista} edicion={edicion} />
+            <SeccionInstagram configuracion={vista} edicion={edicion} />
+          </>
+        ) : (
+          // Mientras llega la configuración se reserva el espacio de la portada (sin textos de ejemplo)
+          <div className="portada" aria-busy="true">
+            <p className="visualmente-oculto">Cargando la tienda...</p>
+          </div>
+        )}
       </main>
+
+      {esAdmin && configuracion && (edicion.editando ? (
+        <BarraEdicion edicion={edicion} />
+      ) : (
+        <button type="button" className="boton boton-primario boton-editar-pagina" onClick={edicion.iniciar}>
+          Editar página
+        </button>
+      ))}
     </>
+  );
+}
+
+// El nombre de la tienda se ve en el header y en la pestaña: en modo edición se cambia arriba de la portada
+function CampoNombreTienda({ edicion }) {
+  return (
+    <label className="landing-nombre-campo">
+      <span className="campo-editable-etiqueta">Nombre de la tienda</span>
+      <input
+        value={edicion.textos.nombre_tienda}
+        maxLength={255}
+        onChange={(e) => edicion.cambiarTexto("nombre_tienda", e.target.value)}
+        aria-invalid={Boolean(edicion.errores.nombre_tienda)}
+      />
+    </label>
   );
 }
 

@@ -2,11 +2,13 @@ from decimal import Decimal
 import uuid
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
+from ecommerce.infrastructure.catalogo.images import ArchivoImagenField
 from .models import Promocion
 
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
@@ -66,6 +68,12 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
+            'logo',
+            'favicon',
+            'banner',
+            'subtitulo_bienvenida',
+            'texto_landing',
         ]
 
     def get_google_client_id(self, obj):
@@ -75,11 +83,30 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
         # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
         return [codigo.value for codigo in medios_pago().disponibles()]
 
+class ImagenNegocioField(ArchivoImagenField):
+    """Logo, favicon o portada: se valida y se vuelve a codificar igual que las fotos del catálogo."""
+
+    def to_internal_value(self, data):
+        imagen = super().to_internal_value(data)
+        return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
+
+
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner')
+
+
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
+    # Se suben por multipart; un null (en JSON) quita la imagen
+    logo = ImagenNegocioField(required=False, allow_null=True)
+    favicon = ImagenNegocioField(required=False, allow_null=True)
+    banner = ImagenNegocioField(required=False, allow_null=True)
+    texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+
     class Meta:
         model = ConfiguracionGlobal
         fields = [
             'texto_bienvenida',
+            'subtitulo_bienvenida',
+            'texto_landing',
             'texto_boton_ingreso',
             'banner_url',
             'tema_seleccionado',
@@ -97,6 +124,16 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'dpto_casa_origen',
             'retiro_en_local_activo',
         ]
+
+    def update(self, instance, validated_data):
+        # Al reemplazar o quitar una imagen se borra el archivo anterior, para no dejar archivos huérfanos
+        anteriores = [getattr(instance, campo) for campo in CAMPOS_IMAGEN_NEGOCIO
+                      if campo in validated_data and getattr(instance, campo)]
+        anteriores = [(archivo.storage, archivo.name) for archivo in anteriores]
+        instance = super().update(instance, validated_data)
+        for storage, nombre in anteriores:
+            storage.delete(nombre)
+        return instance
 
 
 class PaqueteSerializer(serializers.Serializer):

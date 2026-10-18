@@ -693,12 +693,14 @@ class ConfiguracionNegocioView(APIView):
 
     def get(self, request):
         config = self.get_object()
-        serializer = ConfiguracionNegocioSerializer(config)
+        # Con la request, las imágenes salen con URL absoluta (el panel corre en otro puerto u origen)
+        serializer = ConfiguracionNegocioSerializer(config, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
         config = self.get_object()
-        serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True)
+        serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
+                                                    context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)

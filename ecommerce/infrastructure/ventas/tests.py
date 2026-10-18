@@ -66,7 +66,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
-             'google_analytics_id', 'meta_pixel_id'}
+             'google_analytics_id', 'meta_pixel_id',
+             'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing'}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -123,6 +124,11 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'retiro_en_local_activo': True,
             'google_analytics_id': None,
             'meta_pixel_id': None,
+            'logo': None,
+            'favicon': None,
+            'banner': None,
+            'subtitulo_bienvenida': '',
+            'texto_landing': '',
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):

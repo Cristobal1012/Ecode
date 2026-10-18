@@ -46,6 +46,9 @@ class ConfiguracionGlobal(models.Model):
         max_length=100,
         default='Ver Catálogo',
     )
+    # Landing (RF-01.1): campos fijos que el admin edita desde el panel; el título es texto_bienvenida
+    subtitulo_bienvenida = models.CharField(max_length=200, blank=True, default='')
+    texto_landing = models.TextField(blank=True, default='')
     banner_url = models.URLField(max_length=500, blank=True, null=True)
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(

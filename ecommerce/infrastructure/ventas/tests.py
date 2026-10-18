@@ -16,6 +16,7 @@ from ecommerce.infrastructure.usuarios.tests.factories import create_user
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
+from .views import token_verificacion_valido
 
 
 ADAPTADOR_ORDEN_TRANSPORTE = 'ecommerce.infrastructure.ventas.adapters.orden_transporte'
@@ -236,6 +237,13 @@ class CheckoutAccessTests(APITestCase):
                 self.assertEqual(order.email_invitado,
                                  self.payload['email_invitado'])
                 self.assertEqual((order.costo_envio, order.total_final), (1000, 11000))
+
+    def test_la_respuesta_trae_el_token_para_consultar_el_pago_de_esa_orden(self):
+        response = self.checkout()
+        self.assertEqual(response.status_code, 201)
+        token = response.data['token_verificacion']
+        self.assertTrue(token_verificacion_valido(token, response.data['orden_id']))
+        self.assertFalse(token_verificacion_valido(token, response.data['orden_id'] + 1))
 
     def test_required_registration_rejects_anonymous_before_validation(self):
         self.configure('REGISTRO_OBLIGATORIO')

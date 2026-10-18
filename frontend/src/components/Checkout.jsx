@@ -31,6 +31,17 @@ const NOMBRES_MEDIO_PAGO = {
     TRANSFERENCIA: 'Transferencia bancaria'
 };
 
+// Orden de Mercado Pago que espera su pago. El token firmado que entrega el checkout prueba que la creó este
+// navegador: sin él, verificar-pago no responde (los números de orden son correlativos y se podrían adivinar)
+const consultarPagoPendiente = (idOrden) => clienteAxios.get('ventas/checkout/verificar-pago/', {
+    params: { orden_id: idOrden, token: localStorage.getItem('orden_pendiente_token') }
+});
+
+const olvidarOrdenPendiente = () => {
+    localStorage.removeItem('orden_pendiente_pago');
+    localStorage.removeItem('orden_pendiente_token');
+};
+
 export default function Checkout() {
     return (
         <>
@@ -104,10 +115,10 @@ function CheckoutContenido() {
         if (!idOrden) return;
         setVerificando(true);
         try {
-            const res = await clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${idOrden}`);
+            const res = await consultarPagoPendiente(idOrden);
             if (res.data.pagado) {
                 localStorage.removeItem('carrito_local');
-                localStorage.removeItem('orden_pendiente_pago');
+                olvidarOrdenPendiente();
                 window.dispatchEvent(new Event('carritoActualizado'));
                 if (usuarioAutenticado) {
                     try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch { /* vaciado silencioso */ }
@@ -116,7 +127,7 @@ function CheckoutContenido() {
                 navigate(`/pago-exitoso?orden=${idOrden}${sufijoRevision}`);
             } else if (res.data.cancelado) {
                 setEsperandoPago(null);
-                localStorage.removeItem('orden_pendiente_pago');
+                olvidarOrdenPendiente();
                 setMensaje('La orden fue cancelada o rechazada.');
             }
         } catch (err) {
@@ -139,11 +150,11 @@ function CheckoutContenido() {
     useEffect(() => {
         const ordenPendiente = localStorage.getItem('orden_pendiente_pago');
         if (ordenPendiente) {
-            clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${ordenPendiente}`)
+            consultarPagoPendiente(ordenPendiente)
                 .then(res => {
                     if (res.data.pagado) {
                         localStorage.removeItem('carrito_local');
-                        localStorage.removeItem('orden_pendiente_pago');
+                        olvidarOrdenPendiente();
                         window.dispatchEvent(new Event('carritoActualizado'));
                         const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
                         navigate(`/pago-exitoso?orden=${ordenPendiente}${sufijoRevision}`);
@@ -480,6 +491,7 @@ function CheckoutContenido() {
             if (respuesta.data.url_pago) {
                 if (metodoSeleccionado === 'MERCADO_PAGO') {
                     localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
+                    localStorage.setItem('orden_pendiente_token', respuesta.data.token_verificacion);
                     setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
                     const ventana = window.open(respuesta.data.url_pago, '_blank');
                     if (!ventana) {
@@ -861,7 +873,7 @@ function CheckoutContenido() {
                                 type="button"
                                 onClick={() => {
                                     setEsperandoPago(null);
-                                    localStorage.removeItem('orden_pendiente_pago');
+                                    olvidarOrdenPendiente();
                                 }}
                                 style={{
                                     padding: '8px', backgroundColor: 'transparent', color: '#9ca3af',

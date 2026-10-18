@@ -4,6 +4,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.core import signing
 from django.shortcuts import redirect
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import TruncDate
@@ -332,7 +333,8 @@ class CheckoutAPIView(generics.CreateAPIView):
             respuesta_data = serializer.data
             respuesta_data['mensaje'] = "Orden creada con éxito."
             respuesta_data['orden_id'] = orden.id
-            
+            respuesta_data['token_verificacion'] = token_verificacion_pago(orden.id)
+
             # Si el serializer generó una URL de Transbank, la inyectamos en la respuesta
             if hasattr(orden, 'url_pago') and orden.url_pago:
                 respuesta_data['url_pago'] = orden.url_pago
@@ -561,6 +563,21 @@ class MercadoPagoRetornoView(APIView):
         return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
 
 
+SAL_VERIFICAR_PAGO = 'ventas.verificar-pago'
+
+
+def token_verificacion_pago(orden_id) -> str:
+    """Lo recibe quien crea la orden: sin él no se puede consultar su pago (los IDs son correlativos)."""
+    return signing.dumps(str(orden_id), salt=SAL_VERIFICAR_PAGO)
+
+
+def token_verificacion_valido(token, orden_id) -> bool:
+    try:
+        return signing.loads(token, salt=SAL_VERIFICAR_PAGO) == str(orden_id)
+    except signing.BadSignature:
+        return False
+
+
 class VerificarEstadoPagoView(APIView):
     """
     Consulta y sincroniza el estado de una orden.
@@ -574,6 +591,10 @@ class VerificarEstadoPagoView(APIView):
         orden_id = request.query_params.get('orden_id') or request.query_params.get('orden')
         if not orden_id or not str(orden_id).isdigit():
             return Response({"error": "ID de orden no proporcionado o inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Sin el token de la orden se responde igual que si no existiera, y no se consulta a Mercado Pago
+        if not token_verificacion_valido(request.query_params.get('token', ''), orden_id):
+            return Response({"error": "Orden no encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
         orden = OrdenCompra.objects.filter(id=int(orden_id)).first()
         if not orden:

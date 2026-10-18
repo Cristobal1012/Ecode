@@ -23,6 +23,12 @@ from ecommerce.infrastructure.ventas.payment_services import (
     PreferenciaPagoCreada,
     ProcesarWebhookMercadoPago,
 )
+from ecommerce.infrastructure.ventas.views import token_verificacion_pago
+
+
+def url_verificar_pago(orden_id) -> str:
+    """Como la consulta el checkout: con el token que recibió al crear la orden."""
+    return f"/api/ventas/checkout/verificar-pago/?orden_id={orden_id}&token={token_verificacion_pago(orden_id)}"
 
 
 def generar_firma_hmac(secret: str, data_id: str, request_id: str, ts: str = "1700000000") -> str:
@@ -417,8 +423,20 @@ class MercadoPagoWebhookTests(SimpleTestCase):
     def test_verificar_pago_orden_no_existente_retorna_404(self):
         with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
             mock_filter.return_value.first.return_value = None
-            respuesta = self.client.get("/api/ventas/checkout/verificar-pago/?orden_id=99999")
+            respuesta = self.client.get(url_verificar_pago(99999))
             self.assertEqual(respuesta.status_code, 404)
+
+    def test_verificar_pago_sin_el_token_de_la_orden_responde_404_sin_consultar(self):
+        """Los IDs son correlativos: sin el token que recibió quien creó la orden no se revela su estado."""
+        with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter, \
+                patch("ecommerce.infrastructure.ventas.views.sincronizar_orden_con_mercadopago") as sincronizar:
+            for token in ("", "token-inventado", token_verificacion_pago(43)):
+                with self.subTest(token=token):
+                    respuesta = self.client.get("/api/ventas/checkout/verificar-pago/",
+                                                {"orden_id": "42", "token": token})
+                    self.assertEqual(respuesta.status_code, 404)
+            mock_filter.assert_not_called()
+            sincronizar.assert_not_called()
 
     def test_verificar_pago_sincroniza_y_detecta_aprobado(self):
         mock_orden = MagicMock()
@@ -429,7 +447,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
         with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
             mock_filter.return_value.first.return_value = mock_orden
-            respuesta = self.client.get("/api/ventas/checkout/verificar-pago/?orden_id=42")
+            respuesta = self.client.get(url_verificar_pago(42))
             self.assertEqual(respuesta.status_code, 200)
             self.assertTrue(respuesta.json()["pagado"])
             self.assertEqual(respuesta.json()["orden_id"], 42)
@@ -552,7 +570,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
         with patch("ecommerce.infrastructure.ventas.views.OrdenCompra.objects.filter") as mock_filter:
             mock_filter.return_value.first.return_value = mock_orden
-            respuesta = self.client.get("/api/ventas/checkout/verificar-pago/?orden_id=42")
+            respuesta = self.client.get(url_verificar_pago(42))
             self.assertEqual(respuesta.status_code, 200)
             self.assertTrue(respuesta.json()["pagado"])
             self.assertTrue(respuesta.json()["requiere_revision"])

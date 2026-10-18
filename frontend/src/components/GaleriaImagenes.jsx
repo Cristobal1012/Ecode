@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
 export default function GaleriaImagenes({

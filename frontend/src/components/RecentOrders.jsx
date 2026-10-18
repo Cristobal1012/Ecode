@@ -1,6 +1,4 @@
-import React from 'react';
-
-export default function RecentOrders({ ordenes = [], busqueda = '', onVerTodos }) {
+export default function RecentOrders({ ordenes = [] }) {
 
   const obtenerColorEstado = (estado) => {
     switch (estado) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import DashboardCard from './DashboardCard';
 import RecentOrders from './RecentOrders';
@@ -12,7 +12,7 @@ import {
   Tooltip,
 } from 'recharts';
 
-export default function Dashboard({ busqueda = '', onVerTodos }) {
+export default function Dashboard() {
   const [metricas, setMetricas] = useState({
     total_historico: 0,
     total_mensual: 0,
@@ -38,7 +38,7 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
   };
 
   const formatearFecha = (fecha) => {
-    const [anio, mes, dia] = fecha.split('-');
+    const [, mes, dia] = fecha.split('-');
 
     return `${dia}/${mes}`;
   };
@@ -426,10 +426,7 @@ export default function Dashboard({ busqueda = '', onVerTodos }) {
       </section>
 
       {/* Últimos pedidos */}
-      <RecentOrders
-        ordenes={ordenes}
-        busqueda={busqueda}
-      />
+      <RecentOrders ordenes={ordenes} />
     </div>
   );
 }

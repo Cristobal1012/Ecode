@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Header from '../components/header/header'; // Ajusta la ruta de tu Header si es distinta
 import clienteAxios from './auth/axiosConfig';

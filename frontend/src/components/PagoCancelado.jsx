@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/header/header'; // Ajusta la ruta de tu Header
 

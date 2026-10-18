@@ -26,11 +26,6 @@ class PuertoPasarelaPago(ABC):
     def inicializar_conexion(self):
         pass
 
-    """@abstractmethod
-    def generar_link_pago(self, monto, orden_id):
-        pass
-    """
-
 # esto es solo para probar que funciona la interfaz.
 class ServicioPagoLinkify(PuertoPasarelaPago):
     def inicializar_conexion(self):
@@ -79,19 +74,6 @@ class TransbankAdapter(PuertoPasarelaPago):
 
     def generar_link_pago(self, monto, orden_id):
         return f"https://webpay.transbank.cl/pago?orden={orden_id}&monto={monto}"
-
-
-class MercadoPagoAdapter(PuertoPasarelaPago):
-    def __init__(self, api_keys_pagos):
-        credenciales = api_keys_pagos.get('MERCADO_PAGO', {})
-        self.access_token = credenciales.get('access_token')
-        self.public_key = credenciales.get('public_key')
-
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        return f"https://mercadopago.cl/checkout?pref_id={orden_id}"
 
 
 class PayPalAdapter(PuertoPasarelaPago):

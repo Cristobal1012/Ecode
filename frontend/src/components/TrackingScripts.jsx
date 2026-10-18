@@ -1,22 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { isAdminRoute, isCookieConsentAccepted, suspendTracking } from '../hooks/useCookieConsent';
 
-function TrackingScripts({ googleAnalyticsId, metaPixelId }) {
-  const { pathname } = useLocation();
-  const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
+  const { pathname, search, key } = useLocation();
+  const allowed = consent === 'accepted' && !isAdminRoute(pathname);
+  const lastPageView = useRef({ ga: null, meta: null });
 
   useEffect(() => {
-    if (isAdmin) {
-      document.getElementById('ecode-google-analytics-script')?.remove();
-      document.getElementById('ecode-meta-pixel-script')?.remove();
-
-      window.__ecodeGaInitialized = [];
-      window.__ecodeMetaPixelInitialized = [];
+    if (!allowed || !isCookieConsentAccepted()) {
+      suspendTracking();
       return;
     }
 
     // Google Analytics 4
     if (googleAnalyticsId) {
+      window[`ga-disable-${googleAnalyticsId}`] = false;
       window.__ecodeGaInitialized ??= [];
 
       if (!window.__ecodeGaInitialized.includes(googleAnalyticsId)) {
@@ -34,6 +33,7 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId }) {
           script.id = 'ecode-google-analytics-script';
           script.async = true;
           script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleAnalyticsId)}`;
+          script.onload = () => { window.__ecodeGaScriptLoaded = true; };
           document.head.appendChild(script);
         }
 
@@ -67,6 +67,7 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId }) {
           window._fbq = fbq;
         }
 
+        window.fbq('consent', 'grant');
         if (!document.getElementById('ecode-meta-pixel-script')) {
           const script = document.createElement('script');
           script.id = 'ecode-meta-pixel-script';
@@ -77,33 +78,44 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId }) {
 
         window.fbq('init', metaPixelId);
         window.__ecodeMetaPixelInitialized.push(metaPixelId);
+      } else {
+        window.fbq('consent', 'grant');
       }
     }
-  }, [isAdmin, googleAnalyticsId, metaPixelId]);
+  }, [allowed, googleAnalyticsId, metaPixelId]);
 
   // Registrar visitas en la navegación entre páginas de React.
   useEffect(() => {
-    if (isAdmin) return;
+    if (!allowed || !isCookieConsentAccepted()) return;
+
+    const navigation = `${key}:${pathname}${search}`;
+    const gaVisit = `${googleAnalyticsId}:${navigation}`;
+    const metaVisit = `${metaPixelId}:${navigation}`;
 
     if (
       googleAnalyticsId &&
       window.gtag &&
-      window.__ecodeGaInitialized?.includes(googleAnalyticsId)
+      window.__ecodeGaInitialized?.includes(googleAnalyticsId) &&
+      lastPageView.current.ga !== gaVisit
     ) {
       window.gtag('event', 'page_view', {
-        page_path: pathname,
+        page_path: `${pathname}${search}`,
         page_location: window.location.href,
+        send_to: googleAnalyticsId,
       });
+      lastPageView.current.ga = gaVisit;
     }
 
     if (
       metaPixelId &&
       window.fbq &&
-      window.__ecodeMetaPixelInitialized?.includes(metaPixelId)
+      window.__ecodeMetaPixelInitialized?.includes(metaPixelId) &&
+      lastPageView.current.meta !== metaVisit
     ) {
       window.fbq('track', 'PageView');
+      lastPageView.current.meta = metaVisit;
     }
-  }, [pathname, isAdmin, googleAnalyticsId, metaPixelId]);
+  }, [key, pathname, search, allowed, googleAnalyticsId, metaPixelId]);
 
   return null;
 }

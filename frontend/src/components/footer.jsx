@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
+import { isAdminRoute } from '../hooks/useCookieConsent';
 
-export const Footer = () => {
+export const Footer = ({ onOpenCookiePreferences }) => {
+  const { pathname } = useLocation();
   const [paginas, setPaginas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [errorConexion, setErrorConexion] = useState(false);
@@ -90,6 +92,11 @@ export const Footer = () => {
             <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
               No hay páginas legales publicadas.
             </span>
+          )}
+          {!isAdminRoute(pathname) && onOpenCookiePreferences && (
+            <button type="button" className="cookie-preferences-button" onClick={onOpenCookiePreferences}>
+              Preferencias de cookies
+            </button>
           )}
         </div>
       </div>

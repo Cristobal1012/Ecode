@@ -1,3 +1,46 @@
+.checkout-card {
+  width: calc(100% - 32px);
+  box-sizing: border-box;
+}
+
+.checkout-main input,
+.checkout-main select,
+.checkout-main button {
+  min-height: 44px;
+}
+
+.checkout-main input[type="checkbox"],
+.checkout-main input[type="radio"] {
+  min-height: 0;
+}
+
+.checkout-main .checkout-titulo {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0 0 16px;
+}
+
+.checkout-fila > *,
+.checkout-resumen-linea > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.checkout-resumen-linea {
+  gap: 12px;
+  text-align: left;
+}
+
+.checkout-resumen-linea > :last-child {
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .checkout-fila {
+    flex-direction: column;
+  }
+}
+
 /* Opciones del checkout que se eligen con radios (despacho, dirección, sucursal) */
 .checkout-grupo {
   border: none;

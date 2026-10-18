@@ -1,32 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import useCarrito from '../hooks/useCarrito';
 import { guardarCarrito, validarCarrito } from './carrito';
 
 const CarritoCompras = () => {
     const [isOpen, setIsOpen] = useState(false);
     const carritoRef = useRef(null);
-    const [itemsCarrito, setItemsCarrito] = useState([]); // Estado dinámico
+    const itemsCarrito = useCarrito();
     const [aviso, setAviso] = useState('');
     const [tipoAviso, setTipoAviso] = useState('status');
     const [actualizando, setActualizando] = useState(false);
 
     useEffect(() => {
-        // Función para leer los datos actuales
-        const cargarCarrito = () => {
-            const carritoGuardado = localStorage.getItem('carrito_local');
-            if (carritoGuardado) {
-                setItemsCarrito(JSON.parse(carritoGuardado));
-            } else {
-                setItemsCarrito([]);
-            }
-        };
-
-        // Carga inicial
-        cargarCarrito();
-
-        // Escucha un evento para actualizarse al instante si iniciamos/cerramos sesión o agregamos algo
-        window.addEventListener('carritoActualizado', cargarCarrito);
-
         const handleClickOutside = (event) => {
             if (carritoRef.current && !carritoRef.current.contains(event.target)) {
                 setIsOpen(false);
@@ -35,7 +20,6 @@ const CarritoCompras = () => {
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
-            window.removeEventListener('carritoActualizado', cargarCarrito);
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
@@ -58,7 +42,6 @@ const CarritoCompras = () => {
                     : actual
             );
 
-            setItemsCarrito(nuevoCarrito);
             await guardarCarrito(nuevoCarrito);
             mostrarAviso('Cantidad actualizada.');
             return;
@@ -102,7 +85,6 @@ const CarritoCompras = () => {
                     : actual
             );
 
-            setItemsCarrito(carritoNuevo);
             await guardarCarrito(carritoNuevo);
             mostrarAviso('Cantidad actualizada.');
         } catch (error) {
@@ -120,7 +102,6 @@ const CarritoCompras = () => {
             actual => !(actual.id === item.id && actual.sku === item.sku)
         );
 
-        setItemsCarrito(nuevoCarrito);
         await guardarCarrito(nuevoCarrito);
         mostrarAviso('Producto quitado del carrito.');
     };
@@ -129,8 +110,9 @@ const CarritoCompras = () => {
     const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
 
     return (
-        <div style={{ position: 'relative' }} ref={carritoRef}>
+        <div className="carrito-compras" ref={carritoRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-label={`Carrito de compras, ${cantidadTotal} ${cantidadTotal === 1 ? 'producto' : 'productos'}`}
                 aria-expanded={isOpen}
@@ -147,7 +129,7 @@ const CarritoCompras = () => {
                 {cantidadTotal > 0 && (
                     <span aria-hidden="true" style={{
                         position: 'absolute', top: '0px', right: '0px', backgroundColor: '#ef4444',
-                        color: 'white', fontSize: '12px', fontWeight: 'bold', width: '18px',
+                        color: 'white', fontSize: '12px', fontWeight: 'bold', minWidth: '18px', padding: '0 3px', boxSizing: 'border-box',
                         height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center',
                         justifyContent: 'center'
                     }}>
@@ -157,8 +139,7 @@ const CarritoCompras = () => {
             </button>
 
             {isOpen && (
-                <div style={{
-                    position: 'absolute', top: '100%', right: '0', marginTop: '8px', width: '320px',
+                <div className="carrito-panel" style={{
                     backgroundColor: 'white', borderRadius: '8px',
                     boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', border: '1px solid #f3f4f6', zIndex: 9999
                 }}>

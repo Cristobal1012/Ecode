@@ -64,7 +64,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'tema_seleccionado', 'layout_catalogo',
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
-             'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo'}
+             'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
+             'google_analytics_id', 'meta_pixel_id'}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -84,6 +85,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.configuracion = ConfiguracionGlobal.objects.create(
+            pk=1,
             nombre_tienda='Tienda QA',
             texto_bienvenida='Bienvenido a Tienda QA',
             texto_boton_ingreso='Ver productos',
@@ -118,6 +120,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'numero_origen': '123',
             'dpto_casa_origen': None,
             'retiro_en_local_activo': True,
+            'google_analytics_id': None,
+            'meta_pixel_id': None,
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):

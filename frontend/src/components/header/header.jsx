@@ -10,35 +10,33 @@ function Header() {
 
   return (
     <header className="header">
-      <div className="header-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: 'none', padding: '7px 3rem', boxSizing: 'border-box' }}>
-
-        
-        <div className="header-logo" style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', paddingLeft: '1rem' }}>
-          <img 
-            className="header-logo-img" 
-            src={logo} 
-            alt="Logo" 
-            style={{ height: '60px', width: 'auto', objectFit: 'contain' }} 
+      <div className="header-content">
+        <div className="header-logo">
+          <img
+            className="header-logo-img"
+            src={logo}
+            alt="Logo de la Universidad Autónoma"
           />
         </div>
 
-        
-        <nav style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3.5rem' }}>
-          <Link to="/" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Inicio</Link>
-          <Link to="/catalogo" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Catálogo</Link>
-          <Link to="/nosotros" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Nosotros</Link>
+        <nav className="header-nav" aria-label="Navegación de la tienda">
+          <div className="header-links">
+            <Link to="/">Inicio</Link>
+            <Link to="/catalogo">Catálogo</Link>
+            <Link to="/contacto">Contacto</Link>
 
-          {rol === 'ADMIN' && (
-            <Link to="/admin" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Panel admin</Link>
-          )}
+            {/* Si es ADMIN, le damos un atajo rápido a su panel */}
+            {rol === 'ADMIN' && (
+              <Link to="/admin">Panel admin</Link>
+            )}
+          </div>
+
+          {/* Agrupamos el Menú de Usuario y el Carrito de Compras */}
+          <div className="header-actions">
+            <MenuUsuario />
+            <CarritoCompras />
+          </div>
         </nav>
-
-        
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
-          <MenuUsuario />
-          <CarritoCompras />
-        </div>
-
       </div>
     </header>
   );

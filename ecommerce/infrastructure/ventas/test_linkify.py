@@ -6,6 +6,8 @@ from rest_framework.test import APISimpleTestCase
 from rest_framework import status
 from django.urls import reverse
 
+from ecommerce.application.ventas import GenerarOrdenTransporte
+
 class LinkifyWebhookQATest(APISimpleTestCase):
     def setUp(self):
         # Asegúrate de que este nombre coincide con el 'name' que pusiste en urls.py
@@ -61,6 +63,20 @@ class LinkifyWebhookQATest(APISimpleTestCase):
         mock_caso_uso.aprobar.assert_called_once()
         kwargs = mock_caso_uso.aprobar.call_args.kwargs
         self.assertEqual(kwargs.get('orden_id'), "ORD-002")
+
+    @patch('ecommerce.infrastructure.ventas.views.ConfirmarPago')
+    @patch('ecommerce.infrastructure.ventas.views.LinkifyWebhookAPIView._obtener_secret_key')
+    def test_la_ot_se_genera_con_el_caso_de_uso_como_en_los_demas_pagos(self, mock_secret, MockConfirmarPago):
+        """El caso de uso busca el envío de la orden; el adaptador de Chilexpress solo no sabe hacerlo."""
+        mock_secret.return_value = self.secret_key
+        payload = {"action": "notification", "id": "ORD-004", "completeness": "exact"}
+        cuerpo_bytes, firma = self.generar_firma_valida(payload)
+
+        self.client.post(self.url, cuerpo_bytes, content_type='application/json',
+                         HTTP_X_LINKIFY_CONFIRMATION=firma)
+
+        _, _, orden_transporte, _ = MockConfirmarPago.call_args.args
+        self.assertIsInstance(orden_transporte, GenerarOrdenTransporte)
 
     @patch('ecommerce.infrastructure.ventas.views.ConfirmarPago')
     @patch('ecommerce.infrastructure.ventas.views.LinkifyWebhookAPIView._obtener_secret_key')

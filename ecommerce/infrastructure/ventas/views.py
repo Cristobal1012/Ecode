@@ -1214,13 +1214,8 @@ class LinkifyWebhookAPIView(APIView):
         
       # 2. Lógica de negocio
         try:
-            # Inicializar el caso de uso con sus dependencias
-            caso_uso = ConfirmarPago(
-                ordenes=DjangoRepositorioOrdenes(),
-                inventario=MongoInventarioVariantes(),
-                notificador=CorreoNotificadorPedidos(),
-                orden_transporte=ChilexpressOrdenTransporte() 
-            )
+            # Mismas dependencias que los demás pagos: la OT la genera el caso de uso a partir del envío de la orden
+            caso_uso = confirmar_pago()
             
             pago_exacto = (completeness == "exact")
             

@@ -16,24 +16,24 @@ function Header() {
           <img
             className="header-logo-img"
             src={logo}
-            alt="Logo"
+            alt="Logo de la Universidad Autónoma"
           />
         </div>
 
-        {/* Añadí un estilo inline muy ligero (flex y alignItems) para asegurar 
-            que el nuevo botón quede bien centrado verticalmente con tus otros links */}
-        <nav className="header-nav" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link to="/">Inicio</Link>
-          <Link to="/catalogo">Catálogo</Link>
-          <Link to="/contacto">Contacto</Link>
+        <nav className="header-nav" aria-label="Navegación de la tienda">
+          <div className="header-links">
+            <Link to="/">Inicio</Link>
+            <Link to="/catalogo">Catálogo</Link>
+            <Link to="/contacto">Contacto</Link>
 
-          {/* Si es ADMIN, le damos un atajo rápido a su panel */}
-          {rol === 'ADMIN' && (
-            <Link to="/admin">Panel admin</Link>
-          )}
+            {/* Si es ADMIN, le damos un atajo rápido a su panel */}
+            {rol === 'ADMIN' && (
+              <Link to="/admin">Panel admin</Link>
+            )}
+          </div>
 
           {/* Agrupamos el Menú de Usuario y el Carrito de Compras */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginLeft: '8px' }}>
+          <div className="header-actions">
             <MenuUsuario />
             <CarritoCompras />
           </div>

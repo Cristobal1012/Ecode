@@ -23,6 +23,7 @@ import PaginaLegal from './pages/PaginaLegal';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
+import Header from './components/header/header';
 
 // Inyecta las variables CSS directamente en :root
 const applyPaletteToRoot = (paletteId) => {
@@ -42,13 +43,16 @@ function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
 
   return (
-    <div>
-      {showLogin ? (
-        <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
-      ) : (
-        <Register onSwitchToLogin={() => setShowLogin(true)} />
-      )}
-    </div>
+    <>
+      <Header />
+      <main className="auth-main">
+        {showLogin ? (
+          <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
+        ) : (
+          <Register onSwitchToLogin={() => setShowLogin(true)} />
+        )}
+      </main>
+    </>
   );
 }
 
@@ -116,7 +120,7 @@ function App() {
         consent={consent}
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <main style={{ flex: 1 }}>
+        <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
             <Route path="/" element={<LandingPage />} />
@@ -151,7 +155,7 @@ function App() {
               <Route path="/admin" element={<Admin />} />
             </Route>
           </Routes>
-        </main>
+        </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
         <Footer onOpenCookiePreferences={openPreferences} />

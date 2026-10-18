@@ -1,8 +1,19 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import clienteAxios from '../components/auth/axiosConfig';
+import Header from '../components/header/header';
+import './SeguimientoEnvio.css';
 
 export default function SeguimientoEnvio() {
+    return (
+        <>
+            <Header />
+            <SeguimientoContenido />
+        </>
+    );
+}
+
+function SeguimientoContenido() {
     const [searchParams] = useSearchParams(); 
     
     // 3. Modificamos el estado inicial para que lea la URL (?orden=123)
@@ -55,14 +66,7 @@ export default function SeguimientoEnvio() {
         : {};
 
     return (
-        <div
-            style={{
-                maxWidth: '700px',
-                margin: '40px auto',
-                padding: '20px',
-                fontFamily: 'sans-serif'
-            }}
-        >
+        <main className="seguimiento-main">
             <h1>Seguimiento de pedido</h1>
 
             <p>
@@ -242,6 +246,6 @@ export default function SeguimientoEnvio() {
                     )}
                 </div>
             )}
-        </div>
+        </main>
     );
 }

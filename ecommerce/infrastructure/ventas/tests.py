@@ -85,6 +85,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.configuracion = ConfiguracionGlobal.objects.create(
+            pk=1,
             nombre_tienda='Tienda QA',
             texto_bienvenida='Bienvenido a Tienda QA',
             texto_boton_ingreso='Ver productos',

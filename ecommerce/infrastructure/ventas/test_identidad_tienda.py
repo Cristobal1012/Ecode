@@ -46,12 +46,13 @@ class IdentidadTiendaTests(APITestCase):
     def archivo(self, campo):
         return getattr(ConfiguracionGlobal.objects.get(pk=1), campo)
 
-    def test_sube_logo_favicon_y_portada_y_la_tienda_los_recibe_como_url(self):
-        response = self.subir(logo=imagen_png(), favicon=imagen_png('icono.png'), banner=imagen_png('portada.png'))
+    def test_sube_logo_favicon_portada_y_foto_de_nosotros_y_la_tienda_los_recibe_como_url(self):
+        response = self.subir(logo=imagen_png(), favicon=imagen_png('icono.png'), banner=imagen_png('portada.png'),
+                              nosotros_imagen=imagen_png('taller.png'))
 
         self.assertEqual(response.status_code, 200, response.data)
         publica = self.client.get(reverse('configuracion-global')).data
-        for campo in ('logo', 'favicon', 'banner'):
+        for campo in ('logo', 'favicon', 'banner', 'nosotros_imagen'):
             with self.subTest(campo=campo):
                 guardado = self.archivo(campo)
                 self.assertTrue(Path(guardado.path).is_file())
@@ -88,18 +89,22 @@ class IdentidadTiendaTests(APITestCase):
         self.assertFalse(segundo.exists())
 
     def test_edita_los_campos_fijos_de_la_landing(self):
-        datos = {'texto_bienvenida': 'Murales de Alan', 'subtitulo_bienvenida': 'Arte para tus paredes',
-                 'texto_landing': 'Pintamos murales a pedido en todo Chile.', 'texto_boton_ingreso': 'Ver obras'}
+        datos = {'nombre_tienda': 'Murales Alan', 'texto_bienvenida': 'Murales de Alan',
+                 'subtitulo_bienvenida': 'Arte para tus paredes',
+                 'texto_landing': 'Pintamos murales a pedido en todo Chile.', 'texto_boton_ingreso': 'Ver obras',
+                 'nosotros_titulo': 'Nuestro taller', 'nosotros_texto': 'Desde 2015 pintamos en Valparaíso.'}
 
         self.assertEqual(self.client.patch(self.url, datos, format='json').status_code, 200)
 
         publica = self.client.get(reverse('configuracion-global')).data
         self.assertEqual({campo: publica[campo] for campo in datos}, datos)
 
-    def test_el_texto_de_la_landing_tiene_un_largo_maximo(self):
-        response = self.client.patch(self.url, {'texto_landing': 'x' * 1001}, format='json')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('texto_landing', response.data)
+    def test_los_textos_largos_de_la_landing_tienen_un_maximo(self):
+        for campo, maximo in (('texto_landing', 1000), ('nosotros_texto', 2000)):
+            with self.subTest(campo=campo):
+                response = self.client.patch(self.url, {campo: 'x' * (maximo + 1)}, format='json')
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(campo, response.data)
 
     def test_un_comprador_no_puede_cambiar_la_identidad(self):
         self.client.force_authenticate(create_user('comprador-identidad@example.test'))

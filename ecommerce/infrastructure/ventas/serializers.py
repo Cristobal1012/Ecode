@@ -69,11 +69,15 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'dpto_casa_origen',
             'retiro_en_local_activo',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
+            'nombre_tienda',
             'logo',
             'favicon',
             'banner',
             'subtitulo_bienvenida',
             'texto_landing',
+            'nosotros_titulo',
+            'nosotros_texto',
+            'nosotros_imagen',
         ]
 
     def get_google_client_id(self, obj):
@@ -91,7 +95,7 @@ class ImagenNegocioField(ArchivoImagenField):
         return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
 
 
-CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner')
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen')
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
@@ -99,14 +103,20 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     logo = ImagenNegocioField(required=False, allow_null=True)
     favicon = ImagenNegocioField(required=False, allow_null=True)
     banner = ImagenNegocioField(required=False, allow_null=True)
+    nosotros_imagen = ImagenNegocioField(required=False, allow_null=True)
     texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    nosotros_texto = serializers.CharField(max_length=2000, required=False, allow_blank=True)
 
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'nombre_tienda',
             'texto_bienvenida',
             'subtitulo_bienvenida',
             'texto_landing',
+            'nosotros_titulo',
+            'nosotros_texto',
+            'nosotros_imagen',
             'texto_boton_ingreso',
             'banner_url',
             'tema_seleccionado',

@@ -49,6 +49,10 @@ class ConfiguracionGlobal(models.Model):
     # Landing (RF-01.1): campos fijos que el admin edita desde el panel; el título es texto_bienvenida
     subtitulo_bienvenida = models.CharField(max_length=200, blank=True, default='')
     texto_landing = models.TextField(blank=True, default='')
+    # Sección "Nosotros" de la landing: sin texto no se muestra
+    nosotros_titulo = models.CharField(max_length=120, blank=True, default='')
+    nosotros_texto = models.TextField(blank=True, default='')
+    nosotros_imagen = models.ImageField(upload_to='negocio/nosotros/', blank=True, null=True)
     banner_url = models.URLField(max_length=500, blank=True, null=True)
     banner = models.ImageField(upload_to='negocio/banners/', blank=True, null=True)
     modo_autenticacion = models.CharField(

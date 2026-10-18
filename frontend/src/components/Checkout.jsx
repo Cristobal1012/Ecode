@@ -413,15 +413,49 @@ export default function Checkout() {
     const inputStyle = { width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box' };
 
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
+
+    const aplicarCodigo = async () => {
+        if (!codigoInput.trim()) return;
+
+        try {
+            const respuesta = await clienteAxios.post('ventas/checkout/validar-cupon/', { 
+            codigo: codigoInput.trim().toUpperCase() 
+            });
+            
+            setDescuentoAplicado({ 
+            tipo: respuesta.data.tipo_descuento, 
+            valor: Number(respuesta.data.valor_descuento), 
+            codigo: respuesta.data.codigo 
+            });
+            setMensaje('¡Código aplicado con Éxito!');
+            
+        } catch (error) {
+            setDescuentoAplicado(null);
+            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
+        }
+    };
+
+
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
+    let montoDescuento = 0;
+    if (descuentoAplicado) {
+        if (typeof descuentoAplicado === 'number') {
+            montoDescuento = descuentoAplicado;
+        } else if (descuentoAplicado.tipo === 'PORCENTAJE') {
+            montoDescuento = subtotal * (descuentoAplicado.valor / 100);
+        } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
+            montoDescuento = descuentoAplicado.valor;
+        }
+    }
+
     const tieneEnvioGratisCupon = Boolean(
-        codigoValidado &&
+        (codigoValidado || descuentoAplicado?.codigo) &&
         umbralEnvioGratis !== null &&
         subtotal >= umbralEnvioGratis
     );
     const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
-    const totalFinal = Math.max(0, subtotal - descuentoAplicado) + costoEnvioFinal;
+    const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
 
     const aplicarCupon = async () => {
         if (!codigoCupon.trim()) {
@@ -581,7 +615,7 @@ export default function Checkout() {
                 }
             }
 
-            // Algo se agotó mientras completaba el formulario: se ajusta el carrito y se le avisa
+            
             if (datos.items) await revisarCarrito(itemsCarrito);
 
             const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago
@@ -615,59 +649,17 @@ export default function Checkout() {
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>
                 {itemsCarrito.length > 0 ? itemsCarrito.map((item, index) => (
                     <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px', color: '#4b5563' }}>
-                        <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
+                    <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
                     </div>
                 )) : <p>No hay productos</p>}
-
-                <div style={{ display: 'flex', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
-                    <input 
-                        type="text" 
-                        placeholder="Código de descuento" 
-                        value={codigoCupon} 
-                        onChange={(e) => {
-                            setCodigoCupon(e.target.value.toUpperCase());
-                            if (codigoValidado) {
-                                setCodigoValidado(null);
-                                setDescuentoAplicado(0);
-                                setUmbralEnvioGratis(null);
-                                setMensajeCupon('');
-                            }
-                        }}
-                        style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                    <button 
-                        type="button" 
-                        onClick={aplicarCupon}
-                        style={{ padding: '8px 15px', backgroundColor: '#4b5563', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                        Aplicar
-                    </button>
-                    {codigoValidado && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setCodigoCupon('');
-                                setCodigoValidado(null);
-                                setDescuentoAplicado(0);
-                                setUmbralEnvioGratis(null);
-                                setMensajeCupon('');
-                            }}
-                            style={{ padding: '8px 12px', backgroundColor: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
-                            title="Quitar cupón"
-                        >
-                            Quitar
-                        </button>
-                    )}
-                </div>
-                {mensajeCupon && <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: mensajeCupon.includes('inválido') ? '#dc2626' : '#16a34a' }}>{mensajeCupon}</p>}
-                
                 <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
                 
-                {descuentoAplicado > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#dc2626' }}>
-                        <span>Descuento aplicado:</span><span>-${descuentoAplicado.toLocaleString('es-CL')}</span>
+                {montoDescuento > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#16a34a', fontWeight: 'bold' }}>
+                        <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
+                        <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
                     </div>
                 )}
 
@@ -686,10 +678,32 @@ export default function Checkout() {
                         ) : `$${costoEnvio.toLocaleString('es-CL')}`}
                     </span>
                 </div>
-                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
-            </div>
 
+                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+
+                
+                <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
+                    <input
+                    className="input-cupon"
+                    type="text"
+                    placeholder="Cupón de descuento"
+                    value={codigoInput}
+                    onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
+                    style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}
+                    />
+                    <button
+                    type="button"
+                    onClick={aplicarCodigo}
+                    style={{ padding: '10px 16px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                    Aplicar
+                    </button>
+                </div>
+
+            </div>
+                
             <form onSubmit={(e) => e.preventDefault()}>
                 {compraComoInvitado && (
                     <div style={{ marginBottom: '20px' }}>
@@ -721,16 +735,16 @@ export default function Checkout() {
                         <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
                     </legend>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid #111827' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#F9FAFB' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
                             <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
                             A Domicilio
                         </label>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid #111827' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#F9FAFB' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
                             <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
                             Sucursal Chilexpress
                         </label>
                         {configTienda?.retiro_en_local_activo && (
-                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid #111827' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#F9FAFB' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
                                 <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => {
                                     setTipoDespacho('RETIRO_LOCAL');
                                     setCostoEnvio(0);
@@ -760,7 +774,7 @@ export default function Checkout() {
                             <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
                                 <legend className="checkout-solo-lector">Dirección de envío</legend>
                                 {direccionesGuardadas.map(dir => (
-                                    <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid #007BFF' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
+                                    <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid var(--color-primary)' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#F9FAFB' : 'white' }}>
                                         <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => handleCambioDireccionGuardada(dir.id)} style={{ marginRight: '10px' }} />
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</div>
@@ -768,7 +782,7 @@ export default function Checkout() {
                                         </div>
                                     </label>
                                 ))}
-                                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid #007BFF' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid var(--color-primary)' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#F9FAFB' : 'white' }}>
                                     <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => handleCambioDireccionGuardada('nueva')} style={{ marginRight: '10px' }} />
                                     <span style={{ fontWeight: 'bold' }}>Ingresar una nueva dirección</span>
                                 </label>
@@ -825,7 +839,7 @@ export default function Checkout() {
                         </div>
                         
                         {cargandoSucursales ? (
-                            <p style={{ color: '#007BFF', fontSize: '0.9rem' }}>Buscando oficinas disponibles...</p>
+                            <p style={{ color: 'var(--color-primary)', fontSize: '0.9rem' }}>Buscando oficinas disponibles...</p>
                         ) : comunaSucursal && sucursalesDisponibles.length === 0 ? (
                             <div style={{ padding: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', color: '#991b1b', fontSize: '0.9rem' }}>
                                 Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
@@ -862,7 +876,7 @@ export default function Checkout() {
                     <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
                         <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Costo Logístico</h3>
                         {opcionesEntrega.map((opcion) => (
-                            <div key={opcion.proveedor} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '2px solid #007BFF', borderRadius: '6px', backgroundColor: '#f0f7ff' }}>
+                            <div key={opcion.proveedor} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '2px solid #111827', borderRadius: '6px', backgroundColor: '#F9FAFB' }}>
                                 <div>
                                     <strong>{opcion.nombre}</strong>
                                     <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -893,7 +907,7 @@ export default function Checkout() {
                                 return (
                                     <button
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
-                                        style={{ width: '100%', padding: '12px', backgroundColor: habilitado ? '#007BFF' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: habilitado ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
+                                        style={{ width: '100%', padding: '12px', backgroundColor: habilitado ? 'var(--color-primary, #007BFF)' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: habilitado ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
                                     >
                                         {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>

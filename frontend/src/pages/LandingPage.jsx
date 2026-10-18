@@ -15,7 +15,7 @@ function LandingPage() {
 
   const [loading, setLoading] = useState(true);
 
-  // Aplicar la paleta guardada
+  
   useEffect(() => {
     const savedPaletteId =
       Number(localStorage.getItem("ecommerce_palette")) ||
@@ -66,7 +66,7 @@ function LandingPage() {
 
           setConfiguracion(response.data);
 
-          // Sincronizar la paleta con el backend
+          
           const paletaId =
             response.data?.paleta_id ||
             response.data?.paleta;
@@ -119,7 +119,7 @@ function LandingPage() {
             error
           );
 
-          // Datos de ejemplo mientras el backend no responde
+          
           setConfiguracion({
             texto_bienvenida:
               "Bienvenido a nuestra tienda",
@@ -161,7 +161,7 @@ function LandingPage() {
 
       <main
         style={{
-          minHeight: "100vh",
+          height: "calc(100vh - 199px)",
 
           backgroundImage: `
             linear-gradient(
@@ -181,45 +181,63 @@ function LandingPage() {
       >
         <div
           style={{
-            fontFamily: "sans-serif",
             textAlign: "center",
             padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center"
           }}
         >
           <h1
             style={{
+              fontFamily: "'Playfair Display', 'Georgia', serif", 
               color: "white",
-              fontSize: "2.5rem",
-              marginBottom: "1.5rem",
+              fontSize: "4rem", 
+              fontWeight: "normal", 
+              marginBottom: "2rem",
+              textShadow: "2px 2px 8px rgba(0, 0, 0, 0.7)",
             }}
           >
-            {configuracion?.texto_bienvenida ||
-              "Bienvenido a nuestra tienda"}
+            {configuracion?.texto_bienvenida || "Bienvenido a nuestra tienda"}
           </h1>
 
           <button
             type="button"
-            onClick={() =>
-              navigate("/catalogo")
-            }
+            onClick={() => navigate("/catalogo")}
             style={{
-              padding: "12px 28px",
-              fontSize: "1.1rem",
-              fontWeight: "bold",
+              padding: "16px 44px", 
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              letterSpacing: "3.5px", 
+              textTransform: "uppercase",
               color: "#ffffff",
-              backgroundColor:
-                "var(--color-primary, #2E7D32)",
-              border: "none",
-              borderRadius: "8px",
+              
+              
+              backgroundColor: "rgba(255, 255, 255, 0.08)", 
+              backdropFilter: "blur(5px)", 
+              WebkitBackdropFilter: "blur(5px)", 
+              border: "1px solid rgba(255, 255, 255, 0.25)", 
+              
+              
+              borderRadius: "0",
               cursor: "pointer",
-              boxShadow:
-                "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
-              transition:
-                "background-color 0.2s ease",
+              boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.2)", 
+              transition: "all 0.3s ease",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "12px"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.18)";
+              e.currentTarget.style.border = "1px solid rgba(255, 255, 255, 0.45)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+              e.currentTarget.style.border = "1px solid rgba(255, 255, 255, 0.25)";
             }}
           >
-            {configuracion?.texto_boton_ingreso ||
-              "Ver Catálogo"}
+            {configuracion?.texto_boton_ingreso || "Ver Catálogo"} 
+            <span style={{ fontSize: "1.2rem", transform: "translateY(-1px)" }}>→</span>
           </button>
         </div>
       </main>

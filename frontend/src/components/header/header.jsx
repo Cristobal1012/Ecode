@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import "./header.css";
 import logo from "./logoU.png";
 import MenuUsuario from "../MenuUsuario";
-import CarritoCompras from "../CarritoCompras"; // NUEVA IMPORTACIÓN
+import CarritoCompras from "../CarritoCompras"; 
 
 function Header() {
   // Solo conservamos el rol para saber si mostramos el atajo de admin
@@ -10,34 +10,34 @@ function Header() {
 
   return (
     <header className="header">
-      <div className="header-content">
+      <div className="header-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: 'none', padding: '7px 3rem', boxSizing: 'border-box' }}>
 
-        <div className="header-logo">
-          <img
-            className="header-logo-img"
-            src={logo}
-            alt="Logo"
+        
+        <div className="header-logo" style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', paddingLeft: '1rem' }}>
+          <img 
+            className="header-logo-img" 
+            src={logo} 
+            alt="Logo" 
+            style={{ height: '60px', width: 'auto', objectFit: 'contain' }} 
           />
         </div>
 
-        {/* Añadí un estilo inline muy ligero (flex y alignItems) para asegurar 
-            que el nuevo botón quede bien centrado verticalmente con tus otros links */}
-        <nav className="header-nav" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link to="/">Inicio</Link>
-          <Link to="/catalogo">Catálogo</Link>
-          <Link to="/contacto">Contacto</Link>
+        
+        <nav style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3.5rem' }}>
+          <Link to="/" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Inicio</Link>
+          <Link to="/catalogo" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Catálogo</Link>
+          <Link to="/nosotros" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Nosotros</Link>
 
-          {/* Si es ADMIN, le damos un atajo rápido a su panel */}
           {rol === 'ADMIN' && (
-            <Link to="/admin">Panel admin</Link>
+            <Link to="/admin" style={{ textDecoration: 'none', color: '#333', fontWeight: '500' }}>Panel admin</Link>
           )}
-
-          {/* Agrupamos el Menú de Usuario y el Carrito de Compras */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginLeft: '8px' }}>
-            <MenuUsuario />
-            <CarritoCompras />
-          </div>
         </nav>
+
+        
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
+          <MenuUsuario />
+          <CarritoCompras />
+        </div>
 
       </div>
     </header>

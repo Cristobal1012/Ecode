@@ -7,6 +7,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
+from .models import Promocion
 
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
@@ -624,3 +625,8 @@ def chilexpress_para_panel(credenciales):
                    for nombre, etiqueta, obligatorio in credenciales.CAMPOS],
         'datos': credenciales.visibles(),
     }
+
+class PromocionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Promocion
+        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'is_active']

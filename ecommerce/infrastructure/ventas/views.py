@@ -7,6 +7,9 @@ from rest_framework.views import APIView
 from django.shortcuts import redirect
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import TruncDate
+from .models import Promocion
+from .serializers import PromocionSerializer
+from rest_framework.permissions import AllowAny
 
 from django.utils import timezone
 import logging
@@ -1092,6 +1095,7 @@ class AdminChilexpressView(APIView):
         except CredencialesChilexpressInvalidas as error:
             return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
         return Response(chilexpress_para_panel(credenciales))
+
 class ValidarPromocionAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -1240,3 +1244,29 @@ class LinkifyWebhookAPIView(APIView):
                 "message": f"Error procesando la orden: {str(e)}",
                 "notify_merchant": True
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PromocionListCreateView(generics.ListCreateAPIView):
+    queryset = Promocion.objects.all().order_by('-id')
+    serializer_class = PromocionSerializer
+
+
+class PromocionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Promocion.objects.all()
+    serializer_class = PromocionSerializer
+
+
+class ValidarCuponView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        codigo = request.data.get('codigo', '').strip().upper()
+        if not codigo:
+            return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
+
+        promocion = Promocion.objects.filter(codigo=codigo, is_active=True).first()
+        if not promocion:
+            return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PromocionSerializer(promocion)
+        return Response(serializer.data, status=status.HTTP_200_OK)

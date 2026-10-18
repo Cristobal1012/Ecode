@@ -301,7 +301,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         style={{
             marginTop: '20px',
             padding: '12px 24px',
-            backgroundColor: sinStock || agregando ? '#d1d5db' : '#2563eb',
+            backgroundColor: sinStock || agregando ? '#d1d5db' : 'var(--color-primary)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',

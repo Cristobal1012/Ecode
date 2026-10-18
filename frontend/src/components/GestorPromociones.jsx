@@ -1,0 +1,172 @@
+import React, { useState, useEffect } from 'react';
+import clienteAxios from './auth/axiosConfig';
+
+export default function GestorPromociones() {
+  const [promociones, setPromociones] = useState([]);
+  const [formData, setFormData] = useState({
+    codigo: '',
+    tipo_descuento: 'PORCENTAJE',
+    valor_descuento: '',
+    umbral_envio_gratis: ''
+  });
+  const [editId, setEditId] = useState(null);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  
+  useEffect(() => {
+    const cargarPromociones = async () => {
+      try {
+        
+        const respuesta = await clienteAxios.get('ventas/promociones/'); 
+        setPromociones(respuesta.data);
+      } catch (error) {
+        console.error("Error cargando promociones:", error);
+      }
+    };
+    cargarPromociones();
+  }, []);
+
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+        if (editId) {
+            
+            const respuesta = await clienteAxios.put(`ventas/promociones/${editId}/`, formData);
+            setPromociones(promociones.map(p => p.id === editId ? respuesta.data : p));
+        } else {
+            
+            const respuesta = await clienteAxios.post('ventas/promociones/', formData);
+            setPromociones([...promociones, respuesta.data]);
+        }
+        
+        
+        setFormData({ codigo: '', tipo_descuento: 'PORCENTAJE', valor_descuento: '', umbral_envio_gratis: '' });
+        setEditId(null); 
+    } catch (error) {
+        console.error("Error al guardar promoción:", error);
+        alert("Hubo un error al guardar el código.");
+    }
+  };
+
+  
+  const eliminarPromocion = async (id) => {
+    try {
+      await clienteAxios.delete(`ventas/promociones/${id}/`);
+      setPromociones(promociones.filter(p => p.id !== id));
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+    }
+  };
+  const cargarPromocionParaEditar = (promo) => {
+    setEditId(promo.id);
+    setFormData({
+        codigo: promo.codigo,
+        tipo_descuento: promo.tipo_descuento,
+        valor_descuento: promo.valor_descuento, 
+        umbral_envio_gratis: promo.umbral_envio_gratis || ''
+    });
+  };
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '950px', margin: '0 auto' }}>
+      <h2 style={{ color: 'var(--color-primary)', marginBottom: '20px' }}>Gestión de Promociones</h2>
+
+      {/* FORMULARIO DE CREACIÓN */}
+      <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
+        <h3 style={{ marginTop: 0, color: '#333' }}>Crear Nuevo Código</h3>
+        
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
+            <input required type="text" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', textTransform: 'uppercase' }} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Tipo de Descuento</label>
+            <select name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+              <option value="PORCENTAJE">Porcentaje (%)</option>
+              <option value="MONTO_FIJO">Monto Fijo ($)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
+            <input required type="number" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
+            <input type="number" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+          </div>
+
+          <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '10px' }}>
+            <button type="submit" style={{ padding: '10px 24px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+              Guardar Promoción
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* TABLA DE PROMOCIONES ACTIVAS */}
+      <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+        <h3 style={{ marginTop: 0, color: '#333' }}>Códigos Activos</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                <th style={{ padding: '12px' }}>Código</th>
+                <th style={{ padding: '12px' }}>Tipo</th>
+                <th style={{ padding: '12px' }}>Valor</th>
+                <th style={{ padding: '12px' }}>Envío Gratis Desde</th>
+                <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+                {promociones.map((promo) => (
+                    <tr key={promo.id}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', fontWeight: 'bold', color: 'var(--color-primary, #0369a1)' }}>
+                        {promo.codigo}
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                        {promo.tipo_descuento === 'PORCENTAJE' ? 'Porcentaje' : 'Monto Fijo'}
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                        {promo.tipo_descuento === 'PORCENTAJE' 
+                        ? `${promo.valor_descuento}%` 
+                        : `$${Number(promo.valor_descuento).toLocaleString('es-CL')}`
+                        }
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                        {promo.umbral_envio_gratis ? `$${Number(promo.umbral_envio_gratis).toLocaleString('es-CL')}` : '-'}
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee' }}>
+                      <button
+                          
+                          onClick={() => cargarPromocionParaEditar(promo)}
+                          style={{ padding: '6px 12px', backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
+                      >
+                          Editar
+                      </button>
+                      <button
+                          onClick={() => eliminarPromocion(promo.id)}
+                          style={{ padding: '6px 12px', backgroundColor: '#e11d48', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                          Eliminar
+                      </button>
+                    </td>
+                    </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

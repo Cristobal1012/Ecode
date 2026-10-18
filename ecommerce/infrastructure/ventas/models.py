@@ -98,7 +98,8 @@ class DireccionEnvio(models.Model):
     dpto_casa = models.CharField(max_length=100, blank=True, null=True)
     comuna = models.CharField(max_length=100)
     ciudad = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
+    # Opcional: el checkout no la pide y Chilexpress cotiza y despacha con la comuna
+    region = models.CharField(max_length=100, blank=True, default='')
     codigo_postal = models.CharField(max_length=20, blank=True, null=True)
     es_predeterminado = models.BooleanField(default=False)
 

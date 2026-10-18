@@ -803,3 +803,26 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.orden.refresh_from_db()
         self.assertEqual((self.orden.estado, self.orden.motivo_cancelacion), ('CANCELADO', 'Pago rechazado'))
         self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 3)
+
+
+class DireccionesEnvioTests(APITestCase):
+    def setUp(self):
+        self.client.force_authenticate(create_user('direcciones@example.test'))
+        self.direccion = {'calle': 'Av. Principal', 'calle_numero': '123', 'dpto_casa': '',
+                          'comuna': 'SANTIAGO CENTRO', 'ciudad': 'Santiago', 'es_predeterminado': True}
+
+    def test_la_region_es_opcional_como_la_envia_el_checkout(self):
+        # El checkout no pide la región (Chilexpress usa la comuna) y la manda vacía al guardar la dirección
+        for region in ('', None):
+            with self.subTest(region=region):
+                datos = {**self.direccion, 'region': ''} if region == '' else self.direccion
+                response = self.client.post(reverse('direcciones-list-create'), datos, format='json')
+
+                self.assertEqual(response.status_code, 201, response.data)
+                self.assertEqual(response.data['region'], '')
+
+    def test_la_region_se_guarda_si_viene(self):
+        response = self.client.post(reverse('direcciones-list-create'), {**self.direccion, 'region': 'Metropolitana'},
+                                    format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['region'], 'Metropolitana')

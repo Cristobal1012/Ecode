@@ -13,6 +13,7 @@ import GestorPoliticas from '../components/GestorPoliticas';
 import GestorMediosPago from '../components/GestorMediosPago';
 import GestorChilexpress from '../components/GestorChilexpress';
 import GestorPromociones from '../components/GestorPromociones';
+import GestorContacto from '../components/GestorContacto';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -21,6 +22,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
+  { id: 'config-contacto', titulo: 'Contacto y Redes' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' }
@@ -254,6 +256,13 @@ export default function Admin() {
                       </button>
                     </div>
                   </form>
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-contacto" />
+                  <GestorContacto />
                 </div>
 
                 <hr className="admin-separador" />

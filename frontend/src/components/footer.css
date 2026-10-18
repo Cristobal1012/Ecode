@@ -12,6 +12,11 @@
   padding-bottom: 48px;
 }
 
+/* Con la columna de contacto: marca, tienda, legal y contacto */
+.footer-contenido--con-contacto {
+  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+}
+
 .footer-nombre {
   font-family: var(--fuente-titulos);
   font-size: 1.75rem;
@@ -70,6 +75,41 @@
   border-radius: var(--radio);
 }
 
+/* ---------- Contacto ---------- */
+
+.footer-contacto {
+  display: grid;
+  gap: 14px;
+  font-style: normal;
+  font-size: 0.9rem;
+}
+
+.footer-linea,
+.footer-etiqueta {
+  display: block;
+}
+
+.footer-etiqueta {
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #B9B1A6;
+}
+
+/* Cada línea que escribió el admin se respeta */
+.footer-horario {
+  display: block;
+  white-space: pre-line;
+}
+
+.footer-contacto a {
+  gap: 8px;
+  min-height: 24px;
+  overflow-wrap: anywhere;
+}
+
 .footer-pie {
   border-top: 1px solid rgb(243 239 233 / 15%);
   padding-top: 20px;
@@ -78,8 +118,15 @@
   color: #B9B1A6;
 }
 
+@media (max-width: 1023px) {
+  .footer-contenido--con-contacto {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 767px) {
-  .footer-contenido {
+  .footer-contenido,
+  .footer-contenido--con-contacto {
     grid-template-columns: 1fr;
     gap: 28px;
   }

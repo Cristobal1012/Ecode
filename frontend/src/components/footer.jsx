@@ -5,10 +5,25 @@ import { isAdminRoute } from '../hooks/useCookieConsent';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import './footer.css';
 
+// Dirección del local en dos líneas; solo si el admin eligió mostrarla (la API no la entrega si no se usa)
+const lineasDireccion = (configuracion) => {
+  if (!configuracion?.mostrar_direccion_pie || !configuracion.calle_origen) return [];
+  const { calle_origen, numero_origen, dpto_casa_origen, comuna_origen, region_origen } = configuracion;
+  return [
+    [calle_origen, numero_origen].filter(Boolean).join(' ') + (dpto_casa_origen ? `, ${dpto_casa_origen}` : ''),
+    [comuna_origen, region_origen].filter(Boolean).join(', ')
+  ].filter(Boolean);
+};
+
 export const Footer = ({ onOpenCookiePreferences }) => {
   const { pathname } = useLocation();
   const configuracion = useConfiguracionTienda();
   const nombreTienda = configuracion?.nombre_tienda || 'Tienda';
+  const direccion = lineasDireccion(configuracion);
+  const correo = configuracion?.correo_contacto;
+  const horario = configuracion?.horario_atencion?.trim();
+  const instagram = configuracion?.instagram_usuario;
+  const hayContacto = direccion.length > 0 || correo || horario || instagram;
   const [paginas, setPaginas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [errorConexion, setErrorConexion] = useState(false);
@@ -33,7 +48,7 @@ export const Footer = ({ onOpenCookiePreferences }) => {
 
   return (
     <footer className="footer">
-      <div className="contenedor footer-contenido">
+      <div className={`contenedor footer-contenido${hayContacto ? ' footer-contenido--con-contacto' : ''}`}>
         <div className="footer-marca">
           <p className="footer-nombre">{nombreTienda}</p>
           {configuracion?.subtitulo_bienvenida && (
@@ -74,6 +89,45 @@ export const Footer = ({ onOpenCookiePreferences }) => {
             </button>
           )}
         </nav>
+
+        {/* Contacto de la tienda: lo edita el admin en Configuración > Contacto y Redes */}
+        {hayContacto && (
+          <section className="footer-columna" aria-labelledby="footer-titulo-contacto">
+            <h2 id="footer-titulo-contacto" className="footer-titulo">Contacto</h2>
+            <address className="footer-contacto">
+              {direccion.length > 0 && (
+                <p className="footer-dato">
+                  <span className="visualmente-oculto">Dirección: </span>
+                  {direccion.map((linea) => <span key={linea} className="footer-linea">{linea}</span>)}
+                </p>
+              )}
+              {correo && (
+                <p className="footer-dato">
+                  <a href={`mailto:${correo}`}>{correo}</a>
+                </p>
+              )}
+              {horario && (
+                <p className="footer-dato">
+                  <span className="footer-etiqueta">Horario</span>
+                  <span className="footer-horario">{horario}</span>
+                </p>
+              )}
+              {instagram && (
+                <p className="footer-dato">
+                  <a href={`https://www.instagram.com/${encodeURIComponent(instagram)}/`} target="_blank" rel="noopener noreferrer">
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="5" />
+                      <circle cx="12" cy="12" r="4" />
+                      <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
+                    </svg>
+                    @{instagram}
+                    <span className="visualmente-oculto"> en Instagram (se abre en una pestaña nueva)</span>
+                  </a>
+                </p>
+              )}
+            </address>
+          </section>
+        )}
       </div>
 
       <div className="contenedor footer-pie">

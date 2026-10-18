@@ -102,16 +102,18 @@ export default function TablaInventario({ onEditarProducto }) {
     border: '1px solid #d1d5db',
     backgroundColor: '#ffffff',
     color: '#374151',
-    minWidth: '200px',
-    outline: 'none'
+    width: '100%'
   };
+
+  // Cada filtro crece hasta llenar la fila, pero se puede encoger en celular (sin min-width: 0 empuja la página)
+  const filtroStyle = { display: 'flex', flexDirection: 'column', gap: '5px', flex: '1 1 200px', minWidth: 0 };
 
   return (
     <div>
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px', backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.9em', fontWeight: 'bold', color: 'var(--color-text)' }}>Filtrar por Categoría</label>
-          <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} style={selectStyle}>
+        <div style={filtroStyle}>
+          <label htmlFor="inventario-categoria" style={{ fontSize: '0.9em', fontWeight: 'bold', color: 'var(--color-text)' }}>Filtrar por Categoría</label>
+          <select id="inventario-categoria" value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} style={selectStyle}>
             <option value="">Todas las categorías</option>
             {categoriasUnicas.map(cat => (
               <option key={cat} value={cat}>{cat}</option>
@@ -119,9 +121,9 @@ export default function TablaInventario({ onEditarProducto }) {
           </select>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.9em', fontWeight: 'bold', color: 'var(--color-text)' }}>Ordenar por</label>
-          <select value={ordenFiltro} onChange={(e) => setOrdenFiltro(e.target.value)} style={selectStyle}>
+        <div style={filtroStyle}>
+          <label htmlFor="inventario-orden" style={{ fontSize: '0.9em', fontWeight: 'bold', color: 'var(--color-text)' }}>Ordenar por</label>
+          <select id="inventario-orden" value={ordenFiltro} onChange={(e) => setOrdenFiltro(e.target.value)} style={selectStyle}>
             <option value="">Sin orden (Agregados recientemente)</option>
             <option value="PRECIO_ASC">Precio: Menor a Mayor</option>
             <option value="PRECIO_DESC">Precio: Mayor a Menor</option>

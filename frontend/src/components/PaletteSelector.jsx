@@ -77,86 +77,50 @@ export default function PaletteSelector() {
     }
   };
 
+  // Los 5 colores que identifican a cada tema (el resto son variantes de texto y bordes)
+  const COLORES_MUESTRA = ['primary', 'secondary', 'accent', 'background', 'text'];
+
   return (
-    <div style={{ 
-      padding: '2rem', 
-      maxWidth: '850px',
-      // Alineado a la izquierda como el resto de la vista Configuración del panel
-      margin: '2rem 0',
-      backgroundColor: 'var(--color-background, #fff)', 
-      color: 'var(--color-text, #333)',
-      borderRadius: '12px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-      transition: 'all 0.3s ease'
-    }}>
-      <h2 style={{ marginBottom: '1.5rem', color: 'var(--color-primary, #000)' }}>
-        Selector de Paleta de Colores
-      </h2>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+    <div className="selector-paletas">
+      <div className="selector-paletas-opciones" role="group" aria-label="Paletas de colores">
         {PALETTES.map((palette) => {
           const isSelected = selectedId === palette.id;
+          const { colors } = palette;
           return (
-            <div
+            <button
               key={palette.id}
+              type="button"
+              aria-pressed={isSelected}
               onClick={() => handleSelect(palette)}
-              style={{
-                border: isSelected ? '2px solid var(--color-primary, #000)' : '1px solid #ccc',
-                borderRadius: '8px',
-                padding: '1rem',
-                cursor: 'pointer',
-                backgroundColor: isSelected ? '#ffffff' : '#fafafa',
-                boxShadow: isSelected ? '0 0 10px rgba(0,0,0,0.15)' : 'none',
-                transform: isSelected ? 'scale(1.02)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
+              className="selector-paleta"
             >
-              <h4 style={{ margin: '0 0 0.5rem 0' }}>{palette.name}</h4>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {Object.values(palette.colors).map((c, i) => (
-                  <div 
-                    key={i} 
-                    style={{ 
-                      width: 24, 
-                      height: 24, 
-                      backgroundColor: c, 
-                      borderRadius: 4, 
-                      border: '1px solid rgba(0,0,0,0.1)' 
-                    }} 
-                  />
+              {/* Vista previa: texto y botón de la paleta sobre su fondo */}
+              <span className="selector-paleta-vista" aria-hidden="true"
+                style={{ backgroundColor: colors.background, color: colors.text }}>
+                <span className="selector-paleta-letras">Aa</span>
+                <span className="selector-paleta-boton" style={{ backgroundColor: colors.primary, color: colors.onPrimary }}>
+                  Comprar
+                </span>
+              </span>
+              <span className="selector-paleta-nombre">{palette.name}</span>
+              <span className="selector-paleta-muestras" aria-hidden="true">
+                {COLORES_MUESTRA.map((clave) => (
+                  <span key={clave} style={{ backgroundColor: colors[clave] }} />
                 ))}
-              </div>
-            </div>
+              </span>
+            </button>
           );
         })}
       </div>
 
-      <div style={{ marginTop: '2rem' }}>
-        <button 
-          onClick={handleSave} 
-          disabled={loading} 
-          style={{
-            padding: '0.7rem 1.4rem',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            backgroundColor: 'var(--color-primary, #2E7D32)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            transition: 'background-color 0.2s ease'
-          }}
-        >
+      <div className="selector-paletas-acciones">
+        <button type="button" onClick={handleSave} disabled={loading} className="boton boton-primario">
           {loading ? 'Guardando...' : 'Guardar Preferencia'}
         </button>
       </div>
 
       {feedback && (
-        <p style={{ 
-          marginTop: '1.2rem', 
-          color: feedback.type === 'success' ? 'var(--color-primary, #2E7D32)' : '#E65100', 
-          fontWeight: 'bold' 
-        }}>
+        <p role="status" className={`admin-aviso ${feedback.type === 'success' ? 'admin-aviso--exito' : 'admin-aviso--error'}`}>
           {feedback.message}
         </p>
       )}

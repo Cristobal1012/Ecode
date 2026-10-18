@@ -5,10 +5,12 @@ import MenuUsuario from "../MenuUsuario";
 import CarritoCompras from "../CarritoCompras";
 import useConfiguracionTienda from "../../hooks/useConfiguracionTienda";
 
-function Header() {
+// vistaPrevia: el modo edición de la landing muestra aquí el nombre y el logo antes de guardarlos
+function Header({ vistaPrevia }) {
   // Solo conservamos el rol para saber si mostramos el atajo de admin
   const rol = localStorage.getItem("rol");
-  const configuracion = useConfiguracionTienda();
+  const publicada = useConfiguracionTienda();
+  const configuracion = vistaPrevia ? { ...publicada, ...vistaPrevia } : publicada;
   const nombreTienda = configuracion?.nombre_tienda || "Tienda";
 
   return (

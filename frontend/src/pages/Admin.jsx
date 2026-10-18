@@ -18,6 +18,7 @@ import './Admin.css';
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
 const SECCIONES_CONFIGURACION = [
+  { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
@@ -189,6 +190,20 @@ export default function Admin() {
               </nav>
 
               <div className="config-secciones">
+                {/* RF-01.1: la landing, el logo y el favicon se editan en la misma página, viendo cómo quedan */}
+                <div style={{ marginBottom: '30px' }}>
+                  <TituloSeccion id="config-landing" />
+                  <p style={{ margin: '0 0 15px', color: 'var(--color-muted)', maxWidth: '60ch' }}>
+                    Cambia el nombre de tu tienda, el logo, el favicon y los textos e imágenes de la página de
+                    inicio directamente sobre ella. Nada se publica hasta que guardes.
+                  </p>
+                  <button type="button" className="boton boton-primario" onClick={() => navigate('/?editar=1')}>
+                    Editar página de inicio
+                  </button>
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '30px 0' }} />
+
                 <div style={{ marginBottom: '30px' }}>
                   <TituloSeccion id="config-paleta" />
                   <PaletteSelector />

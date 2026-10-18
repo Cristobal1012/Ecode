@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import TarjetaProducto from '../TarjetaProducto';
 
 // Sección de 4 productos de la landing ("Más vendidos", "Últimos agregados"). Sin productos no se muestra.
-export default function SeccionProductos({ id, antetitulo, titulo, productos, etiqueta, alterna = false }) {
+// nota: aviso del modo edición (estas secciones no se editan, se llenan solas con los productos)
+export default function SeccionProductos({ id, antetitulo, titulo, productos, etiqueta, alterna = false, nota }) {
   if (!productos?.length) return null;
 
   return (
@@ -18,6 +19,8 @@ export default function SeccionProductos({ id, antetitulo, titulo, productos, et
             Ver todo <span aria-hidden="true">→</span>
           </Link>
         </div>
+
+        {nota && <p className="seccion-landing-nota">{nota}</p>}
 
         <ul className="grilla-productos lista-sin-estilo">
           {productos.map((producto) => (

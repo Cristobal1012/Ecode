@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-const { getMock } = vi.hoisted(() => ({ getMock: vi.fn() }));
+const { getMock, patchMock } = vi.hoisted(() => ({ getMock: vi.fn(), patchMock: vi.fn() }));
 
-vi.mock('../components/auth/axiosConfig', () => ({ default: { get: getMock } }));
+vi.mock('../components/auth/axiosConfig', () => ({ default: { get: getMock, patch: patchMock } }));
 vi.mock('../components/MenuUsuario', () => ({ default: () => null }));
 vi.mock('../components/CarritoCompras', () => ({ default: () => null }));
 
@@ -102,5 +102,96 @@ describe('LandingPage', () => {
 
     expect(await screen.findByText('Taller Maché')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Logo de la Universidad Autónoma' })).toBeInTheDocument();
+  });
+});
+
+describe('LandingPage en modo edición (RF-01.1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    patchMock.mockResolvedValue({ data: {} });
+    // jsdom no implementa las vistas previas de archivos
+    URL.createObjectURL = vi.fn(() => 'blob:vista-previa');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => cleanup());
+
+  async function entrarComoAdmin() {
+    localStorage.setItem('rol', 'ADMIN');
+    responder();
+    await renderLanding();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
+  }
+
+  it('solo el admin ve el botón para editar la página', async () => {
+    localStorage.setItem('rol', 'COMPRADOR');
+    responder();
+    await renderLanding();
+
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('button', { name: 'Editar página' })).not.toBeInTheDocument();
+  });
+
+  it('guarda solo los textos que cambiaron y avisa que están publicados', async () => {
+    await entrarComoAdmin();
+
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Arte para tus paredes' } });
+    expect(screen.getByText('Tienes cambios sin guardar')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalledWith(
+      'configuracion/negocio/', { texto_bienvenida: 'Arte para tus paredes' }));
+    expect(await screen.findByText(/Cambios guardados/)).toBeInTheDocument();
+  });
+
+  it('una imagen nueva viaja en multipart junto con los textos; quitar una imagen es un null', async () => {
+    await entrarComoAdmin();
+    const archivo = new File(['png'], 'portada.png', { type: 'image/png' });
+
+    fireEvent.change(screen.getByLabelText('Texto del botón'), { target: { value: 'Ver obras' } });
+    fireEvent.change(screen.getByLabelText('Subir imagen de portada'), { target: { files: [archivo] } });
+    fireEvent.change(screen.getByLabelText('Subir logo'), { target: { files: [archivo] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar logo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalledTimes(2));
+    const [, formulario, opciones] = patchMock.mock.calls[0];
+    expect(formulario).toBeInstanceOf(FormData);
+    expect(formulario.get('banner')).toBe(archivo);
+    expect(formulario.get('texto_boton_ingreso')).toBe('Ver obras');
+    // El navegador pone el multipart con su boundary (axios fija JSON por defecto)
+    expect(opciones).toEqual({ headers: { 'Content-Type': undefined } });
+    expect(patchMock.mock.calls[1]).toEqual(['configuracion/negocio/', { logo: null }]);
+  });
+
+  it('no guarda si un campo obligatorio queda vacío', async () => {
+    await entrarComoAdmin();
+
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    expect(await screen.findAllByText(/No puede quedar vacío/)).not.toHaveLength(0);
+    expect(patchMock).not.toHaveBeenCalled();
+  });
+
+  it('rechaza archivos que no son JPEG, PNG o WebP antes de enviarlos', async () => {
+    await entrarComoAdmin();
+    const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
+
+    fireEvent.change(screen.getByLabelText('Subir logo'), { target: { files: [svg] } });
+
+    expect(await screen.findAllByText('Solo se admiten imágenes JPEG, PNG o WebP.')).not.toHaveLength(0);
+    expect(screen.getByText('Sin cambios')).toBeInTheDocument();
+  });
+
+  it('descartar vuelve a los textos publicados', async () => {
+    await entrarComoAdmin();
+
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Otro título' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar' }));
+
+    expect(screen.getByLabelText('Título')).toHaveValue('Objetos con alma');
+    expect(screen.getByText('Sin cambios')).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
 export default function GaleriaImagenes({
@@ -8,7 +8,7 @@ export default function GaleriaImagenes({
   onImagenesChange,
   onArchivosChange
 }) {
-  const inputRef = useRef(null);
+  const idInput = useId();
 
   const [archivosSeleccionados, setArchivosSeleccionados] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
@@ -207,12 +207,26 @@ export default function GaleriaImagenes({
     >
       <h4>Galería de imágenes</h4>
 
-      {/* Zona para subir imágenes */}
-      <div
+      {/* Zona para subir imágenes: es la etiqueta del input, así un clic abre el selector una sola vez (antes el
+          input estaba dentro de la zona y su clic volvía a ella, abriendo el selector en bucle). El input va antes y
+          oculto solo a la vista, para que reciba el foco del teclado; el foco se dibuja en la zona (Admin.css). */}
+      <input
+        id={idInput}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        onChange={handleInputChange}
+        className="visualmente-oculto galeria-input"
+        aria-label="Seleccionar imágenes para la galería"
+        aria-describedby={`${idInput}-formatos`}
+      />
+      <label
+        htmlFor={idInput}
+        className="galeria-zona"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
         style={{
+          display: 'block',
           border: '2px dashed var(--color-primary)',
           borderRadius: '8px',
           padding: '30px',
@@ -229,19 +243,10 @@ export default function GaleriaImagenes({
           o haz clic para seleccionarlas
         </p>
 
-        <small>
+        <small id={`${idInput}-formatos`}>
           Formatos permitidos: JPG, PNG y WebP
         </small>
-
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          onChange={handleInputChange}
-          style={{ display: 'none' }}
-        />
-      </div>
+      </label>
 
       {/* Mensaje de error */}
       {error && (

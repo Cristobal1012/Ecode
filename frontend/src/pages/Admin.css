@@ -395,6 +395,12 @@
   max-width: 100%;
 }
 
+/* Galería de un producto: el input de archivos está oculto a la vista y su foco se muestra en la zona */
+.galeria-input:focus-visible + .galeria-zona {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
 .admin-contenido th {
   font-family: var(--fuente-texto);
   font-size: 0.7rem;

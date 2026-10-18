@@ -102,13 +102,19 @@ export default function DetalleProducto() {
       ? Number(varianteSeleccionada.precio_oferta) 
       : Number(varianteSeleccionada.precio);
 
-    const valoresAtributos = Object.values(varianteSeleccionada.atributos_variables || {}).join(' / ');
-    const detalleVariante = valoresAtributos || varianteSeleccionada.sku;
+    const atributos = varianteSeleccionada.atributos_variables || {};
+
+    const detalleAtributos = Object.entries(atributos)
+      .map(([nombre, valor]) => `${nombre}: ${valor}`)
+      .join(' · ');
 
     const linea = {
       id: producto.id,
       sku: varianteSeleccionada.sku,
-      nombre: existente?.nombre || `${producto.nombre} - ${detalleVariante}`,
+      nombre: detalleAtributos
+        ? `${producto.nombre} · ${detalleAtributos}`
+        : producto.nombre,
+      atributos,
       precio: precioEfectivo,
       cantidad: enCarrito + cantidadSeleccionada
     };
@@ -133,7 +139,7 @@ export default function DetalleProducto() {
       : precioEfectivo;
 
     const carritoNuevo = existente
-      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, cantidad: linea.cantidad, precio: precioConfirmado } : item))
+      ? carritoActual.map(item => (item.sku === linea.sku ? { ...item, nombre: linea.nombre, atributos: linea.atributos, cantidad: linea.cantidad, precio: precioConfirmado } : item))
       : [...carritoActual, { ...linea, precio: precioConfirmado }];
     await guardarCarrito(carritoNuevo);
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };

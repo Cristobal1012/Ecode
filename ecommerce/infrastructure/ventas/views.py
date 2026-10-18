@@ -11,6 +11,9 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 import logging
 import os
+import hmac
+import hashlib
+import json
 import base64
 from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
@@ -1089,7 +1092,6 @@ class AdminChilexpressView(APIView):
         except CredencialesChilexpressInvalidas as error:
             return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
         return Response(chilexpress_para_panel(credenciales))
-    
 class ValidarPromocionAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -1125,3 +1127,116 @@ class ValidarPromocionAPIView(APIView):
             "descuento": round(descuento),
             "umbral_envio_gratis": promo.umbral_envio_gratis
         }, status=status.HTTP_200_OK)
+
+
+class LinkifyWebhookAPIView(APIView):
+    # Permitir que Linkify acceda sin token de usuario
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def _obtener_secret_key(self):
+        """Extrae la clave secreta de Linkify desde la configuración de medios de pago"""
+        try:
+            # Asumiendo que el código del medio es TRANSFERENCIA
+            medio = medios_pago().exigir(CodigoMedioPago.TRANSFERENCIA)
+            # Retorna el secret guardado, o string vacío si no existe
+            return medio.datos.get('linkify_secret', '')
+        except Exception:
+            return ''
+
+    def verificar_firma(self, request, content):
+            firma_recibida = request.headers.get("X-Linkify-Confirmation")
+            if not firma_recibida:
+                return False
+                
+            secret = self._obtener_secret_key()
+            if not secret:
+                return False
+
+            firma_calculada = hmac.new(
+                secret.encode('utf-8'),
+                content,
+                hashlib.sha256
+            ).hexdigest()
+            
+            return hmac.compare_digest(firma_recibida, firma_calculada)
+
+    def get(self, request, *args, **kwargs):
+        """Petición inicial de Linkify para consultar el monto de la orden[cite: 4]"""
+        encoded_data = request.query_params.get('encoded_data', '')
+        
+        # Validar seguridad con el string crudo[cite: 4]
+        if not self.verificar_firma(request, encoded_data.encode('utf-8')):
+            return Response({"message": "Firma inválida"}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            datos = json.loads(encoded_data)
+            orden_id = datos.get("id")
+            
+            # Buscar la orden real en la base de datos
+            repositorio_ordenes = DjangoRepositorioOrdenes()
+            orden = repositorio_ordenes.obtener_por_id(orden_id)
+
+            respuesta = {
+                "amount": int(orden.total),
+                "description": f"Orden #{orden.id}",
+                "currency": "CLP"
+            }
+            return Response(respuesta, status=status.HTTP_200_OK)
+            
+        except OrdenNoEncontrada:
+            return Response({"message": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request, *args, **kwargs):
+        """Notificación de transferencia validada por Linkify]"""
+        cuerpo = request.body # Usar request.body crudo para no romper el HMAC
+        
+        # 1. Seguridad: Verificar firma]
+        if not self.verificar_firma(request, cuerpo):
+            return Response({
+                "message": "Firma de seguridad inválida", 
+                "notify_merchant": False
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        datos_pago = json.loads(cuerpo)
+        
+        if datos_pago.get("action") != "notification":
+            return Response({"status": "rejected", "message": "Acción ignorada"}, status=status.HTTP_200_OK)
+
+        orden_id = datos_pago.get("id")
+        completeness = datos_pago.get("completeness")
+        
+      # 2. Lógica de negocio
+        try:
+            # Inicializar el caso de uso con sus dependencias
+            caso_uso = ConfirmarPago(
+                ordenes=DjangoRepositorioOrdenes(),
+                inventario=MongoInventarioVariantes(),
+                notificador=CorreoNotificadorPedidos(),
+                orden_transporte=ChilexpressOrdenTransporte() 
+            )
+            
+            pago_exacto = (completeness == "exact")
+            
+            # CAMBIO AQUÍ: Usar aprobar() en lugar de ejecutar()
+            caso_uso.aprobar(
+                orden_id=orden_id,
+                pago_exacto=pago_exacto 
+            )
+
+            # 3. Respuesta de éxito
+            return Response({
+                "status": "accepted",
+                "message": "Pago verificado correctamente",
+                "restart": False
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # Respuesta de error
+            print(f"Error en webhook: {str(e)}") # Opcional: sirve para ver el error exacto en la consola si vuelve a fallar
+            return Response({
+                "message": f"Error procesando la orden: {str(e)}",
+                "notify_merchant": True
+            }, status=status.HTTP_400_BAD_REQUEST)

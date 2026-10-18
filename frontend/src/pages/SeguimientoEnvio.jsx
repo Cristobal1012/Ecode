@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import clienteAxios from '../components/auth/axiosConfig';
 
@@ -49,6 +49,11 @@ export default function SeguimientoEnvio() {
 
     const indiceEstadoActual = estados.indexOf(estadoActual);
 
+    // El error es genérico (no revela qué dato no coincide), así que marca ambos campos
+    const camposConError = mensaje
+        ? { 'aria-invalid': true, 'aria-describedby': 'seguimiento-error' }
+        : {};
+
     return (
         <div
             style={{
@@ -66,12 +71,14 @@ export default function SeguimientoEnvio() {
 
             <form onSubmit={consultarSeguimiento}>
                 <div style={{ marginBottom: '15px' }}>
-                    <label>Número de orden</label>
+                    <label htmlFor="seguimiento-orden">Número de orden</label>
                     <input
+                        id="seguimiento-orden"
                         type="text"
                         value={numeroOrden}
                         onChange={(e) => setNumeroOrden(e.target.value)}
                         required
+                        {...camposConError}
                         style={{
                             display: 'block',
                             width: '100%',
@@ -82,12 +89,15 @@ export default function SeguimientoEnvio() {
                 </div>
 
                 <div style={{ marginBottom: '15px' }}>
-                    <label>Correo electrónico</label>
+                    <label htmlFor="seguimiento-email">Correo electrónico</label>
                     <input
+                        id="seguimiento-email"
                         type="email"
+                        autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        {...camposConError}
                         style={{
                             display: 'block',
                             width: '100%',
@@ -103,7 +113,11 @@ export default function SeguimientoEnvio() {
             </form>
 
             {mensaje && (
-                <p style={{ color: 'red', marginTop: '20px' }}>
+                <p
+                    id="seguimiento-error"
+                    role="alert"
+                    style={{ color: '#b91c1c', marginTop: '20px' }}
+                >
                     {mensaje}
                 </p>
             )}

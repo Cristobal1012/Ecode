@@ -33,6 +33,8 @@ const applyPaletteToRoot = aplicarPaleta;
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
+  // Aviso que deja el registro para el login ("Tu cuenta quedó creada...", con el correo ya escrito)
+  const [avisoLogin, setAvisoLogin] = useState(null);
   // La misma portada de la landing acompaña al formulario (decorativa: el nombre ya está en el header)
   const configuracion = useConfiguracionTienda();
   const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
@@ -46,9 +48,13 @@ function AuthPage({ googleHabilitado }) {
         </div>
         <div className="auth-contenido">
           {showLogin ? (
-            <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
+            <Login
+              onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
+              googleHabilitado={googleHabilitado}
+              aviso={avisoLogin}
+            />
           ) : (
-            <Register onSwitchToLogin={() => setShowLogin(true)} />
+            <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
           )}
         </div>
       </main>

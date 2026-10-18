@@ -4,15 +4,26 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { guardarCarrito } from '../carrito';
 
+// Mensaje según la causa: credenciales incorrectas o la tienda no responde
+const mensajeDeError = (error) => {
+    if (error.response?.status === 401) return 'Correo o contraseña incorrectos.';
+    if (!error.response) return 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.';
+    return 'No pudimos iniciar sesión. Inténtalo de nuevo.';
+};
+
 // googleHabilitado: la tienda configuró GOOGLE_CLIENT_ID (RN-04); si no, no se ofrece Google
-export default function Login({ onSwitchToRegister, googleHabilitado = false }) {
+// aviso: { texto, email } que deja el registro al crear la cuenta
+export default function Login({ onSwitchToRegister, googleHabilitado = false, aviso = null }) {
     const navigate = useNavigate();
     // Prefijo único para asociar cada etiqueta con su campo
     const id = useId();
     const [formData, setFormData] = useState({
-        email: '',
+        email: aviso?.email || '',
         password: ''
     });
+    // Los mensajes van en el formulario (no en alert()) para que el lector de pantalla los anuncie
+    const [error, setError] = useState('');
+    const [enviando, setEnviando] = useState(false);
 
     const handleChange = (e) => {
         setFormData({
@@ -88,6 +99,8 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        setEnviando(true);
         try {
             // 1. Obtenemos los tokens y el interceptor los guarda
             await clienteAxios.post('usuarios/token/', formData);
@@ -98,8 +111,6 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
 
             // 3. Descargamos el carrito asociado a este usuario desde Django
             await sincronizarCarrito();
-
-            alert("¡Login exitoso!");
 
             const urlAnterior = localStorage.getItem('url_anterior_login');
             if (urlAnterior) {
@@ -113,12 +124,14 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
 
         } catch (error) {
             console.error("Axios interceptó un error:", error);
-            alert("Error al iniciar sesión. Verifica tus credenciales.");
+            setError(mensajeDeError(error));
+            setEnviando(false);
         }
     };
 
     const handleGoogleSuccess = async (credentialResponse) => {
         const googleToken = credentialResponse.credential;
+        setError('');
 
         try {
             const { data } = await clienteAxios.post('usuarios/google/', { id_token: googleToken });
@@ -132,8 +145,6 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
             // Descargamos el carrito también para Google
             await sincronizarCarrito();
 
-            alert("¡Inicio de sesión con Google exitoso!");
-
             // Igual que el login con contraseña: vuelve a donde estaba (ej. el checkout)
             const urlAnterior = localStorage.getItem('url_anterior_login');
             if (urlAnterior) {
@@ -146,19 +157,27 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
             }
         } catch (error) {
             console.error("Axios interceptó un error con Google:", error);
-            alert("No se pudo completar el acceso con Google.");
+            setError('No se pudo completar el acceso con Google.');
         }
     };
 
     const handleGoogleError = () => {
         console.error("Error al iniciar sesión con Google");
-        alert("No se pudo completar el acceso con Google.");
+        setError('No se pudo completar el acceso con Google.');
     };
+
+    // Las credenciales no se distinguen por campo: el error describe a los dos
+    const camposConError = error
+        ? { 'aria-invalid': true, 'aria-describedby': `${id}-error` }
+        : {};
 
     return (
         <div className="auth-tarjeta">
             <span className="antetitulo">Mi cuenta</span>
             <h1 className="auth-titulo">Iniciar sesión</h1>
+
+            {aviso && !error && <p role="status" className="auth-aviso auth-aviso--exito">{aviso.texto}</p>}
+            {error && <p id={`${id}-error`} role="alert" className="auth-aviso auth-aviso--error">{error}</p>}
 
             <form onSubmit={handleSubmit} className="auth-formulario">
                 <div className="auth-campo">
@@ -171,6 +190,7 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
                         value={formData.email}
                         onChange={handleChange}
                         required
+                        {...camposConError}
                     />
                 </div>
                 <div className="auth-campo">
@@ -183,10 +203,11 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
                         value={formData.password}
                         onChange={handleChange}
                         required
+                        {...camposConError}
                     />
                 </div>
-                <button type="submit" className="boton boton-primario auth-enviar">
-                    Entrar
+                <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
+                    {enviando ? 'Entrando...' : 'Entrar'}
                 </button>
             </form>
 

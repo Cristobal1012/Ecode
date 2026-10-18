@@ -113,103 +113,76 @@ const CarritoCompras = () => {
         <div className="carrito-compras" ref={carritoRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
             <button
                 type="button"
+                className="header-icono"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-label={`Carrito de compras, ${cantidadTotal} ${cantidadTotal === 1 ? 'producto' : 'productos'}`}
                 aria-expanded={isOpen}
-                style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '8px', backgroundColor: 'transparent', border: 'none',
-                    cursor: 'pointer', position: 'relative'
-                }}
             >
-                <svg aria-hidden="true" style={{ width: '28px', height: '28px', color: '#1f2937' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                {/* Bolsa de compras de trazo fino, como el resto de los íconos del header */}
+                <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 7h12l-1 13H7L6 7Z" />
+                    <path d="M9 7a3 3 0 0 1 6 0" />
                 </svg>
 
                 {cantidadTotal > 0 && (
-                    <span aria-hidden="true" style={{
-                        position: 'absolute', top: '0px', right: '0px', backgroundColor: '#ef4444',
-                        color: 'white', fontSize: '12px', fontWeight: 'bold', minWidth: '18px', padding: '0 3px', boxSizing: 'border-box',
-                        height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        {cantidadTotal}
-                    </span>
+                    <span aria-hidden="true" className="header-icono-contador">{cantidadTotal}</span>
                 )}
             </button>
 
             {isOpen && (
-                <div className="carrito-panel" style={{
-                    backgroundColor: 'white', borderRadius: '8px',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', border: '1px solid #f3f4f6', zIndex: 9999
-                }}>
-                    <div style={{ padding: '16px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb', borderRadius: '8px 8px 0 0' }}>
-                        <h3 style={{ margin: 0, fontWeight: 'bold', color: '#1f2937' }}>Mi Carrito</h3>
+                <div className="carrito-panel panel-header">
+                    <div className="panel-header-encabezado">
+                        <h3>Mi Carrito</h3>
                     </div>
 
-                    <div style={{ padding: '16px', maxHeight: '300px', overflowY: 'auto' }}>
+                    <div className="carrito-panel-lista">
                         {aviso && (
-                            <p role={tipoAviso} style={{ color: tipoAviso === 'alert' ? '#b91c1c' : '#166534' }}>
+                            <p role={tipoAviso} className={`carrito-aviso${tipoAviso === 'alert' ? ' carrito-aviso--error' : ''}`}>
                                 {aviso}
                             </p>
                         )}
 
                         {itemsCarrito.length > 0 ? (
                             itemsCarrito.map(item => (
-                                <div
-                                    key={`${item.id}-${item.sku}`}
-                                    style={{
-                                        marginBottom: '12px',
-                                        paddingBottom: '12px',
-                                        borderBottom: '1px solid #f3f4f6'
-                                    }}
-                                >
-                                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                                        {item.nombre}
-                                    </p>
+                                <div key={`${item.id}-${item.sku}`} className="carrito-item">
+                                    <p className="carrito-item-nombre">{item.nombre}</p>
 
-                                    <p style={{ margin: '6px 0', fontSize: '14px', fontWeight: 'bold' }}>
+                                    <p className="carrito-item-precio">
                                         ${(Number(item.precio) * item.cantidad).toLocaleString('es-CL')}
                                     </p>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div className="carrito-item-acciones">
+                                        <div className="carrito-cantidad">
+                                            <button
+                                                type="button"
+                                                onClick={() => cambiarCantidad(item, -1)}
+                                                disabled={item.cantidad <= 1 || actualizando}
+                                                aria-label={`Disminuir cantidad de ${item.nombre}`}
+                                            >
+                                                −
+                                            </button>
+
+                                            <span aria-label={`Cantidad: ${item.cantidad}`}>
+                                                {item.cantidad}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => cambiarCantidad(item, 1)}
+                                                disabled={actualizando}
+                                                aria-label={`Aumentar cantidad de ${item.nombre}`}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+
                                         <button
                                             type="button"
-                                            onClick={() => cambiarCantidad(item, -1)}
-                                            disabled={item.cantidad <= 1 || actualizando}
-                                            aria-label={`Disminuir cantidad de ${item.nombre}`}
-                                            style={{ minWidth: '32px', minHeight: '32px', cursor: 'pointer' }}
-                                        >
-                                            −
-                                        </button>
-
-                                        <span aria-label={`Cantidad: ${item.cantidad}`}>
-                                            {item.cantidad}
-                                        </span>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => cambiarCantidad(item, 1)}
-                                            disabled={actualizando}
-                                            aria-label={`Aumentar cantidad de ${item.nombre}`}
-                                            style={{ minWidth: '32px', minHeight: '32px', cursor: 'pointer' }}
-                                        >
-                                            +
-                                        </button>
-
-                                        <button
-                                            type="button"
+                                            className="carrito-quitar"
                                             onClick={() => quitarProducto(item)}
                                             disabled={actualizando}
                                             aria-label={`Quitar ${item.nombre} del carrito`}
-                                            style={{
-                                                minHeight: '32px',
-                                                cursor: 'pointer',
-                                                color: '#b91c1c',
-                                                background: 'transparent',
-                                                border: 'none',
-                                                textDecoration: 'underline'
-                                            }}
                                         >
                                             Quitar
                                         </button>
@@ -217,22 +190,22 @@ const CarritoCompras = () => {
                                 </div>
                             ))
                         ) : (
-                            <p style={{ margin: 0, textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-                                Tu carrito está vacío
-                            </p>
+                            <div className="carrito-vacio">
+                                <p>Tu carrito está vacío</p>
+                                <Link to="/catalogo" className="enlace-flecha" onClick={() => setIsOpen(false)}>
+                                    Ver catálogo <span aria-hidden="true">→</span>
+                                </Link>
+                            </div>
                         )}
                     </div>
 
                     {itemsCarrito.length > 0 && (
-                        <div style={{ padding: '16px', borderTop: '1px solid #f3f4f6' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <span style={{ fontWeight: 'bold', color: '#374151' }}>Total:</span>
-                                <span style={{ fontWeight: 'bold', color: '#1f2937', fontSize: '18px' }}>${total.toLocaleString('es-CL')}</span>
+                        <div className="carrito-panel-pie">
+                            <div className="carrito-total">
+                                <span>Total:</span>
+                                <span>${total.toLocaleString('es-CL')}</span>
                             </div>
-                            <Link to="/checkout" onClick={() => setIsOpen(false)} style={{
-                                display: 'block', width: '100%', textAlign: 'center', backgroundColor: 'var(--color-primary)',
-                                color: 'white', padding: '10px 0', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold'
-                            }}>
+                            <Link to="/checkout" onClick={() => setIsOpen(false)} className="boton boton-primario carrito-pagar">
                                 Ir a Pagar
                             </Link>
                         </div>

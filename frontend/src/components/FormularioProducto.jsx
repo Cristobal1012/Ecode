@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useId, useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import GaleriaImagenes from './GaleriaImagenes';
 
@@ -14,136 +14,103 @@ const crearVarianteVacia = () => ({
   atributosVariables: []
 });
 
+// Estado inicial del formulario: vacío al crear, o los datos del producto al editar. El formulario se
+// monta de nuevo para cada producto (Admin le pone key), así que basta con leerlo una vez.
+const leerProductoAEditar = (productoAEditar) => {
+  if (!productoAEditar) {
+    return {
+      producto: {
+        nombre: '',
+        descripcion: '',
+        categoria: '',
+        publicado: false,
+        meta_titulo: '',
+        meta_descripcion: ''
+      },
+      imagenes: [],
+      productoGuardadoId: null,
+      atributosGlobales: [],
+      variantes: [crearVarianteVacia()]
+    };
+  }
+
+  const atributosGlobales = productoAEditar.atributos_globales
+    ? Object.entries(productoAEditar.atributos_globales).map(([clave, valor]) => ({
+        clave: clave.replace(/_/g, ' '),
+        valor: String(valor)
+      }))
+    : [];
+
+  const variantes =
+    productoAEditar.variantes && productoAEditar.variantes.length > 0
+      ? productoAEditar.variantes.map((v) => ({
+          sku: v.sku || '',
+          precio: v.precio ?? '',
+          precio_oferta: v.precio_oferta ?? '',
+          stock: v.stock ?? 0,
+
+          // Campos logísticos
+          peso_kg: v.peso_kg ?? 1.0,
+          alto_cm: v.alto_cm ?? 10,
+          ancho_cm: v.ancho_cm ?? 10,
+          largo_cm: v.largo_cm ?? 10,
+
+          atributosVariables: v.atributos_variables
+            ? Object.entries(v.atributos_variables).map(([clave, valor]) => ({
+                clave: clave.replace(/_/g, ' '),
+                valor: String(valor)
+              }))
+            : []
+        }))
+      : [crearVarianteVacia()];
+
+  return {
+    producto: {
+      nombre: productoAEditar.nombre || '',
+      descripcion: productoAEditar.descripcion || '',
+      categoria: productoAEditar.categoria || '',
+      publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
+      meta_titulo: productoAEditar.meta_titulo || '',
+      meta_descripcion: productoAEditar.meta_descripcion || ''
+    },
+    // Conservamos las imágenes existentes
+    imagenes: productoAEditar.imagenes || [],
+    // Guardamos el ID para poder subir imágenes
+    productoGuardadoId: productoAEditar.id || productoAEditar._id || null,
+    atributosGlobales,
+    variantes
+  };
+};
+
 export default function FormularioProducto({
   alCancelar,
   alGuardar,
   productoAEditar
 }) {
-  const [producto, setProducto] = useState({
-    nombre: '',
-    descripcion: '',
-    categoria: '',
-    publicado: false,
-    meta_titulo: '',
-    meta_descripcion: ''
-  });
+  const [inicial] = useState(() => leerProductoAEditar(productoAEditar));
+  // Asocia cada etiqueta con su campo (WCAG 1.3.1); en las variantes se suma el índice
+  const idFormulario = useId();
+  const [producto, setProducto] = useState(inicial.producto);
 
   // Imágenes existentes/devueltas por el backend
-  const [imagenes, setImagenes] = useState([]);
+  const [imagenes, setImagenes] = useState(inicial.imagenes);
 
   // Archivos gestionados por GaleriaImagenes
   const [archivosGestionados, setArchivosGestionados] = useState([]);
 
   // ID del producto ya guardado
-  const [productoGuardadoId, setProductoGuardadoId] = useState(null);
+  const [productoGuardadoId, setProductoGuardadoId] = useState(inicial.productoGuardadoId);
 
   // Atributos globales
-  const [atributosGlobales, setAtributosGlobales] = useState([]);
+  const [atributosGlobales, setAtributosGlobales] = useState(inicial.atributosGlobales);
 
   // Variantes
-  const [variantes, setVariantes] = useState([
-    crearVarianteVacia()
-  ]);
+  const [variantes, setVariantes] = useState(inicial.variantes);
 
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
-
-  // ============================================================
-  // CARGAR DATOS DEL PRODUCTO AL EDITAR
-  // ============================================================
-
-  useEffect(() => {
-    if (productoAEditar) {
-      setProducto({
-        nombre: productoAEditar.nombre || '',
-        descripcion: productoAEditar.descripcion || '',
-        categoria: productoAEditar.categoria || '',
-        publicado:
-          productoAEditar.publicado !== undefined
-            ? productoAEditar.publicado
-            : false,
-        meta_titulo: productoAEditar.meta_titulo || '',
-        meta_descripcion: productoAEditar.meta_descripcion || ''
-      });
-
-      // Conservamos las imágenes existentes
-      setImagenes(productoAEditar.imagenes || []);
-
-      // Guardamos el ID para poder subir imágenes
-      setProductoGuardadoId(
-        productoAEditar.id || productoAEditar._id || null
-      );
-
-      // ========================================================
-      // ATRIBUTOS GLOBALES
-      // ========================================================
-
-      if (productoAEditar.atributos_globales) {
-        const arrGlobales = Object.entries(
-          productoAEditar.atributos_globales
-        ).map(([clave, valor]) => ({
-          clave: clave.replace(/_/g, ' '),
-          valor: String(valor)
-        }));
-
-        setAtributosGlobales(arrGlobales);
-      } else {
-        setAtributosGlobales([]);
-      }
-
-      // ========================================================
-      // VARIANTES
-      // ========================================================
-
-      if (
-        productoAEditar.variantes &&
-        productoAEditar.variantes.length > 0
-      ) {
-        const arrVariantes = productoAEditar.variantes.map((v) => {
-          const arrAttrVar = v.atributos_variables
-            ? Object.entries(v.atributos_variables).map(
-                ([clave, valor]) => ({
-                  clave: clave.replace(/_/g, ' '),
-                  valor: String(valor)
-                })
-              )
-            : [];
-
-          return {
-            sku: v.sku || '',
-            precio: v.precio ?? '',
-            precio_oferta: v.precio_oferta ?? '',
-            stock: v.stock ?? 0,
-
-            // Campos logísticos
-            peso_kg: v.peso_kg ?? 1.0,
-            alto_cm: v.alto_cm ?? 10,
-            ancho_cm: v.ancho_cm ?? 10,
-            largo_cm: v.largo_cm ?? 10,
-
-            atributosVariables: arrAttrVar
-          };
-        });
-
-        setVariantes(arrVariantes);
-      } else {
-        setVariantes([crearVarianteVacia()]);
-      }
-    } else {
-      // ========================================================
-      // CREAR PRODUCTO NUEVO
-      // ========================================================
-
-      setProductoGuardadoId(null);
-      setImagenes([]);
-      setArchivosGestionados([]);
-      setAtributosGlobales([]);
-      setVariantes([crearVarianteVacia()]);
-      setError('');
-    }
-  }, [productoAEditar]);
 
   // ============================================================
   // CARGAR CATEGORÍAS EXISTENTES
@@ -580,19 +547,19 @@ export default function FormularioProducto({
   const inputStyle = {
     width: '100%',
     padding: '10px',
-    border: '1px solid #ccc',
+    border: '1px solid var(--color-border)',
     borderRadius: '4px',
     marginTop: '5px',
-    backgroundColor: '#fff',
-    color: '#000',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text)',
     boxSizing: 'border-box'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--color-surface)',
     padding: '15px',
     borderRadius: '6px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--color-border)',
     marginBottom: '15px'
   };
 
@@ -605,7 +572,7 @@ export default function FormularioProducto({
       onSubmit={handleSubmit}
       style={{
         maxWidth: '900px',
-        backgroundColor: '#f9fafb',
+        backgroundColor: 'var(--color-secondary)',
         padding: '25px',
         borderRadius: '8px'
       }}
@@ -656,7 +623,7 @@ export default function FormularioProducto({
       {error && (
         <p
           style={{
-            color: '#ef4444',
+            color: '#b91c1c',
             backgroundColor: '#fee2e2',
             padding: '10px',
             borderRadius: '4px'
@@ -692,7 +659,7 @@ export default function FormularioProducto({
         {/* NOMBRE */}
 
         <div>
-          <label
+          <label htmlFor={`${idFormulario}-nombre`}
             style={{
               fontWeight: 'bold'
             }}
@@ -702,6 +669,7 @@ export default function FormularioProducto({
 
           <input
             type="text"
+            id={`${idFormulario}-nombre`}
             name="nombre"
             value={producto.nombre}
             onChange={handleChangeProducto}
@@ -713,7 +681,7 @@ export default function FormularioProducto({
         {/* CATEGORÍA */}
 
         <div>
-          <label
+          <label htmlFor={`${idFormulario}-categoria`}
             style={{
               fontWeight: 'bold'
             }}
@@ -732,6 +700,7 @@ export default function FormularioProducto({
             categoriasExistentes.length > 0 ? (
               <>
                 <select
+                  id={`${idFormulario}-categoria`}
                   name="categoria"
                   value={producto.categoria}
                   onChange={handleChangeProducto}
@@ -771,7 +740,7 @@ export default function FormularioProducto({
                   style={{
                     padding: '0 15px',
                     backgroundColor:
-                      'var(--color-secondary)',
+                      'var(--color-primary)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -785,6 +754,7 @@ export default function FormularioProducto({
               <>
                 <input
                   type="text"
+                  id={`${idFormulario}-categoria`}
                   name="categoria"
                   value={producto.categoria}
                   onChange={handleChangeProducto}
@@ -811,7 +781,7 @@ export default function FormularioProducto({
                     }}
                     style={{
                       padding: '0 15px',
-                      backgroundColor: '#6b7280',
+                      backgroundColor: 'var(--color-muted)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -833,7 +803,7 @@ export default function FormularioProducto({
             gridColumn: '1 / -1'
           }}
         >
-          <label
+          <label htmlFor={`${idFormulario}-descripcion`}
             style={{
               fontWeight: 'bold'
             }}
@@ -842,6 +812,7 @@ export default function FormularioProducto({
           </label>
 
           <textarea
+            id={`${idFormulario}-descripcion`}
             name="descripcion"
             value={producto.descripcion}
             onChange={handleChangeProducto}
@@ -859,7 +830,7 @@ export default function FormularioProducto({
         <div style={{ gridColumn: '1 / -1' }}>
           <h4
             style={{
-              borderBottom: '2px solid var(--color-secondary)',
+              borderBottom: '2px solid var(--color-border)',
               paddingBottom: '5px',
               color: 'var(--color-text)'
             }}
@@ -867,18 +838,19 @@ export default function FormularioProducto({
             Configuración SEO
           </h4>
 
-          <p style={{ color: '#6b7280', fontSize: '0.9em' }}>
+          <p style={{ color: 'var(--color-muted)', fontSize: '0.9em' }}>
             Estos datos ayudan a los buscadores a comprender y mostrar
             tu producto en los resultados de búsqueda.
           </p>
 
           <div style={{ marginBottom: '15px' }}>
-            <label style={{ fontWeight: 'bold' }}>
+            <label htmlFor={`${idFormulario}-meta_titulo`} style={{ fontWeight: 'bold' }}>
               Título SEO
             </label>
 
             <input
               type="text"
+              id={`${idFormulario}-meta_titulo`}
               name="meta_titulo"
               value={producto.meta_titulo}
               onChange={handleChangeProducto}
@@ -887,17 +859,18 @@ export default function FormularioProducto({
               style={inputStyle}
             />
 
-            <small style={{ color: '#6b7280' }}>
+            <small style={{ color: 'var(--color-muted)' }}>
               {producto.meta_titulo.length}/60 caracteres
             </small>
           </div>
 
           <div>
-            <label style={{ fontWeight: 'bold' }}>
+            <label htmlFor={`${idFormulario}-meta_descripcion`} style={{ fontWeight: 'bold' }}>
               Descripción SEO
             </label>
 
             <textarea
+              id={`${idFormulario}-meta_descripcion`}
               name="meta_descripcion"
               value={producto.meta_descripcion}
               onChange={handleChangeProducto}
@@ -909,7 +882,7 @@ export default function FormularioProducto({
               }}
             />
 
-            <small style={{ color: '#6b7280' }}>
+            <small style={{ color: 'var(--color-muted)' }}>
               {producto.meta_descripcion.length}/160 caracteres
             </small>
           </div>
@@ -961,8 +934,8 @@ export default function FormularioProducto({
             style={{
               padding: '5px 10px',
               backgroundColor:
-                'var(--color-secondary)',
-              color: '#fff',
+                'var(--color-primary)',
+              color: 'var(--color-on-primary)',
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -984,6 +957,8 @@ export default function FormularioProducto({
             >
               <input
                 type="text"
+                // Sin etiqueta visible: el nombre accesible indica qué atributo es
+                aria-label={`Nombre del atributo ${index + 1}`}
                 placeholder="Clave (Ej: Marca)"
                 value={attr.clave}
                 onChange={(e) =>
@@ -998,6 +973,7 @@ export default function FormularioProducto({
 
               <input
                 type="text"
+                aria-label={`Valor del atributo ${index + 1}`}
                 placeholder="Valor (Ej: Nike)"
                 value={attr.valor}
                 onChange={(e) =>
@@ -1018,7 +994,7 @@ export default function FormularioProducto({
                 style={{
                   marginTop: '5px',
                   padding: '10px',
-                  backgroundColor: '#ef4444',
+                  backgroundColor: '#b91c1c',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -1042,7 +1018,7 @@ export default function FormularioProducto({
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom:
-            '2px solid var(--color-secondary)',
+            '2px solid var(--color-border)',
           paddingBottom: '5px',
           marginTop: '30px',
           marginBottom: '15px'
@@ -1063,8 +1039,8 @@ export default function FormularioProducto({
           style={{
             padding: '6px 12px',
             backgroundColor:
-              'var(--color-accent)',
-            color: '#fff',
+              'var(--color-primary)',
+            color: 'var(--color-on-primary)',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
@@ -1109,7 +1085,7 @@ export default function FormularioProducto({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#ef4444',
+                  color: '#b91c1c',
                   cursor: 'pointer',
                   fontWeight: 'bold'
                 }}
@@ -1132,7 +1108,7 @@ export default function FormularioProducto({
               {/* SKU */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-sku`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1143,6 +1119,7 @@ export default function FormularioProducto({
 
                 <input
                   type="text"
+                  id={`${idFormulario}-variante-${varIndex}-sku`}
                   value={variante.sku}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1159,7 +1136,7 @@ export default function FormularioProducto({
               {/* PRECIO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-precio`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1170,6 +1147,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-precio`}
                   value={variante.precio}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1187,7 +1165,7 @@ export default function FormularioProducto({
 
               {/* PRECIO OFERTA */}
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-precio_oferta`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold',
@@ -1199,6 +1177,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-precio_oferta`}
                   value={variante.precio_oferta || ''}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1216,7 +1195,7 @@ export default function FormularioProducto({
               {/* STOCK */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-stock`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1227,6 +1206,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-stock`}
                   value={variante.stock}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1268,7 +1248,7 @@ export default function FormularioProducto({
                   style={{
                     fontSize: '0.85em',
                     fontWeight: 'bold',
-                    color: '#0369a1'
+                    color: 'var(--color-primary)'
                   }}
                 >
                   Dimensiones Logísticas
@@ -1278,7 +1258,7 @@ export default function FormularioProducto({
               {/* PESO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-peso_kg`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1290,6 +1270,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-peso_kg`}
                   value={variante.peso_kg}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1312,7 +1293,7 @@ export default function FormularioProducto({
               {/* ALTO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-alto_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1324,6 +1305,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-alto_cm`}
                   value={variante.alto_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1346,7 +1328,7 @@ export default function FormularioProducto({
               {/* ANCHO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-ancho_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1358,6 +1340,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-ancho_cm`}
                   value={variante.ancho_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1380,7 +1363,7 @@ export default function FormularioProducto({
               {/* LARGO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-largo_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1392,6 +1375,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-largo_cm`}
                   value={variante.largo_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1418,7 +1402,7 @@ export default function FormularioProducto({
 
             <div
               style={{
-                backgroundColor: '#f3f4f6',
+                backgroundColor: 'var(--color-secondary)',
                 padding: '10px',
                 borderRadius: '4px'
               }}
@@ -1452,7 +1436,7 @@ export default function FormularioProducto({
                     fontSize: '0.8em',
                     padding: '4px 8px',
                     backgroundColor:
-                      '#6b7280',
+                      'var(--color-muted)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '4px',
@@ -1475,6 +1459,7 @@ export default function FormularioProducto({
                   >
                     <input
                       type="text"
+                      aria-label={`Variante ${varIndex + 1}: nombre del atributo ${attrIndex + 1}`}
                       placeholder="Ej: Talla"
                       value={attr.clave}
                       onChange={(e) =>
@@ -1494,6 +1479,7 @@ export default function FormularioProducto({
 
                     <input
                       type="text"
+                      aria-label={`Variante ${varIndex + 1}: valor del atributo ${attrIndex + 1}`}
                       placeholder="Ej: M"
                       value={attr.valor}
                       onChange={(e) =>
@@ -1522,7 +1508,7 @@ export default function FormularioProducto({
                       style={{
                         backgroundColor:
                           'transparent',
-                        color: '#ef4444',
+                        color: '#b91c1c',
                         border: 'none',
                         cursor: 'pointer'
                       }}
@@ -1550,12 +1536,12 @@ export default function FormularioProducto({
           backgroundColor:
             producto.publicado
               ? '#ecfdf5'
-              : '#f3f4f6',
+              : 'var(--color-secondary)',
           borderRadius: '8px',
           border: `1px solid ${
             producto.publicado
               ? '#10b981'
-              : '#d1d5db'
+              : 'var(--color-border)'
           }`,
           marginTop: '20px'
         }}
@@ -1578,7 +1564,7 @@ export default function FormularioProducto({
           <span
             style={{
               fontSize: '0.85em',
-              color: '#6b7280'
+              color: 'var(--color-muted)'
             }}
           >
             {producto.publicado
@@ -1598,9 +1584,10 @@ export default function FormularioProducto({
           <span
             style={{
               fontWeight: 'bold',
+              // Contraste AA: el verde #10b981 y el gris #9ca3af no llegaban a 4,5:1
               color: producto.publicado
-                ? '#10b981'
-                : '#9ca3af'
+                ? '#166534'
+                : 'var(--color-muted)'
             }}
           >
             {producto.publicado
@@ -1640,7 +1627,7 @@ export default function FormularioProducto({
             padding: '15px',
             backgroundColor:
               'var(--color-primary)',
-            color: '#ffffff',
+            color: 'var(--color-on-primary)',
             fontSize: '1.1em',
             fontWeight: 'bold',
             border: 'none',
@@ -1664,8 +1651,8 @@ export default function FormularioProducto({
               width: '100%',
               padding: '15px',
               backgroundColor:
-                'var(--color-secondary)',
-              color: '#ffffff',
+                'var(--color-primary)',
+              color: 'var(--color-on-primary)',
               fontSize: '1.1em',
               fontWeight: 'bold',
               border: 'none',
@@ -1689,7 +1676,7 @@ export default function FormularioProducto({
               padding: '15px',
               backgroundColor:
                 'var(--color-primary)',
-              color: '#ffffff',
+              color: 'var(--color-on-primary)',
               fontSize: '1.1em',
               fontWeight: 'bold',
               border: 'none',

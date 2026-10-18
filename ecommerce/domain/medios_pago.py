@@ -35,6 +35,8 @@ class CampoMedioPago:
     # Obligatorio solo si otro campo tiene cierto valor, ej. ('ambiente', 'PRODUCCION'); None = siempre
     obligatorio_si: tuple[str, str] | None = None
     obligatorio: bool = True
+    # False para la configuración interna del medio (ej. activar Linkify): el admin la ve, el comprador no
+    para_comprador: bool = True
 
     def es_obligatorio(self, datos: dict) -> bool:
         if not self.obligatorio:
@@ -85,9 +87,10 @@ MEDIOS_PAGO = (
         CampoMedioPago('nombre_titular', 'Nombre del titular'),
         CampoMedioPago('email', 'Correo para el comprobante'),
         
-        # CONFIGURACIÓN DE LINKIFY 
-        CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify', 
-                       opciones=('No', 'Sí'), secreto = True),
+        # Linkify valida las transferencias automáticamente; es opcional, así que una tienda sin Linkify
+        # igual ofrece la transferencia
+        CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify',
+                       opciones=('No', 'Sí'), obligatorio=False, para_comprador=False),
         CampoMedioPago('linkify_secret', 'Llave secreta de Linkify', secreto=True,
                        obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),
@@ -134,7 +137,7 @@ class MedioPagoConfigurado:
     def datos_para_comprador(self) -> dict[str, str]:
         """Lo que el comprador necesita para pagar (ej. los datos bancarios): nunca las credenciales."""
         return {c.nombre: self.datos[c.nombre] for c in self.definicion.campos
-                if not c.secreto and self.datos.get(c.nombre)}
+                if not c.secreto and c.para_comprador and self.datos.get(c.nombre)}
 
     def datos_visibles(self) -> dict[str, str]:
         """Para el panel del admin: las credenciales van enmascaradas."""

@@ -4,6 +4,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.core import signing
 from django.shortcuts import redirect
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import TruncDate
@@ -332,7 +333,8 @@ class CheckoutAPIView(generics.CreateAPIView):
             respuesta_data = serializer.data
             respuesta_data['mensaje'] = "Orden creada con éxito."
             respuesta_data['orden_id'] = orden.id
-            
+            respuesta_data['token_verificacion'] = token_verificacion_pago(orden.id)
+
             # Si el serializer generó una URL de Transbank, la inyectamos en la respuesta
             if hasattr(orden, 'url_pago') and orden.url_pago:
                 respuesta_data['url_pago'] = orden.url_pago
@@ -561,6 +563,21 @@ class MercadoPagoRetornoView(APIView):
         return HttpResponseRedirect(f"{frontend_url}/pago-cancelado{sufijo}")
 
 
+SAL_VERIFICAR_PAGO = 'ventas.verificar-pago'
+
+
+def token_verificacion_pago(orden_id) -> str:
+    """Lo recibe quien crea la orden: sin él no se puede consultar su pago (los IDs son correlativos)."""
+    return signing.dumps(str(orden_id), salt=SAL_VERIFICAR_PAGO)
+
+
+def token_verificacion_valido(token, orden_id) -> bool:
+    try:
+        return signing.loads(token, salt=SAL_VERIFICAR_PAGO) == str(orden_id)
+    except signing.BadSignature:
+        return False
+
+
 class VerificarEstadoPagoView(APIView):
     """
     Consulta y sincroniza el estado de una orden.
@@ -574,6 +591,10 @@ class VerificarEstadoPagoView(APIView):
         orden_id = request.query_params.get('orden_id') or request.query_params.get('orden')
         if not orden_id or not str(orden_id).isdigit():
             return Response({"error": "ID de orden no proporcionado o inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Sin el token de la orden se responde igual que si no existiera, y no se consulta a Mercado Pago
+        if not token_verificacion_valido(request.query_params.get('token', ''), orden_id):
+            return Response({"error": "Orden no encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
         orden = OrdenCompra.objects.filter(id=int(orden_id)).first()
         if not orden:
@@ -672,12 +693,14 @@ class ConfiguracionNegocioView(APIView):
 
     def get(self, request):
         config = self.get_object()
-        serializer = ConfiguracionNegocioSerializer(config)
+        # Con la request, las imágenes salen con URL absoluta (el panel corre en otro puerto u origen)
+        serializer = ConfiguracionNegocioSerializer(config, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
         config = self.get_object()
-        serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True)
+        serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
+                                                    context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1175,23 +1198,21 @@ class LinkifyWebhookAPIView(APIView):
 
         try:
             datos = json.loads(encoded_data)
-            orden_id = datos.get("id")
-            
-            # Buscar la orden real en la base de datos
-            repositorio_ordenes = DjangoRepositorioOrdenes()
-            orden = repositorio_ordenes.obtener_por_id(orden_id)
+        except ValueError:
+            return Response({"message": "Datos inválidos"}, status=status.HTTP_400_BAD_REQUEST)
 
-            respuesta = {
-                "amount": int(orden.total),
-                "description": f"Orden #{orden.id}",
-                "currency": "CLP"
-            }
-            return Response(respuesta, status=status.HTTP_200_OK)
-            
-        except OrdenNoEncontrada:
+        # Buscar la orden real en la base de datos
+        orden_id = str(datos.get("id", "")) if isinstance(datos, dict) else ""
+        orden = OrdenCompra.objects.filter(id=int(orden_id)).first() if orden_id.isdigit() else None
+        if orden is None:
             return Response({"message": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        respuesta = {
+            "amount": int(round(orden.total_final)),
+            "description": f"Orden #{orden.id}",
+            "currency": "CLP"
+        }
+        return Response(respuesta, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         """Notificación de transferencia validada por Linkify]"""
@@ -1214,13 +1235,8 @@ class LinkifyWebhookAPIView(APIView):
         
       # 2. Lógica de negocio
         try:
-            # Inicializar el caso de uso con sus dependencias
-            caso_uso = ConfirmarPago(
-                ordenes=DjangoRepositorioOrdenes(),
-                inventario=MongoInventarioVariantes(),
-                notificador=CorreoNotificadorPedidos(),
-                orden_transporte=ChilexpressOrdenTransporte() 
-            )
+            # Mismas dependencias que los demás pagos: la OT la genera el caso de uso a partir del envío de la orden
+            caso_uso = confirmar_pago()
             
             pago_exacto = (completeness == "exact")
             
@@ -1247,26 +1263,13 @@ class LinkifyWebhookAPIView(APIView):
 
 
 class PromocionListCreateView(generics.ListCreateAPIView):
+    # Los cupones los gestiona solo el admin; el comprador los valida en promociones/validar/
+    permission_classes = [IsAdministrador]
     queryset = Promocion.objects.all().order_by('-id')
     serializer_class = PromocionSerializer
 
 
 class PromocionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdministrador]
     queryset = Promocion.objects.all()
     serializer_class = PromocionSerializer
-
-
-class ValidarCuponView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        codigo = request.data.get('codigo', '').strip().upper()
-        if not codigo:
-            return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
-
-        promocion = Promocion.objects.filter(codigo=codigo, is_active=True).first()
-        if not promocion:
-            return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = PromocionSerializer(promocion)
-        return Response(serializer.data, status=status.HTTP_200_OK)

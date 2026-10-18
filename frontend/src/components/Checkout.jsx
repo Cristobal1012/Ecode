@@ -31,6 +31,17 @@ const NOMBRES_MEDIO_PAGO = {
     TRANSFERENCIA: 'Transferencia bancaria'
 };
 
+// Orden de Mercado Pago que espera su pago. El token firmado que entrega el checkout prueba que la creó este
+// navegador: sin él, verificar-pago no responde (los números de orden son correlativos y se podrían adivinar)
+const consultarPagoPendiente = (idOrden) => clienteAxios.get('ventas/checkout/verificar-pago/', {
+    params: { orden_id: idOrden, token: localStorage.getItem('orden_pendiente_token') }
+});
+
+const olvidarOrdenPendiente = () => {
+    localStorage.removeItem('orden_pendiente_pago');
+    localStorage.removeItem('orden_pendiente_token');
+};
+
 export default function Checkout() {
     return (
         <>
@@ -79,10 +90,9 @@ function CheckoutContenido() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
-    const [codigoCupon, setCodigoCupon] = useState('');
+    // Vista previa del cupón ({ tipo, valor, codigo }) y el código que se envía al checkout
     const [descuentoAplicado, setDescuentoAplicado] = useState(null);
     const [codigoValidado, setCodigoValidado] = useState(null);
-    const [mensajeCupon, setMensajeCupon] = useState('');
     const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
     const [codigoInput, setCodigoInput] = useState('');
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opcion: null, error: '' });
@@ -104,10 +114,10 @@ function CheckoutContenido() {
         if (!idOrden) return;
         setVerificando(true);
         try {
-            const res = await clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${idOrden}`);
+            const res = await consultarPagoPendiente(idOrden);
             if (res.data.pagado) {
                 localStorage.removeItem('carrito_local');
-                localStorage.removeItem('orden_pendiente_pago');
+                olvidarOrdenPendiente();
                 window.dispatchEvent(new Event('carritoActualizado'));
                 if (usuarioAutenticado) {
                     try { await clienteAxios.post('ventas/carrito/', { items: [] }); } catch { /* vaciado silencioso */ }
@@ -116,7 +126,7 @@ function CheckoutContenido() {
                 navigate(`/pago-exitoso?orden=${idOrden}${sufijoRevision}`);
             } else if (res.data.cancelado) {
                 setEsperandoPago(null);
-                localStorage.removeItem('orden_pendiente_pago');
+                olvidarOrdenPendiente();
                 setMensaje('La orden fue cancelada o rechazada.');
             }
         } catch (err) {
@@ -139,11 +149,11 @@ function CheckoutContenido() {
     useEffect(() => {
         const ordenPendiente = localStorage.getItem('orden_pendiente_pago');
         if (ordenPendiente) {
-            clienteAxios.get(`ventas/checkout/verificar-pago/?orden_id=${ordenPendiente}`)
+            consultarPagoPendiente(ordenPendiente)
                 .then(res => {
                     if (res.data.pagado) {
                         localStorage.removeItem('carrito_local');
-                        localStorage.removeItem('orden_pendiente_pago');
+                        olvidarOrdenPendiente();
                         window.dispatchEvent(new Event('carritoActualizado'));
                         const sufijoRevision = res.data.requiere_revision ? '&revision=1' : '';
                         navigate(`/pago-exitoso?orden=${ordenPendiente}${sufijoRevision}`);
@@ -320,40 +330,14 @@ function CheckoutContenido() {
     const cajaCalculada = { peso_kg: String(medidasCaja.peso), alto_cm: String(medidasCaja.lado), ancho_cm: String(medidasCaja.lado), largo_cm: String(medidasCaja.lado) };
     const mensajeVisible = mensaje || cotizacionVigente?.error || '';
 
-    const estiloContenedorOpciones = { maxWidth: '400px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif', textAlign: 'center' };
-    const inputStyle = { width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box' };
 
     const irALogin = () => { localStorage.setItem('url_anterior_login', window.location.pathname); navigate('/login'); };
-
-    const aplicarCodigo = async () => {
-        if (!codigoInput.trim()) return;
-
-        try {
-            const respuesta = await clienteAxios.post('ventas/checkout/validar-cupon/', { 
-            codigo: codigoInput.trim().toUpperCase() 
-            });
-            
-            setDescuentoAplicado({ 
-            tipo: respuesta.data.tipo_descuento, 
-            valor: Number(respuesta.data.valor_descuento), 
-            codigo: respuesta.data.codigo 
-            });
-            setMensaje('¡Código aplicado con Éxito!');
-            
-        } catch (error) {
-            setDescuentoAplicado(null);
-            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
-        }
-    };
-
 
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
     let montoDescuento = 0;
     if (descuentoAplicado) {
-        if (typeof descuentoAplicado === 'number') {
-            montoDescuento = descuentoAplicado;
-        } else if (descuentoAplicado.tipo === 'PORCENTAJE') {
+        if (descuentoAplicado.tipo === 'PORCENTAJE') {
             montoDescuento = subtotal * (descuentoAplicado.valor / 100);
         } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
             montoDescuento = descuentoAplicado.valor;
@@ -361,45 +345,36 @@ function CheckoutContenido() {
     }
 
     const tieneEnvioGratisCupon = Boolean(
-        (codigoValidado || descuentoAplicado?.codigo) &&
+        codigoValidado &&
         umbralEnvioGratis !== null &&
         subtotal >= umbralEnvioGratis
     );
     const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
     const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
 
-    const aplicarCupon = async () => {
-        if (!codigoCupon.trim()) {
-            setDescuentoAplicado(0);
-            setCodigoValidado(null);
-            setUmbralEnvioGratis(null);
-            setMensajeCupon('');
-            return;
-        }
-        setMensajeCupon('Validando...');
-        try {
-            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { 
-                codigo: codigoCupon,
-                subtotal: subtotal 
-            });
-            
-            setDescuentoAplicado(respuesta.data.descuento);
-            setCodigoValidado(codigoCupon);
-            const umbral = respuesta.data.umbral_envio_gratis;
-            const tieneUmbral = umbral !== undefined && umbral !== null;
-            const valorUmbral = tieneUmbral ? Number(umbral) : null;
-            setUmbralEnvioGratis(valorUmbral);
+    // El cupón se valida en el servidor (vigencia incluida) y su código viaja en el checkout, donde el
+    // servidor vuelve a validarlo y lo descuenta del total: lo que se muestra aquí es solo una vista previa
+    const aplicarCodigo = async () => {
+        const codigo = codigoInput.trim().toUpperCase();
+        if (!codigo) return;
 
-            let msg = `¡Cupón aplicado! Descuento de $${respuesta.data.descuento.toLocaleString('es-CL')}`;
-            if (tieneUmbral && subtotal >= valorUmbral) {
-                msg += ' + Envío gratis incluido';
-            }
-            setMensajeCupon(msg);
+        try {
+            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
+            const umbral = respuesta.data.umbral_envio_gratis;
+
+            setDescuentoAplicado({
+                tipo: respuesta.data.tipo_descuento,
+                valor: Number(respuesta.data.valor_descuento),
+                codigo: respuesta.data.codigo
+            });
+            setCodigoValidado(respuesta.data.codigo);
+            setUmbralEnvioGratis(umbral === null || umbral === undefined ? null : Number(umbral));
+            setMensaje('¡Código aplicado con Éxito!');
         } catch (error) {
-            setDescuentoAplicado(0);
+            setDescuentoAplicado(null);
             setCodigoValidado(null);
             setUmbralEnvioGratis(null);
-            setMensajeCupon(error.response?.data?.error || 'Código inválido o expirado.');
+            setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
     const procesarPago = async (metodoSeleccionado) => {
@@ -480,6 +455,7 @@ function CheckoutContenido() {
             if (respuesta.data.url_pago) {
                 if (metodoSeleccionado === 'MERCADO_PAGO') {
                     localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
+                    localStorage.setItem('orden_pendiente_token', respuesta.data.token_verificacion);
                     setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
                     const ventana = window.open(respuesta.data.url_pago, '_blank');
                     if (!ventana) {
@@ -529,343 +505,338 @@ function CheckoutContenido() {
     if (modoAutenticacion == null) {
         if (errorReglas) {
             return (
-                <p role="alert" style={{ textAlign: 'center', marginTop: '50px' }}>
+                <p role="alert" className="checkout-estado">
                     No se pudieron cargar las opciones de compra.
                 </p>
             );
         }
 
         return (
-            <p role={mensaje ? 'alert' : undefined} style={{ textAlign: 'center', marginTop: '50px' }}>
+            <p role={mensaje ? 'alert' : undefined} className="checkout-estado">
                 {mensaje || 'Cargando...'}
             </p>
         );
     }
-    if (modoAutenticacion === 'REGISTRO_OBLIGATORIO' && !usuarioAutenticado) return ( <div className="checkout-card" style={estiloContenedorOpciones}><h1 className="checkout-titulo">Finalizar Compra</h1><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
-    if (modoAutenticacion === 'MIXTO' && !usuarioAutenticado && opcionCompra === null) return ( <div className="checkout-card" style={estiloContenedorOpciones}><h1 className="checkout-titulo">Finalizar Compra</h1><button onClick={() => setOpcionCompra('INVITADO')} style={{ width: '100%', padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '10px' }}>Comprar como invitado</button><button onClick={irALogin} style={{ width: '100%', padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Iniciar sesión o registrarse</button></div> );
+
+    // RN-04: según el modo de la tienda, primero se elige cómo comprar
+    if (modoAutenticacion === 'REGISTRO_OBLIGATORIO' && !usuarioAutenticado) return (
+        <div className="checkout-card checkout-acceso">
+            <span className="antetitulo">Compra segura</span>
+            <h1 className="checkout-titulo">Finalizar Compra</h1>
+            <p className="texto-secundario">Para comprar en esta tienda necesitas una cuenta.</p>
+            <button type="button" className="boton boton-primario" onClick={irALogin}>Iniciar sesión o registrarse</button>
+        </div>
+    );
+    if (modoAutenticacion === 'MIXTO' && !usuarioAutenticado && opcionCompra === null) return (
+        <div className="checkout-card checkout-acceso">
+            <span className="antetitulo">Compra segura</span>
+            <h1 className="checkout-titulo">Finalizar Compra</h1>
+            <p className="texto-secundario">Puedes comprar solo con tu correo o entrar a tu cuenta.</p>
+            <button type="button" className="boton boton-primario" onClick={() => setOpcionCompra('INVITADO')}>Comprar como invitado</button>
+            <button type="button" className="boton boton-contorno" onClick={irALogin}>Iniciar sesión o registrarse</button>
+        </div>
+    );
+
+    const claseOpcion = (elegida) => `checkout-opcion${elegida ? ' checkout-opcion--elegida' : ''}`;
+    const exito = mensajeVisible.includes('Éxito');
 
     return (
-        <div className="checkout-card" style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h1 className="checkout-titulo">Finalizar Compra</h1>
-            {mensajeVisible && <div role="status" style={{ padding: '10px', marginBottom: '15px', backgroundColor: mensajeVisible.includes('Éxito') ? '#d4edda' : '#f8d7da', borderRadius: '4px', color: mensajeVisible.includes('Éxito') ? '#155724' : '#721c24' }}>{mensajeVisible}</div>}
+        <div className="checkout-card checkout">
+            <div className="checkout-encabezado">
+                <span className="antetitulo">Compra segura</span>
+                <h1 className="checkout-titulo">Finalizar Compra</h1>
+            </div>
+
+            {mensajeVisible && (
+                <div role="status" className={`checkout-aviso ${exito ? 'checkout-aviso--exito' : 'checkout-aviso--error'}`}>
+                    {mensajeVisible}
+                </div>
+            )}
             {avisosCarrito.length > 0 && (
-                <div role="alert" style={{ padding: '10px 15px', marginBottom: '15px', backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '4px', color: '#92400e' }}>
+                <div role="alert" className="checkout-aviso checkout-aviso--advertencia">
                     <strong>Actualizamos tu carrito:</strong>
-                    <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                    <ul>
                         {avisosCarrito.map(aviso => <li key={aviso}>{aviso}</li>)}
                     </ul>
                 </div>
             )}
 
-            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem' }}>Resumen del pedido</h3>
-                {itemsCarrito.length > 0 ? itemsCarrito.map((item) => (
-                    <div className="checkout-resumen-linea" key={`${item.id}|${item.sku}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px', color: '#4b5563' }}>
-                        <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
-                    </div>
-                )) : <p>No hay productos</p>}
-                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
-                
-                {montoDescuento > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px', color: '#16a34a', fontWeight: 'bold' }}>
-                        <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
-                        <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
-                    </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '6px' }}>
-                    <span>Costo de envío:</span>
-                    <span>
-                        {cotizando ? 'Calculando...' : tieneEnvioGratisCupon ? (
-                            <>
-                                {costoEnvio > 0 && (
-                                    <span style={{ textDecoration: 'line-through', color: '#9ca3af', marginRight: '6px' }}>
-                                        ${costoEnvio.toLocaleString('es-CL')}
-                                    </span>
-                                )}
-                                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>$0 (Envío gratis)</span>
-                            </>
-                        ) : `$${costoEnvio.toLocaleString('es-CL')}`}
-                    </span>
-                </div>
-
-                <hr style={{ borderTop: '1px solid #e5e7eb', margin: '12px 0' }} />
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
-
-                
-                <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
-                    <input
-                    className="input-cupon"
-                    type="text"
-                    placeholder="Cupón de descuento"
-                    value={codigoInput}
-                    onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
-                    style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}
-                    />
-                    <button
-                    type="button"
-                    onClick={aplicarCodigo}
-                    style={{ padding: '10px 16px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                    Aplicar
-                    </button>
-                </div>
-
-            </div>
-                
-            <form onSubmit={(e) => e.preventDefault()}>
-                {compraComoInvitado && (
-                    <div style={{ marginBottom: '20px' }}>
-                        <label htmlFor="checkout-email" style={{fontWeight: 'bold'}}>Correo electrónico para el recibo y estado de envío:</label>
-                        <input id="checkout-email" type="email" autoComplete="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required style={inputStyle} />
-                    </div>
-                )}
-
-                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
-                    <legend style={{ width: '100%', padding: 0 }}>
-                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Quién recibe el pedido?</h3>
-                    </legend>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label htmlFor="checkout-destinatario" style={{ fontWeight: 'bold' }}>Nombre de quien recibe o retira</label>
-                        <input id="checkout-destinatario" type="text" autoComplete="name" maxLength={120} value={nombreDestinatario} onChange={(e) => setNombreDestinatario(e.target.value)} required style={inputStyle} />
-                    </div>
-                    <div>
-                        <label htmlFor="checkout-telefono" style={{ fontWeight: 'bold' }}>Teléfono de contacto</label>
-                        <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" style={inputStyle} />
-                        <p id="checkout-telefono-ayuda" style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#4b5563' }}>
-                            Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
-                        </p>
-                    </div>
-                </fieldset>
-                
-                {/* --- TABS: ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
-                <fieldset className="checkout-grupo" style={{ marginBottom: '25px' }}>
-                    <legend style={{ width: '100%', padding: 0 }}>
-                        <h3 style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '15px' }}>¿Cómo deseas recibir tu pedido?</h3>
-                    </legend>
-                    <div className="checkout-fila" style={{ display: 'flex', gap: '10px' }}>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'DOMICILIO' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'DOMICILIO' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'DOMICILIO' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
-                            A Domicilio
-                        </label>
-                        <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'SUCURSAL' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'SUCURSAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'SUCURSAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                            <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
-                            Sucursal Chilexpress
-                        </label>
-                        {configTienda?.retiro_en_local_activo && (
-                            <label className="checkout-opcion" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px', border: tipoDespacho === 'RETIRO_LOCAL' ? '2px solid var(--color-primary, #007BFF)' : '1px solid #d1d5db', borderRadius: '6px', backgroundColor: tipoDespacho === 'RETIRO_LOCAL' ? '#f0f7ff' : 'white', fontSize: '0.85rem', fontWeight: tipoDespacho === 'RETIRO_LOCAL' ? 'bold' : 'normal', textAlign: 'center' }}>
-                                <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => setTipoDespacho('RETIRO_LOCAL')} className="checkout-radio-oculto" />
-                                Retiro en Local
-                            </label>
-                        )}
-                    </div>
-                </fieldset>
-
-                {/* --- CONTENIDO SEGÚN EL TAB SELECCIONADO --- */}
-                {tipoDespacho === 'DOMICILIO' ? (
-                    <div style={{ marginBottom: '25px' }}>
-                        {usuarioAutenticado && direccionesGuardadas.length > 0 && (
-                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
-                                <legend className="checkout-solo-lector">Dirección de envío</legend>
-                                {direccionesGuardadas.map(dir => (
-                                    <label key={dir.id} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === dir.id ? '2px solid var(--color-primary, #007BFF)' : '1px solid #ddd', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === dir.id ? '#f0f7ff' : 'white' }}>
-                                        <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => setDireccionSeleccionadaId(dir.id)} style={{ marginRight: '10px' }} />
-                                        <div>
-                                            <div style={{ fontWeight: 'bold' }}>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</div>
-                                            <div style={{ fontSize: '0.85rem', color: '#666' }}>{dir.comuna}, {dir.ciudad}</div>
-                                        </div>
-                                    </label>
-                                ))}
-                                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: direccionSeleccionadaId === 'nueva' ? '2px solid var(--color-primary, #007BFF)' : '1px dashed #ccc', borderRadius: '6px', cursor: 'pointer', backgroundColor: direccionSeleccionadaId === 'nueva' ? '#f0f7ff' : 'white' }}>
-                                    <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => setDireccionSeleccionadaId('nueva')} style={{ marginRight: '10px' }} />
-                                    <span style={{ fontWeight: 'bold' }}>Ingresar una nueva dirección</span>
-                                </label>
-                            </fieldset>
-                        )}
-
-                        {direccionSeleccionadaId === 'nueva' && (
-                            <div style={{ padding: '15px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                <div className="checkout-fila" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                                    <div style={{ flex: 3 }}>
-                                        <label htmlFor="checkout-calle" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Calle</label>
-                                        <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required style={inputStyle} placeholder="Ej: Av. Providencia" />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <label htmlFor="checkout-numero" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Número</label>
-                                        <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required style={inputStyle} />
-                                    </div>
-                                </div>
-                                <div style={{ marginBottom: '15px' }}>
-                                    <label htmlFor="checkout-dpto" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Dpto, Casa o Referencia (Opcional)</label>
-                                    <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} style={inputStyle} placeholder="Ej: Depto 505" />
-                                </div>
-                                <div className="checkout-fila" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <label htmlFor="checkout-comuna" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Comuna</label>
-                                        <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
-                                            <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
-                                            {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <label htmlFor="checkout-ciudad" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Ciudad</label>
-                                        <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required style={inputStyle} />
-                                    </div>
-                                </div>
-                                {usuarioAutenticado && (
-                                    <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                        <input type="checkbox" checked={guardarNuevaDireccion} onChange={(e) => setGuardarNuevaDireccion(e.target.checked)} style={{ marginRight: '8px' }} />
-                                        Guardar esta dirección para mis próximas compras
-                                    </label>
-                                )}
+            <div className="checkout-columnas">
+                <form className="checkout-formulario" onSubmit={(e) => e.preventDefault()}>
+                    {compraComoInvitado && (
+                        <section className="checkout-seccion" aria-labelledby="checkout-paso-contacto">
+                            <h2 id="checkout-paso-contacto" className="checkout-paso">Contacto</h2>
+                            <div className="checkout-campo">
+                                <label htmlFor="checkout-email">Correo electrónico para el recibo y estado de envío:</label>
+                                <input id="checkout-email" type="email" autoComplete="email" value={emailInvitado} onChange={(e) => setEmailInvitado(e.target.value)} required />
                             </div>
-                        )}
-                    </div>
-                ) : tipoDespacho === 'SUCURSAL' ? (
-                    <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                        <h4 style={{ margin: '0 0 15px 0', fontSize: '1rem' }}>Elige la sucursal de retiro</h4>
-                        <div style={{ marginBottom: '15px' }}>
-                            <label htmlFor="checkout-comuna-sucursal" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>¿En qué comuna te encuentras?</label>
-                            <select id="checkout-comuna-sucursal" value={comunaSucursal} onChange={(e) => { setComunaSucursal(e.target.value); setSucursalElegida(null); setMensaje(''); }} required disabled={cargandoComunas} style={{...inputStyle, backgroundColor: 'white'}}>
-                                <option value="">-- Selecciona comuna --</option>
-                                {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                        </section>
+                    )}
+
+                    <fieldset className="checkout-grupo checkout-seccion">
+                        <legend className="checkout-paso">¿Quién recibe el pedido?</legend>
+                        <div className="checkout-campo">
+                            <label htmlFor="checkout-destinatario">Nombre de quien recibe o retira</label>
+                            <input id="checkout-destinatario" type="text" autoComplete="name" maxLength={120} value={nombreDestinatario} onChange={(e) => setNombreDestinatario(e.target.value)} required />
                         </div>
-                        
-                        {cargandoSucursales ? (
-                            <p style={{ color: 'var(--color-primary)', fontSize: '0.9rem' }}>Buscando oficinas disponibles...</p>
-                        ) : comunaSucursal && sucursalesDisponibles.length === 0 ? (
-                            <div style={{ padding: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', color: '#991b1b', fontSize: '0.9rem' }}>
-                                Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
-                            </div>
-                        ) : sucursalesDisponibles.length > 0 && (
-                            <fieldset className="checkout-grupo" style={{ marginBottom: '15px' }}>
-                                <legend style={{ fontSize: '0.9rem', fontWeight: 'bold', padding: 0 }}>Oficinas Disponibles</legend>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
-                                    {sucursalesDisponibles.map(suc => (
-                                        <label key={suc.codigo} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: sucursalSeleccionada?.codigo === suc.codigo ? '2px solid #007BFF' : '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', backgroundColor: sucursalSeleccionada?.codigo === suc.codigo ? '#f0f7ff' : 'white' }}>
-                                            <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalElegida({ ...suc, comuna: comunaSucursal })} style={{ marginRight: '12px' }} />
-                                            <div>
-                                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{suc.nombre}</div>
-                                                <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{suc.direccion}</div>
-                                            </div>
+                        <div className="checkout-campo">
+                            <label htmlFor="checkout-telefono">Teléfono de contacto</label>
+                            <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" />
+                            <p id="checkout-telefono-ayuda" className="checkout-ayuda">
+                                Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
+                            </p>
+                        </div>
+                    </fieldset>
+
+                    {/* --- ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
+                    <fieldset className="checkout-grupo checkout-seccion">
+                        <legend className="checkout-paso">¿Cómo deseas recibir tu pedido?</legend>
+                        <div className="checkout-fila checkout-opciones">
+                            <label className={claseOpcion(tipoDespacho === 'DOMICILIO')}>
+                                <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
+                                A Domicilio
+                            </label>
+                            <label className={claseOpcion(tipoDespacho === 'SUCURSAL')}>
+                                <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
+                                Sucursal Chilexpress
+                            </label>
+                            {configTienda?.retiro_en_local_activo && (
+                                <label className={claseOpcion(tipoDespacho === 'RETIRO_LOCAL')}>
+                                    <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => setTipoDespacho('RETIRO_LOCAL')} className="checkout-radio-oculto" />
+                                    Retiro en Local
+                                </label>
+                            )}
+                        </div>
+
+                        {/* --- CONTENIDO SEGÚN LA FORMA DE ENTREGA --- */}
+                        {tipoDespacho === 'DOMICILIO' ? (
+                            <div className="checkout-entrega">
+                                {usuarioAutenticado && direccionesGuardadas.length > 0 && (
+                                    <fieldset className="checkout-grupo checkout-direcciones">
+                                        <legend className="checkout-solo-lector">Dirección de envío</legend>
+                                        {direccionesGuardadas.map(dir => (
+                                            <label key={dir.id} className={claseOpcion(direccionSeleccionadaId === dir.id) + ' checkout-opcion--fila'}>
+                                                <input type="radio" name="direccion-envio" value={dir.id} checked={direccionSeleccionadaId === dir.id} onChange={() => setDireccionSeleccionadaId(dir.id)} />
+                                                <span>
+                                                    <strong>{dir.calle} {dir.calle_numero} {dir.dpto_casa && `- ${dir.dpto_casa}`}</strong>
+                                                    <span className="checkout-ayuda">{dir.comuna}, {dir.ciudad}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                        <label className={claseOpcion(direccionSeleccionadaId === 'nueva') + ' checkout-opcion--fila'}>
+                                            <input type="radio" name="direccion-envio" value="nueva" checked={direccionSeleccionadaId === 'nueva'} onChange={() => setDireccionSeleccionadaId('nueva')} />
+                                            <strong>Ingresar una nueva dirección</strong>
                                         </label>
-                                    ))}
-                                </div>
-                            </fieldset>
-                        )}
-                    </div>
-                ) : (
-                    <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#166534' }}>Retiro Gratuito en Local</h4>
-                        <p style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#15803d' }}>Puedes retirar tu pedido sin costo en nuestra dirección:</p>
-                        <p style={{ margin: 0, fontWeight: 'bold', color: '#14532d', fontSize: '1.05rem' }}>
-                            📍 {configTienda?.calle_origen || 'Av. Principal'} #{configTienda?.numero_origen || '123'} {configTienda?.dpto_casa_origen ? `- ${configTienda.dpto_casa_origen}` : ''}, {configTienda?.comuna_origen || 'Santiago'} ({configTienda?.region_origen || 'Metropolitana'})
-                        </p>
-                    </div>
-                )}
+                                    </fieldset>
+                                )}
 
-                {/* --- MÉTODOS DE ENTREGA Y PAGO --- */}
-                {opcionesEntrega.length > 0 && (
-                    <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
-                        <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Costo Logístico</h3>
-                        {opcionesEntrega.map((opcion) => (
-                            <div key={opcion.proveedor} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '2px solid #111827', borderRadius: '6px', backgroundColor: '#F9FAFB' }}>
-                                <div>
-                                    <strong>{opcion.nombre}</strong>
-                                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                                        {opcion.tipo === 'RETIRO' ? (tipoDespacho === 'RETIRO_LOCAL' ? 'Retiro en Local Propio' : 'Retiro en Sucursal') : 'Despacho a Domicilio'}
+                                {direccionSeleccionadaId === 'nueva' && (
+                                    <div className="checkout-direccion-nueva">
+                                        <div className="checkout-fila">
+                                            <div className="checkout-campo checkout-campo--ancho">
+                                                <label htmlFor="checkout-calle">Calle</label>
+                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required placeholder="Ej: Av. Providencia" />
+                                            </div>
+                                            <div className="checkout-campo">
+                                                <label htmlFor="checkout-numero">Número</label>
+                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required />
+                                            </div>
+                                        </div>
+                                        <div className="checkout-campo">
+                                            <label htmlFor="checkout-dpto">Dpto, Casa o Referencia (Opcional)</label>
+                                            <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} placeholder="Ej: Depto 505" />
+                                        </div>
+                                        <div className="checkout-fila">
+                                            <div className="checkout-campo">
+                                                <label htmlFor="checkout-comuna">Comuna</label>
+                                                <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required disabled={cargandoComunas}>
+                                                    <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
+                                                    {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="checkout-campo">
+                                                <label htmlFor="checkout-ciudad">Ciudad</label>
+                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required />
+                                            </div>
+                                        </div>
+                                        {usuarioAutenticado && (
+                                            <label className="checkout-casilla">
+                                                <input type="checkbox" checked={guardarNuevaDireccion} onChange={(e) => setGuardarNuevaDireccion(e.target.checked)} />
+                                                Guardar esta dirección para mis próximas compras
+                                            </label>
+                                        )}
                                     </div>
-                                </div>
-                                <strong>{Number(opcion.costo_envio).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}</strong>
+                                )}
                             </div>
-                        ))}
-                    </div>
-                )}
-            
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '20px', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required style={{ marginTop: '3px' }} />
-                    <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
-                </label>
+                        ) : tipoDespacho === 'SUCURSAL' ? (
+                            <div className="checkout-entrega">
+                                <div className="checkout-campo">
+                                    <label htmlFor="checkout-comuna-sucursal">¿En qué comuna te encuentras?</label>
+                                    <select id="checkout-comuna-sucursal" value={comunaSucursal} onChange={(e) => { setComunaSucursal(e.target.value); setSucursalElegida(null); setMensaje(''); }} required disabled={cargandoComunas}>
+                                        <option value="">-- Selecciona comuna --</option>
+                                        {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
 
-                <div style={{ marginTop: '20px' }}>
-                    {cargandoPagos ? (
-                        <p style={{ color: '#d9534f', fontWeight: 'bold' }}>Cargando métodos de pago...</p>
-                    ) : pasarelas.length === 0 ? (
-                        <p style={{ color: '#d9534f', fontWeight: 'bold' }}>No hay métodos de pago configurados en la tienda.</p>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {pasarelas.map(pasarela => {
+                                {cargandoSucursales ? (
+                                    <p className="checkout-ayuda" role="status">Buscando oficinas disponibles...</p>
+                                ) : comunaSucursal && sucursalesDisponibles.length === 0 ? (
+                                    <div className="checkout-aviso checkout-aviso--error">
+                                        Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
+                                    </div>
+                                ) : sucursalesDisponibles.length > 0 && (
+                                    <fieldset className="checkout-grupo checkout-direcciones">
+                                        <legend className="checkout-etiqueta">Oficinas disponibles</legend>
+                                        {sucursalesDisponibles.map(suc => (
+                                            <label key={suc.codigo} className={claseOpcion(sucursalSeleccionada?.codigo === suc.codigo) + ' checkout-opcion--fila'}>
+                                                <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalElegida({ ...suc, comuna: comunaSucursal })} />
+                                                <span>
+                                                    <strong>{suc.nombre}</strong>
+                                                    <span className="checkout-ayuda">{suc.direccion}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </fieldset>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="checkout-entrega checkout-retiro">
+                                <p className="checkout-etiqueta">Retiro gratuito en local</p>
+                                <p className="checkout-ayuda">Puedes retirar tu pedido sin costo en nuestra dirección:</p>
+                                <p className="checkout-retiro-direccion">
+                                    {configTienda?.calle_origen || 'Av. Principal'} #{configTienda?.numero_origen || '123'} {configTienda?.dpto_casa_origen ? `- ${configTienda.dpto_casa_origen}` : ''}, {configTienda?.comuna_origen || 'Santiago'} ({configTienda?.region_origen || 'Metropolitana'})
+                                </p>
+                            </div>
+                        )}
+
+                        {/* --- COSTO DE LA ENTREGA ELEGIDA --- */}
+                        {opcionesEntrega.length > 0 && (
+                            <div className="checkout-logistica">
+                                {opcionesEntrega.map((opcion) => (
+                                    <div key={opcion.proveedor} className="checkout-logistica-opcion">
+                                        <div>
+                                            <strong>{opcion.nombre}</strong>
+                                            <div className="checkout-ayuda">
+                                                {opcion.tipo === 'RETIRO' ? (tipoDespacho === 'RETIRO_LOCAL' ? 'Retiro en Local Propio' : 'Retiro en Sucursal') : 'Despacho a Domicilio'}
+                                            </div>
+                                        </div>
+                                        <strong>{Number(opcion.costo_envio).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </fieldset>
+                </form>
+
+                <aside className="checkout-resumen" aria-labelledby="checkout-resumen-titulo">
+                    <h2 id="checkout-resumen-titulo" className="checkout-paso">Resumen del pedido</h2>
+                    <div className="checkout-resumen-lineas">
+                        {itemsCarrito.length > 0 ? itemsCarrito.map((item) => (
+                            <div className="checkout-resumen-linea" key={`${item.id}|${item.sku}`}>
+                                <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
+                            </div>
+                        )) : <p>No hay productos</p>}
+                    </div>
+
+                    <div className="checkout-cupon">
+                        <input
+                            className="input-cupon"
+                            type="text"
+                            placeholder="Cupón de descuento"
+                            aria-label="Cupón de descuento"
+                            value={codigoInput}
+                            onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
+                        />
+                        <button type="button" className="boton-edicion checkout-cupon-boton" onClick={aplicarCodigo}>
+                            Aplicar
+                        </button>
+                    </div>
+
+                    <div className="checkout-totales">
+                        <div className="checkout-total-linea"><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
+
+                        {montoDescuento > 0 && (
+                            <div className="checkout-total-linea checkout-total-linea--descuento">
+                                <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
+                                <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
+                            </div>
+                        )}
+
+                        <div className="checkout-total-linea">
+                            <span>Costo de envío:</span>
+                            <span>
+                                {cotizando ? 'Calculando...' : tieneEnvioGratisCupon ? (
+                                    <>
+                                        {costoEnvio > 0 && (
+                                            <del className="checkout-precio-anterior">
+                                                ${costoEnvio.toLocaleString('es-CL')}
+                                            </del>
+                                        )}
+                                        <span className="checkout-envio-gratis">$0 (Envío gratis)</span>
+                                    </>
+                                ) : `$${costoEnvio.toLocaleString('es-CL')}`}
+                            </span>
+                        </div>
+
+                        <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+                    </div>
+
+                    {/* RF-04.4: sin aceptar los términos no se puede pagar (el backend también lo valida) */}
+                    <label className="checkout-casilla checkout-terminos">
+                        <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required />
+                        <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
+                    </label>
+
+                    <div className="checkout-pagos">
+                        {cargandoPagos ? (
+                            <p className="checkout-ayuda" role="status">Cargando métodos de pago...</p>
+                        ) : pasarelas.length === 0 ? (
+                            <p className="checkout-aviso checkout-aviso--error">No hay métodos de pago configurados en la tienda.</p>
+                        ) : (
+                            pasarelas.map(pasarela => {
                                 const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
                                 const habilitado = validadoParaPagar && !procesandoPago;
                                 return (
                                     <button
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
-                                        style={{ width: '100%', padding: '12px', backgroundColor: habilitado ? 'var(--color-primary, #007BFF)' : '#9ca3af', color: 'white', border: 'none', borderRadius: '4px', cursor: habilitado ? 'pointer' : 'not-allowed', fontSize: '16px', fontWeight: 'bold' }}
+                                        className="boton boton-primario checkout-pagar"
                                     >
                                         {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
                                 );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </form>
+                            })
+                        )}
+                    </div>
+                </aside>
+            </div>
 
             {esperandoPago && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', zIndex: 99999, padding: '20px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff', borderRadius: '12px', padding: '30px',
-                        maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
-                    }}>
-                        <div style={{ width: '64px', height: '64px', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 16px auto' }}>
-                            💳
-                        </div>
-                        <h2 style={{ margin: '0 0 10px 0', fontSize: '1.4rem', color: '#111827' }}>
-                            Completando pago en Mercado Pago
-                        </h2>
-                        <p style={{ color: '#4b5563', fontSize: '0.95rem', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                <div className="checkout-modal-fondo">
+                    <div className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-titulo">
+                        <span className="antetitulo">Pago en curso</span>
+                        <h2 id="checkout-modal-titulo">Completando pago en Mercado Pago</h2>
+                        <p className="texto-secundario">
                             Se abrió la ventana de Mercado Pago para la <strong>Orden #{esperandoPago.ordenId}</strong>.
                             Completa tu pago allá. Esta pantalla detectará tu pago automáticamente tan pronto como se acredite.
                         </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div className="checkout-modal-acciones">
                             <button
                                 type="button"
+                                className="boton boton-primario"
                                 onClick={() => verificarEstadoOrden(esperandoPago.ordenId)}
                                 disabled={verificando}
-                                style={{
-                                    padding: '12px 20px', backgroundColor: '#0284c7', color: 'white',
-                                    border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer'
-                                }}
                             >
                                 {verificando ? 'Consultando a Mercado Pago...' : 'Ya pagué (Verificar mi pago)'}
                             </button>
-                            <a
-                                href={esperandoPago.urlPago}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                    padding: '10px', color: '#4b5563', fontSize: '0.9rem', textDecoration: 'underline'
-                                }}
-                            >
+                            <a href={esperandoPago.urlPago} target="_blank" rel="noopener noreferrer" className="checkout-modal-enlace">
                                 ¿Se cerró la ventana? Abrir Mercado Pago de nuevo
                             </a>
                             <button
                                 type="button"
+                                className="boton-texto"
                                 onClick={() => {
                                     setEsperandoPago(null);
-                                    localStorage.removeItem('orden_pendiente_pago');
-                                }}
-                                style={{
-                                    padding: '8px', backgroundColor: 'transparent', color: '#9ca3af',
-                                    border: 'none', fontSize: '0.85rem', cursor: 'pointer'
+                                    olvidarOrdenPendiente();
                                 }}
                             >
                                 Cancelar y volver al checkout

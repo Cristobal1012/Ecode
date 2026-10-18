@@ -111,6 +111,14 @@ class MediosPagoDisponiblesTests(SimpleTestCase):
         self.assertEqual(self.repo.obtener('TRANSBANK').datos_para_comprador(),
                          {'ambiente': 'PRODUCCION', 'commerce_code': '5970'})
 
+    def test_la_transferencia_se_ofrece_sin_linkify_y_su_configuracion_no_llega_al_comprador(self):
+        self.guardar('TRANSFERENCIA', True, DATOS_BANCO)
+        self.assertEqual(self.casos.exigir('TRANSFERENCIA').codigo, 'TRANSFERENCIA')
+
+        self.guardar('TRANSFERENCIA', True, {**DATOS_BANCO, 'verificar_con_linkify': 'Sí',
+                                              'linkify_secret': 'secreto-linkify-1234'})
+        self.assertEqual(self.repo.obtener('TRANSFERENCIA').datos_para_comprador(), DATOS_BANCO)
+
     def test_medio_inexistente_no_esta_disponible(self):
         for codigo in ('PAYPAL', '', 'transbank'):
             with self.subTest(codigo=codigo), self.assertRaises(MedioPagoNoDisponible):

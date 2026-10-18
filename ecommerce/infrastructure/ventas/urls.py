@@ -24,9 +24,6 @@ ventas_urlpatterns = [
     path('checkout/verificar-pago/', views.VerificarEstadoPagoView.as_view(), name='verificar-pago'),
     path('promociones/', views.PromocionListCreateView.as_view(), name='promociones-list-create'),
     path('promociones/<int:pk>/', views.PromocionDetailView.as_view(), name='promociones-detail'),
-    
-    # Ruta para validar en el carrito
-    path('checkout/validar-cupon/', views.ValidarCuponView.as_view(), name='validar-cupon'),
     # NUEVA RUTA PARA EL RETORNO DE TRANSBANK
     # Ruta resultante: GET/POST /api/ventas/transbank/retorno/
     path('transbank/retorno/', views.TransbankRetornoView.as_view(), name='transbank_retorno'),

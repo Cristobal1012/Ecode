@@ -1,0 +1,211 @@
+.detalle-page {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.detalle-estado {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  padding-top: 64px;
+  padding-bottom: 64px;
+}
+
+.detalle {
+  padding-bottom: var(--espacio-seccion);
+}
+
+/* ---------- Ruta de navegación ---------- */
+
+.detalle-migas {
+  padding: 24px 0;
+  margin-bottom: clamp(24px, 4vw, 48px);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+
+.detalle-migas ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--color-muted);
+}
+
+.detalle-migas li + li::before {
+  content: '/';
+  margin-right: 8px;
+  color: var(--color-border);
+}
+
+.detalle-migas a {
+  color: var(--color-muted);
+}
+
+.detalle-migas [aria-current='page'] {
+  color: var(--color-text);
+}
+
+/* ---------- Contenido ---------- */
+
+.detalle-contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 80px);
+  align-items: start;
+}
+
+/* ---------- Galería ---------- */
+
+.detalle-imagen-principal {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--color-accent);
+}
+
+.detalle-imagen-principal img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detalle-flecha {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 85%);
+  color: var(--color-text);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.detalle-flecha--anterior { left: 16px; }
+.detalle-flecha--siguiente { right: 16px; }
+
+.detalle-contador {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: rgb(0 0 0 / 55%);
+  color: #FFFFFF;
+  font-size: 0.8rem;
+}
+
+.detalle-miniaturas {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.detalle-miniatura {
+  display: block;
+  width: 76px;
+  padding: 0;
+  border: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.detalle-miniatura[aria-pressed='true'] {
+  border-color: var(--color-text);
+}
+
+.detalle-miniatura img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+}
+
+.detalle-sin-imagen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 5;
+  background: var(--color-accent);
+  font-family: var(--fuente-titulos);
+  font-size: 6rem;
+  color: var(--color-muted);
+}
+
+/* ---------- Información ---------- */
+
+.detalle-info {
+  position: sticky;
+  top: 112px;
+}
+
+.detalle-nombre {
+  font-size: clamp(2.25rem, 4vw, 3.25rem);
+  margin-bottom: 16px;
+}
+
+.detalle-precio {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-family: var(--fuente-titulos);
+  font-size: 1.6rem;
+  font-variant-numeric: lining-nums;
+}
+
+.detalle-precio-anterior {
+  font-size: 1.1rem;
+  color: var(--color-muted);
+}
+
+.detalle-separador {
+  width: 48px;
+  margin: 24px 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.detalle-descripcion {
+  font-size: 1.05rem;
+  line-height: 1.8;
+  white-space: pre-line;
+  margin-bottom: 28px;
+}
+
+/* Ficha técnica al estilo "Materials / Dimensions" */
+.detalle-ficha {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 28px;
+}
+
+.detalle-ficha dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: 4px;
+}
+
+.detalle-ficha dd {
+  margin: 0;
+}
+
+.detalle-compra {
+  padding-top: 28px;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 767px) {
+  .detalle-contenido {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detalle-info {
+    position: static;
+  }
+}

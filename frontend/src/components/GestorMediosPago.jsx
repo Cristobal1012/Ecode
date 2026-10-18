@@ -10,7 +10,7 @@ const ETIQUETAS_OPCION = {
 const ESTILOS_ESTADO = {
   disponible: { backgroundColor: '#f0fdf4', border: '1px solid #86efac', color: '#166534' },
   incompleto: { backgroundColor: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e' },
-  deshabilitado: { backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', color: '#374151' }
+  deshabilitado: { backgroundColor: 'var(--color-secondary)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
 };
 
 const ESTILOS_AVISO = {
@@ -18,8 +18,8 @@ const ESTILOS_AVISO = {
   exito: { backgroundColor: '#f0fdf4', border: '1px solid #86efac', color: '#166534' }
 };
 
-const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' };
-const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' };
+const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-border)', borderRadius: '4px' };
+const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--color-text)' };
 
 const formularioDe = (medio) => ({ habilitado: medio.habilitado, datos: { ...medio.datos } });
 
@@ -111,7 +111,7 @@ export default function GestorMediosPago() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '640px' }}>
-      <p style={{ margin: 0, color: '#4b5563', fontSize: '0.95rem' }}>
+      <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.95rem' }}>
         Los compradores solo ven los medios habilitados y con todos sus datos obligatorios. Las credenciales se guardan
         cifradas y aquí solo se muestran sus últimos caracteres.
       </p>
@@ -121,12 +121,12 @@ export default function GestorMediosPago() {
         const aviso = avisos[medio.codigo];
         const errores = aviso?.errores || {};
         return (
-          <fieldset key={medio.codigo} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', margin: 0 }}>
+          <fieldset key={medio.codigo} style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '20px', margin: 0 }}>
             <legend style={{ fontWeight: 'bold', fontSize: '1.1rem', padding: '0 6px', color: 'var(--color-text)' }}>{medio.nombre}</legend>
 
             <EstadoMedio medio={medio} />
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: medio.integracion_lista ? 'pointer' : 'not-allowed', color: medio.integracion_lista ? '#374151' : '#6b7280' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: medio.integracion_lista ? 'pointer' : 'not-allowed', color: medio.integracion_lista ? 'var(--color-text)' : 'var(--color-muted)' }}>
               <input
                 type="checkbox"
                 checked={formulario.habilitado && medio.integracion_lista}
@@ -156,7 +156,7 @@ export default function GestorMediosPago() {
                       onChange={(e) => editarDato(medio.codigo, campo.nombre, e.target.value)}
                       aria-invalid={Boolean(errores[campo.nombre])}
                       aria-describedby={errores[campo.nombre] ? idError : undefined}
-                      style={{ ...estiloCampo, backgroundColor: '#fff' }}
+                      style={{ ...estiloCampo, backgroundColor: 'var(--color-surface)' }}
                     >
                       <option value="">-- Selecciona --</option>
                       {campo.opciones.map(opcion => (
@@ -179,7 +179,7 @@ export default function GestorMediosPago() {
                     />
                   )}
                   {campo.secreto && (
-                    <p id={idAyuda} style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#4b5563' }}>
+                    <p id={idAyuda} style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--color-muted)' }}>
                       Por seguridad solo se muestran los últimos caracteres. Escribe una nueva para reemplazarla o deja el campo vacío para borrarla.
                     </p>
                   )}

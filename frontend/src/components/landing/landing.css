@@ -1,0 +1,537 @@
+/* ---------- Portada ---------- */
+
+.portada {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: min(88vh, 860px);
+  padding: 96px 0;
+  background-color: var(--color-footer);
+  background-size: cover;
+  background-position: center;
+  color: #FFFFFF;
+}
+
+/* Oscurece la foto (más a la izquierda, donde va el texto) para que el texto blanco siempre se lea */
+.portada-velo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(0 0 0 / 62%) 0%, rgb(0 0 0 / 38%) 55%, rgb(0 0 0 / 18%) 100%);
+}
+
+.portada-contenido {
+  position: relative;
+}
+
+.portada-antetitulo {
+  color: #FFFFFF;
+  margin-bottom: 1.5rem;
+}
+
+.portada-titulo {
+  max-width: 14ch;
+  color: #FFFFFF;
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+}
+
+.portada-texto {
+  max-width: 46ch;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: rgb(255 255 255 / 92%);
+  margin-bottom: 2.25rem;
+  white-space: pre-line;
+}
+
+.portada-boton:focus-visible {
+  outline-color: #FFFFFF;
+}
+
+/* ---------- Secciones ---------- */
+
+.seccion-landing {
+  padding: var(--espacio-seccion) 0;
+  background: var(--color-background);
+  /* Al saltar a /#nosotros, la sección no queda tapada por el header fijo */
+  scroll-margin-top: 80px;
+}
+
+.seccion-landing--alterna {
+  background: var(--color-secondary);
+}
+
+.seccion-landing-encabezado {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: clamp(32px, 4vw, 56px);
+}
+
+.seccion-landing-encabezado h2 {
+  margin: 0;
+}
+
+/* ---------- Nosotros ---------- */
+
+.nosotros-contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(32px, 6vw, 96px);
+}
+
+.nosotros-imagen {
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--color-accent);
+}
+
+.nosotros-imagen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nosotros-parrafo {
+  max-width: 52ch;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+/* Sin foto: el texto va centrado en una columna */
+.nosotros--sin-imagen .nosotros-contenido {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+}
+
+.nosotros--sin-imagen .nosotros-parrafo {
+  margin: 0 auto;
+}
+
+@media (max-width: 767px) {
+  .portada {
+    min-height: 72vh;
+    padding: 72px 0;
+  }
+
+  .portada-velo {
+    background: rgb(0 0 0 / 50%);
+  }
+
+  .seccion-landing-encabezado {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nosotros-contenido {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ======================================================================
+   Modo edición (solo admin): los textos se vuelven campos en su lugar
+   ====================================================================== */
+
+.boton-editar-pagina {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+/* La barra fija no tapa el final de la página */
+.landing--editando {
+  padding-bottom: 140px;
+}
+
+.barra-edicion {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: var(--color-text);
+  color: var(--color-background);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 18%);
+}
+
+.barra-edicion-contenido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.barra-edicion-estado {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+}
+
+.barra-edicion-estado strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.barra-edicion-identidad,
+.barra-edicion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.barra-edicion .boton-primario {
+  padding: 0.75rem 1.5rem;
+}
+
+.barra-edicion :focus-visible {
+  outline-color: var(--color-background);
+}
+
+.barra-edicion-errores {
+  margin: 0 auto;
+  padding-bottom: 14px;
+  list-style: none;
+  font-size: 0.85rem;
+  color: #FFD9CF;
+}
+
+/* Botón secundario del modo edición (contorno); la variante clara va sobre la portada y la barra */
+.boton-edicion {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.boton-edicion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.barra-edicion .boton-edicion,
+.selector-imagen--claro .boton-edicion {
+  background: transparent;
+  color: inherit;
+}
+
+.selector-imagen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.selector-imagen--claro {
+  color: #FFFFFF;
+}
+
+.barra-edicion .selector-imagen--claro {
+  color: var(--color-background);
+}
+
+/* El input de archivo está oculto: su foco se muestra en el botón que lo abre */
+.selector-imagen input:focus-visible + label {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.selector-imagen-error {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: #FFD9CF;
+}
+
+.selector-imagen:not(.selector-imagen--claro) .selector-imagen-error {
+  color: #9B2C1F;
+}
+
+/* ---------- Campos de texto en su lugar ---------- */
+
+.campo-editable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 1.25rem;
+}
+
+.campo-editable-etiqueta {
+  font-family: var(--fuente-texto);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.campo-editable--claro .campo-editable-etiqueta,
+.campo-editable--claro .campo-editable-ayuda {
+  color: rgb(255 255 255 / 85%);
+}
+
+.campo-editable-control {
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed currentColor;
+  border-radius: var(--radio);
+  background: rgb(255 255 255 / 55%);
+  color: var(--color-text);
+  resize: vertical;
+  field-sizing: content;
+}
+
+.campo-editable--claro .campo-editable-control {
+  background: rgb(0 0 0 / 25%);
+  color: #FFFFFF;
+}
+
+.campo-editable-control:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-style: solid;
+}
+
+.campo-editable-ayuda {
+  align-self: flex-end;
+  font-size: 0.72rem;
+  color: var(--color-muted);
+}
+
+.campo-editable-ayuda--error {
+  align-self: flex-start;
+  font-weight: 600;
+  color: #9B2C1F;
+}
+
+.campo-editable--claro .campo-editable-ayuda--error {
+  color: #FFD9CF;
+}
+
+/* Los campos toman la tipografía del elemento que reemplazan */
+.portada-titulo--campo {
+  max-width: none;
+  font-family: var(--fuente-titulos);
+  font-size: clamp(2.25rem, 5vw, 4.25rem);
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.portada--editando .portada-texto {
+  max-width: none;
+  margin: 0;
+}
+
+/* El ancho va en el contenedor del campo: así la etiqueta y el contador quedan alineados con él */
+.campo-ancho-medio {
+  max-width: 640px;
+}
+
+.campo-ancho-titulo {
+  max-width: 900px;
+}
+
+.portada-controles {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.portada-boton--campo {
+  padding: 0.6rem 1rem;
+  cursor: default;
+}
+
+.portada-boton--campo .campo-editable {
+  margin: 0;
+}
+
+.portada-boton-campo {
+  min-width: 14ch;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.nosotros-titulo-campo {
+  font-family: var(--fuente-titulos);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 1.15;
+}
+
+.nosotros-imagen {
+  position: relative;
+}
+
+.nosotros-imagen-vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.nosotros-imagen-controles {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+}
+
+.nosotros-aviso,
+.seccion-landing-nota {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+.seccion-landing-nota {
+  margin: -24px 0 32px;
+}
+
+.landing-nombre-edicion {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.landing-nombre-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.landing-nombre-campo input {
+  padding: 8px 12px;
+  border: 1px dashed var(--color-text);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--fuente-titulos);
+  font-size: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .boton-editar-pagina {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .portada-controles {
+    position: static;
+    justify-content: flex-start;
+    margin-bottom: 24px;
+  }
+
+  .landing--editando {
+    padding-bottom: 240px;
+  }
+}
+
+/* ---------- Instagram ---------- */
+
+.instagram-encabezado {
+  margin-bottom: clamp(28px, 4vw, 48px);
+  text-align: center;
+}
+
+.instagram-encabezado h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.instagram-nota {
+  margin: -16px 0 28px;
+  text-align: center;
+}
+
+/* Hasta 6 fotos cuadradas: 6 por fila en escritorio, 3 en tablet y 2 en celular */
+.instagram-grilla {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(8px, 1.2vw, 16px);
+}
+
+.instagram-foto {
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--color-accent);
+}
+
+.instagram-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transicion);
+}
+
+a.instagram-foto:hover img {
+  transform: scale(1.04);
+}
+
+.instagram-foto-vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* Modo edición: los botones de cada foto van debajo de ella */
+.instagram-espacio {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.instagram-espacio .boton-edicion {
+  min-height: 36px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.72rem;
+}
+
+.instagram-acciones {
+  margin-top: clamp(28px, 4vw, 48px);
+  text-align: center;
+}
+
+@media (max-width: 1023px) {
+  .instagram-grilla {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .instagram-grilla {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .instagram-acciones .boton {
+    width: 100%;
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
 export default function GaleriaImagenes({
@@ -8,7 +8,7 @@ export default function GaleriaImagenes({
   onImagenesChange,
   onArchivosChange
 }) {
-  const inputRef = useRef(null);
+  const idInput = useId();
 
   const [archivosSeleccionados, setArchivosSeleccionados] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
@@ -200,54 +200,59 @@ export default function GaleriaImagenes({
       style={{
         marginTop: '20px',
         padding: '20px',
-        backgroundColor: '#fff',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
         borderRadius: '8px'
       }}
     >
       <h4>Galería de imágenes</h4>
 
-      {/* Zona para subir imágenes */}
-      <div
+      {/* Zona para subir imágenes: es la etiqueta del input, así un clic abre el selector una sola vez (antes el
+          input estaba dentro de la zona y su clic volvía a ella, abriendo el selector en bucle). El input va antes y
+          oculto solo a la vista, para que reciba el foco del teclado; el foco se dibuja en la zona (Admin.css). */}
+      <input
+        id={idInput}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        onChange={handleInputChange}
+        className="visualmente-oculto galeria-input"
+        aria-label="Seleccionar imágenes para la galería"
+        aria-describedby={`${idInput}-formatos`}
+      />
+      <label
+        htmlFor={idInput}
+        className="galeria-zona"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
         style={{
+          display: 'block',
           border: '2px dashed var(--color-primary)',
           borderRadius: '8px',
           padding: '30px',
           textAlign: 'center',
           cursor: 'pointer',
-          backgroundColor: '#f9fafb'
+          backgroundColor: 'var(--color-secondary)'
         }}
       >
         <p style={{ margin: 0, fontWeight: 'bold' }}>
           Arrastra tus imágenes aquí
         </p>
 
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: 'var(--color-muted)' }}>
           o haz clic para seleccionarlas
         </p>
 
-        <small>
+        <small id={`${idInput}-formatos`}>
           Formatos permitidos: JPG, PNG y WebP
         </small>
-
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          onChange={handleInputChange}
-          style={{ display: 'none' }}
-        />
-      </div>
+      </label>
 
       {/* Mensaje de error */}
       {error && (
         <p
           style={{
-            color: '#ef4444',
+            color: '#b91c1c',
             backgroundColor: '#fee2e2',
             padding: '10px',
             borderRadius: '4px',
@@ -290,7 +295,7 @@ export default function GaleriaImagenes({
                   style={{
                     width: '100%',
                     marginTop: '5px',
-                    backgroundColor: '#ef4444',
+                    backgroundColor: '#b91c1c',
                     color: '#fff',
                     border: 'none',
                     padding: '5px',
@@ -313,7 +318,7 @@ export default function GaleriaImagenes({
               marginTop: '15px',
               padding: '12px',
               backgroundColor: 'var(--color-primary)',
-              color: '#fff',
+              color: 'var(--color-on-primary)',
               border: 'none',
               borderRadius: '4px',
               cursor: subiendo ? 'not-allowed' : 'pointer'
@@ -341,7 +346,7 @@ export default function GaleriaImagenes({
               <div
                 key={url || index}
                 style={{
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--color-border)',
                   borderRadius: '6px',
                   padding: '5px'
                 }}
@@ -382,7 +387,7 @@ export default function GaleriaImagenes({
                     backgroundColor:
                       eliminando === index
                         ? '#9ca3af'
-                        : '#ef4444',
+                        : '#b91c1c',
                     color: '#fff',
                     border: 'none',
                     padding: '6px',

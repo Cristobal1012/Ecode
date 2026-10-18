@@ -1,13 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
-import { PALETTES } from '../constants/palettes';
-import VariantSelector from '../components/VariantSelector';
+import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 import ProductCardGrid from '../components/ProductCardGrid';
 import ProductCardList from '../components/ProductCardList';
+import { precioMinimoVigente } from '../utils/precios';
+import '../components/TarjetaProducto.css';
 import './Catalogo.css';
 
 const TEMA_PREDETERMINADO = 1;
+
+// Órdenes del catálogo; "Destacados" respeta el orden en que llegan del servidor
+const ORDENES = {
+  destacados: { etiqueta: 'Destacados', comparar: null },
+  recientes: {
+    etiqueta: 'Más nuevos',
+    comparar: (a, b) => new Date(b.fecha_creacion || 0) - new Date(a.fecha_creacion || 0)
+  },
+  'precio-asc': {
+    etiqueta: 'Precio: menor a mayor',
+    comparar: (a, b) => precioMinimoVigente(a.variantes) - precioMinimoVigente(b.variantes)
+  },
+  'precio-desc': {
+    etiqueta: 'Precio: mayor a menor',
+    comparar: (a, b) => precioMinimoVigente(b.variantes) - precioMinimoVigente(a.variantes)
+  },
+  nombre: { etiqueta: 'Nombre (A-Z)', comparar: (a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es') }
+};
+
+// RF-01.4: grilla de 3, grilla de 4 o lista con la descripción al costado
+const CLASES_LAYOUT = { GRID_3: 'catalogo-grilla catalogo-grilla--3', GRID_4: 'catalogo-grilla', LISTA: 'catalogo-lista' };
 
 function obtenerAtributos(producto) {
   const atributos = producto?.atributos_globales;
@@ -31,30 +53,12 @@ export default function Catalogo() {
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [filtrosActivos, setFiltrosActivos] = useState({});
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [orden, setOrden] = useState('destacados');
   const [layoutCatalogo, setLayoutCatalogo] = useState('GRID_3');
 
   // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
-    const activePalette = PALETTES.find((p) => p.id === temaConfigurado) || PALETTES[0];
-    const root = document.documentElement.style;
-
-    if (activePalette) {
-      root.setProperty('--color-primary', activePalette.colors.primary);
-      root.setProperty('--color-secondary', activePalette.colors.secondary);
-      root.setProperty('--color-accent', activePalette.colors.accent);
-      root.setProperty('--color-background', activePalette.colors.background);
-      root.setProperty('--color-text', activePalette.colors.text);
-
-      root.setProperty('--catalogo-primary', activePalette.colors.primary);
-      root.setProperty('--catalogo-background', activePalette.colors.background);
-      root.setProperty('--catalogo-text', activePalette.colors.text);
-      
-      root.setProperty('--catalogo-on-primary', '#ffffff');
-      root.setProperty('--catalogo-surface', '#ffffff');
-      root.setProperty('--catalogo-muted-text', '#6b7280');
-      root.setProperty('--catalogo-border', '#e5e7eb');
-    }
+    aplicarPaleta(temaConfigurado);
   }, [temaConfigurado]);
 
   // FETCH DE DATOS
@@ -148,89 +152,86 @@ export default function Catalogo() {
   const cambiarCategoria = (event) => {
     setCategoriaSeleccionada(event.target.value);
     setFiltrosActivos({});
-    setProductoSeleccionado(null);
   };
 
-  const obtenerEstiloCatalogo = () => {
-    if (layoutCatalogo === 'GRID_4') {
-      return { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' };
-    }
-    if (layoutCatalogo === 'LISTA') {
-      return { display: 'flex', flexDirection: 'column', gap: '15px' };
-    }
-    return { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' };
-  };
+  const productosOrdenados = useMemo(() => {
+    const { comparar } = ORDENES[orden];
+    return comparar ? [...productosFiltrados].sort(comparar) : productosFiltrados;
+  }, [productosFiltrados, orden]);
+
+  const esLista = layoutCatalogo === 'LISTA';
 
   return (
     <div className="catalogo-page">
       <Header />
-      <div className="catalogo">
-        <aside className="catalogo__filtros">
-          <h3>Filtros</h3>
-          <div className="catalogo__campo">
-            <label htmlFor="categoria">Categoría</label>
-            <select id="categoria" value={categoriaSeleccionada} onChange={cambiarCategoria}>
-              <option value="">Mostrar todo</option>
-              {categoriasUnicas.map((categoria) => (
-                <option key={categoria} value={categoria}>{categoria}</option>
-              ))}
-            </select>
+      <main className="catalogo" id="contenido">
+        <section className="catalogo-encabezado" aria-labelledby="catalogo-titulo">
+          <div className="contenedor">
+            <span className="antetitulo">Tienda</span>
+            <h1 id="catalogo-titulo">Catálogo</h1>
           </div>
+        </section>
 
-          {categoriaSeleccionada && atributosDinamicos.length > 0 && (
-            <div>
-              <h4 className="catalogo__subtitulo">Atributos de {categoriaSeleccionada}</h4>
-              {atributosDinamicos.map((atributo) => (
-                <div className="catalogo__campo" key={atributo}>
-                  <label htmlFor={`atributo-${atributo}`}>{atributo.replaceAll('_', ' ')}</label>
-                  <select
-                    id={`atributo-${atributo}`}
-                    value={filtrosActivos[atributo] ?? ''}
-                    onChange={(event) =>
-                      setFiltrosActivos((previos) => ({ ...previos, [atributo]: event.target.value }))
-                    }
-                  >
-                    <option value="">Cualquier {atributo.replaceAll('_', ' ')}</option>
-                    {obtenerOpcionesPorAtributo(atributo).map((valor) => (
-                      <option key={valor} value={valor}>{valor}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+        {/* RF-01.3: los filtros de atributos salen de los productos de la categoría elegida */}
+        <div className="catalogo-filtros">
+          <div className="contenedor catalogo-filtros-contenido">
+            <div className="catalogo__campo">
+              <label htmlFor="categoria">Categoría</label>
+              <select id="categoria" value={categoriaSeleccionada} onChange={cambiarCategoria}>
+                <option value="">Todas</option>
+                {categoriasUnicas.map((categoria) => (
+                  <option key={categoria} value={categoria}>{categoria}</option>
+                ))}
+              </select>
             </div>
-          )}
-        </aside>
 
-        <main className="catalogo__contenido" style={{ flex: 1 }}>
-          <h2>Catálogo</h2>
-          {productosFiltrados.length === 0 ? (
+            {categoriaSeleccionada && atributosDinamicos.map((atributo) => (
+              <div className="catalogo__campo" key={atributo}>
+                <label htmlFor={`atributo-${atributo}`}>{atributo.replaceAll('_', ' ')}</label>
+                <select
+                  id={`atributo-${atributo}`}
+                  value={filtrosActivos[atributo] ?? ''}
+                  onChange={(event) =>
+                    setFiltrosActivos((previos) => ({ ...previos, [atributo]: event.target.value }))
+                  }
+                >
+                  <option value="">Cualquier {atributo.replaceAll('_', ' ')}</option>
+                  {obtenerOpcionesPorAtributo(atributo).map((valor) => (
+                    <option key={valor} value={valor}>{valor}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+
+            <div className="catalogo__campo catalogo__campo--orden">
+              <label htmlFor="orden">Ordenar por</label>
+              <select id="orden" value={orden} onChange={(event) => setOrden(event.target.value)}>
+                {Object.entries(ORDENES).map(([valor, { etiqueta }]) => (
+                  <option key={valor} value={valor}>{etiqueta}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="contenedor catalogo__contenido">
+          <p className="catalogo-cantidad texto-secundario" role="status">
+            {productosOrdenados.length === 1 ? '1 producto' : `${productosOrdenados.length} productos`}
+          </p>
+
+          {productosOrdenados.length === 0 ? (
             <p className="catalogo__vacio">No hay productos para mostrar.</p>
           ) : (
-            <div style={obtenerEstiloCatalogo()}>
-              {productosFiltrados.map((prod) =>
-                layoutCatalogo === 'LISTA' ? (
-                  <ProductCardList key={prod.id ?? prod._id} producto={prod} onSeleccionarVariante={setProductoSeleccionado} />
-                ) : (
-                  <ProductCardGrid key={prod.id ?? prod._id} producto={prod} onSeleccionarVariante={setProductoSeleccionado} />
-                )
-              )}
-            </div>
+            <ul className={`${CLASES_LAYOUT[layoutCatalogo] || CLASES_LAYOUT.GRID_3} lista-sin-estilo`}>
+              {productosOrdenados.map((prod) => (
+                <li key={prod.id ?? prod._id}>
+                  {esLista ? <ProductCardList producto={prod} /> : <ProductCardGrid producto={prod} />}
+                </li>
+              ))}
+            </ul>
           )}
-
-          {productoSeleccionado && (
-            <div style={{ marginTop: '30px', padding: '20px', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', backgroundColor: '#ffffff' }}>
-              <button
-                type="button"
-                onClick={() => setProductoSeleccionado(null)}
-                style={{ marginBottom: '15px', padding: '6px 12px', cursor: 'pointer', backgroundColor: '#e5e7eb', border: 'none', borderRadius: '4px' }}
-              >
-                Cerrar selector
-              </button>
-              <VariantSelector producto={productoSeleccionado} />
-            </div>
-          )}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

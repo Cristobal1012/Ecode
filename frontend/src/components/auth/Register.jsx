@@ -1,7 +1,42 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
 
+const campos = [
+    { nombre: 'nombre', etiqueta: 'Nombre', tipo: 'text', autocompletar: 'given-name' },
+    { nombre: 'apellido_paterno', etiqueta: 'Apellido paterno', tipo: 'text', autocompletar: 'family-name' },
+    { nombre: 'email', etiqueta: 'Correo electrónico', tipo: 'email', autocompletar: 'email' },
+    { nombre: 'password', etiqueta: 'Contraseña', tipo: 'password', autocompletar: 'new-password' },
+    { nombre: 'password2', etiqueta: 'Confirmar contraseña', tipo: 'password', autocompletar: 'new-password' }
+];
+
+const NOMBRES_CAMPOS = campos.map(campo => campo.nombre);
+
+// El backend responde { campo: [mensajes] }: cada mensaje va bajo su campo y el resto, arriba del formulario
+const leerErrores = (error) => {
+    const data = error.response?.data;
+    if (!error.response) {
+        return { general: 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.', campos: {} };
+    }
+    if (error.response.status !== 400 || !data || typeof data !== 'object') {
+        return { general: 'No pudimos crear tu cuenta. Inténtalo de nuevo.', campos: {} };
+    }
+    const porCampo = {};
+    const otros = [];
+    Object.entries(data).forEach(([campo, mensajes]) => {
+        const texto = [].concat(mensajes).join(' ');
+        if (NOMBRES_CAMPOS.includes(campo)) porCampo[campo] = texto;
+        else otros.push(texto);
+    });
+    return {
+        general: otros.length ? otros.join(' ') : 'Revisa los datos marcados.',
+        campos: porCampo
+    };
+};
+
+// onSwitchToLogin(aviso): al crear la cuenta se vuelve al login con el aviso y el correo ya escrito
 export default function Register({ onSwitchToLogin }) {
+    // Prefijo único para asociar cada etiqueta con su campo
+    const id = useId();
     const [formData, setFormData] = useState({
         nombre: '',
         apellido_paterno: '',
@@ -9,6 +44,9 @@ export default function Register({ onSwitchToLogin }) {
         password: '',
         password2: ''
     });
+    // { general, campos: { nombre_del_campo: mensaje } }
+    const [errores, setErrores] = useState({ general: '', campos: {} });
+    const [enviando, setEnviando] = useState(false);
 
     const handleChange = (e) => {
         setFormData({
@@ -19,104 +57,69 @@ export default function Register({ onSwitchToLogin }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (formData.password !== formData.password2) {
-            alert("Las contraseñas no coinciden");
+            setErrores({ general: 'Revisa los datos marcados.', campos: { password2: 'Las contraseñas no coinciden.' } });
             return;
         }
 
+        setErrores({ general: '', campos: {} });
+        setEnviando(true);
         try {
-            console.log("Enviando petición a la ruta: http://localhost:8000/api/usuarios/registro/");
-            
-            
-            const respuesta = await clienteAxios.post('/usuarios/registro/', formData);
-            
-            console.log("Respuesta del servidor:", respuesta.data);
-            alert("¡Registro exitoso!");
-            
-            //Si el registro es exitoso, lo enviamos de vuelta al Login automáticamente
-            onSwitchToLogin(); 
-
+            await clienteAxios.post('/usuarios/registro/', formData);
+            onSwitchToLogin({
+                texto: 'Tu cuenta quedó creada. Ya puedes iniciar sesión.',
+                email: formData.email
+            });
         } catch (error) {
-            // Capturamos la caída por la falta de backend
-            console.error("Axios interceptó un error en el registro:", error);
-            alert("Axios disparó la petición de registro, pero el servidor no respondió.");
+            console.error("Error en el registro:", error);
+            setErrores(leerErrores(error));
+            setEnviando(false);
         }
     };
 
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h2 style={{ textAlign: 'center' }}>Crear Cuenta</h2>
-            
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Nombre:</label><br/>
-                    <input 
-                        type="text" 
-                        name="nombre"
-                        value={formData.nombre} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Apellido Paterno:</label><br/>
-                    <input 
-                        type="text" 
-                        name="apellido_paterno"
-                        value={formData.apellido_paterno}
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Correo Electrónico:</label><br/>
-                    <input 
-                        type="email" 
-                        name="email"
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Contraseña:</label><br/>
-                    <input 
-                        type="password" 
-                        name="password"
-                        value={formData.password} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Confirmar Contraseña:</label><br/>
-                    <input 
-                        type="password" 
-                        name="password2" 
-                        value={formData.password2} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <button type="submit" style={{ width: '100%', padding: '10px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                    Registrarse
+        <div className="auth-tarjeta">
+            <span className="antetitulo">Mi cuenta</span>
+            <h1 className="auth-titulo">Crear cuenta</h1>
+
+            {errores.general && (
+                <p role="alert" className="auth-aviso auth-aviso--error">{errores.general}</p>
+            )}
+
+            <form onSubmit={handleSubmit} className="auth-formulario">
+                {campos.map(campo => {
+                    const mensaje = errores.campos[campo.nombre];
+                    const idError = `${id}-${campo.nombre}-error`;
+                    return (
+                        <div className="auth-campo" key={campo.nombre}>
+                            <label htmlFor={`${id}-${campo.nombre}`}>{campo.etiqueta}</label>
+                            <input
+                                id={`${id}-${campo.nombre}`}
+                                type={campo.tipo}
+                                name={campo.nombre}
+                                autoComplete={campo.autocompletar}
+                                value={formData[campo.nombre]}
+                                onChange={handleChange}
+                                required
+                                aria-invalid={mensaje ? true : undefined}
+                                aria-describedby={mensaje ? idError : undefined}
+                            />
+                            {mensaje && <p id={idError} className="auth-campo-error">{mensaje}</p>}
+                        </div>
+                    );
+                })}
+                <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
+                    {enviando ? 'Creando cuenta...' : 'Registrarse'}
                 </button>
             </form>
 
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <button 
-                    onClick={onSwitchToLogin}
-                    style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                    ¿Ya tienes cuenta? Inicia sesión aquí
+            <p className="auth-cambiar">
+                ¿Ya tienes cuenta?{' '}
+                <button type="button" className="boton-texto auth-cambiar-boton" onClick={() => onSwitchToLogin()}>
+                    Inicia sesión aquí
                 </button>
-            </div>
+            </p>
         </div>
     );
 }

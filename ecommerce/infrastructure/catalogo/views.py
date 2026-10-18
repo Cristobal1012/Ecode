@@ -7,6 +7,7 @@ from pymongo.errors import PyMongoError
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -15,7 +16,9 @@ from ecommerce.domain.imagenes import (
     GaleriaEnConflicto,
     LimiteGaleriaExcedido,
 )
+from ecommerce.application.vitrina import SeleccionarVitrina
 from ecommerce.infrastructure.usuarios.permissions import IsAdministrador
+from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
 
 from .documents import ImagenPendienteBorrado, Producto
 from .image_adapters import eliminar_producto, servicio_galeria
@@ -24,6 +27,7 @@ from .images import (
     es_imagen_gestionada, url_imagen,
 )
 from .permissions import LecturaPublicaEscrituraAdmin
+from .repositorio_vitrina import MongoCatalogoVitrina
 from .serializers import ProductoSerializer
 from .upload_handlers import CatalogoImageUploadHandler
 
@@ -52,6 +56,28 @@ class CatalogoAPIView(APIView):
             logger.exception('Fallo de persistencia en el catálogo')
             return Response({'detail': 'El catálogo o su almacenamiento no están disponibles. Inténtalo nuevamente.'}, status=503)
         return super().handle_exception(exc)
+
+
+def seleccionar_vitrina():
+    """Las pruebas lo reemplazan para no depender de las ventas ni del catálogo reales."""
+    return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina())
+
+
+class VitrinaView(CatalogoAPIView):
+    """RF-01.1: secciones de productos de la landing (pública)."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        vitrina = seleccionar_vitrina().ejecutar()
+        ids = set(vitrina.mas_vendidos) | set(vitrina.recientes)
+        productos = {str(p.id): p for p in Producto.objects(id__in=list(ids))}
+
+        def serializar(lista):
+            return ProductoSerializer([productos[i] for i in lista if i in productos], many=True,
+                                      context={'request': request}).data
+
+        return Response({'mas_vendidos': serializar(vitrina.mas_vendidos), 'recientes': serializar(vitrina.recientes)})
 
 
 class ProductoListCreateView(CatalogoAPIView):

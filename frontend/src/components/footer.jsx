@@ -2,9 +2,28 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
 import { isAdminRoute } from '../hooks/useCookieConsent';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
+import './footer.css';
+
+// Dirección del local en dos líneas; solo si el admin eligió mostrarla (la API no la entrega si no se usa)
+const lineasDireccion = (configuracion) => {
+  if (!configuracion?.mostrar_direccion_pie || !configuracion.calle_origen) return [];
+  const { calle_origen, numero_origen, dpto_casa_origen, comuna_origen, region_origen } = configuracion;
+  return [
+    [calle_origen, numero_origen].filter(Boolean).join(' ') + (dpto_casa_origen ? `, ${dpto_casa_origen}` : ''),
+    [comuna_origen, region_origen].filter(Boolean).join(', ')
+  ].filter(Boolean);
+};
 
 export const Footer = ({ onOpenCookiePreferences }) => {
   const { pathname } = useLocation();
+  const configuracion = useConfiguracionTienda();
+  const nombreTienda = configuracion?.nombre_tienda || 'Tienda';
+  const direccion = lineasDireccion(configuracion);
+  const correo = configuracion?.correo_contacto;
+  const horario = configuracion?.horario_atencion?.trim();
+  const instagram = configuracion?.instagram_usuario;
+  const hayContacto = direccion.length > 0 || correo || horario || instagram;
   const [paginas, setPaginas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [errorConexion, setErrorConexion] = useState(false);
@@ -12,15 +31,12 @@ export const Footer = ({ onOpenCookiePreferences }) => {
   useEffect(() => {
     const cargarPaginasLegales = async () => {
       try {
-        setErrorConexion(false);
-        // Corrección Error 1: Petición mediante la instancia centralizada y ruta relativa
         const res = await clienteAxios.get('/ventas/paginas-legales/');
-        // Corrección Error 3: Sin filtrado de atributos inexistentes (publicada/es_publica)
         const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
         setPaginas(data);
       } catch (error) {
         console.error('Error al obtener páginas legales para el footer:', error);
-        // Corrección Error 2: Flag explícito de falla de infraestructura/red
+        // Una falla de red se distingue de "no hay páginas publicadas"
         setErrorConexion(true);
       } finally {
         setCargando(false);
@@ -31,74 +47,91 @@ export const Footer = ({ onOpenCookiePreferences }) => {
   }, []);
 
   return (
-    <footer style={{
-      backgroundColor: '#1f2937',
-      color: '#f9fafb',
-      padding: '30px 20px',
-      marginTop: 'auto',
-      borderTop: '1px solid #374151'
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'flex',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '20px'
-      }}>
-        <div>
-          <p style={{ margin: 0, fontSize: '0.95rem' }}>
-            © {new Date().getFullYear()} Ecode. Todos los derechos reservados.
-          </p>
+    <footer className="footer">
+      <div className={`contenedor footer-contenido${hayContacto ? ' footer-contenido--con-contacto' : ''}`}>
+        <div className="footer-marca">
+          <p className="footer-nombre">{nombreTienda}</p>
+          {configuracion?.subtitulo_bienvenida && (
+            <p className="footer-descripcion">{configuracion.subtitulo_bienvenida}</p>
+          )}
         </div>
 
-        <div>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#9ca3af' }}>
-            Información Legal
-          </h4>
+        <nav className="footer-columna" aria-labelledby="footer-titulo-tienda">
+          <h2 id="footer-titulo-tienda" className="footer-titulo">Tienda</h2>
+          <ul>
+            <li><Link to="/">Inicio</Link></li>
+            <li><Link to="/catalogo">Catálogo</Link></li>
+            <li><Link to="/seguimiento">Seguimiento de pedido</Link></li>
+          </ul>
+        </nav>
+
+        {/* RF-03.5: las páginas legales publicadas aparecen enlazadas aquí */}
+        <nav className="footer-columna" aria-labelledby="footer-titulo-legal">
+          <h2 id="footer-titulo-legal" className="footer-titulo">Información legal</h2>
           {cargando ? (
-            <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Cargando enlaces...</span>
+            <p className="footer-aviso">Cargando enlaces...</p>
           ) : errorConexion ? (
-            /* Corrección Error 2: Distinción visual para fallas técnicas */
-            <span style={{ fontSize: '0.85rem', color: '#ef4444' }}>
-              No fue posible cargar la información legal.
-            </span>
+            <p className="footer-aviso" role="status">No fue posible cargar la información legal.</p>
           ) : paginas.length > 0 ? (
-            <ul style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              display: 'flex',
-              gap: '15px',
-              flexWrap: 'wrap'
-            }}>
+            <ul>
               {paginas.map((pag) => (
                 <li key={pag.id || pag.tipo_pagina}>
-                  <Link
-                    to={`/legal/${pag.tipo_pagina.toLowerCase()}`}
-                    style={{
-                      color: '#60a5fa',
-                      textDecoration: 'none',
-                      fontSize: '0.9rem'
-                    }}
-                  >
-                    {pag.titulo}
-                  </Link>
+                  <Link to={`/legal/${pag.tipo_pagina.toLowerCase()}`}>{pag.titulo}</Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
-              No hay páginas legales publicadas.
-            </span>
+            <p className="footer-aviso">No hay páginas legales publicadas.</p>
           )}
           {!isAdminRoute(pathname) && onOpenCookiePreferences && (
             <button type="button" className="cookie-preferences-button" onClick={onOpenCookiePreferences}>
               Preferencias de cookies
             </button>
           )}
-        </div>
+        </nav>
+
+        {/* Contacto de la tienda: lo edita el admin en Configuración > Contacto y Redes */}
+        {hayContacto && (
+          <section className="footer-columna" aria-labelledby="footer-titulo-contacto">
+            <h2 id="footer-titulo-contacto" className="footer-titulo">Contacto</h2>
+            <address className="footer-contacto">
+              {direccion.length > 0 && (
+                <p className="footer-dato">
+                  <span className="visualmente-oculto">Dirección: </span>
+                  {direccion.map((linea) => <span key={linea} className="footer-linea">{linea}</span>)}
+                </p>
+              )}
+              {correo && (
+                <p className="footer-dato">
+                  <a href={`mailto:${correo}`}>{correo}</a>
+                </p>
+              )}
+              {horario && (
+                <p className="footer-dato">
+                  <span className="footer-etiqueta">Horario</span>
+                  <span className="footer-horario">{horario}</span>
+                </p>
+              )}
+              {instagram && (
+                <p className="footer-dato">
+                  <a href={`https://www.instagram.com/${encodeURIComponent(instagram)}/`} target="_blank" rel="noopener noreferrer">
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="5" />
+                      <circle cx="12" cy="12" r="4" />
+                      <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
+                    </svg>
+                    @{instagram}
+                    <span className="visualmente-oculto"> en Instagram (se abre en una pestaña nueva)</span>
+                  </a>
+                </p>
+              )}
+            </address>
+          </section>
+        )}
+      </div>
+
+      <div className="contenedor footer-pie">
+        <p>© {new Date().getFullYear()} {nombreTienda}. Todos los derechos reservados.</p>
       </div>
     </footer>
   );

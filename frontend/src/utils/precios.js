@@ -46,3 +46,13 @@ export function obtenerDatosPrecioYStock(variantes = []) {
     tieneOferta,
   };
 }
+
+// Precio más bajo que paga el comprador (con oferta si la hay); sirve para ordenar el catálogo por precio
+export function precioMinimoVigente(variantes = []) {
+  const precios = (variantes || []).map((v) => {
+    const normal = Number(v.precio) || 0;
+    const oferta = Number(v.precio_oferta);
+    return oferta > 0 && oferta < normal ? oferta : normal;
+  });
+  return precios.length ? Math.min(...precios) : Infinity;
+}

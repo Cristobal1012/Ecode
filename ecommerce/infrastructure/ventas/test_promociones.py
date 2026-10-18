@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.urls import reverse
 
+from ecommerce.infrastructure.usuarios.tests.factories import create_user
+
 from .models import Promocion
 
 
@@ -166,3 +168,47 @@ class CheckoutPromocionTests(APITestCase):
         self.promo_valida.refresh_from_db()
         self.assertFalse(self.promo_valida.is_active)
 
+
+
+class GestionPromocionesPermisosTests(APITestCase):
+    """Solo el admin crea, edita o borra cupones: un comprador podría crearse uno del 100 %."""
+
+    def setUp(self):
+        self.promo = Promocion.objects.create(codigo='BASE10', tipo_descuento='PORCENTAJE', valor_descuento=10.0)
+        self.lista = reverse('promociones-list-create')
+        self.detalle = reverse('promociones-detail', args=[self.promo.id])
+        self.nueva = {'codigo': 'GRATIS100', 'tipo_descuento': 'PORCENTAJE', 'valor_descuento': 100.0}
+
+    def test_comprador_o_visitante_no_pueden_gestionar_cupones(self):
+        comprador = create_user('comprador-cupones@example.test')
+        for usuario, codigo_esperado in ((None, status.HTTP_401_UNAUTHORIZED), (comprador, status.HTTP_403_FORBIDDEN)):
+            self.client.force_authenticate(usuario)
+            with self.subTest(usuario=usuario):
+                self.assertEqual(self.client.get(self.lista).status_code, codigo_esperado)
+                self.assertEqual(self.client.post(self.lista, self.nueva, format='json').status_code, codigo_esperado)
+                self.assertEqual(self.client.patch(self.detalle, {'valor_descuento': 100.0}, format='json').status_code,
+                                 codigo_esperado)
+                self.assertEqual(self.client.delete(self.detalle).status_code, codigo_esperado)
+        self.assertFalse(Promocion.objects.filter(codigo='GRATIS100').exists())
+        self.promo.refresh_from_db()
+        self.assertEqual(self.promo.valor_descuento, 10.0)
+
+    def test_admin_gestiona_cupones(self):
+        self.client.force_authenticate(create_user('admin-cupones@example.test', rol='ADMIN'))
+        self.assertEqual(self.client.post(self.lista, self.nueva, format='json').status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.client.delete(self.detalle).status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_admin_fija_y_quita_la_fecha_de_expiracion_desde_el_panel(self):
+        self.client.force_authenticate(create_user('admin-vence@example.test', rol='ADMIN'))
+        # El panel envía la fecha sin zona horaria: vale la hora de la tienda (America/Santiago)
+        response = self.client.patch(self.detalle, {'fecha_expiracion': '2020-01-31T23:59:59'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['fecha_expiracion'].startswith('2020-01-31T23:59:59'))
+        self.promo.refresh_from_db()
+        self.assertEqual(timezone.localtime(self.promo.fecha_expiracion).date().isoformat(), '2020-01-31')
+        self.assertFalse(self.promo.esta_vigente)
+
+        self.client.patch(self.detalle, {'fecha_expiracion': None}, format='json')
+        self.promo.refresh_from_db()
+        self.assertTrue(self.promo.esta_vigente)

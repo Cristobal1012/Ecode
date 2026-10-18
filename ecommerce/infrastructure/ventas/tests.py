@@ -16,6 +16,7 @@ from ecommerce.infrastructure.usuarios.tests.factories import create_user
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
+from .views import token_verificacion_valido
 
 
 ADAPTADOR_ORDEN_TRANSPORTE = 'ecommerce.infrastructure.ventas.adapters.orden_transporte'
@@ -61,11 +62,15 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
         self.assertEqual(
             set(data),
             {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
-             'tema_seleccionado', 'layout_catalogo',
+             'tema_seleccionado', 'tipografia_seleccionada', 'layout_catalogo',
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
-             'google_analytics_id', 'meta_pixel_id'}
+             'google_analytics_id', 'meta_pixel_id',
+             'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
+             'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
+             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'instagram_usuario',
+             *(f'instagram_foto_{numero}' for numero in range(1, 7))}
         )
         self.assertNotIn('api_keys_pagos', data)
 
@@ -109,6 +114,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'texto_boton_ingreso': 'Ver productos',
             'banner_url': 'https://example.com/hero.jpg',
             'tema_seleccionado': 1,
+            'tipografia_seleccionada': 1,
             'layout_catalogo': 'GRID_3',
             'pasarelas_activas': [],
             'google_analytics_id': None,
@@ -122,6 +128,20 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'retiro_en_local_activo': True,
             'google_analytics_id': None,
             'meta_pixel_id': None,
+            'nombre_tienda': 'Tienda QA',
+            'logo': None,
+            'favicon': None,
+            'banner': None,
+            'subtitulo_bienvenida': '',
+            'texto_landing': '',
+            'nosotros_titulo': '',
+            'nosotros_texto': '',
+            'nosotros_imagen': None,
+            'correo_contacto': '',
+            'horario_atencion': '',
+            'mostrar_direccion_pie': False,
+            'instagram_usuario': '',
+            **{f'instagram_foto_{numero}': None for numero in range(1, 7)},
         })
 
     def test_returns_not_found_when_configuration_does_not_exist(self):
@@ -236,6 +256,13 @@ class CheckoutAccessTests(APITestCase):
                 self.assertEqual(order.email_invitado,
                                  self.payload['email_invitado'])
                 self.assertEqual((order.costo_envio, order.total_final), (1000, 11000))
+
+    def test_la_respuesta_trae_el_token_para_consultar_el_pago_de_esa_orden(self):
+        response = self.checkout()
+        self.assertEqual(response.status_code, 201)
+        token = response.data['token_verificacion']
+        self.assertTrue(token_verificacion_valido(token, response.data['orden_id']))
+        self.assertFalse(token_verificacion_valido(token, response.data['orden_id'] + 1))
 
     def test_required_registration_rejects_anonymous_before_validation(self):
         self.configure('REGISTRO_OBLIGATORIO')
@@ -795,3 +822,26 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.orden.refresh_from_db()
         self.assertEqual((self.orden.estado, self.orden.motivo_cancelacion), ('CANCELADO', 'Pago rechazado'))
         self.assertEqual(self.inventario.stock[('camisa', 'CAMISA-S')], 3)
+
+
+class DireccionesEnvioTests(APITestCase):
+    def setUp(self):
+        self.client.force_authenticate(create_user('direcciones@example.test'))
+        self.direccion = {'calle': 'Av. Principal', 'calle_numero': '123', 'dpto_casa': '',
+                          'comuna': 'SANTIAGO CENTRO', 'ciudad': 'Santiago', 'es_predeterminado': True}
+
+    def test_la_region_es_opcional_como_la_envia_el_checkout(self):
+        # El checkout no pide la región (Chilexpress usa la comuna) y la manda vacía al guardar la dirección
+        for region in ('', None):
+            with self.subTest(region=region):
+                datos = {**self.direccion, 'region': ''} if region == '' else self.direccion
+                response = self.client.post(reverse('direcciones-list-create'), datos, format='json')
+
+                self.assertEqual(response.status_code, 201, response.data)
+                self.assertEqual(response.data['region'], '')
+
+    def test_la_region_se_guarda_si_viene(self):
+        response = self.client.post(reverse('direcciones-list-create'), {**self.direccion, 'region': 'Metropolitana'},
+                                    format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['region'], 'Metropolitana')

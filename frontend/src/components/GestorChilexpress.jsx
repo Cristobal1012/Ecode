@@ -7,8 +7,8 @@ const ESTILOS_AVISO = {
   incompleto: { backgroundColor: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e' }
 };
 
-const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '4px' };
-const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: '#374151' };
+const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-border)', borderRadius: '4px' };
+const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--color-text)' };
 
 // RNF-03: el admin carga las llaves de las APIs de Chilexpress; llegan enmascaradas y, si se devuelven
 // sin cambios, el backend conserva las anteriores.
@@ -59,7 +59,7 @@ export default function GestorChilexpress() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '640px' }}>
-      <p style={{ margin: 0, color: '#4b5563', fontSize: '0.95rem' }}>
+      <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.95rem' }}>
         Con estas llaves la tienda cotiza el despacho, muestra las sucursales y genera la orden de transporte.
         Se obtienen en el portal de desarrolladores de Chilexpress; si dejas vacías las de coberturas o envíos, se usa la
         del cotizador. Se guardan cifradas y aquí solo se muestran sus últimos caracteres.
@@ -95,7 +95,7 @@ export default function GestorChilexpress() {
               aria-describedby={[idAyuda, errores[campo.nombre] ? idError : ''].filter(Boolean).join(' ')}
               style={estiloCampo}
             />
-            <p id={idAyuda} style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#4b5563' }}>
+            <p id={idAyuda} style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--color-muted)' }}>
               Por seguridad solo se muestran los últimos caracteres. Escribe una nueva para reemplazarla o deja el campo vacío para borrarla.
             </p>
             {errores[campo.nombre] && (

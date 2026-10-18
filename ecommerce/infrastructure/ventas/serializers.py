@@ -2,11 +2,13 @@ from decimal import Decimal
 import uuid
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
+from ecommerce.infrastructure.catalogo.images import ArchivoImagenField
 from .models import Promocion
 
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
@@ -17,6 +19,7 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.medios_pago import MedioPagoNoDisponible
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -40,6 +43,10 @@ def medios_pago():
     return MediosPagoDisponibles(DjangoRepositorioMediosPago())
 
 
+CAMPOS_FOTOS_INSTAGRAM = tuple(f'instagram_foto_{numero}' for numero in range(1, 7))
+CAMPOS_DIRECCION_LOCAL = ('calle_origen', 'numero_origen', 'dpto_casa_origen', 'comuna_origen', 'region_origen')
+
+
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
@@ -55,6 +62,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_boton_ingreso',
             'banner_url',
             'tema_seleccionado', 
+            'tipografia_seleccionada',
             'layout_catalogo',
             'pasarelas_activas',
             'google_analytics_id',
@@ -66,7 +74,31 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
+            'nombre_tienda',
+            'logo',
+            'favicon',
+            'banner',
+            'subtitulo_bienvenida',
+            'texto_landing',
+            'nosotros_titulo',
+            'nosotros_texto',
+            'nosotros_imagen',
+            # Contacto y redes: pie de página y sección de Instagram
+            'correo_contacto',
+            'horario_atencion',
+            'mostrar_direccion_pie',
+            'instagram_usuario',
+            *CAMPOS_FOTOS_INSTAGRAM,
         ]
+
+    def to_representation(self, instance):
+        datos = super().to_representation(instance)
+        # Sin retiro en local y sin mostrarla en el pie, la dirección del local no se publica
+        if not direccion_es_publica(instance.retiro_en_local_activo, instance.mostrar_direccion_pie):
+            for campo in CAMPOS_DIRECCION_LOCAL:
+                datos.pop(campo, None)
+        return datos
 
     def get_google_client_id(self, obj):
         return settings.GOOGLE_CLIENT_ID
@@ -75,14 +107,49 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
         # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
         return [codigo.value for codigo in medios_pago().disponibles()]
 
+class ImagenNegocioField(ArchivoImagenField):
+    """Logo, favicon o portada: se valida y se vuelve a codificar igual que las fotos del catálogo."""
+
+    def to_internal_value(self, data):
+        imagen = super().to_internal_value(data)
+        return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
+
+
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM)
+
+
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
+    # Se suben por multipart; un null (en JSON) quita la imagen
+    logo = ImagenNegocioField(required=False, allow_null=True)
+    favicon = ImagenNegocioField(required=False, allow_null=True)
+    banner = ImagenNegocioField(required=False, allow_null=True)
+    nosotros_imagen = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_1 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_2 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_3 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_4 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_5 = ImagenNegocioField(required=False, allow_null=True)
+    instagram_foto_6 = ImagenNegocioField(required=False, allow_null=True)
+    texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    nosotros_texto = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    horario_atencion = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    # Se acepta '@usuario' o el enlace al perfil; se guarda solo el usuario
+    instagram_usuario = serializers.CharField(max_length=200, required=False, allow_blank=True)
+
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'nombre_tienda',
             'texto_bienvenida',
+            'subtitulo_bienvenida',
+            'texto_landing',
+            'nosotros_titulo',
+            'nosotros_texto',
+            'nosotros_imagen',
             'texto_boton_ingreso',
             'banner_url',
             'tema_seleccionado',
+            'tipografia_seleccionada',
             'logo',
             'favicon',
             'banner',
@@ -96,7 +163,28 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'correo_contacto',
+            'horario_atencion',
+            'mostrar_direccion_pie',
+            'instagram_usuario',
+            *CAMPOS_FOTOS_INSTAGRAM,
         ]
+
+    def validate_instagram_usuario(self, valor):
+        try:
+            return normalizar_usuario_instagram(valor)
+        except UsuarioInstagramInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def update(self, instance, validated_data):
+        # Al reemplazar o quitar una imagen se borra el archivo anterior, para no dejar archivos huérfanos
+        anteriores = [getattr(instance, campo) for campo in CAMPOS_IMAGEN_NEGOCIO
+                      if campo in validated_data and getattr(instance, campo)]
+        anteriores = [(archivo.storage, archivo.name) for archivo in anteriores]
+        instance = super().update(instance, validated_data)
+        for storage, nombre in anteriores:
+            storage.delete(nombre)
+        return instance
 
 
 class PaqueteSerializer(serializers.Serializer):
@@ -629,4 +717,6 @@ def chilexpress_para_panel(credenciales):
 class PromocionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Promocion
-        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'is_active']
+        # fecha_expiracion: el cupón deja de valer desde ese momento (sin fecha no vence)
+        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'fecha_expiracion',
+                  'is_active']

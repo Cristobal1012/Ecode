@@ -2,11 +2,41 @@ import json
 import hmac
 import hashlib
 from unittest.mock import patch, MagicMock
-from rest_framework.test import APISimpleTestCase
+from rest_framework.test import APISimpleTestCase, APITestCase
 from rest_framework import status
 from django.urls import reverse
 
 from ecommerce.application.ventas import GenerarOrdenTransporte
+from ecommerce.infrastructure.ventas.models import OrdenCompra
+
+SECRETO_LINKIFY = 'secreto_de_prueba_linkify'
+OBTENER_SECRETO = 'ecommerce.infrastructure.ventas.views.LinkifyWebhookAPIView._obtener_secret_key'
+
+
+@patch(OBTENER_SECRETO, return_value=SECRETO_LINKIFY)
+class LinkifyConsultaMontoTests(APITestCase):
+    """Linkify consulta con un GET firmado cuánto debe pagarse por la orden."""
+
+    def consultar(self, datos):
+        encoded_data = json.dumps(datos)
+        firma = hmac.new(SECRETO_LINKIFY.encode('utf-8'), encoded_data.encode('utf-8'), hashlib.sha256).hexdigest()
+        return self.client.get(reverse('webhook-linkify'), {'encoded_data': encoded_data},
+                               HTTP_X_LINKIFY_CONFIRMATION=firma)
+
+    def test_responde_el_total_de_la_orden(self, _):
+        orden = OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSFERENCIA', direccion_envio_snapshot={},
+            subtotal=15000, costo_envio=0, total_final=15000, proveedor_logistico='RETIRO_LOCAL')
+
+        response = self.consultar({'id': orden.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {'amount': 15000, 'description': f'Orden #{orden.id}', 'currency': 'CLP'})
+
+    def test_orden_inexistente_o_id_invalido_responde_404(self, _):
+        for orden_id in (999999, 'ORD-001', None):
+            with self.subTest(orden_id=orden_id):
+                self.assertEqual(self.consultar({'id': orden_id}).status_code, status.HTTP_404_NOT_FOUND)
 
 class LinkifyWebhookQATest(APISimpleTestCase):
     def setUp(self):

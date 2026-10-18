@@ -1175,23 +1175,21 @@ class LinkifyWebhookAPIView(APIView):
 
         try:
             datos = json.loads(encoded_data)
-            orden_id = datos.get("id")
-            
-            # Buscar la orden real en la base de datos
-            repositorio_ordenes = DjangoRepositorioOrdenes()
-            orden = repositorio_ordenes.obtener_por_id(orden_id)
+        except ValueError:
+            return Response({"message": "Datos inválidos"}, status=status.HTTP_400_BAD_REQUEST)
 
-            respuesta = {
-                "amount": int(orden.total),
-                "description": f"Orden #{orden.id}",
-                "currency": "CLP"
-            }
-            return Response(respuesta, status=status.HTTP_200_OK)
-            
-        except OrdenNoEncontrada:
+        # Buscar la orden real en la base de datos
+        orden_id = str(datos.get("id", "")) if isinstance(datos, dict) else ""
+        orden = OrdenCompra.objects.filter(id=int(orden_id)).first() if orden_id.isdigit() else None
+        if orden is None:
             return Response({"message": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        respuesta = {
+            "amount": int(round(orden.total_final)),
+            "description": f"Orden #{orden.id}",
+            "currency": "CLP"
+        }
+        return Response(respuesta, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         """Notificación de transferencia validada por Linkify]"""

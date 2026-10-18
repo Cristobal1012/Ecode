@@ -107,26 +107,26 @@ export default function GestorPromociones() {
         
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
-            <input required type="text" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)', textTransform: 'uppercase' }} />
+            <label htmlFor="promocion-codigo" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
+            <input required type="text" id="promocion-codigo" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)', textTransform: 'uppercase' }} />
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Tipo de Descuento</label>
-            <select name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
+            <label htmlFor="promocion-tipo" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Tipo de Descuento</label>
+            <select id="promocion-tipo" name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
               <option value="PORCENTAJE">Porcentaje (%)</option>
               <option value="MONTO_FIJO">Monto Fijo ($)</option>
             </select>
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
-            <input required type="number" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <label htmlFor="promocion-valor" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
+            <input required type="number" id="promocion-valor" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
-            <input type="number" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <label htmlFor="promocion-umbral-envio" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
+            <input type="number" id="promocion-umbral-envio" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
           </div>
 
           <div>

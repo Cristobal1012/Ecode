@@ -182,7 +182,7 @@ export default function Dashboard() {
         }}
       >
         <div>
-          <label
+          <label htmlFor="dashboard-fecha-inicio"
             style={{
               display: 'block',
               marginBottom: '6px',
@@ -196,6 +196,7 @@ export default function Dashboard() {
 
           <input
             type="date"
+            id="dashboard-fecha-inicio"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
             style={{
@@ -210,7 +211,7 @@ export default function Dashboard() {
         </div>
 
         <div>
-          <label
+          <label htmlFor="dashboard-fecha-fin"
             style={{
               display: 'block',
               marginBottom: '6px',
@@ -224,6 +225,7 @@ export default function Dashboard() {
 
           <input
             type="date"
+            id="dashboard-fecha-fin"
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
             style={{

@@ -126,7 +126,7 @@ export default function GestorMediosPago() {
 
             <EstadoMedio medio={medio} />
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: medio.integracion_lista ? 'pointer' : 'not-allowed', color: medio.integracion_lista ? '#374151' : '#6b7280' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', cursor: medio.integracion_lista ? 'pointer' : 'not-allowed', color: medio.integracion_lista ? 'var(--color-text)' : 'var(--color-muted)' }}>
               <input
                 type="checkbox"
                 checked={formulario.habilitado && medio.integracion_lista}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useId, useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import GaleriaImagenes from './GaleriaImagenes';
 
@@ -88,6 +88,8 @@ export default function FormularioProducto({
   productoAEditar
 }) {
   const [inicial] = useState(() => leerProductoAEditar(productoAEditar));
+  // Asocia cada etiqueta con su campo (WCAG 1.3.1); en las variantes se suma el índice
+  const idFormulario = useId();
   const [producto, setProducto] = useState(inicial.producto);
 
   // Imágenes existentes/devueltas por el backend
@@ -657,7 +659,7 @@ export default function FormularioProducto({
         {/* NOMBRE */}
 
         <div>
-          <label
+          <label htmlFor={`${idFormulario}-nombre`}
             style={{
               fontWeight: 'bold'
             }}
@@ -667,6 +669,7 @@ export default function FormularioProducto({
 
           <input
             type="text"
+            id={`${idFormulario}-nombre`}
             name="nombre"
             value={producto.nombre}
             onChange={handleChangeProducto}
@@ -678,7 +681,7 @@ export default function FormularioProducto({
         {/* CATEGORÍA */}
 
         <div>
-          <label
+          <label htmlFor={`${idFormulario}-categoria`}
             style={{
               fontWeight: 'bold'
             }}
@@ -697,6 +700,7 @@ export default function FormularioProducto({
             categoriasExistentes.length > 0 ? (
               <>
                 <select
+                  id={`${idFormulario}-categoria`}
                   name="categoria"
                   value={producto.categoria}
                   onChange={handleChangeProducto}
@@ -750,6 +754,7 @@ export default function FormularioProducto({
               <>
                 <input
                   type="text"
+                  id={`${idFormulario}-categoria`}
                   name="categoria"
                   value={producto.categoria}
                   onChange={handleChangeProducto}
@@ -798,7 +803,7 @@ export default function FormularioProducto({
             gridColumn: '1 / -1'
           }}
         >
-          <label
+          <label htmlFor={`${idFormulario}-descripcion`}
             style={{
               fontWeight: 'bold'
             }}
@@ -807,6 +812,7 @@ export default function FormularioProducto({
           </label>
 
           <textarea
+            id={`${idFormulario}-descripcion`}
             name="descripcion"
             value={producto.descripcion}
             onChange={handleChangeProducto}
@@ -838,12 +844,13 @@ export default function FormularioProducto({
           </p>
 
           <div style={{ marginBottom: '15px' }}>
-            <label style={{ fontWeight: 'bold' }}>
+            <label htmlFor={`${idFormulario}-meta_titulo`} style={{ fontWeight: 'bold' }}>
               Título SEO
             </label>
 
             <input
               type="text"
+              id={`${idFormulario}-meta_titulo`}
               name="meta_titulo"
               value={producto.meta_titulo}
               onChange={handleChangeProducto}
@@ -858,11 +865,12 @@ export default function FormularioProducto({
           </div>
 
           <div>
-            <label style={{ fontWeight: 'bold' }}>
+            <label htmlFor={`${idFormulario}-meta_descripcion`} style={{ fontWeight: 'bold' }}>
               Descripción SEO
             </label>
 
             <textarea
+              id={`${idFormulario}-meta_descripcion`}
               name="meta_descripcion"
               value={producto.meta_descripcion}
               onChange={handleChangeProducto}
@@ -949,6 +957,8 @@ export default function FormularioProducto({
             >
               <input
                 type="text"
+                // Sin etiqueta visible: el nombre accesible indica qué atributo es
+                aria-label={`Nombre del atributo ${index + 1}`}
                 placeholder="Clave (Ej: Marca)"
                 value={attr.clave}
                 onChange={(e) =>
@@ -963,6 +973,7 @@ export default function FormularioProducto({
 
               <input
                 type="text"
+                aria-label={`Valor del atributo ${index + 1}`}
                 placeholder="Valor (Ej: Nike)"
                 value={attr.valor}
                 onChange={(e) =>
@@ -1097,7 +1108,7 @@ export default function FormularioProducto({
               {/* SKU */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-sku`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1108,6 +1119,7 @@ export default function FormularioProducto({
 
                 <input
                   type="text"
+                  id={`${idFormulario}-variante-${varIndex}-sku`}
                   value={variante.sku}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1124,7 +1136,7 @@ export default function FormularioProducto({
               {/* PRECIO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-precio`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1135,6 +1147,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-precio`}
                   value={variante.precio}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1152,7 +1165,7 @@ export default function FormularioProducto({
 
               {/* PRECIO OFERTA */}
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-precio_oferta`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold',
@@ -1164,6 +1177,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-precio_oferta`}
                   value={variante.precio_oferta || ''}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1181,7 +1195,7 @@ export default function FormularioProducto({
               {/* STOCK */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-stock`}
                   style={{
                     fontSize: '0.9em',
                     fontWeight: 'bold'
@@ -1192,6 +1206,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-stock`}
                   value={variante.stock}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1243,7 +1258,7 @@ export default function FormularioProducto({
               {/* PESO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-peso_kg`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1255,6 +1270,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-peso_kg`}
                   value={variante.peso_kg}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1277,7 +1293,7 @@ export default function FormularioProducto({
               {/* ALTO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-alto_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1289,6 +1305,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-alto_cm`}
                   value={variante.alto_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1311,7 +1328,7 @@ export default function FormularioProducto({
               {/* ANCHO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-ancho_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1323,6 +1340,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-ancho_cm`}
                   value={variante.ancho_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1345,7 +1363,7 @@ export default function FormularioProducto({
               {/* LARGO */}
 
               <div>
-                <label
+                <label htmlFor={`${idFormulario}-variante-${varIndex}-largo_cm`}
                   style={{
                     fontSize: '0.8em',
                     fontWeight: 'bold',
@@ -1357,6 +1375,7 @@ export default function FormularioProducto({
 
                 <input
                   type="number"
+                  id={`${idFormulario}-variante-${varIndex}-largo_cm`}
                   value={variante.largo_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1440,6 +1459,7 @@ export default function FormularioProducto({
                   >
                     <input
                       type="text"
+                      aria-label={`Variante ${varIndex + 1}: nombre del atributo ${attrIndex + 1}`}
                       placeholder="Ej: Talla"
                       value={attr.clave}
                       onChange={(e) =>
@@ -1459,6 +1479,7 @@ export default function FormularioProducto({
 
                     <input
                       type="text"
+                      aria-label={`Variante ${varIndex + 1}: valor del atributo ${attrIndex + 1}`}
                       placeholder="Ej: M"
                       value={attr.valor}
                       onChange={(e) =>

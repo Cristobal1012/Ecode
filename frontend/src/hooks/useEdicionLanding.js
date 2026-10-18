@@ -13,11 +13,15 @@ export const CAMPOS_TEXTO = {
   nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 }
 };
 
+// Fotos de la sección de Instagram: 6 espacios fijos (el usuario se configura en el panel)
+export const CAMPOS_FOTOS_INSTAGRAM = [1, 2, 3, 4, 5, 6].map((numero) => `instagram_foto_${numero}`);
+
 export const CAMPOS_IMAGEN = {
   logo: 'logo',
   favicon: 'favicon',
   banner: 'imagen de portada',
-  nosotros_imagen: 'foto de Nosotros'
+  nosotros_imagen: 'foto de Nosotros',
+  ...Object.fromEntries(CAMPOS_FOTOS_INSTAGRAM.map((campo, indice) => [campo, `foto ${indice + 1} de Instagram`]))
 };
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];

@@ -87,6 +87,27 @@ describe('LandingPage', () => {
     expect(screen.queryByRole('region', { name: 'Un taller familiar' })).not.toBeInTheDocument();
   });
 
+  it('muestra la sección de Instagram solo con usuario, con sus fotos y el botón al perfil', async () => {
+    responder({ configuracion: { ...CONFIGURACION, instagram_usuario: 'taller.mache',
+      instagram_foto_1: 'http://localhost:8000/media/negocio/instagram/uno.jpg', instagram_foto_2: null } });
+    const { container } = await renderLanding();
+
+    const seccion = await screen.findByRole('region', { name: '@taller.mache' });
+    const boton = within(seccion).getByRole('link', { name: /Seguir en Instagram/ });
+    expect(boton).toHaveAttribute('href', 'https://www.instagram.com/taller.mache/');
+    expect(boton).toHaveAttribute('rel', 'noopener noreferrer');
+    // Solo las fotos cargadas, fuera del árbol accesible: el enlace accesible es el botón
+    const fotos = container.querySelectorAll('#instagram img');
+    expect(fotos).toHaveLength(1);
+    expect(fotos[0].closest('[aria-hidden="true"]')).not.toBeNull();
+
+    cleanup();
+    responder();
+    await renderLanding();
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('region', { name: /Instagram|@/ })).not.toBeInTheDocument();
+  });
+
   it('sin productos no muestra las secciones de productos', async () => {
     responder({ vitrina: { mas_vendidos: [], recientes: [] } });
     await renderLanding();
@@ -163,6 +184,19 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     // El navegador pone el multipart con su boundary (axios fija JSON por defecto)
     expect(opciones).toEqual({ headers: { 'Content-Type': undefined } });
     expect(patchMock.mock.calls[1]).toEqual(['configuracion/negocio/', { logo: null }]);
+  });
+
+  it('las fotos de Instagram se suben desde el modo edición en el mismo multipart', async () => {
+    await entrarComoAdmin();
+    const archivo = new File(['png'], 'instagram.png', { type: 'image/png' });
+
+    // Sin usuario la sección igual aparece en modo edición, con el aviso de dónde configurarlo
+    expect(screen.getByText(/Configuración > Contacto y Redes/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Subir foto 3'), { target: { files: [archivo] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalledTimes(1));
+    expect(patchMock.mock.calls[0][1].get('instagram_foto_3')).toBe(archivo);
   });
 
   it('no guarda si un campo obligatorio queda vacío', async () => {

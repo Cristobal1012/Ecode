@@ -5,6 +5,7 @@ import Header from "../components/header/header";
 import Portada from "../components/landing/Portada";
 import SeccionProductos from "../components/landing/SeccionProductos";
 import SeccionNosotros from "../components/landing/SeccionNosotros";
+import SeccionInstagram from "../components/landing/SeccionInstagram";
 import BarraEdicion from "../components/landing/BarraEdicion";
 import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
 import useEdicionLanding from "../hooks/useEdicionLanding";
@@ -95,6 +96,7 @@ function LandingPage() {
               productos={vitrina?.recientes} etiqueta="Nuevo"
               nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
             <SeccionNosotros configuracion={vista} edicion={edicion} />
+            <SeccionInstagram configuracion={vista} edicion={edicion} />
           </>
         ) : (
           // Mientras llega la configuración se reserva el espacio de la portada (sin textos de ejemplo)

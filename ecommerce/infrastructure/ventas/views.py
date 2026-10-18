@@ -1240,11 +1240,14 @@ class LinkifyWebhookAPIView(APIView):
 
 
 class PromocionListCreateView(generics.ListCreateAPIView):
+    # Los cupones los gestiona solo el admin; el comprador los valida en promociones/validar/
+    permission_classes = [IsAdministrador]
     queryset = Promocion.objects.all().order_by('-id')
     serializer_class = PromocionSerializer
 
 
 class PromocionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdministrador]
     queryset = Promocion.objects.all()
     serializer_class = PromocionSerializer
 

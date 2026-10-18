@@ -2,8 +2,10 @@
    Los colores vienen de la paleta activa (constants/palettes.js, aplicarPaleta), así funcionan los 4 temas. */
 
 :root {
-  --fuente-titulos: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-  --fuente-texto: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Las fuentes las pone aplicarTipografia() (constants/tipografias.js) según lo que eligió el admin; esto es el
+     respaldo hasta que corre el JavaScript */
+  --fuente-titulos: Georgia, 'Times New Roman', serif;
+  --fuente-texto: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --ancho-contenido: 1200px;
   --margen-lateral: clamp(16px, 4vw, 40px);

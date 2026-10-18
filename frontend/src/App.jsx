@@ -11,6 +11,7 @@ import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
 import { aplicarPaleta } from './constants/palettes';
+import { aplicarTipografia, CLAVE_TIPOGRAFIA } from './constants/tipografias';
 import DetalleProducto from './pages/DetalleProducto';
 import SeguimientoEnvio from './pages/SeguimientoEnvio';
 import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
@@ -88,6 +89,11 @@ function App() {
           const serverId = Number(config.tema_seleccionado);
           localStorage.setItem('ecommerce_palette', serverId.toString());
           applyPaletteToRoot(serverId);
+        }
+        // RF-01.2: la tipografía elegida por el admin se aplica aquí, en un solo lugar (main.jsx pinta la última conocida)
+        if (config?.tipografia_seleccionada !== undefined) {
+          localStorage.setItem(CLAVE_TIPOGRAFIA, String(config.tipografia_seleccionada));
+          aplicarTipografia(config.tipografia_seleccionada);
         }
       } catch (error) {
         console.error('Error al sincronizar tema global en App:', error);

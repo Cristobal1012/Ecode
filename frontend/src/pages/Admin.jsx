@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PaletteSelector from '../components/PaletteSelector';
+import TipografiaSelector from '../components/TipografiaSelector';
 import clienteAxios from '../components/auth/axiosConfig'; 
 import { aplicarPaleta } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
@@ -21,6 +22,7 @@ import './Admin.css';
 const SECCIONES_CONFIGURACION = [
   { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
+  { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
@@ -195,6 +197,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-paleta" />
                   <PaletteSelector />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-tipografia" />
+                  <TipografiaSelector />
                 </div>
 
                 <hr className="admin-separador" />

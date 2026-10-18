@@ -529,6 +529,34 @@
   border: 1px solid rgb(0 0 0 / 10%);
 }
 
+/* ---------- Selector de tipografía (RF-01.2): mismas tarjetas que las paletas ---------- */
+
+.selector-tipografia-vista {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+/* Muestra con el tamaño de un título de sección; cada combinación ya trae su ajuste de tamaño */
+.selector-tipografia-titulo {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.selector-tipografia-texto {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.selector-tipografia-descripcion {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
 .selector-paletas-acciones {
   margin: 20px 0 12px;
 }

@@ -24,22 +24,33 @@ import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
 import Header from './components/header/header';
+import useConfiguracionTienda from './hooks/useConfiguracionTienda';
+import { PORTADA_POR_DEFECTO } from './components/landing/textosPorDefecto';
+import './components/auth/auth.css';
 
 const applyPaletteToRoot = aplicarPaleta;
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
+  // La misma portada de la landing acompaña al formulario (decorativa: el nombre ya está en el header)
+  const configuracion = useConfiguracionTienda();
+  const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
 
   return (
     <>
       <Header />
       <main className="auth-main">
-        {showLogin ? (
-          <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
-        ) : (
-          <Register onSwitchToLogin={() => setShowLogin(true)} />
-        )}
+        <div className="auth-imagen" aria-hidden="true" style={{ backgroundImage: `url("${portada}")` }}>
+          {configuracion?.nombre_tienda && <span className="auth-imagen-nombre">{configuracion.nombre_tienda}</span>}
+        </div>
+        <div className="auth-contenido">
+          {showLogin ? (
+            <Login onSwitchToRegister={() => setShowLogin(false)} googleHabilitado={googleHabilitado} />
+          ) : (
+            <Register onSwitchToLogin={() => setShowLogin(true)} />
+          )}
+        </div>
       </main>
     </>
   );

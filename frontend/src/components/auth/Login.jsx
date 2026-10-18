@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,8 @@ import { guardarCarrito } from '../carrito';
 // googleHabilitado: la tienda configuró GOOGLE_CLIENT_ID (RN-04); si no, no se ofrece Google
 export default function Login({ onSwitchToRegister, googleHabilitado = false }) {
     const navigate = useNavigate();
+    // Prefijo único para asociar cada etiqueta con su campo
+    const id = useId();
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -154,44 +156,45 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
     };
 
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h2 style={{ textAlign: 'center' }}>Iniciar Sesión</h2>
-            
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Correo Electrónico:</label><br/>
-                    <input 
-                        type="email" 
+        <div className="auth-tarjeta">
+            <span className="antetitulo">Mi cuenta</span>
+            <h1 className="auth-titulo">Iniciar sesión</h1>
+
+            <form onSubmit={handleSubmit} className="auth-formulario">
+                <div className="auth-campo">
+                    <label htmlFor={`${id}-email`}>Correo electrónico</label>
+                    <input
+                        id={`${id}-email`}
+                        type="email"
                         name="email"
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
+                        autoComplete="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
                     />
                 </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Contraseña:</label><br/>
-                    <input 
-                        type="password" 
+                <div className="auth-campo">
+                    <label htmlFor={`${id}-password`}>Contraseña</label>
+                    <input
+                        id={`${id}-password`}
+                        type="password"
                         name="password"
-                        value={formData.password} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
+                        autoComplete="current-password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
                     />
                 </div>
-                <button type="submit" style={{ width: '100%', padding: '10px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                <button type="submit" className="boton boton-primario auth-enviar">
                     Entrar
                 </button>
             </form>
 
             {googleHabilitado && (
                 <>
-                    <div style={{ margin: '20px 0', textAlign: 'center', color: '#4b5563', fontSize: '14px' }}>
-                        O ingresa con
-                    </div>
+                    <p className="auth-separador"><span>O ingresa con</span></p>
 
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div className="auth-google">
                         <GoogleLogin
                             onSuccess={handleGoogleSuccess}
                             onError={handleGoogleError}
@@ -200,14 +203,12 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false }) 
                 </>
             )}
 
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <button 
-                    onClick={onSwitchToRegister}
-                    style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                    ¿No tienes cuenta? Regístrate aquí
+            <p className="auth-cambiar">
+                ¿No tienes cuenta?{' '}
+                <button type="button" className="boton-texto auth-cambiar-boton" onClick={onSwitchToRegister}>
+                    Regístrate aquí
                 </button>
-            </div>
+            </p>
         </div>
     );
 }

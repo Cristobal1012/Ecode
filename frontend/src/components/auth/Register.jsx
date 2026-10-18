@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
 
 export default function Register({ onSwitchToLogin }) {
+    // Prefijo único para asociar cada etiqueta con su campo
+    const id = useId();
     const [formData, setFormData] = useState({
         nombre: '',
         apellido_paterno: '',
@@ -44,79 +46,45 @@ export default function Register({ onSwitchToLogin }) {
         }
     };
 
+    const campos = [
+        { nombre: 'nombre', etiqueta: 'Nombre', tipo: 'text', autocompletar: 'given-name' },
+        { nombre: 'apellido_paterno', etiqueta: 'Apellido paterno', tipo: 'text', autocompletar: 'family-name' },
+        { nombre: 'email', etiqueta: 'Correo electrónico', tipo: 'email', autocompletar: 'email' },
+        { nombre: 'password', etiqueta: 'Contraseña', tipo: 'password', autocompletar: 'new-password' },
+        { nombre: 'password2', etiqueta: 'Confirmar contraseña', tipo: 'password', autocompletar: 'new-password' }
+    ];
+
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', fontFamily: 'sans-serif' }}>
-            <h2 style={{ textAlign: 'center' }}>Crear Cuenta</h2>
-            
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Nombre:</label><br/>
-                    <input 
-                        type="text" 
-                        name="nombre"
-                        value={formData.nombre} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Apellido Paterno:</label><br/>
-                    <input 
-                        type="text" 
-                        name="apellido_paterno"
-                        value={formData.apellido_paterno}
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Correo Electrónico:</label><br/>
-                    <input 
-                        type="email" 
-                        name="email"
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Contraseña:</label><br/>
-                    <input 
-                        type="password" 
-                        name="password"
-                        value={formData.password} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Confirmar Contraseña:</label><br/>
-                    <input 
-                        type="password" 
-                        name="password2" 
-                        value={formData.password2} 
-                        onChange={handleChange} 
-                        required 
-                        style={{ width: '100%', padding: '8px', marginTop: '5px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ccc' }}
-                    />
-                </div>
-                <button type="submit" style={{ width: '100%', padding: '10px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <div className="auth-tarjeta">
+            <span className="antetitulo">Mi cuenta</span>
+            <h1 className="auth-titulo">Crear cuenta</h1>
+
+            <form onSubmit={handleSubmit} className="auth-formulario">
+                {campos.map(campo => (
+                    <div className="auth-campo" key={campo.nombre}>
+                        <label htmlFor={`${id}-${campo.nombre}`}>{campo.etiqueta}</label>
+                        <input
+                            id={`${id}-${campo.nombre}`}
+                            type={campo.tipo}
+                            name={campo.nombre}
+                            autoComplete={campo.autocompletar}
+                            value={formData[campo.nombre]}
+                            onChange={handleChange}
+                            required
+                        />
+                    </div>
+                ))}
+                <button type="submit" className="boton boton-primario auth-enviar">
                     Registrarse
                 </button>
             </form>
 
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <button 
-                    onClick={onSwitchToLogin}
-                    style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                    ¿Ya tienes cuenta? Inicia sesión aquí
+            <p className="auth-cambiar">
+                ¿Ya tienes cuenta?{' '}
+                <button type="button" className="boton-texto auth-cambiar-boton" onClick={onSwitchToLogin}>
+                    Inicia sesión aquí
                 </button>
-            </div>
+            </p>
         </div>
     );
 }

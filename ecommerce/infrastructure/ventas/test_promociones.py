@@ -197,3 +197,18 @@ class GestionPromocionesPermisosTests(APITestCase):
         self.client.force_authenticate(create_user('admin-cupones@example.test', rol='ADMIN'))
         self.assertEqual(self.client.post(self.lista, self.nueva, format='json').status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.client.delete(self.detalle).status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_admin_fija_y_quita_la_fecha_de_expiracion_desde_el_panel(self):
+        self.client.force_authenticate(create_user('admin-vence@example.test', rol='ADMIN'))
+        # El panel envía la fecha sin zona horaria: vale la hora de la tienda (America/Santiago)
+        response = self.client.patch(self.detalle, {'fecha_expiracion': '2020-01-31T23:59:59'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['fecha_expiracion'].startswith('2020-01-31T23:59:59'))
+        self.promo.refresh_from_db()
+        self.assertEqual(timezone.localtime(self.promo.fecha_expiracion).date().isoformat(), '2020-01-31')
+        self.assertFalse(self.promo.esta_vigente)
+
+        self.client.patch(self.detalle, {'fecha_expiracion': None}, format='json')
+        self.promo.refresh_from_db()
+        self.assertTrue(self.promo.esta_vigente)

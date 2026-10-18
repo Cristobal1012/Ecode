@@ -629,4 +629,6 @@ def chilexpress_para_panel(credenciales):
 class PromocionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Promocion
-        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'is_active']
+        # fecha_expiracion: el cupón deja de valer desde ese momento (sin fecha no vence)
+        fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'fecha_expiracion',
+                  'is_active']

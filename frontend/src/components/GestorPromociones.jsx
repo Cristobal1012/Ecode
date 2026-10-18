@@ -1,14 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
+const FORMULARIO_VACIO = {
+  codigo: '',
+  tipo_descuento: 'PORCENTAJE',
+  valor_descuento: '',
+  umbral_envio_gratis: '',
+  fecha_expiracion: ''
+};
+
+// El cupón vale hasta el final del día elegido, en la hora de la tienda (el backend usa America/Santiago)
+const fechaParaBackend = (fecha) => (fecha ? `${fecha}T23:59:59` : null);
+
+// "2026-10-31T23:59:59-03:00" -> "2026-10-31", en la hora local del navegador
+const fechaParaFormulario = (iso) => {
+  if (!iso) return '';
+  const fecha = new Date(iso);
+  const dosDigitos = (n) => String(n).padStart(2, '0');
+  return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
+};
+
+const estaVencida = (promo) => Boolean(promo.fecha_expiracion) && new Date(promo.fecha_expiracion) < new Date();
+
 export default function GestorPromociones() {
   const [promociones, setPromociones] = useState([]);
-  const [formData, setFormData] = useState({
-    codigo: '',
-    tipo_descuento: 'PORCENTAJE',
-    valor_descuento: '',
-    umbral_envio_gratis: ''
-  });
+  const [formData, setFormData] = useState(FORMULARIO_VACIO);
   const [editId, setEditId] = useState(null);
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -35,19 +51,25 @@ export default function GestorPromociones() {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Los campos opcionales vacíos se envían como null (sin umbral, sin vencimiento)
+    const datos = {
+        ...formData,
+        umbral_envio_gratis: formData.umbral_envio_gratis === '' ? null : formData.umbral_envio_gratis,
+        fecha_expiracion: fechaParaBackend(formData.fecha_expiracion)
+    };
     try {
         if (editId) {
-            
-            const respuesta = await clienteAxios.put(`ventas/promociones/${editId}/`, formData);
+
+            const respuesta = await clienteAxios.put(`ventas/promociones/${editId}/`, datos);
             setPromociones(promociones.map(p => p.id === editId ? respuesta.data : p));
         } else {
-            
-            const respuesta = await clienteAxios.post('ventas/promociones/', formData);
+
+            const respuesta = await clienteAxios.post('ventas/promociones/', datos);
             setPromociones([...promociones, respuesta.data]);
         }
-        
-        
-        setFormData({ codigo: '', tipo_descuento: 'PORCENTAJE', valor_descuento: '', umbral_envio_gratis: '' });
+
+
+        setFormData(FORMULARIO_VACIO);
         setEditId(null); 
     } catch (error) {
         console.error("Error al guardar promoción:", error);
@@ -70,7 +92,8 @@ export default function GestorPromociones() {
         codigo: promo.codigo,
         tipo_descuento: promo.tipo_descuento,
         valor_descuento: promo.valor_descuento, 
-        umbral_envio_gratis: promo.umbral_envio_gratis || ''
+        umbral_envio_gratis: promo.umbral_envio_gratis || '',
+        fecha_expiracion: fechaParaFormulario(promo.fecha_expiracion)
     });
   };
 
@@ -106,6 +129,14 @@ export default function GestorPromociones() {
             <input type="number" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
           </div>
 
+          <div>
+            <label htmlFor="promocion-fecha-expiracion" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Válido hasta (opcional)</label>
+            <input id="promocion-fecha-expiracion" type="date" name="fecha_expiracion" value={formData.fecha_expiracion} onChange={handleChange} aria-describedby="promocion-fecha-expiracion-ayuda" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+            <p id="promocion-fecha-expiracion-ayuda" style={{ margin: '5px 0 0', fontSize: '13px', color: '#4b5563' }}>
+              El código deja de funcionar al terminar ese día. Déjalo vacío para que no venza.
+            </p>
+          </div>
+
           <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '10px' }}>
             <button type="submit" style={{ padding: '10px 24px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
               Guardar Promoción
@@ -125,6 +156,7 @@ export default function GestorPromociones() {
                 <th style={{ padding: '12px' }}>Tipo</th>
                 <th style={{ padding: '12px' }}>Valor</th>
                 <th style={{ padding: '12px' }}>Envío Gratis Desde</th>
+                <th style={{ padding: '12px' }}>Válido hasta</th>
                 <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
               </tr>
             </thead>
@@ -145,6 +177,11 @@ export default function GestorPromociones() {
                     </td>
                     <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
                         {promo.umbral_envio_gratis ? `$${Number(promo.umbral_envio_gratis).toLocaleString('es-CL')}` : '-'}
+                    </td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: estaVencida(promo) ? '#b91c1c' : '#555' }}>
+                        {promo.fecha_expiracion
+                          ? `${new Date(promo.fecha_expiracion).toLocaleDateString('es-CL')}${estaVencida(promo) ? ' (vencido)' : ''}`
+                          : 'Sin vencimiento'}
                     </td>
                     <td style={{ padding: '12px', borderBottom: '1px solid #eee' }}>
                       <button

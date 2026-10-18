@@ -14,136 +14,101 @@ const crearVarianteVacia = () => ({
   atributosVariables: []
 });
 
+// Estado inicial del formulario: vacío al crear, o los datos del producto al editar. El formulario se
+// monta de nuevo para cada producto (Admin le pone key), así que basta con leerlo una vez.
+const leerProductoAEditar = (productoAEditar) => {
+  if (!productoAEditar) {
+    return {
+      producto: {
+        nombre: '',
+        descripcion: '',
+        categoria: '',
+        publicado: false,
+        meta_titulo: '',
+        meta_descripcion: ''
+      },
+      imagenes: [],
+      productoGuardadoId: null,
+      atributosGlobales: [],
+      variantes: [crearVarianteVacia()]
+    };
+  }
+
+  const atributosGlobales = productoAEditar.atributos_globales
+    ? Object.entries(productoAEditar.atributos_globales).map(([clave, valor]) => ({
+        clave: clave.replace(/_/g, ' '),
+        valor: String(valor)
+      }))
+    : [];
+
+  const variantes =
+    productoAEditar.variantes && productoAEditar.variantes.length > 0
+      ? productoAEditar.variantes.map((v) => ({
+          sku: v.sku || '',
+          precio: v.precio ?? '',
+          precio_oferta: v.precio_oferta ?? '',
+          stock: v.stock ?? 0,
+
+          // Campos logísticos
+          peso_kg: v.peso_kg ?? 1.0,
+          alto_cm: v.alto_cm ?? 10,
+          ancho_cm: v.ancho_cm ?? 10,
+          largo_cm: v.largo_cm ?? 10,
+
+          atributosVariables: v.atributos_variables
+            ? Object.entries(v.atributos_variables).map(([clave, valor]) => ({
+                clave: clave.replace(/_/g, ' '),
+                valor: String(valor)
+              }))
+            : []
+        }))
+      : [crearVarianteVacia()];
+
+  return {
+    producto: {
+      nombre: productoAEditar.nombre || '',
+      descripcion: productoAEditar.descripcion || '',
+      categoria: productoAEditar.categoria || '',
+      publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
+      meta_titulo: productoAEditar.meta_titulo || '',
+      meta_descripcion: productoAEditar.meta_descripcion || ''
+    },
+    // Conservamos las imágenes existentes
+    imagenes: productoAEditar.imagenes || [],
+    // Guardamos el ID para poder subir imágenes
+    productoGuardadoId: productoAEditar.id || productoAEditar._id || null,
+    atributosGlobales,
+    variantes
+  };
+};
+
 export default function FormularioProducto({
   alCancelar,
   alGuardar,
   productoAEditar
 }) {
-  const [producto, setProducto] = useState({
-    nombre: '',
-    descripcion: '',
-    categoria: '',
-    publicado: false,
-    meta_titulo: '',
-    meta_descripcion: ''
-  });
+  const [inicial] = useState(() => leerProductoAEditar(productoAEditar));
+  const [producto, setProducto] = useState(inicial.producto);
 
   // Imágenes existentes/devueltas por el backend
-  const [imagenes, setImagenes] = useState([]);
+  const [imagenes, setImagenes] = useState(inicial.imagenes);
 
   // Archivos gestionados por GaleriaImagenes
   const [archivosGestionados, setArchivosGestionados] = useState([]);
 
   // ID del producto ya guardado
-  const [productoGuardadoId, setProductoGuardadoId] = useState(null);
+  const [productoGuardadoId, setProductoGuardadoId] = useState(inicial.productoGuardadoId);
 
   // Atributos globales
-  const [atributosGlobales, setAtributosGlobales] = useState([]);
+  const [atributosGlobales, setAtributosGlobales] = useState(inicial.atributosGlobales);
 
   // Variantes
-  const [variantes, setVariantes] = useState([
-    crearVarianteVacia()
-  ]);
+  const [variantes, setVariantes] = useState(inicial.variantes);
 
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
-
-  // ============================================================
-  // CARGAR DATOS DEL PRODUCTO AL EDITAR
-  // ============================================================
-
-  useEffect(() => {
-    if (productoAEditar) {
-      setProducto({
-        nombre: productoAEditar.nombre || '',
-        descripcion: productoAEditar.descripcion || '',
-        categoria: productoAEditar.categoria || '',
-        publicado:
-          productoAEditar.publicado !== undefined
-            ? productoAEditar.publicado
-            : false,
-        meta_titulo: productoAEditar.meta_titulo || '',
-        meta_descripcion: productoAEditar.meta_descripcion || ''
-      });
-
-      // Conservamos las imágenes existentes
-      setImagenes(productoAEditar.imagenes || []);
-
-      // Guardamos el ID para poder subir imágenes
-      setProductoGuardadoId(
-        productoAEditar.id || productoAEditar._id || null
-      );
-
-      // ========================================================
-      // ATRIBUTOS GLOBALES
-      // ========================================================
-
-      if (productoAEditar.atributos_globales) {
-        const arrGlobales = Object.entries(
-          productoAEditar.atributos_globales
-        ).map(([clave, valor]) => ({
-          clave: clave.replace(/_/g, ' '),
-          valor: String(valor)
-        }));
-
-        setAtributosGlobales(arrGlobales);
-      } else {
-        setAtributosGlobales([]);
-      }
-
-      // ========================================================
-      // VARIANTES
-      // ========================================================
-
-      if (
-        productoAEditar.variantes &&
-        productoAEditar.variantes.length > 0
-      ) {
-        const arrVariantes = productoAEditar.variantes.map((v) => {
-          const arrAttrVar = v.atributos_variables
-            ? Object.entries(v.atributos_variables).map(
-                ([clave, valor]) => ({
-                  clave: clave.replace(/_/g, ' '),
-                  valor: String(valor)
-                })
-              )
-            : [];
-
-          return {
-            sku: v.sku || '',
-            precio: v.precio ?? '',
-            precio_oferta: v.precio_oferta ?? '',
-            stock: v.stock ?? 0,
-
-            // Campos logísticos
-            peso_kg: v.peso_kg ?? 1.0,
-            alto_cm: v.alto_cm ?? 10,
-            ancho_cm: v.ancho_cm ?? 10,
-            largo_cm: v.largo_cm ?? 10,
-
-            atributosVariables: arrAttrVar
-          };
-        });
-
-        setVariantes(arrVariantes);
-      } else {
-        setVariantes([crearVarianteVacia()]);
-      }
-    } else {
-      // ========================================================
-      // CREAR PRODUCTO NUEVO
-      // ========================================================
-
-      setProductoGuardadoId(null);
-      setImagenes([]);
-      setArchivosGestionados([]);
-      setAtributosGlobales([]);
-      setVariantes([crearVarianteVacia()]);
-      setError('');
-    }
-  }, [productoAEditar]);
 
   // ============================================================
   // CARGAR CATEGORÍAS EXISTENTES

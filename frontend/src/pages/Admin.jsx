@@ -161,7 +161,9 @@ export default function Admin() {
             </div>
 
             {mostrandoFormulario || productoAEditar ? (
-              <FormularioProducto 
+              <FormularioProducto
+                // Un formulario nuevo por producto: lee sus datos una sola vez al montarse
+                key={productoAEditar ? (productoAEditar.id || productoAEditar._id) : 'nuevo'}
                 productoAEditar={productoAEditar}
                 alCancelar={() => {
                   setMostrandoFormulario(false);

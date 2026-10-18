@@ -36,21 +36,20 @@ export default function TablaInventario({ onEditarProducto }) {
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [ordenFiltro, setOrdenFiltro] = useState('');
 
-  const cargarProductos = async () => {
-    try {
-      setCargando(true);
-      const { data } = await clienteAxios.get('catalogo/productos/');
-      setProductos(Array.isArray(data) ? data : []);
-      setError(null);
-    } catch (err) {
-      console.error('Error al cargar inventario:', err);
-      setError('No se pudo cargar la lista de productos.');
-    } finally {
-      setCargando(false);
-    }
-  };
-
+  // La tabla parte cargando: el efecto solo actualiza el estado cuando responde el servidor
   useEffect(() => {
+    const cargarProductos = async () => {
+      try {
+        const { data } = await clienteAxios.get('catalogo/productos/');
+        setProductos(Array.isArray(data) ? data : []);
+        setError(null);
+      } catch (err) {
+        console.error('Error al cargar inventario:', err);
+        setError('No se pudo cargar la lista de productos.');
+      } finally {
+        setCargando(false);
+      }
+    };
     cargarProductos();
   }, []);
 

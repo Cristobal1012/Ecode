@@ -15,7 +15,8 @@ const MisDirecciones = () => {
     // Estados para el formulario de nueva dirección
     const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
     const [listaComunas, setListaComunas] = useState([]);
-    const [cargandoComunas, setCargandoComunas] = useState(false);
+    // Las comunas se piden una sola vez, al abrir la página
+    const [cargandoComunas, setCargandoComunas] = useState(true);
     
     const [nuevaDireccion, setNuevaDireccion] = useState({
         calle: '',
@@ -48,7 +49,34 @@ const MisDirecciones = () => {
         }
     }, [temaConfigurado]);
 
-    // CARGAR CONFIGURACIÓN, DIRECCIONES Y COMUNAS
+    // Crear, marcar como principal o eliminar sube la versión y el efecto vuelve a pedir la lista
+    const [versionDirecciones, setVersionDirecciones] = useState(0);
+    const cargarDirecciones = () => {
+        setCargando(true);
+        setVersionDirecciones((version) => version + 1);
+    };
+
+    useEffect(() => {
+        // Si se pide otra versión antes de que responda el servidor, la respuesta vieja se descarta
+        let vigente = true;
+        clienteAxios.get('ventas/direcciones/')
+            .then(({ data }) => {
+                if (!vigente) return;
+                setDirecciones(data);
+                setError('');
+            })
+            .catch((err) => {
+                if (!vigente) return;
+                console.error("Error cargando direcciones:", err);
+                setError('No se pudieron cargar tus direcciones. Intenta de nuevo.');
+            })
+            .finally(() => {
+                if (vigente) setCargando(false);
+            });
+        return () => { vigente = false; };
+    }, [versionDirecciones]);
+
+    // CARGAR CONFIGURACIÓN Y COMUNAS
     useEffect(() => {
         clienteAxios.get('configuracion/')
             .then(({ data }) => {
@@ -63,35 +91,12 @@ const MisDirecciones = () => {
             })
             .catch((error) => console.error('Error cargando configuración:', error));
 
-        cargarDirecciones();
-        cargarComunas();
+
+        clienteAxios.get('ventas/logistica/comunas/')
+            .then((response) => setListaComunas(response.data.comunas || []))
+            .catch((err) => console.error("Error cargando comunas:", err))
+            .finally(() => setCargandoComunas(false));
     }, []);
-
-    const cargarDirecciones = async () => {
-        try {
-            setCargando(true);
-            const response = await clienteAxios.get('ventas/direcciones/');
-            setDirecciones(response.data);
-            setError('');
-        } catch (err) {
-            console.error("Error cargando direcciones:", err);
-            setError('No se pudieron cargar tus direcciones. Intenta de nuevo.');
-        } finally {
-            setCargando(false);
-        }
-    };
-
-    const cargarComunas = async () => {
-        try {
-            setCargandoComunas(true);
-            const response = await clienteAxios.get('ventas/logistica/comunas/');
-            setListaComunas(response.data.comunas || []);
-        } catch (err) {
-            console.error("Error cargando comunas:", err);
-        } finally {
-            setCargandoComunas(false);
-        }
-    };
 
     const handleCrearDireccion = async (e) => {
         e.preventDefault();

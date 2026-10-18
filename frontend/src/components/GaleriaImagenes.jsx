@@ -200,8 +200,8 @@ export default function GaleriaImagenes({
       style={{
         marginTop: '20px',
         padding: '20px',
-        backgroundColor: '#fff',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
         borderRadius: '8px'
       }}
     >
@@ -218,14 +218,14 @@ export default function GaleriaImagenes({
           padding: '30px',
           textAlign: 'center',
           cursor: 'pointer',
-          backgroundColor: '#f9fafb'
+          backgroundColor: 'var(--color-secondary)'
         }}
       >
         <p style={{ margin: 0, fontWeight: 'bold' }}>
           Arrastra tus imágenes aquí
         </p>
 
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: 'var(--color-muted)' }}>
           o haz clic para seleccionarlas
         </p>
 
@@ -247,7 +247,7 @@ export default function GaleriaImagenes({
       {error && (
         <p
           style={{
-            color: '#ef4444',
+            color: '#b91c1c',
             backgroundColor: '#fee2e2',
             padding: '10px',
             borderRadius: '4px',
@@ -290,7 +290,7 @@ export default function GaleriaImagenes({
                   style={{
                     width: '100%',
                     marginTop: '5px',
-                    backgroundColor: '#ef4444',
+                    backgroundColor: '#b91c1c',
                     color: '#fff',
                     border: 'none',
                     padding: '5px',
@@ -313,7 +313,7 @@ export default function GaleriaImagenes({
               marginTop: '15px',
               padding: '12px',
               backgroundColor: 'var(--color-primary)',
-              color: '#fff',
+              color: 'var(--color-on-primary)',
               border: 'none',
               borderRadius: '4px',
               cursor: subiendo ? 'not-allowed' : 'pointer'
@@ -341,7 +341,7 @@ export default function GaleriaImagenes({
               <div
                 key={url || index}
                 style={{
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--color-border)',
                   borderRadius: '6px',
                   padding: '5px'
                 }}
@@ -382,7 +382,7 @@ export default function GaleriaImagenes({
                     backgroundColor:
                       eliminando === index
                         ? '#9ca3af'
-                        : '#ef4444',
+                        : '#b91c1c',
                     color: '#fff',
                     border: 'none',
                     padding: '6px',

@@ -545,19 +545,19 @@ export default function FormularioProducto({
   const inputStyle = {
     width: '100%',
     padding: '10px',
-    border: '1px solid #ccc',
+    border: '1px solid var(--color-border)',
     borderRadius: '4px',
     marginTop: '5px',
-    backgroundColor: '#fff',
-    color: '#000',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text)',
     boxSizing: 'border-box'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--color-surface)',
     padding: '15px',
     borderRadius: '6px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--color-border)',
     marginBottom: '15px'
   };
 
@@ -570,7 +570,7 @@ export default function FormularioProducto({
       onSubmit={handleSubmit}
       style={{
         maxWidth: '900px',
-        backgroundColor: '#f9fafb',
+        backgroundColor: 'var(--color-secondary)',
         padding: '25px',
         borderRadius: '8px'
       }}
@@ -621,7 +621,7 @@ export default function FormularioProducto({
       {error && (
         <p
           style={{
-            color: '#ef4444',
+            color: '#b91c1c',
             backgroundColor: '#fee2e2',
             padding: '10px',
             borderRadius: '4px'
@@ -776,7 +776,7 @@ export default function FormularioProducto({
                     }}
                     style={{
                       padding: '0 15px',
-                      backgroundColor: '#6b7280',
+                      backgroundColor: 'var(--color-muted)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -832,7 +832,7 @@ export default function FormularioProducto({
             Configuración SEO
           </h4>
 
-          <p style={{ color: '#6b7280', fontSize: '0.9em' }}>
+          <p style={{ color: 'var(--color-muted)', fontSize: '0.9em' }}>
             Estos datos ayudan a los buscadores a comprender y mostrar
             tu producto en los resultados de búsqueda.
           </p>
@@ -852,7 +852,7 @@ export default function FormularioProducto({
               style={inputStyle}
             />
 
-            <small style={{ color: '#6b7280' }}>
+            <small style={{ color: 'var(--color-muted)' }}>
               {producto.meta_titulo.length}/60 caracteres
             </small>
           </div>
@@ -874,7 +874,7 @@ export default function FormularioProducto({
               }}
             />
 
-            <small style={{ color: '#6b7280' }}>
+            <small style={{ color: 'var(--color-muted)' }}>
               {producto.meta_descripcion.length}/160 caracteres
             </small>
           </div>
@@ -927,7 +927,7 @@ export default function FormularioProducto({
               padding: '5px 10px',
               backgroundColor:
                 'var(--color-primary)',
-              color: '#fff',
+              color: 'var(--color-on-primary)',
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -983,7 +983,7 @@ export default function FormularioProducto({
                 style={{
                   marginTop: '5px',
                   padding: '10px',
-                  backgroundColor: '#ef4444',
+                  backgroundColor: '#b91c1c',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -1029,7 +1029,7 @@ export default function FormularioProducto({
             padding: '6px 12px',
             backgroundColor:
               'var(--color-primary)',
-            color: '#fff',
+            color: 'var(--color-on-primary)',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
@@ -1074,7 +1074,7 @@ export default function FormularioProducto({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#ef4444',
+                  color: '#b91c1c',
                   cursor: 'pointer',
                   fontWeight: 'bold'
                 }}
@@ -1233,7 +1233,7 @@ export default function FormularioProducto({
                   style={{
                     fontSize: '0.85em',
                     fontWeight: 'bold',
-                    color: '#0369a1'
+                    color: 'var(--color-primary)'
                   }}
                 >
                   Dimensiones Logísticas
@@ -1383,7 +1383,7 @@ export default function FormularioProducto({
 
             <div
               style={{
-                backgroundColor: '#f3f4f6',
+                backgroundColor: 'var(--color-secondary)',
                 padding: '10px',
                 borderRadius: '4px'
               }}
@@ -1417,7 +1417,7 @@ export default function FormularioProducto({
                     fontSize: '0.8em',
                     padding: '4px 8px',
                     backgroundColor:
-                      '#6b7280',
+                      'var(--color-muted)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '4px',
@@ -1487,7 +1487,7 @@ export default function FormularioProducto({
                       style={{
                         backgroundColor:
                           'transparent',
-                        color: '#ef4444',
+                        color: '#b91c1c',
                         border: 'none',
                         cursor: 'pointer'
                       }}
@@ -1515,12 +1515,12 @@ export default function FormularioProducto({
           backgroundColor:
             producto.publicado
               ? '#ecfdf5'
-              : '#f3f4f6',
+              : 'var(--color-secondary)',
           borderRadius: '8px',
           border: `1px solid ${
             producto.publicado
               ? '#10b981'
-              : '#d1d5db'
+              : 'var(--color-border)'
           }`,
           marginTop: '20px'
         }}
@@ -1543,7 +1543,7 @@ export default function FormularioProducto({
           <span
             style={{
               fontSize: '0.85em',
-              color: '#6b7280'
+              color: 'var(--color-muted)'
             }}
           >
             {producto.publicado
@@ -1563,9 +1563,10 @@ export default function FormularioProducto({
           <span
             style={{
               fontWeight: 'bold',
+              // Contraste AA: el verde #10b981 y el gris #9ca3af no llegaban a 4,5:1
               color: producto.publicado
-                ? '#10b981'
-                : '#9ca3af'
+                ? '#166534'
+                : 'var(--color-muted)'
             }}
           >
             {producto.publicado
@@ -1605,7 +1606,7 @@ export default function FormularioProducto({
             padding: '15px',
             backgroundColor:
               'var(--color-primary)',
-            color: '#ffffff',
+            color: 'var(--color-on-primary)',
             fontSize: '1.1em',
             fontWeight: 'bold',
             border: 'none',
@@ -1630,7 +1631,7 @@ export default function FormularioProducto({
               padding: '15px',
               backgroundColor:
                 'var(--color-primary)',
-              color: '#ffffff',
+              color: 'var(--color-on-primary)',
               fontSize: '1.1em',
               fontWeight: 'bold',
               border: 'none',
@@ -1654,7 +1655,7 @@ export default function FormularioProducto({
               padding: '15px',
               backgroundColor:
                 'var(--color-primary)',
-              color: '#ffffff',
+              color: 'var(--color-on-primary)',
               fontSize: '1.1em',
               fontWeight: 'bold',
               border: 'none',

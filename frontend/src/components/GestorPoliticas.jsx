@@ -33,7 +33,7 @@ const estiloCampo = {
   width: '100%',
   maxWidth: '400px',
   borderRadius: '4px',
-  border: '1px solid #ccc',
+  border: '1px solid var(--color-border)',
   fontSize: '1rem'
 };
 
@@ -108,8 +108,8 @@ export default function GestorPoliticas() {
   const faltantes = REQUERIDAS_PARA_VENDER.filter(t => !paginas.find(p => p.tipo_pagina === t)?.publicada);
 
   return (
-    <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-      <h2 style={{ marginBottom: '20px', color: 'var(--color-primary)' }}>Gestión de Páginas Legales</h2>
+    <div>
+      <h2 className="admin-titulo">Páginas legales</h2>
 
       {faltantes.length > 0 && (
         <div style={{ ...ESTILOS_AVISO.advertencia, padding: '12px 16px', borderRadius: '6px', marginBottom: '20px' }}>
@@ -144,7 +144,7 @@ export default function GestorPoliticas() {
           ))}
         </select>
         {paginaActual?.ultima_actualizacion && (
-          <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', color: '#4b5563' }}>
+          <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
             Última actualización: {new Date(paginaActual.ultima_actualizacion).toLocaleString('es-CL')}
           </p>
         )}
@@ -196,7 +196,7 @@ export default function GestorPoliticas() {
         style={{
           padding: '12px 24px',
           backgroundColor: 'var(--color-primary)',
-          color: '#fff',
+          color: 'var(--color-on-primary)',
           border: 'none',
           borderRadius: '4px',
           cursor: guardando || !modificado ? 'not-allowed' : 'pointer',

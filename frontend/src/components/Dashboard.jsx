@@ -110,7 +110,7 @@ export default function Dashboard() {
           Dashboard
         </h2>
 
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: 'var(--color-muted)' }}>
           Cargando información...
         </p>
       </div>
@@ -163,7 +163,7 @@ export default function Dashboard() {
         <p
           style={{
             margin: '6px 0 0',
-            color: '#6b7280',
+            color: 'var(--color-muted)',
             fontSize: '0.95rem',
           }}
         >
@@ -188,7 +188,7 @@ export default function Dashboard() {
               marginBottom: '6px',
               fontSize: '0.85rem',
               fontWeight: '600',
-              color: '#374151',
+              color: 'var(--color-text)',
             }}
           >
             Desde
@@ -200,10 +200,10 @@ export default function Dashboard() {
             onChange={(e) => setFechaInicio(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid #d1d5db',
+              border: '1px solid var(--color-border)',
               borderRadius: '8px',
-              color: '#374151',
-              backgroundColor: '#ffffff',
+              color: 'var(--color-text)',
+              backgroundColor: 'var(--color-surface)',
               fontSize: '0.9rem',
             }}
           />
@@ -216,7 +216,7 @@ export default function Dashboard() {
               marginBottom: '6px',
               fontSize: '0.85rem',
               fontWeight: '600',
-              color: '#374151',
+              color: 'var(--color-text)',
             }}
           >
             Hasta
@@ -228,10 +228,10 @@ export default function Dashboard() {
             onChange={(e) => setFechaFin(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid #d1d5db',
+              border: '1px solid var(--color-border)',
               borderRadius: '8px',
-              color: '#374151',
-              backgroundColor: '#ffffff',
+              color: 'var(--color-text)',
+              backgroundColor: 'var(--color-surface)',
               fontSize: '0.9rem',
             }}
           />
@@ -244,7 +244,7 @@ export default function Dashboard() {
             border: 'none',
             borderRadius: '7px',
             backgroundColor: 'var(--color-primary)',
-            color: '#ffffff',
+            color: 'var(--color-on-primary)',
             fontWeight: '600',
             cursor: 'pointer',
           }}
@@ -257,10 +257,10 @@ export default function Dashboard() {
             onClick={limpiarFiltro}
             style={{
               padding: '10px 18px',
-              border: '1px solid #d1d5db',
+              border: '1px solid var(--color-border)',
               borderRadius: '7px',
-              backgroundColor: '#ffffff',
-              color: '#374151',
+              backgroundColor: 'var(--color-surface)',
+              color: 'var(--color-text)',
               fontWeight: '600',
               cursor: 'pointer',
             }}
@@ -327,11 +327,11 @@ export default function Dashboard() {
       {/* Resumen */}
       <section
         style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--color-surface)',
           borderRadius: '12px',
           padding: '25px',
           marginBottom: '30px',
-          border: '1px solid #e5e7eb',
+          border: '1px solid var(--color-border)',
         }}
       >
         <h3
@@ -347,7 +347,7 @@ export default function Dashboard() {
         <p
           style={{
             margin: '0 0 25px',
-            color: '#6b7280',
+            color: 'var(--color-muted)',
             fontSize: '0.9rem',
           }}
         >
@@ -368,20 +368,20 @@ export default function Dashboard() {
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="#e5e7eb"
+                  stroke="var(--color-border)"
                 />
 
                 <XAxis
                   dataKey="fechaFormateada"
                   tick={{
-                    fill: '#6b7280',
+                    fill: 'var(--color-muted)',
                     fontSize: 12,
                   }}
                 />
 
                 <YAxis
                   tick={{
-                    fill: '#6b7280',
+                    fill: 'var(--color-muted)',
                     fontSize: 12,
                   }}
                   tickFormatter={(valor) => formatearMonto(valor)}
@@ -417,7 +417,7 @@ export default function Dashboard() {
             style={{
               padding: '50px 20px',
               textAlign: 'center',
-              color: '#6b7280',
+              color: 'var(--color-muted)',
             }}
           >
             No existen ventas pagadas para el período seleccionado.

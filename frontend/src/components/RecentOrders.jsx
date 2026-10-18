@@ -53,8 +53,8 @@ export default function RecentOrders({ ordenes = [] }) {
   return (
     <section
       style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
         borderRadius: '12px',
         padding: '24px',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
@@ -82,7 +82,7 @@ export default function RecentOrders({ ordenes = [] }) {
           <p
             style={{
               margin: '5px 0 0',
-              color: '#6b7280',
+              color: 'var(--color-muted)',
               fontSize: '0.9rem'
             }}
           >
@@ -96,7 +96,7 @@ export default function RecentOrders({ ordenes = [] }) {
           style={{
             padding: '30px',
             textAlign: 'center',
-            color: '#6b7280'
+            color: 'var(--color-muted)'
           }}
         >
           No hay pedidos registrados.
@@ -125,8 +125,8 @@ export default function RecentOrders({ ordenes = [] }) {
                     style={{
                       padding: '12px',
                       textAlign: titulo === 'Total' ? 'right' : 'left',
-                      borderBottom: '1px solid #e5e7eb',
-                      color: '#6b7280',
+                      borderBottom: '1px solid var(--color-border)',
+                      color: 'var(--color-muted)',
                       fontSize: '0.8rem',
                       fontWeight: '600',
                       textTransform: 'uppercase'
@@ -147,7 +147,7 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6',
+                        borderBottom: '1px solid var(--color-border)',
                         fontWeight: '600',
                         color: 'var(--color-text)'
                       }}
@@ -158,7 +158,7 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6',
+                        borderBottom: '1px solid var(--color-border)',
                         color: 'var(--color-text)'
                       }}
                     >
@@ -168,8 +168,8 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6',
-                        color: '#6b7280'
+                        borderBottom: '1px solid var(--color-border)',
+                        color: 'var(--color-muted)'
                       }}
                     >
                       {formatearFecha(orden.fecha_creacion)}
@@ -178,8 +178,8 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6',
-                        color: '#4b5563'
+                        borderBottom: '1px solid var(--color-border)',
+                        color: 'var(--color-muted)'
                       }}
                     >
                       <div
@@ -217,7 +217,7 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6'
+                        borderBottom: '1px solid var(--color-border)'
                       }}
                     >
                       <span
@@ -236,7 +236,7 @@ export default function RecentOrders({ ordenes = [] }) {
                     <td
                       style={{
                         padding: '15px 12px',
-                        borderBottom: '1px solid #f3f4f6',
+                        borderBottom: '1px solid var(--color-border)',
                         textAlign: 'right',
                         fontWeight: '600',
                         color: 'var(--color-text)'

@@ -98,22 +98,22 @@ export default function GestorPromociones() {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '950px', margin: '0 auto' }}>
-      <h2 style={{ color: 'var(--color-primary)', marginBottom: '20px' }}>Gestión de Promociones</h2>
+    // El título lo pone la sección "Promociones y Descuentos" de Configuración
+    <div style={{ maxWidth: '950px' }}>
 
       {/* FORMULARIO DE CREACIÓN */}
-      <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
-        <h3 style={{ marginTop: 0, color: '#333' }}>Crear Nuevo Código</h3>
+      <div style={{ backgroundColor: 'var(--color-secondary)', padding: '20px', marginBottom: '30px' }}>
+        <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Crear nuevo código</h4>
         
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
-            <input required type="text" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', textTransform: 'uppercase' }} />
+            <input required type="text" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)', textTransform: 'uppercase' }} />
           </div>
 
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Tipo de Descuento</label>
-            <select name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+            <select name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
               <option value="PORCENTAJE">Porcentaje (%)</option>
               <option value="MONTO_FIJO">Monto Fijo ($)</option>
             </select>
@@ -121,24 +121,24 @@ export default function GestorPromociones() {
 
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
-            <input required type="number" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+            <input required type="number" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
           </div>
 
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
-            <input type="number" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+            <input type="number" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
           </div>
 
           <div>
             <label htmlFor="promocion-fecha-expiracion" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Válido hasta (opcional)</label>
-            <input id="promocion-fecha-expiracion" type="date" name="fecha_expiracion" value={formData.fecha_expiracion} onChange={handleChange} aria-describedby="promocion-fecha-expiracion-ayuda" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <p id="promocion-fecha-expiracion-ayuda" style={{ margin: '5px 0 0', fontSize: '13px', color: '#4b5563' }}>
+            <input id="promocion-fecha-expiracion" type="date" name="fecha_expiracion" value={formData.fecha_expiracion} onChange={handleChange} aria-describedby="promocion-fecha-expiracion-ayuda" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <p id="promocion-fecha-expiracion-ayuda" style={{ margin: '5px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
               El código deja de funcionar al terminar ese día. Déjalo vacío para que no venza.
             </p>
           </div>
 
           <div style={{ gridColumn: '1 / -1', textAlign: 'right', marginTop: '10px' }}>
-            <button type="submit" style={{ padding: '10px 24px', backgroundColor: 'var(--color-primary, #0369a1)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <button type="submit" style={{ padding: '10px 24px', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
               Guardar Promoción
             </button>
           </div>
@@ -146,12 +146,12 @@ export default function GestorPromociones() {
       </div>
 
       {/* TABLA DE PROMOCIONES ACTIVAS */}
-      <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
-        <h3 style={{ marginTop: 0, color: '#333' }}>Códigos Activos</h3>
+      <div style={{ backgroundColor: 'var(--color-surface)', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+        <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Códigos activos</h4>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+              <tr style={{ borderBottom: '2px solid var(--color-border)', backgroundColor: 'var(--color-secondary)' }}>
                 <th style={{ padding: '12px' }}>Código</th>
                 <th style={{ padding: '12px' }}>Tipo</th>
                 <th style={{ padding: '12px' }}>Valor</th>
@@ -163,31 +163,31 @@ export default function GestorPromociones() {
             <tbody>
                 {promociones.map((promo) => (
                     <tr key={promo.id}>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', fontWeight: 'bold', color: 'var(--color-primary, #0369a1)' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)', fontWeight: 'bold', color: 'var(--color-primary, #0369a1)' }}>
                         {promo.codigo}
                     </td>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                         {promo.tipo_descuento === 'PORCENTAJE' ? 'Porcentaje' : 'Monto Fijo'}
                     </td>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                         {promo.tipo_descuento === 'PORCENTAJE' 
                         ? `${promo.valor_descuento}%` 
                         : `$${Number(promo.valor_descuento).toLocaleString('es-CL')}`
                         }
                     </td>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: '#555' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                         {promo.umbral_envio_gratis ? `$${Number(promo.umbral_envio_gratis).toLocaleString('es-CL')}` : '-'}
                     </td>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee', color: estaVencida(promo) ? '#b91c1c' : '#555' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)', color: estaVencida(promo) ? '#b91c1c' : 'var(--color-muted)' }}>
                         {promo.fecha_expiracion
                           ? `${new Date(promo.fecha_expiracion).toLocaleDateString('es-CL')}${estaVencida(promo) ? ' (vencido)' : ''}`
                           : 'Sin vencimiento'}
                     </td>
-                    <td style={{ padding: '12px', borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--color-border)' }}>
                       <button
                           
                           onClick={() => cargarPromocionParaEditar(promo)}
-                          style={{ padding: '6px 12px', backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
+                          style={{ padding: '6px 12px', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
                       >
                           Editar
                       </button>

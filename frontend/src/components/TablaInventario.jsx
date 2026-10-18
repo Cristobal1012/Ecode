@@ -218,7 +218,7 @@ export default function TablaInventario({ onEditarProducto }) {
                     {estaExpandida && producto.variantes && producto.variantes.map((variante, index) => (
                       <tr key={index} style={{ backgroundColor: '#f8fafc', borderBottom: index === producto.variantes.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
                         <td></td>
-                        <td colSpan="2" style={{ padding: '10px 15px', borderLeft: '3px solid var(--color-secondary)' }}>
+                        <td colSpan="2" style={{ padding: '10px 15px', borderLeft: '3px solid var(--color-primary)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{ color: '#9ca3af' }}>↳</span>
                             <span style={{ fontFamily: 'monospace', color: 'var(--color-primary)', fontWeight: 'bold' }}>{variante.sku}</span>

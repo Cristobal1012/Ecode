@@ -195,7 +195,7 @@ export default function GestorPoliticas() {
         disabled={guardando || !modificado}
         style={{
           padding: '12px 24px',
-          backgroundColor: 'var(--color-accent)',
+          backgroundColor: 'var(--color-primary)',
           color: '#fff',
           border: 'none',
           borderRadius: '4px',

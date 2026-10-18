@@ -9,7 +9,8 @@ export default function AdminSidebar({
   const getEstiloBoton = (activo) => ({
     width: '100%',
     padding: '15px 20px',
-    background: activo ? 'var(--color-secondary)' : 'transparent',
+    // Realce translúcido: se lee sobre el primary de cualquiera de los 4 temas
+    background: activo ? 'rgb(255 255 255 / 14%)' : 'transparent',
     color: activo ? '#ffffff' : 'rgba(255,255,255,0.7)',
     border: 'none',
     textAlign: 'left',
@@ -18,7 +19,7 @@ export default function AdminSidebar({
     transition: 'all 0.2s',
     fontWeight: activo ? 'bold' : 'normal',
     borderLeft: activo
-      ? '4px solid var(--color-accent)'
+      ? '4px solid var(--color-on-primary)'
       : '4px solid transparent',
   });
 

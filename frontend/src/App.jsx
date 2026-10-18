@@ -10,7 +10,7 @@ import VariantSelector from './components/VariantSelector';
 import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
-import { PALETTES } from './constants/palettes';
+import { aplicarPaleta } from './constants/palettes';
 import DetalleProducto from './pages/DetalleProducto';
 import SeguimientoEnvio from './pages/SeguimientoEnvio';
 import HistorialPedidos from './pages/HistorialPedidos'; // NUEVO: Importamos el componente de historial
@@ -25,18 +25,7 @@ import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
 import Header from './components/header/header';
 
-// Inyecta las variables CSS directamente en :root
-const applyPaletteToRoot = (paletteId) => {
-  const activePalette = PALETTES.find((p) => p.id === Number(paletteId)) || PALETTES[0];
-  if (activePalette) {
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', activePalette.colors.primary);
-    root.style.setProperty('--color-secondary', activePalette.colors.secondary);
-    root.style.setProperty('--color-accent', activePalette.colors.accent);
-    root.style.setProperty('--color-background', activePalette.colors.background);
-    root.style.setProperty('--color-text', activePalette.colors.text);
-  }
-};
+const applyPaletteToRoot = aplicarPaleta;
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {

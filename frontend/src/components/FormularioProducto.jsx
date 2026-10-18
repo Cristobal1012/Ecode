@@ -736,7 +736,7 @@ export default function FormularioProducto({
                   style={{
                     padding: '0 15px',
                     backgroundColor:
-                      'var(--color-secondary)',
+                      'var(--color-primary)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -824,7 +824,7 @@ export default function FormularioProducto({
         <div style={{ gridColumn: '1 / -1' }}>
           <h4
             style={{
-              borderBottom: '2px solid var(--color-secondary)',
+              borderBottom: '2px solid var(--color-border)',
               paddingBottom: '5px',
               color: 'var(--color-text)'
             }}
@@ -926,7 +926,7 @@ export default function FormularioProducto({
             style={{
               padding: '5px 10px',
               backgroundColor:
-                'var(--color-secondary)',
+                'var(--color-primary)',
               color: '#fff',
               border: 'none',
               borderRadius: '4px',
@@ -1007,7 +1007,7 @@ export default function FormularioProducto({
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom:
-            '2px solid var(--color-secondary)',
+            '2px solid var(--color-border)',
           paddingBottom: '5px',
           marginTop: '30px',
           marginBottom: '15px'
@@ -1028,7 +1028,7 @@ export default function FormularioProducto({
           style={{
             padding: '6px 12px',
             backgroundColor:
-              'var(--color-accent)',
+              'var(--color-primary)',
             color: '#fff',
             border: 'none',
             borderRadius: '4px',
@@ -1629,7 +1629,7 @@ export default function FormularioProducto({
               width: '100%',
               padding: '15px',
               backgroundColor:
-                'var(--color-secondary)',
+                'var(--color-primary)',
               color: '#ffffff',
               fontSize: '1.1em',
               fontWeight: 'bold',

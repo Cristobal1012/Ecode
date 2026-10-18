@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
-import { PALETTES } from '../constants/palettes';
+import { aplicarPaleta } from '../constants/palettes';
 import VariantSelector from '../components/VariantSelector';
 import Header from '../components/header/header';
 import ProductCardGrid from '../components/ProductCardGrid';
@@ -36,25 +36,7 @@ export default function Catalogo() {
 
   // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
-    const activePalette = PALETTES.find((p) => p.id === temaConfigurado) || PALETTES[0];
-    const root = document.documentElement.style;
-
-    if (activePalette) {
-      root.setProperty('--color-primary', activePalette.colors.primary);
-      root.setProperty('--color-secondary', activePalette.colors.secondary);
-      root.setProperty('--color-accent', activePalette.colors.accent);
-      root.setProperty('--color-background', activePalette.colors.background);
-      root.setProperty('--color-text', activePalette.colors.text);
-
-      root.setProperty('--catalogo-primary', activePalette.colors.primary);
-      root.setProperty('--catalogo-background', activePalette.colors.background);
-      root.setProperty('--catalogo-text', activePalette.colors.text);
-      
-      root.setProperty('--catalogo-on-primary', '#ffffff');
-      root.setProperty('--catalogo-surface', '#ffffff');
-      root.setProperty('--catalogo-muted-text', '#6b7280');
-      root.setProperty('--catalogo-border', '#e5e7eb');
-    }
+    aplicarPaleta(temaConfigurado);
   }, [temaConfigurado]);
 
   // FETCH DE DATOS

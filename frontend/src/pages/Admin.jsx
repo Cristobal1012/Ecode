@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PaletteSelector from '../components/PaletteSelector';
 import clienteAxios from '../components/auth/axiosConfig'; 
-import { PALETTES } from '../constants/palettes';
+import { aplicarPaleta } from '../constants/palettes';
 import FormularioProducto from '../components/FormularioProducto';
 import TablaInventario from '../components/TablaInventario';
 import Dashboard from '../components/Dashboard';
@@ -62,20 +62,7 @@ export default function Admin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedPaletteId = Number(localStorage.getItem('ecommerce_palette')) || 1;
-    const activePalette = PALETTES.find((p) => p.id === savedPaletteId) || PALETTES[0];
-
-    const applyColors = (colors) => {
-      if (!colors) return;
-      const root = document.documentElement;
-      root.style.setProperty('--color-primary', colors.primary);
-      root.style.setProperty('--color-secondary', colors.secondary);
-      root.style.setProperty('--color-accent', colors.accent);
-      root.style.setProperty('--color-background', colors.background);
-      root.style.setProperty('--color-text', colors.text);
-    };
-
-    applyColors(activePalette.colors);
+    aplicarPaleta(Number(localStorage.getItem('ecommerce_palette')) || 1);
 
     const fetchTema = async () => {
       try {
@@ -85,8 +72,7 @@ export default function Admin() {
           if (config.tema_seleccionado !== undefined) {
             const temaId = Number(config.tema_seleccionado);
             localStorage.setItem('ecommerce_palette', temaId.toString());
-            const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-            applyColors(palette.colors);
+            aplicarPaleta(temaId);
           }
           // Cargar datos de la tienda para el formulario de retiro local
           setConfigLocal({
@@ -106,9 +92,7 @@ export default function Admin() {
     fetchTema();
 
     const handleThemeChanged = (e) => {
-      const temaId = e.detail.temaId;
-      const newPalette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-      applyColors(newPalette.colors);
+      aplicarPaleta(e.detail.temaId);
     };
 
     window.addEventListener('themeChanged', handleThemeChanged);
@@ -144,7 +128,7 @@ export default function Admin() {
                   onClick={() => setMostrandoFormulario(true)}
                   style={{ 
                     padding: '10px 20px', 
-                    backgroundColor: 'var(--color-accent)', 
+                    backgroundColor: 'var(--color-primary)', 
                     color: '#fff', 
                     border: 'none', 
                     borderRadius: '4px', 

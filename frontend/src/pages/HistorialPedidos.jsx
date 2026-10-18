@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
-import { PALETTES } from '../constants/palettes';
+import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 
 const TEMA_PREDETERMINADO = 1;
@@ -18,25 +18,7 @@ const HistorialPedidos = () => {
 
     // APLICAR COLORES: Sincroniza la misma paleta del administrador que usa el Catálogo
     useEffect(() => {
-        const activePalette = PALETTES.find((p) => p.id === temaConfigurado) || PALETTES[0];
-        const root = document.documentElement.style;
-
-        if (activePalette) {
-            root.setProperty('--color-primary', activePalette.colors.primary);
-            root.setProperty('--color-secondary', activePalette.colors.secondary);
-            root.setProperty('--color-accent', activePalette.colors.accent);
-            root.setProperty('--color-background', activePalette.colors.background);
-            root.setProperty('--color-text', activePalette.colors.text);
-
-            root.setProperty('--catalogo-primary', activePalette.colors.primary);
-            root.setProperty('--catalogo-background', activePalette.colors.background);
-            root.setProperty('--catalogo-text', activePalette.colors.text);
-            
-            root.setProperty('--catalogo-on-primary', '#ffffff');
-            root.setProperty('--catalogo-surface', '#ffffff');
-            root.setProperty('--catalogo-muted-text', '#6b7280');
-            root.setProperty('--catalogo-border', '#e5e7eb');
-        }
+        aplicarPaleta(temaConfigurado);
     }, [temaConfigurado]);
 
     // Cargar la configuración de la tienda y el historial de pedidos

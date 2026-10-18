@@ -1,17 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from "./auth/axiosConfig";
-import { PALETTES } from '../constants/palettes';
+import { PALETTES, aplicarPaleta } from '../constants/palettes';
 
-const applyColorsToRoot = (colors) => {
-  // ... tu función se mantiene igual
-  if (!colors) return;
-  const root = document.documentElement;
-  root.style.setProperty('--color-primary', colors.primary);
-  root.style.setProperty('--color-secondary', colors.secondary);
-  root.style.setProperty('--color-accent', colors.accent);
-  root.style.setProperty('--color-background', colors.background);
-  root.style.setProperty('--color-text', colors.text);
-};
 
 export default function PaletteSelector() {
   const [selectedId, setSelectedId] = useState(() => {
@@ -19,7 +9,7 @@ export default function PaletteSelector() {
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     const initialPalette = PALETTES.find((p) => p.id === initialId) || PALETTES[0];
-    applyColorsToRoot(initialPalette.colors);
+    aplicarPaleta(initialPalette.id);
     return initialId;
   });
 
@@ -38,7 +28,7 @@ export default function PaletteSelector() {
           setSelectedId(temaId);
           localStorage.setItem('ecommerce_palette', temaId.toString());
           const palette = PALETTES.find((p) => p.id === temaId) || PALETTES[0];
-          applyColorsToRoot(palette.colors);
+          aplicarPaleta(palette.id);
         }
       } catch (error) {
         console.error('Error al sincronizar configuración con backend:', error);
@@ -51,7 +41,7 @@ export default function PaletteSelector() {
   const handleSelect = (palette) => {
       // ... se mantiene igual
     setSelectedId(palette.id);
-    applyColorsToRoot(palette.colors);
+    aplicarPaleta(palette.id);
     localStorage.setItem('ecommerce_palette', palette.id.toString());
     window.dispatchEvent(
       new CustomEvent('themeChanged', { detail: { temaId: palette.id } })

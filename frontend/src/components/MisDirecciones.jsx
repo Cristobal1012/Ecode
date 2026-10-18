@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
-import { PALETTES } from '../constants/palettes';
+import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 
 const TEMA_PREDETERMINADO = 1;
@@ -37,16 +37,7 @@ const MisDirecciones = () => {
 
     // APLICAR COLORES ADAPTATIVOS
     useEffect(() => {
-        const activePalette = PALETTES.find((p) => p.id === temaConfigurado) || PALETTES[0];
-        const root = document.documentElement.style;
-
-        if (activePalette) {
-            root.setProperty('--color-primary', activePalette.colors.primary);
-            root.setProperty('--color-secondary', activePalette.colors.secondary);
-            root.setProperty('--color-accent', activePalette.colors.accent);
-            root.setProperty('--color-background', activePalette.colors.background);
-            root.setProperty('--color-text', activePalette.colors.text);
-        }
+        aplicarPaleta(temaConfigurado);
     }, [temaConfigurado]);
 
     // Crear, marcar como principal o eliminar sube la versión y el efecto vuelve a pedir la lista
@@ -235,7 +226,7 @@ const MisDirecciones = () => {
                                 <button type="button" onClick={() => setMostrandoFormulario(false)} style={{ padding: '10px 15px', backgroundColor: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
                                     Cancelar
                                 </button>
-                                <button type="submit" style={{ padding: '10px 15px', backgroundColor: 'var(--color-secondary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                <button type="submit" style={{ padding: '10px 15px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
                                     Guardar Dirección
                                 </button>
                             </div>

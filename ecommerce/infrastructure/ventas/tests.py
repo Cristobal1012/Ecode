@@ -54,7 +54,6 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
             texto_bienvenida='Descubre nuestros productos',
             texto_boton_ingreso='Ir al catálogo',
             banner_url='https://example.com/banner.jpg',
-            api_keys_pagos={'secreto': 'no-exponer'},
         )
 
         data = ConfiguracionGlobalSerializer(configuracion).data
@@ -72,7 +71,6 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'instagram_usuario',
              *(f'instagram_foto_{numero}' for numero in range(1, 7))}
         )
-        self.assertNotIn('api_keys_pagos', data)
 
     def test_validates_url_and_button_length(self):
         serializer = ConfiguracionGlobalSerializer(data={

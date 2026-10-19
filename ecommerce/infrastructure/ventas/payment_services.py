@@ -4,7 +4,6 @@ from decimal import Decimal
 import hashlib
 import hmac
 import logging
-import uuid
 import requests
 from django.conf import settings
 from ecommerce.application.ventas import (
@@ -25,91 +24,6 @@ class PuertoPasarelaPago(ABC):
     @abstractmethod
     def inicializar_conexion(self):
         pass
-
-# esto es solo para probar que funciona la interfaz.
-class ServicioPagoLinkify(PuertoPasarelaPago):
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        token = uuid.uuid4().hex[:8]
-        return f"https://linkify.cl/simulacion-pago?orden={orden_id}&token={token}&monto={monto}"
-
-    def iniciar_pago(self, orden, medio):
-        """
-        RF-02.2: Nueva implementación del puerto de pagos para Linkify.
-        Retorna la respuesta esperada por el frontend para mostrar los datos de transferencia.
-        """
-        secret = medio.datos.get('linkify_secret', '')
-        # Instanciamos el adaptador pasándole el formato de diccionario que espera
-        adaptador = LinkifyAdapter({'TRANSFERENCIA': {'linkify_secret': secret}})
-        instrucciones = adaptador.generar_instrucciones(orden, medio)
-        
-        return {
-            "url_pago": None,  # No hay redirección, es pago manual en la tienda
-            "instrucciones": instrucciones,
-            "metodo": medio.codigo.value
-        }
-
-
-class ServicioPagoTransbank(PuertoPasarelaPago):
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        token = uuid.uuid4().hex[:8]
-        return f"https://webpay3gint.transbank.cl/simulacion-pago?orden={orden_id}&token={token}"
-
-
-# ADAPTADORES
-class TransbankAdapter(PuertoPasarelaPago):
-    def __init__(self, api_keys_pagos):
-        credenciales = api_keys_pagos.get('TRANSBANK', {})
-        self.commerce_code = credenciales.get('commerce_code')
-        self.api_key_secret = credenciales.get('api_key_secret')
-        self.ambiente = credenciales.get('ambiente', 'integracion')
-
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        return f"https://webpay.transbank.cl/pago?orden={orden_id}&monto={monto}"
-
-
-class PayPalAdapter(PuertoPasarelaPago):
-    def __init__(self, api_keys_pagos):
-        credenciales = api_keys_pagos.get('PAYPAL', {})
-        self.client_id = credenciales.get('client_id')
-        self.secret = credenciales.get('secret')
-        self.modo = credenciales.get('modo', 'sandbox')
-
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        return f"https://paypal.com/checkout?token={orden_id}"
-
-
-class LinkifyAdapter(PuertoPasarelaPago):
-    def __init__(self, api_keys_pagos):
-        # Adaptado para leer la llave secreta desde la configuración de TRANSFERENCIA
-        credenciales = api_keys_pagos.get('TRANSFERENCIA', api_keys_pagos.get('LINKIFY', {}))
-        self.secret_key = credenciales.get('linkify_secret')
-        self.api_key = credenciales.get('api_key')
-        self.webhook_secret = credenciales.get('webhook_secret')
-
-    def inicializar_conexion(self):
-        pass
-
-    def generar_link_pago(self, monto, orden_id):
-        return f"https://linkify.cl/transferencia?orden={orden_id}"
-
-    def generar_instrucciones(self, orden, medio) -> dict:
-        """
-        RF-02.2: Genera las instrucciones de transferencia bancaria usando los datos del medio.
-        """
-        from .instrucciones_pago import instrucciones_transferencia
-        return instrucciones_transferencia(orden, medio)
 
 
 class FirmaWebhookInvalida(Exception):
@@ -162,26 +76,18 @@ class MercadoPagoAdapter(PaymentGateway):
 
     def __init__(
         self,
-        api_keys_pagos: dict | None = None,
         *,
         access_token: str | None = None,
         webhook_secret: str | None = None,
     ):
-        if api_keys_pagos is not None and isinstance(api_keys_pagos, dict):
-            credenciales = api_keys_pagos.get('MERCADO_PAGO', {})
-            self.access_token = access_token if access_token is not None else credenciales.get('access_token', '')
-            self.webhook_secret = webhook_secret if webhook_secret is not None else credenciales.get('webhook_secret', '')
-            self.public_key = credenciales.get('public_key', '')
-        elif access_token is not None and webhook_secret is not None:
+        if access_token is not None and webhook_secret is not None:
             # Si ambos se pasan explícitamente (ej. en tests unitarios), no tocamos la base de datos
             self.access_token = access_token
             self.webhook_secret = webhook_secret
-            self.public_key = ''
         else:
             datos = DjangoRepositorioMediosPago().obtener(CodigoMedioPago.MERCADO_PAGO).datos
             self.access_token = access_token if access_token is not None else datos.get('access_token', '')
             self.webhook_secret = webhook_secret if webhook_secret is not None else datos.get('webhook_secret', '')
-            self.public_key = ''
 
     def _headers(self) -> dict[str, str]:
         if not self.access_token:
@@ -236,16 +142,6 @@ class MercadoPagoAdapter(PaymentGateway):
             raise ErrorPasarelaPago("Mercado Pago no devolvió una URL de pago válida.")
 
         return PreferenciaPagoCreada(preference_id=pref_id, url_pago=url_pago)
-
-    def generar_link_pago(self, monto, orden_id):
-        """Mantiene compatibilidad con llamadas directas a generar_link_pago."""
-        back_urls = {
-            "success": f"http://localhost:8000/api/ventas/mercadopago/retorno/?resultado=success&orden={orden_id}",
-            "failure": f"http://localhost:8000/api/ventas/mercadopago/retorno/?resultado=failure&orden={orden_id}",
-            "pending": f"http://localhost:8000/api/ventas/mercadopago/retorno/?resultado=pending&orden={orden_id}",
-        }
-        pref = self.crear_preferencia(str(orden_id), float(monto), back_urls)
-        return pref.url_pago
 
     def validar_firma_webhook(self, x_signature: str, x_request_id: str, data_id: str) -> bool:
         """Verifica la firma HMAC-SHA256 enviada por Mercado Pago en el header x-signature."""
@@ -345,29 +241,3 @@ class ProcesarWebhookMercadoPago:
                 return 'CANCELADO'
         else:
             return 'PENDIENTE'
-
-
-def generar_link_pago(metodo_pago, monto, orden_id, api_keys_pagos=None):
-    """
-    Fábrica que instancia el adaptador correcto según el método elegido por el cliente.
-    """
-    api_keys_pagos = api_keys_pagos or {}
-    metodo = metodo_pago.upper() if metodo_pago else ""
-    
-    # Se añade soporte para el código real de la base de datos (TRANSFERENCIA) 
-    # manteniendo la compatibilidad con el string 'LINKIFY'
-    if metodo in ['LINKIFY', 'TRANSFERENCIA']:
-        adaptador = ServicioPagoLinkify()
-        return adaptador.generar_link_pago(monto, orden_id)
-    elif metodo == 'TRANSBANK':
-        adaptador = ServicioPagoTransbank()
-        return adaptador.generar_link_pago(monto, orden_id)
-    elif metodo == 'MERCADO_PAGO':
-        adaptador = MercadoPagoAdapter(api_keys_pagos if api_keys_pagos else None)
-        return adaptador.generar_link_pago(monto, orden_id)
-    elif metodo == 'PAYPAL':
-        adaptador = PayPalAdapter(api_keys_pagos)
-        return adaptador.generar_link_pago(monto, orden_id)
-    else:
-        token = uuid.uuid4().hex[:8]
-        return f"https://mock-bank.com/pago?orden={orden_id}&token={token}"

@@ -118,7 +118,6 @@ class CotizacionesAPITests(APITestCase):
         habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
-            api_keys_logistica={'proveedor_activo': 'CHILEXPRESS'},
         )
         self.payload = {'destino': 'SANTIAGO', 'peso': 1.5, 'alto': 10, 'ancho': 20, 'largo': 30}
         usar_catalogo_falso(self, {
@@ -218,8 +217,7 @@ class CotizacionesAPITests(APITestCase):
 
     def sin_logistica_configurada(self):
         self.config.retiro_en_local_activo = False
-        self.config.api_keys_logistica = {}
-        self.config.save(update_fields=['retiro_en_local_activo', 'api_keys_logistica'])
+        self.config.save(update_fields=['retiro_en_local_activo'])
 
     def checkout_con_totales_manipulados(self, **cambios):
         payload = {

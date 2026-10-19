@@ -53,7 +53,8 @@ claves del `.env`.
 ## Diseño anterior (sin uso en producción)
 
 `ServicioCotizacion` (`ecommerce/application/logistica.py`) y `logistics_adapters.py` implementan una
-cotización multi-proveedor (Starken/Chilexpress) configurada en el JSON `ConfiguracionGlobal.api_keys_logistica`.
+cotización multi-proveedor (Starken/Chilexpress) que recibe su configuración como un diccionario (antes salía del
+JSON `ConfiguracionGlobal.api_keys_logistica`, que ya no existe).
 Hoy solo los cubren `AdaptadoresTests`; ningún endpoint los usa. Queda pendiente decidir si se eliminan o se
 reintegran.
 

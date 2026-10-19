@@ -48,6 +48,10 @@ class ServicioGaleria:
         self.limpiar_pendiente(clave)
         return galeria
 
+    def quitar_enlace(self, producto_id: str, anteriores: list[str], url: str) -> list[str]:
+        """RF-03.2: un enlace externo no tiene archivo en la tienda, así que solo se quita de la galería."""
+        return self.repositorio.desasociar(producto_id, anteriores, url)
+
     def limpiar_pendiente(self, clave: str, *, programar: bool = False) -> bool:
         try:
             if programar:

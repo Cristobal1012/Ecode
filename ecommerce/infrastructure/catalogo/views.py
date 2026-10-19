@@ -188,3 +188,16 @@ class ProductoImagenDetailView(CatalogoAPIView):
         else:
             servicio.eliminar(str(producto.id), list(producto.imagenes), clave)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProductoEnlaceImagenView(CatalogoAPIView):
+    """DELETE ?url=...: quita de la galería una imagen cargada como enlace externo (las subidas usan su id)."""
+    permission_classes = [IsAdministrador]
+
+    def delete(self, request, id):
+        producto = self.get_object(id)
+        url = request.query_params.get('url', '')
+        if url not in producto.imagenes or es_imagen_gestionada(url):
+            raise NotFound('Enlace no encontrado en este producto.')
+        servicio_galeria().quitar_enlace(str(producto.id), list(producto.imagenes), url)
+        return Response(status=status.HTTP_204_NO_CONTENT)

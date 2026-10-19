@@ -6,6 +6,7 @@ from io import BytesIO, StringIO
 import os
 import shutil
 from unittest.mock import patch
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from django.conf import settings
@@ -493,6 +494,45 @@ class GaleriaAPITests(APITestCase):
         borrado = self.client.delete(self.url_borrado(response.data['archivos'][0]['id']))
         self.assertEqual(borrado.status_code, 204)
         self.assertEqual(self.archivos_guardados(), [])
+
+    def quitar_enlace(self, url):
+        ruta = reverse('enlace_imagen_producto', kwargs={'id': str(self.producto.id)})
+        return self.client.delete(f"{ruta}?{urlencode({'url': url})}")
+
+    def test_quitar_enlace_externo_solo_lo_saca_de_la_galeria(self):
+        enlace = 'https://example.test/img/camisa-azul.jpg'
+        subida = self.subir().data['imagenes'][0]
+        self.assertEqual(self.client.patch(self.detalle, {'imagenes': [enlace, subida]}, format='json').status_code, 200)
+        self.producto.reload()
+        self.producto.variantes[0].imagen_especifica = enlace
+        self.producto.save()
+
+        self.assertEqual(self.quitar_enlace(enlace).status_code, 204)
+
+        self.producto.reload()
+        self.assertEqual(len(self.producto.imagenes), 1)
+        self.assertTrue(es_imagen_gestionada(self.producto.imagenes[0], self.producto.id))
+        self.assertIsNone(self.producto.variantes[0].imagen_especifica)
+        # La foto subida y su archivo siguen intactos
+        self.assertEqual(len(self.archivos_guardados()), 1)
+
+    def test_quitar_enlace_no_borra_fotos_subidas_ni_enlaces_ajenos(self):
+        respuesta = self.subir().data
+        self.producto.reload()
+        for url in (respuesta['imagenes'][0], self.producto.imagenes[0], 'https://example.test/otra.jpg', ''):
+            with self.subTest(url=url):
+                self.assertEqual(self.quitar_enlace(url).status_code, 404)
+        self.producto.reload()
+        self.assertEqual(len(self.producto.imagenes), 1)
+        self.assertEqual(len(self.archivos_guardados()), 1)
+
+    def test_quitar_enlace_es_solo_para_el_admin(self):
+        enlace = 'https://example.test/img/camisa-azul.jpg'
+        Producto.objects(id=self.producto.id).update_one(set__imagenes=[enlace])
+        self.autorizar(self.comprador)
+        self.assertEqual(self.quitar_enlace(enlace).status_code, 403)
+        self.producto.reload()
+        self.assertEqual(self.producto.imagenes, [enlace])
 
 
 def usar_mongo_de_prueba(cls):

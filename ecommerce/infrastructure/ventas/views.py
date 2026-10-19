@@ -45,7 +45,6 @@ from .payment_services import (
     FirmaWebhookInvalida,
     MercadoPagoAdapter,
     ProcesarWebhookMercadoPago,
-    generar_link_pago,
 )
 from .serializers import (
     ConfiguracionGlobalSerializer,

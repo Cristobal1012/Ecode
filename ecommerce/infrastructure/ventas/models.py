@@ -79,9 +79,6 @@ class ConfiguracionGlobal(models.Model):
         default='MIXTO'
     )
     
-    # Obsoleto: los medios de pago viven en MedioPago (credenciales cifradas). Se migró en 0016
-    api_keys_pagos = models.JSONField(default=dict, blank=True)
-    api_keys_logistica = models.JSONField(default=dict, blank=True)
     layout_catalogo = models.CharField(max_length=50, choices=TIPOS_LAYOUT, default="GRID_3")
 
     def __str__(self):

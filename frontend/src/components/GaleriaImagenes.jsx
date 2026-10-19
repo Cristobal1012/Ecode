@@ -1,6 +1,9 @@
 import { useId, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 
+// Dirección de una foto subida: catalogo/productos/<producto>/<id>.<formato> (CLAVE_IMAGEN en el backend)
+const FOTO_SUBIDA = /\/catalogo\/productos\/[0-9a-f]{24}\/([0-9a-f]{32}(?:_[A-Za-z0-9]{7})*)\.(?:jpg|png|webp)$/;
+
 export default function GaleriaImagenes({
   productoId,
   imagenes = [],
@@ -52,39 +55,20 @@ export default function GaleriaImagenes({
   };
 
   /*
-   * Obtiene el ID de una imagen.
+   * Devuelve el ID de una foto subida a la tienda, o null si la imagen es un enlace externo.
    *
-   * Primero intenta encontrarlo en archivosGestionados.
-   * Si no existe, intenta obtenerlo desde el nombre de archivo
-   * de la URL de la imagen.
+   * Se busca por la dirección y no por la posición: archivosGestionados solo trae las fotos
+   * subidas, así que en una galería con enlaces las posiciones no coinciden. Al editar un
+   * producto todavía no hay archivosGestionados, y el ID sale de la dirección de la foto.
    */
-  const obtenerImagenId = (url, index) => {
-    const archivoGestionado = archivosGestionados[index];
-
-    if (archivoGestionado) {
-      if (typeof archivoGestionado === 'object') {
-        return (
-          archivoGestionado.id ||
-          archivoGestionado.imagen_id ||
-          archivoGestionado.image_id
-        );
-      }
-
-      if (typeof archivoGestionado === 'string') {
-        const partes = archivoGestionado.split('/');
-        const nombre = partes[partes.length - 1];
-        return nombre.split('.')[0];
-      }
-    }
+  const obtenerIdFotoSubida = (url) => {
+    const archivo = archivosGestionados.find((a) => a.url === url);
+    if (archivo) return archivo.id;
 
     try {
-      const urlObj = new URL(url, window.location.origin);
-      const partes = urlObj.pathname.split('/').filter(Boolean);
-      const nombreArchivo = partes[partes.length - 1];
-
-      return nombreArchivo.split('.')[0];
-    } catch (error) {
-      console.error('No se pudo obtener el ID de la imagen:', error);
+      const { pathname } = new URL(url, window.location.origin);
+      return pathname.match(FOTO_SUBIDA)?.[1] ?? null;
+    } catch {
       return null;
     }
   };
@@ -95,12 +79,7 @@ export default function GaleriaImagenes({
       return;
     }
 
-    const imagenId = obtenerImagenId(url, index);
-
-    if (!imagenId) {
-      setError('No se pudo identificar la imagen que deseas eliminar.');
-      return;
-    }
+    const imagenId = obtenerIdFotoSubida(url);
 
     const confirmar = window.confirm(
       '¿Estás seguro de que deseas eliminar esta imagen?'
@@ -114,9 +93,18 @@ export default function GaleriaImagenes({
     setError('');
 
     try {
-      await clienteAxios.delete(
-        `catalogo/productos/${productoId}/imagenes/${imagenId}/`
-      );
+      if (imagenId) {
+        // Foto subida: el backend también borra su archivo
+        await clienteAxios.delete(
+          `catalogo/productos/${productoId}/imagenes/${imagenId}/`
+        );
+      } else {
+        // Enlace externo: no hay archivo en la tienda, solo se quita de la galería
+        await clienteAxios.delete(
+          `catalogo/productos/${productoId}/imagenes/enlace/`,
+          { params: { url } }
+        );
+      }
 
       // Actualizar las imágenes mostradas
       const nuevasImagenes = imagenes.filter((_, i) => i !== index);
@@ -126,7 +114,7 @@ export default function GaleriaImagenes({
       // Actualizar archivos gestionados si el padre los utiliza
       if (onArchivosChange) {
         const nuevosArchivos = archivosGestionados.filter(
-          (_, i) => i !== index
+          (archivo) => archivo.url !== url
         );
 
         onArchivosChange(nuevosArchivos);
@@ -251,6 +239,7 @@ export default function GaleriaImagenes({
       {/* Mensaje de error */}
       {error && (
         <p
+          role="alert"
           style={{
             color: '#b91c1c',
             backgroundColor: '#fee2e2',

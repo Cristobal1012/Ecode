@@ -1,15 +1,23 @@
 """Reglas de SCRUM-177 en las vistas reales del admin de Django."""
 
+from datetime import datetime, timezone
+from decimal import Decimal
 import json
+import os
+from unittest.mock import patch
+from uuid import uuid4
 
+from django.conf import settings
 from django.core import mail
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from pymongo import MongoClient
 
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
+from ecommerce.infrastructure.catalogo.documents import Producto, Variante
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, MedioPago, OrdenCompra, Promocion
+from .models import ConfiguracionGlobal, DetalleOrden, MedioPago, OrdenCompra, Promocion
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 
 
@@ -222,3 +230,176 @@ class MedioPagoAdminTests(TestCase):
         })
         self.assert_sin_credenciales(respuesta)
         self.assertEqual(MedioPago.objects.count(), 3)
+
+
+class AdminPanelInventarioTests(TestCase):
+    """PostgreSQL, inventario MongoDB y correos reales capturados en memoria."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        mongo = MongoClient(os.environ.get('MONGO_TEST_URI', settings.MONGO_URI), serverSelectionTimeoutMS=5000)
+        cls.addClassCleanup(mongo.close)
+        mongo.admin.command('ping')
+        nombre = f'test_ecode_admin177_{uuid4().hex}'
+        cls.addClassCleanup(mongo.drop_database, nombre)
+        cls.coleccion = mongo[nombre][Producto._meta['collection']]
+        binding = patch.object(Producto, '_get_collection', return_value=cls.coleccion)
+        binding.start()
+        cls.addClassCleanup(binding.stop)
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superusuario = create_user(
+            'superusuario-integracion@example.test', rol='ADMIN', is_staff=True, is_superuser=True,
+        )
+        ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='Tienda QA', retiro_en_local_activo=True)
+
+    def setUp(self):
+        self.coleccion.delete_many({})
+        self.producto = Producto(
+            nombre='Producto QA', categoria='Pruebas', fecha_creacion=datetime.now(timezone.utc),
+            activo=True, publicado=True, variantes=[
+                Variante(sku='QA177-S', precio=Decimal('10000'), stock=5),
+                Variante(sku='QA177-M', precio=Decimal('9000'), stock=8),
+            ],
+        ).save()
+        self.orden = OrdenCompra.objects.create(
+            email_invitado='pedido-integracion@example.test', metodo_pago='TRANSFERENCIA',
+            proveedor_logistico='RETIRO_LOCAL', direccion_envio_snapshot={'comuna': 'Santiago'},
+            nombre_destinatario='Persona original', telefono_destinatario='+56912345678',
+            subtotal=20000, costo_envio=0, total_final=20000,
+        )
+        DetalleOrden.objects.create(
+            orden=self.orden, producto_mongo_id=str(self.producto.pk), variante_sku='QA177-S',
+            nombre_producto_snapshot='Producto QA - QA177-S', precio_unitario_snapshot=10000, cantidad=2,
+        )
+        self.client = Client(enforce_csrf_checks=True)
+        self.client.force_login(self.superusuario)
+        self.client.get(reverse('admin:index'))
+
+    def stock(self):
+        return {v.sku: v.stock for v in self.producto.reload().variantes}
+
+    def cambiar(self, estado):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.patch(
+                reverse('admin-ordenes-patch', args=[self.orden.pk]),
+                json.dumps({'estado': estado}), content_type='application/json',
+                HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value,
+            )
+
+    def manipular_admin(self, **campos):
+        url = reverse('admin:ventas_ordencompra_change', args=[self.orden.pk])
+        self.client.get(url)
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(url, {
+                'email_invitado': self.orden.email_invitado, 'metodo_pago': 'TRANSFERENCIA',
+                'proveedor_logistico': 'RETIRO_LOCAL',
+                'direccion_envio_snapshot': json.dumps(self.orden.direccion_envio_snapshot),
+                'nombre_destinatario': 'Persona corregida', 'telefono_destinatario': '+56912345678',
+                'subtotal': self.orden.subtotal, 'costo_envio': self.orden.costo_envio,
+                'total_final': self.orden.total_final,
+                'csrfmiddlewaretoken': self.client.cookies['csrftoken'].value, '_save': 'Guardar',
+                **campos,
+            })
+
+    def test_intento_de_pago_en_admin_no_tiene_efectos_y_panel_descuenta_una_vez(self):
+        detalle_antes = list(self.orden.detalles.values())
+        self.assertEqual(self.manipular_admin(estado='PAGADO', stock_descontado='on').status_code, 302)
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PENDIENTE')
+        self.assertFalse(self.orden.stock_descontado)
+        self.assertEqual(self.orden.nombre_destinatario, 'Persona corregida')
+        self.assertEqual(list(self.orden.detalles.values()), detalle_antes)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(mail.outbox, [])
+
+        self.assertEqual(self.cambiar('PAGADO').status_code, 200)
+        self.orden.refresh_from_db()
+        self.assertTrue(self.orden.stock_descontado)
+        self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.cambiar('PAGADO').status_code, 400)
+        self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_cancelacion_manipulada_no_altera_stock_y_panel_lo_repone_una_vez(self):
+        self.assertEqual(self.cambiar('PAGADO').status_code, 200)
+        self.assertEqual(self.manipular_admin(estado='CANCELADO', stock_descontado='').status_code, 302)
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PAGADO')
+        self.assertTrue(self.orden.stock_descontado)
+        self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+
+        self.assertEqual(self.cambiar('CANCELADO').status_code, 200)
+        self.orden.refresh_from_db()
+        self.assertFalse(self.orden.stock_descontado)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(self.cambiar('CANCELADO').status_code, 400)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_transicion_invalida_no_tiene_efectos_y_cancelar_pendiente_no_repone(self):
+        self.assertEqual(self.cambiar('ENVIADO').status_code, 400)
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.estado, 'PENDIENTE')
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(self.cambiar('CANCELADO').status_code, 200)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_ciclo_del_panel_con_retiro_conserva_stock_y_notifica_cada_hito(self):
+        for estado in ('PAGADO', 'EN_PREPARACION', 'ENVIADO', 'ENTREGADO'):
+            self.assertEqual(self.cambiar(estado).status_code, 200)
+            self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 4)
+        for correo in mail.outbox:
+            self.assertEqual(correo.to, ['pedido-integracion@example.test'])
+        self.assertIn('listo para retirar', mail.outbox[2].subject)
+        self.assertIn('Retiraste tu pedido', mail.outbox[3].subject)
+        self.assertEqual(self.cambiar('CANCELADO').status_code, 400)
+        self.assertEqual(len(mail.outbox), 4)
+        self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+
+    def test_falta_de_stock_compensa_lineas_y_cancelar_no_repone_unidades_no_descontadas(self):
+        DetalleOrden.objects.create(
+            orden=self.orden, producto_mongo_id=str(self.producto.pk), variante_sku='QA177-M',
+            nombre_producto_snapshot='Producto QA - QA177-M', precio_unitario_snapshot=9000, cantidad=9,
+        )
+        respuesta = self.cambiar('PAGADO')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.json()['requiere_revision'])
+        self.orden.refresh_from_db()
+        self.assertFalse(self.orden.stock_descontado)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.cambiar('CANCELADO').status_code, 200)
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 2)
+
+    @override_settings(EXIGIR_PAGINAS_LEGALES=False)
+    def test_checkout_real_y_pago_manual_siguen_operativos(self):
+        DjangoRepositorioMediosPago().guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSFERENCIA, True, {
+            'banco': 'Banco QA', 'tipo_cuenta': 'Cuenta vista', 'numero_cuenta': '12345678',
+            'rut_titular': '11.111.111-1', 'nombre_titular': 'Tienda QA', 'email': 'pagos@example.test',
+        }))
+        with self.captureOnCommitCallbacks(execute=True):
+            respuesta = Client().post(reverse('checkout'), json.dumps({
+                'items': [{'producto_mongo_id': str(self.producto.pk), 'variante_sku': 'QA177-S', 'cantidad': 2}],
+                'email_invitado': 'checkout-qa@example.test', 'metodo_pago': 'TRANSFERENCIA',
+                'proveedor_logistico': 'RETIRO_LOCAL', 'direccion_envio_snapshot': {'comuna': 'Santiago'},
+                'nombre_destinatario': 'Persona QA', 'telefono_destinatario': '+56912345678',
+                'subtotal': 20000, 'acepta_terminos': True,
+            }), content_type='application/json')
+        self.assertEqual(respuesta.status_code, 201, respuesta.content)
+        self.orden = OrdenCompra.objects.get(pk=respuesta.json()['orden_id'])
+        self.assertEqual(self.orden.estado, 'PENDIENTE')
+        self.assertEqual(self.stock(), {'QA177-S': 5, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.cambiar('PAGADO').status_code, 200)
+        self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
+        self.assertEqual(len(mail.outbox), 2)

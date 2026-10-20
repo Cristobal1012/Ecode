@@ -139,6 +139,20 @@ class DireccionEnvio(models.Model):
     def __str__(self):
         return f"{self.calle} {self.calle_numero}, {self.ciudad}"
 
+class EmpresaComprador(models.Model):
+    """Datos de facturación que un comprador registrado guardó para sus próximas compras como empresa."""
+
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='empresa')
+    razon_social = models.CharField(max_length=150)
+    rut = models.CharField(max_length=12)
+    giro = models.CharField(max_length=120)
+    direccion = models.CharField(max_length=255)
+    correo = models.EmailField()
+
+    def __str__(self):
+        return f'{self.razon_social} ({self.rut})'
+
+
 class Promocion(models.Model):
     TIPOS_DESCUENTO = [
         ('PORCENTAJE', 'Porcentaje (%)'),
@@ -196,6 +210,9 @@ class OrdenCompra(models.Model):
     estado = models.CharField(max_length=50, choices=ESTADOS_PEDIDO, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=50, choices=METODOS_PAGO)
     direccion_envio_snapshot = models.JSONField()
+    # Compra como empresa: razón social, RUT, giro, dirección y correo para la factura, tal como venían al
+    # comprar (domain/empresa.py). Vacío si compra una persona
+    datos_empresa = models.JSONField(null=True, blank=True)
     # Quién recibe o retira el pedido (RF-02.3); la orden de transporte usa estos datos
     nombre_destinatario = models.CharField(max_length=120, blank=True, default='')
     # Normalizado como +56XXXXXXXXX (normalizar_telefono_chile)

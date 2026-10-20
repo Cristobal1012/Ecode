@@ -10,6 +10,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
+from ecommerce.domain.empresa import DatosEmpresa
 from ecommerce.domain.logistica import ENTREGA_COORDINADA
 from ecommerce.domain.ventas import EventoPedido
 
@@ -95,6 +96,9 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             # Cómo se coordina la entrega (lo escribe el admin); vacío si la entrega no es coordinada
             'aviso_entrega_coordinada': CorreoNotificadorPedidos._aviso_entrega_coordinada(orden, config),
             'transportista': (orden.proveedor_logistico or '').capitalize(),
+            # Compra como empresa: [(etiqueta, valor)] con los datos para la factura; vacío si compró una persona
+            'datos_factura': [(etiqueta, (orden.datos_empresa or {}).get(campo, ''))
+                              for campo, etiqueta in DatosEmpresa.CAMPOS] if orden.datos_empresa else [],
             # Número de la orden de transporte (RF-02.3), si ya se generó
             'numero_ot': orden.numero_seguimiento_tracking or '',
             # Datos bancarios, monto y referencia si la orden se paga por transferencia (None si no)

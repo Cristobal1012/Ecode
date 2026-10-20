@@ -685,3 +685,106 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
     expect(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' })).toBeDisabled();
   });
 });
+
+describe('Checkout: compra como empresa', () => {
+  const EMPRESA = {
+    razon_social: 'Comercial Andes SpA', rut: '761234560', giro: 'Venta de artículos de regalo',
+    direccion: 'Av. Providencia 1234', correo: 'facturas@andes.test'
+  };
+
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    localStorage.clear();
+    prepararRespuestas();
+  });
+
+  afterEach(() => cleanup());
+
+  const prepararPago = async () => {
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'compras@andes.test' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    return botonPago;
+  };
+
+  const completarEmpresa = (datos) => {
+    fireEvent.click(screen.getByRole('checkbox', { name: /compro como empresa/i }));
+    const etiquetas = { razon_social: 'Razón social', rut: 'RUT de la empresa', giro: 'Giro',
+                        direccion: 'Dirección comercial', correo: 'Correo para la factura' };
+    Object.entries(datos).forEach(([campo, valor]) =>
+      fireEvent.change(screen.getByLabelText(etiquetas[campo]), { target: { value: valor } }));
+  };
+
+  const payloadCheckout = () => postMock.mock.calls.find(([url]) => url === 'ventas/checkout/')?.[1];
+
+  it('una persona compra sin datos de empresa', async () => {
+    renderCheckout();
+    fireEvent.click(await prepararPago());
+
+    await waitFor(() => expect(payloadCheckout()).toBeDefined());
+    expect(payloadCheckout()).toMatchObject({ datos_empresa: null, guardar_datos_empresa: false });
+    expect(screen.queryByLabelText('Razón social')).not.toBeInTheDocument();
+  });
+
+  it('envía los datos para la factura con el RUT normalizado', async () => {
+    renderCheckout();
+    const botonPago = await prepararPago();
+    completarEmpresa(EMPRESA);
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(payloadCheckout()).toBeDefined());
+    expect(payloadCheckout().datos_empresa).toEqual({ ...EMPRESA, rut: '76.123.456-0' });
+    // Un invitado no tiene dónde guardarlos
+    expect(payloadCheckout().guardar_datos_empresa).toBe(false);
+  });
+
+  it('un RUT inválido o un dato faltante se marca junto al campo y no se envía la compra', async () => {
+    renderCheckout();
+    const botonPago = await prepararPago();
+    completarEmpresa({ ...EMPRESA, rut: '76.123.456-1', giro: '' });
+    fireEvent.click(botonPago);
+
+    const rut = screen.getByLabelText('RUT de la empresa');
+    await waitFor(() => expect(rut).toHaveAttribute('aria-invalid', 'true'));
+    expect(rut).toHaveAccessibleDescription(/dígito verificador/);
+    expect(screen.getByLabelText('Giro')).toHaveAccessibleDescription('Este dato es obligatorio para la factura.');
+    expect(payloadCheckout()).toBeUndefined();
+
+    // Al corregir el campo, su error desaparece
+    fireEvent.change(rut, { target: { value: '76.123.456-0' } });
+    expect(rut).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('muestra junto al campo el error que devuelve el servidor', async () => {
+    postMock.mockImplementation((url) => (url === 'ventas/checkout/'
+      ? Promise.reject({ response: { data: { datos_empresa: { correo: ['Introduzca una dirección de correo electrónico válida.'] } } } })
+      : Promise.resolve({ data: {} })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderCheckout();
+    const botonPago = await prepararPago();
+    completarEmpresa(EMPRESA);
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(screen.getByLabelText('Correo para la factura'))
+      .toHaveAccessibleDescription('Introduzca una dirección de correo electrónico válida.'));
+  });
+
+  it('con sesión precarga los datos guardados y ofrece guardarlos de nuevo', async () => {
+    localStorage.setItem('access_token', 'token-de-prueba');
+    const anterior = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => (url === 'ventas/empresa/'
+      ? Promise.resolve({ data: { ...EMPRESA, rut: '76.123.456-0' } })
+      : anterior(url)));
+    renderCheckout();
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: /compro como empresa/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Razón social')).toHaveValue('Comercial Andes SpA'));
+    expect(screen.getByLabelText('RUT de la empresa')).toHaveValue('76.123.456-0');
+    expect(screen.getByRole('checkbox', { name: /guardar los datos de la empresa/i })).toBeChecked();
+  });
+});

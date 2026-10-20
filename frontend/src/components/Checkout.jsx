@@ -3,7 +3,9 @@ import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
 import useCarrito from '../hooks/useCarrito';
+import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
 import './Checkout.css';
+import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
 
 const OPCION_RETIRO_LOCAL = {
@@ -66,6 +68,11 @@ function CheckoutContenido() {
     // RF-02.3: quién recibe o retira el pedido (Chilexpress y la tienda lo contactan)
     const [nombreDestinatario, setNombreDestinatario] = useState('');
     const [telefonoDestinatario, setTelefonoDestinatario] = useState('');
+    // Compra como empresa: la tienda emite la factura con estos datos
+    const [compraEmpresa, setCompraEmpresa] = useState(false);
+    const [datosEmpresa, setDatosEmpresa] = useState(EMPRESA_VACIA);
+    const [erroresEmpresa, setErroresEmpresa] = useState({});
+    const [guardarEmpresa, setGuardarEmpresa] = useState(true);
     const [mensaje, setMensaje] = useState('');
     const [errorReglas, setErrorReglas] = useState(false);
     const [opcionCompra, setOpcionCompra] = useState(null);
@@ -235,6 +242,21 @@ function CheckoutContenido() {
             })
             .catch(() => {});
     }, [usuarioAutenticado]);
+
+    // Con sesión, los datos de la empresa que el comprador guardó en una compra anterior (204 si no hay)
+    useEffect(() => {
+        if (!usuarioAutenticado) return;
+        clienteAxios.get('ventas/empresa/')
+            .then(({ data }) => {
+                if (data && typeof data === 'object') setDatosEmpresa(actual => ({ ...actual, ...data }));
+            })
+            .catch(() => {});
+    }, [usuarioAutenticado]);
+
+    const editarEmpresa = (campo, valor) => {
+        setDatosEmpresa(actual => ({ ...actual, [campo]: valor }));
+        setErroresEmpresa(actual => ({ ...actual, [campo]: undefined }));
+    };
 
     // 2. CARGA DE DIRECCIONES GUARDADAS
     // Las direcciones se cargan por sesión, sin reiniciar la elección al cambiar el carrito.
@@ -408,6 +430,13 @@ function CheckoutContenido() {
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
         if (!nombreDestinatario.trim() || !telefonoDestinatario.trim()) return setMensaje('Indica el nombre y el teléfono de quien recibe el pedido.');
         if (!aceptaTerminos) return setMensaje('Debes aceptar los Términos y Condiciones y la Política de Privacidad.');
+        if (compraEmpresa) {
+            const errores = validarDatosEmpresa(datosEmpresa);
+            if (Object.keys(errores).length > 0) {
+                setErroresEmpresa(errores);
+                return setMensaje('Revisa los datos de la empresa para la factura.');
+            }
+        }
 
         let dirSnapshot;
         
@@ -464,7 +493,9 @@ function CheckoutContenido() {
             email_invitado: !usuarioAutenticado && compraComoInvitado ? emailInvitado : null,
             nombre_destinatario: nombreDestinatario.trim(),
             telefono_destinatario: telefonoDestinatario.trim(),
-            direccion_envio_snapshot: dirSnapshot, 
+            datos_empresa: compraEmpresa ? { ...datosEmpresa, rut: normalizarRut(datosEmpresa.rut) } : null,
+            guardar_datos_empresa: compraEmpresa && usuarioAutenticado && guardarEmpresa,
+            direccion_envio_snapshot: dirSnapshot,
             subtotal, 
             costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
@@ -518,8 +549,14 @@ function CheckoutContenido() {
                     await guardarCarrito(ajuste.items);
                 }
             }
+            // El backend también valida los datos de la empresa: sus errores van junto a cada campo
+            if (datos.datos_empresa && typeof datos.datos_empresa === 'object') {
+                setErroresEmpresa(Object.fromEntries(Object.entries(datos.datos_empresa)
+                    .map(([campo, mensajes]) => [campo, [].concat(mensajes).join(' ')])));
+            }
             const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago
-                || datos.nombre_destinatario || datos.telefono_destinatario;
+                || datos.nombre_destinatario || datos.telefono_destinatario
+                || (datos.datos_empresa && 'Revisa los datos de la empresa para la factura.');
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
         } finally {
@@ -611,6 +648,29 @@ function CheckoutContenido() {
                                 Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
                             </p>
                         </div>
+                    </fieldset>
+
+                    {/* Compra como empresa: la tienda emite la factura con estos datos */}
+                    <fieldset className="checkout-grupo checkout-seccion">
+                        <legend className="checkout-paso">Facturación</legend>
+                        <label className="checkout-casilla">
+                            <input type="checkbox" checked={compraEmpresa} onChange={(e) => { setCompraEmpresa(e.target.checked); setErroresEmpresa({}); }} aria-describedby="checkout-empresa-ayuda" />
+                            Compro como empresa y necesito factura
+                        </label>
+                        <p id="checkout-empresa-ayuda" className="checkout-ayuda">
+                            Te pediremos la razón social, el RUT, el giro y a qué correo enviar la factura.
+                        </p>
+                        {compraEmpresa && (
+                            <>
+                                <DatosEmpresa id="checkout-empresa" datos={datosEmpresa} errores={erroresEmpresa} onChange={editarEmpresa} />
+                                {usuarioAutenticado && (
+                                    <label className="checkout-casilla">
+                                        <input type="checkbox" checked={guardarEmpresa} onChange={(e) => setGuardarEmpresa(e.target.checked)} />
+                                        Guardar los datos de la empresa para mis próximas compras
+                                    </label>
+                                )}
+                            </>
+                        )}
                     </fieldset>
 
                     {/* --- ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}

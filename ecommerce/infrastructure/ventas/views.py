@@ -38,7 +38,9 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalido
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
 
-from .models import ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, PaginaLegal, Promocion
+from .models import (
+    ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal, Promocion,
+)
 from .permissions import CanCheckout
 from .payment_services import (
     ErrorPasarelaPago,
@@ -52,6 +54,7 @@ from .serializers import (
     OrdenCompraSerializer,
     RevisionCarritoSerializer,
     DireccionEnvioSerializer,
+    EmpresaCompradorSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
@@ -844,6 +847,20 @@ class DireccionEnvioDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         # Seguridad: Un usuario solo puede ver/editar/eliminar SUS propias direcciones
         return DireccionEnvio.objects.filter(usuario=self.request.user)
+
+class EmpresaCompradorView(APIView):
+    """GET: los datos de empresa que el comprador guardó en una compra anterior (204 si no hay).
+
+    Se guardan desde el checkout, cuando marca "Guardar para mis próximas compras".
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        empresa = EmpresaComprador.objects.filter(usuario=request.user).first()
+        if empresa is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(EmpresaCompradorSerializer(empresa).data)
+
 
 class SucursalesChilexpressAPIView(APIView):
     """

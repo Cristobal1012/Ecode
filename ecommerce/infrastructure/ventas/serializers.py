@@ -21,6 +21,7 @@ from ecommerce.domain.logistica import (
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
+from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -30,7 +31,7 @@ from ecommerce.domain.ventas import (
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
-from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
+from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
@@ -279,6 +280,28 @@ class RevisionCarritoSerializer(serializers.Serializer):
         }
 
 
+class DatosEmpresaSerializer(serializers.Serializer):
+    """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""
+
+    razon_social = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    rut = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    giro = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    direccion = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    correo = serializers.EmailField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        try:
+            return DatosEmpresa.desde(attrs).como_dict()
+        except DatosEmpresaInvalidos as error:
+            raise serializers.ValidationError(error.errores)
+
+
+class EmpresaCompradorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmpresaComprador
+        fields = ['razon_social', 'rut', 'giro', 'direccion', 'correo']
+
+
 class OrdenCompraSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=0, min_value=Decimal('0'))
     # Los calcula el servidor (cotización + subtotal del catálogo); lo que envíe el navegador se ignora
@@ -296,6 +319,10 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
     telefono_destinatario = serializers.CharField(max_length=30)
+    # Compra como empresa: la tienda emite la factura con estos datos (null si compra una persona)
+    datos_empresa = DatosEmpresaSerializer(required=False, allow_null=True)
+    # Con sesión: guardar los datos de la empresa para las próximas compras
+    guardar_datos_empresa = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = OrdenCompra
@@ -309,6 +336,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'direccion_envio_snapshot',
             'nombre_destinatario',
             'telefono_destinatario',
+            'datos_empresa',
+            'guardar_datos_empresa',
             'subtotal',
             'costo_envio',
             'total_final',
@@ -486,12 +515,23 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             validated_data['email_invitado'] = ''
             
         # 3. CREAR LA ORDEN EN BASE DE DATOS
+        # DRF no guarda un serializer anidado: los datos de la empresa se asignan después de crear la orden
+        datos_empresa = validated_data.pop('datos_empresa', None)
+        guardar_datos_empresa = validated_data.pop('guardar_datos_empresa', False)
         orden = super().create(validated_data)
+        completar = {}
+        if datos_empresa:
+            completar['datos_empresa'] = datos_empresa
         if self._medio_pago.codigo == CodigoMedioPago.TRANSFERENCIA:
             # El plazo de la tienda en este momento: si lo cambia después, esta orden conserva el suyo
             plazo = plazo_pago(orden.fecha_creacion, plazo_pago_transferencia(self._medio_pago))
-            orden.fecha_limite_pago, orden.fecha_recordatorio_pago = plazo.vence, plazo.recordar
-            orden.save(update_fields=['fecha_limite_pago', 'fecha_recordatorio_pago'])
+            completar.update(fecha_limite_pago=plazo.vence, fecha_recordatorio_pago=plazo.recordar)
+        if completar:
+            for campo, valor in completar.items():
+                setattr(orden, campo, valor)
+            orden.save(update_fields=list(completar))
+        if datos_empresa and guardar_datos_empresa and orden.usuario_id:
+            EmpresaComprador.objects.update_or_create(usuario_id=orden.usuario_id, defaults=datos_empresa)
         DetalleOrden.objects.bulk_create([
             DetalleOrden(
                 orden=orden, producto_mongo_id=linea.producto_id, variante_sku=linea.sku,
@@ -633,6 +673,8 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
             'nombre_destinatario', 'telefono_destinatario',
             # La entrega coordinada la hace la tienda: necesita la dirección del comprador
             'direccion_envio_snapshot',
+            # Compra como empresa: con estos datos la tienda emite la factura
+            'datos_empresa',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',

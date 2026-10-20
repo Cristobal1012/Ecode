@@ -186,6 +186,14 @@ export default function GestorPedidos() {
                         )}
                       </div>
                     )}
+                    {pedido.datos_empresa && (
+                      // Compra como empresa: la tienda emite la factura con estos datos
+                      <div style={{ marginTop: '4px', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+                        <strong style={{ color: 'var(--color-text)' }}>Factura:</strong> {pedido.datos_empresa.razon_social} · RUT {pedido.datos_empresa.rut}
+                        <div>{pedido.datos_empresa.giro} · {pedido.datos_empresa.direccion}</div>
+                        <a href={`mailto:${pedido.datos_empresa.correo}`} style={{ color: 'var(--color-primary)' }}>{pedido.datos_empresa.correo}</a>
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '12px' }}>${Number(pedido.total_final).toLocaleString('es-CL')}</td>
                   <td style={{ padding: '12px' }}>

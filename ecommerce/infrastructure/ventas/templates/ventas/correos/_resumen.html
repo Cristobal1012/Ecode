@@ -26,3 +26,7 @@
 {% if aviso_entrega_coordinada %}<p style="margin:0 0 4px 0; font-size:14px; color:#4b5563;">{{ aviso_entrega_coordinada }}</p>{% endif %}
 {% if orden.nombre_destinatario %}<p style="margin:0 0 4px 0; font-size:14px;"><strong>Recibe:</strong> {{ orden.nombre_destinatario }}{% if orden.telefono_destinatario %} ({{ orden.telefono_destinatario }}){% endif %}</p>{% endif %}
 <p style="margin:0; font-size:14px;"><strong>Medio de pago:</strong> {{ metodo_pago }}</p>
+{% if datos_factura %}
+<h2 style="margin:24px 0 8px 0; font-size:16px; color:#111827;">Datos para la factura</h2>
+{% for etiqueta, valor in datos_factura %}<p style="margin:0 0 4px 0; font-size:14px;"><strong>{{ etiqueta }}:</strong> {{ valor }}</p>
+{% endfor %}{% endif %}

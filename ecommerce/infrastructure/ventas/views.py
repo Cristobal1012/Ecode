@@ -758,29 +758,8 @@ class SeguimientoEnvioView(APIView):
             )
 
         proveedor = orden.proveedor_logistico or 'CHILEXPRESS'
-        """
         codigo = orden.numero_seguimiento_tracking
-
-        if proveedor == 'RETIRO_LOCAL':
-            estado_estandarizado = 'Pendiente de retiro en local'
-        elif not codigo or not codigo.strip():
-            estado_estandarizado = 'Pendiente de despacho'
-        else:
-            estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(
-                proveedor,
-                codigo,
-            )
-
-        return Response({
-            "numero_orden": orden.id,
-            "estado_actual": estado_estandarizado,
-            "linea_tiempo_estandar": ["En origen", "En tránsito", "En reparto", "Entregado"],
-            "proveedor": proveedor,
-            "codigo_seguimiento": codigo
-        }, status=status.HTTP_200_OK)
-        """
-        codigo = orden.numero_seguimiento_tracking
-        # Los estados finales tienen prioridad sobre el tipo de entrega.
+        # Los estados finales tienen prioridad sobre el tipo de entrega
         if orden.estado == 'CANCELADO':
             estado_estandarizado = 'Cancelado'
         elif orden.estado == 'ENTREGADO':

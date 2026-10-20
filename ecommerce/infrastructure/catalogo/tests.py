@@ -234,7 +234,8 @@ class GaleriaAPITests(APITestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.data['imagenes'], response.data['imagenes'])
         listado = self.client.get(reverse('lista_productos'))
-        self.assertEqual(listado.data[0]['imagenes'], public.data['imagenes'])
+        items = listado.data.get('results', listado.data) if isinstance(listado.data, dict) else listado.data
+        self.assertEqual(items[0]['imagenes'], public.data['imagenes'])
 
     def test_urls_del_storage_externo_y_round_trip(self):
         with override_settings(STORAGES={'default': {
@@ -641,7 +642,8 @@ class CatalogoPublicoTests(APITestCase):
     def listado(self):
         response = self.client.get(reverse('lista_productos'))
         self.assertEqual(response.status_code, 200)
-        return sorted(producto['nombre'] for producto in response.data)
+        items = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        return sorted(producto['nombre'] for producto in items)
 
     def detalle(self, nombre):
         return self.client.get(reverse('detalle_producto', args=[self.productos[nombre].id]))

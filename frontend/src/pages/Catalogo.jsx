@@ -233,7 +233,7 @@ export default function Catalogo() {
     }
     const { comparar } = ORDENES[orden];
     return comparar ? [...productosFiltrados].sort(comparar) : productosFiltrados;
-  }, [productosFiltrados, orden, totalPaginas, totalProductos]);
+  }, [productosFiltrados, productos.length, orden, totalPaginas, totalProductos]);
 
   const esLista = layoutCatalogo === 'LISTA';
 

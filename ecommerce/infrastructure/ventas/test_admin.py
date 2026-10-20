@@ -68,13 +68,72 @@ class OrdenCompraAdminTests(TestCase):
                 self.assertContains(respuesta, 'field-estado')
 
     def test_edicion_permitida_se_guarda_sin_modificar_estado_ni_enviar_correo(self):
-        respuesta = self.guardar()
+        direccion = {'comuna': 'Providencia', 'calle': 'Calle corregida', 'calle_numero': '177'}
+        respuesta = self.guardar(telefono_destinatario='+56987654321',
+                                 direccion_envio_snapshot=json.dumps(direccion))
         self.assertEqual(respuesta.status_code, 302)
         self.orden.refresh_from_db()
         self.assertEqual(self.orden.nombre_destinatario, 'Persona corregida')
+        self.assertEqual(self.orden.telefono_destinatario, '+56987654321')
+        self.assertEqual(self.orden.direccion_envio_snapshot, direccion)
         self.assertEqual(self.orden.estado, 'PENDIENTE')
         self.assertFalse(self.orden.stock_descontado)
         self.assertEqual(mail.outbox, [])
+
+    def test_solo_los_tres_campos_del_destinatario_son_editables_y_el_resto_se_consulta(self):
+        respuesta = self.client.get(self.url)
+        permitidos = {'nombre_destinatario', 'telefono_destinatario', 'direccion_envio_snapshot'}
+        self.assertEqual(set(respuesta.context['adminform'].form.fields), permitidos)
+        for campo in OrdenCompra._meta.fields:
+            if campo.name not in permitidos:
+                self.assertContains(respuesta, 'field-' + campo.name)
+
+    def test_post_manipulado_no_modifica_ningun_campo_protegido(self):
+        otro_usuario = create_user('otra-persona-177@example.test')
+        promocion = Promocion.objects.create(codigo='OTRA177', tipo_descuento='MONTO_FIJO', valor_descuento=100)
+        OrdenCompra.objects.filter(pk=self.orden.pk).update(
+            requiere_revision=True, motivo_revision='Revisión original',
+            recordatorio_pago_enviado=True, id_transaccion_pasarela='pago-original',
+        )
+        antes = OrdenCompra.objects.values().get(pk=self.orden.pk)
+        respuesta = self.guardar(
+            id=str(self.orden.pk + 177), usuario=str(otro_usuario.pk), email_invitado='otro@example.test',
+            promocion=str(promocion.pk), fecha_creacion='2000-01-01 00:00:00',
+            estado='PAGADO', metodo_pago='MERCADO_PAGO', stock_descontado='on',
+            subtotal='1', costo_envio='2', total_final='3', id_transaccion_pasarela='pago-inyectado',
+            requiere_revision='', motivo_revision='', motivo_cancelacion='inyectado',
+            recordatorio_pago_enviado='', proveedor_logistico='CHILEXPRESS',
+            numero_seguimiento_tracking='ot-inyectada', paquete='{"peso":999}',
+            error_orden_transporte='error-inyectado',
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        despues = OrdenCompra.objects.values().get(pk=self.orden.pk)
+        permitidos = {'nombre_destinatario', 'telefono_destinatario', 'direccion_envio_snapshot'}
+        self.assertEqual({k: v for k, v in despues.items() if k not in permitidos},
+                         {k: v for k, v in antes.items() if k not in permitidos})
+        self.assertEqual(despues['nombre_destinatario'], 'Persona corregida')
+        self.assertEqual(OrdenCompra.objects.count(), 1)
+        self.assertEqual(mail.outbox, [])
+
+    def test_correccion_de_destinatario_no_sobrescribe_actualizacion_concurrente(self):
+        configuracion = admin.site._registry[OrdenCompra]
+        guardar = configuracion.save_model
+
+        def actualizar_antes_de_guardar(request, obj, form, change):
+            OrdenCompra.objects.filter(pk=obj.pk).update(
+                estado='PAGADO', stock_descontado=True, id_transaccion_pasarela='pago-concurrente',
+                recordatorio_pago_enviado=True,
+            )
+            guardar(request, obj, form, change)
+
+        with patch.object(configuracion, 'save_model', side_effect=actualizar_antes_de_guardar):
+            self.assertEqual(self.guardar().status_code, 302)
+        self.orden.refresh_from_db()
+        self.assertEqual(self.orden.nombre_destinatario, 'Persona corregida')
+        self.assertEqual(self.orden.estado, 'PAGADO')
+        self.assertTrue(self.orden.stock_descontado)
+        self.assertEqual(self.orden.id_transaccion_pasarela, 'pago-concurrente')
+        self.assertTrue(self.orden.recordatorio_pago_enviado)
 
     def test_post_manipulado_no_cambia_estado_aunque_guarde_la_edicion_permitida(self):
         for actual, nuevo in (
@@ -441,6 +500,31 @@ class AdminPanelInventarioTests(TestCase):
         self.assertEqual(self.cambiar('PAGADO').status_code, 400)
         self.assertEqual(self.stock(), {'QA177-S': 3, 'QA177-M': 8})
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_montos_pago_y_revision_manipulados_conservan_inventario_y_efectos(self):
+        for estado in ('PENDIENTE', 'PAGADO'):
+            with self.subTest(estado=estado):
+                if estado == 'PAGADO':
+                    self.assertEqual(self.cambiar('PAGADO').status_code, 200)
+                antes = OrdenCompra.objects.values().get(pk=self.orden.pk)
+                detalles = list(self.orden.detalles.values())
+                stock = self.stock()
+                correos = len(mail.outbox)
+                respuesta = self.manipular_admin(
+                    estado='CANCELADO', stock_descontado='on', metodo_pago='MERCADO_PAGO',
+                    subtotal='1', costo_envio='1', total_final='1', id_transaccion_pasarela='inyectado',
+                    requiere_revision='on', motivo_revision='inyectado', recordatorio_pago_enviado='on',
+                    proveedor_logistico='CHILEXPRESS', numero_seguimiento_tracking='inyectado',
+                )
+                self.assertEqual(respuesta.status_code, 302)
+                despues = OrdenCompra.objects.values().get(pk=self.orden.pk)
+                permitidos = {'nombre_destinatario', 'telefono_destinatario', 'direccion_envio_snapshot'}
+                self.assertEqual({k: v for k, v in despues.items() if k not in permitidos},
+                                 {k: v for k, v in antes.items() if k not in permitidos})
+                self.assertEqual(despues['nombre_destinatario'], 'Persona corregida')
+                self.assertEqual(list(self.orden.detalles.values()), detalles)
+                self.assertEqual(self.stock(), stock)
+                self.assertEqual(len(mail.outbox), correos)
 
     def test_cancelacion_manipulada_no_altera_stock_y_panel_lo_repone_una_vez(self):
         self.assertEqual(self.cambiar('PAGADO').status_code, 200)

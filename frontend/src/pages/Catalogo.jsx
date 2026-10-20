@@ -44,6 +44,19 @@ function mostrarValor(valor) {
     : String(valor);
 }
 
+function calcularRangoPaginacion(paginaActual, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (paginaActual <= 4) {
+    return [1, 2, 3, 4, 5, '...', total];
+  }
+  if (paginaActual >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, '...', paginaActual - 1, paginaActual, paginaActual + 1, '...', total];
+}
+
 export default function Catalogo() {
   const [temaConfigurado, setTemaConfigurado] = useState(() => {
     const savedPaletteId = Number(localStorage.getItem('ecommerce_palette'));
@@ -235,6 +248,11 @@ export default function Catalogo() {
     return comparar ? [...productosFiltrados].sort(comparar) : productosFiltrados;
   }, [productosFiltrados, productos.length, orden, totalPaginas, totalProductos]);
 
+  const rangoPaginacion = useMemo(
+    () => calcularRangoPaginacion(pagina, totalPaginas),
+    [pagina, totalPaginas]
+  );
+
   const esLista = layoutCatalogo === 'LISTA';
 
   return (
@@ -317,18 +335,24 @@ export default function Catalogo() {
                     Anterior
                   </button>
 
-                  {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      className={`catalogo-paginacion__btn ${pagina === num ? 'catalogo-paginacion__btn--activa' : ''}`}
-                      onClick={() => cambiarPagina(num)}
-                      aria-current={pagina === num ? 'page' : undefined}
-                      aria-label={`Página ${num}`}
-                    >
-                      {num}
-                    </button>
-                  ))}
+                  {rangoPaginacion.map((item, idx) =>
+                    item === '...' ? (
+                      <span key={`elipsis-${idx}`} className="catalogo-paginacion__elipsis" aria-hidden="true">
+                        &hellip;
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`catalogo-paginacion__btn ${pagina === item ? 'catalogo-paginacion__btn--activa' : ''}`}
+                        onClick={() => cambiarPagina(item)}
+                        aria-current={pagina === item ? 'page' : undefined}
+                        aria-label={`Página ${item}`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
 
                   <button
                     type="button"

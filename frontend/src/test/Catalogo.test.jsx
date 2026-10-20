@@ -404,4 +404,26 @@ describe('Catalogo', () => {
       );
     });
   });
+
+  it('muestra elipsis en la paginación cuando hay muchas páginas (ej. 10 páginas)', async () => {
+    configurarRespuestas({
+      paginacion: {
+        count: 240,
+        total_pages: 10,
+        current_page: 1,
+      },
+    });
+
+    renderCatalogo();
+
+    const paginacionNav = await screen.findByRole('navigation', { name: 'Paginación del catálogo' });
+    expect(paginacionNav).toBeInTheDocument();
+
+    // Deben existir páginas iniciales y la última página 10
+    expect(screen.getByRole('button', { name: 'Página 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Página 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Página 10' })).toBeInTheDocument();
+    // La elipsis debe existir como elemento decorativo
+    expect(document.querySelector('.catalogo-paginacion__elipsis')).toBeInTheDocument();
+  });
 });

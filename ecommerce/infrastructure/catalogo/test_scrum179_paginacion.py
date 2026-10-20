@@ -340,6 +340,64 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         self.assertIn(p_editado, pagina_2_desc)
         self.assertEqual(pagina_2_desc[-1].nombre, 'Oferta editada')
 
+    def test_orden_catalogo_a_gran_escala_100_productos_5_paginas(self):
+        """
+        Escalabilidad a gran escala con 100 productos (5 páginas completas):
+        - 99 productos escalonados entre $2.000 y $9.900
+        - 1 producto "Original Caro" creado en $15.000
+        - Se edita "Original Caro" a $500 con oferta
+        - En asc: se mueve de Página 5 a Página 1 (Posición 1)
+        - En desc: se mueve a Página 5 (Posición 100)
+        """
+        from ecommerce.infrastructure.catalogo.documents import Variante
+
+        productos = []
+        for i in range(99):
+            precio = 2000.0 + (i * 80.0)
+            p = Producto(
+                id=f'507f1f77bcf86cd7994400{i:02d}',
+                nombre=f'Item {i+1}',
+                categoria='QA179 Escala',
+                variantes=[Variante(sku=f'SKU-ESC-{i}', precio=f'{precio:.2f}')]
+            )
+            p.actualizar_precio_minimo_vigente()
+            productos.append(p)
+
+        # Producto originalmente caro en $15.000 (estaría al final en asc)
+        p_caro = Producto(
+            id='507f1f77bcf86cd799440099',
+            nombre='Original Caro',
+            categoria='QA179 Escala',
+            variantes=[Variante(sku='SKU-CARO-15K', precio='15000.00')]
+        )
+        p_caro.actualizar_precio_minimo_vigente()
+        productos.append(p_caro)
+
+        self.assertEqual(len(productos), 100)
+
+        # Antes de la edición, en asc: está en la página 5
+        antes_asc = sorted(productos, key=lambda x: float(x.precio_minimo_vigente))
+        self.assertEqual(antes_asc[-1].nombre, 'Original Caro')
+
+        # Se edita con oferta a $500
+        p_caro.variantes[0].precio_oferta = 500.0
+        p_caro.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(p_caro.precio_minimo_vigente), 500.0)
+
+        # 1. En orden ascendente tras edición:
+        tras_asc = sorted(productos, key=lambda x: float(x.precio_minimo_vigente))
+        pagina_1_asc = tras_asc[:24]
+        # Pasa inmediatamente a la Página 1, primera posición absoluta
+        self.assertEqual(pagina_1_asc[0].nombre, 'Original Caro')
+        self.assertEqual(float(pagina_1_asc[0].precio_minimo_vigente), 500.0)
+
+        # 2. En orden descendente tras edición:
+        tras_desc = sorted(productos, key=lambda x: float(x.precio_minimo_vigente), reverse=True)
+        pagina_5_desc = tras_desc[96:]  # Última página de 4 elementos
+        self.assertEqual(len(pagina_5_desc), 4)
+        # Queda al final de la última página (página 5)
+        self.assertEqual(pagina_5_desc[-1].nombre, 'Original Caro')
+
     @patch('ecommerce.infrastructure.catalogo.views.obtener_filtros_catalogo')
     def test_endpoint_filtros_catalogo_publico(self, mock_filtros):
         mock_filtros.return_value = {

@@ -1,4 +1,4 @@
-"""Public payment configuration in Django admin; secrets belong to the panel."""
+"""Datos públicos de pago en el admin; las credenciales se gestionan en el panel."""
 from django import forms
 from django.core.exceptions import ValidationError
 
@@ -28,8 +28,8 @@ def datos_publicos_admitidos(datos, campos):
 
 class DatosPublicosField(forms.JSONField):
     def prepare_value(self, value):
-        # Django otherwise echoes even malformed JSON after a validation error.
-        # This only filters rendering; clean_datos still validates the original input.
+        # Evitar que Django muestre secretos, incluso si el JSON recibido está mal formado.
+        # Solo se filtra la presentación; clean_datos valida la entrada original.
         publicos = {nombre: valor for nombre, valor in value.items()
                     if dato_publico_admitido(nombre, valor, self.campos)} if isinstance(value, dict) else {}
         return super().prepare_value(publicos)
@@ -47,7 +47,7 @@ class MedioPagoAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # An existing provider cannot be reinterpreted through a forged codigo.
+        # Un código manipulado no debe cambiar el proveedor de un registro existente.
         codigo = self.instance.codigo if self.instance.pk else (
             self.data.get('codigo') if self.is_bound else self.initial.get('codigo', self.instance.codigo)
         )
@@ -73,6 +73,6 @@ class MedioPagoAdminForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         if self.datos_anteriores_invalidos:
-            # Do not silently delete or encrypt legacy values during another edit.
+            # No borrar ni cifrar datos antiguos automáticamente al editar otros campos.
             raise ValidationError('El registro contiene datos no admitidos. No se guardó ningún cambio.')
         return cleaned

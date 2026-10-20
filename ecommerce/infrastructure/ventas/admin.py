@@ -15,7 +15,7 @@ class OrdenCompraAdmin(admin.ModelAdmin):
         return tuple(campo.name for campo in self.model._meta.fields if campo.name not in self.campos_editables)
 
     def save_model(self, request, obj, form, change):
-        # A concurrent panel update must not be overwritten by a recipient correction.
+        # Corregir el destinatario no debe sobrescribir cambios simultáneos del panel.
         obj.save(update_fields=self.campos_editables)
 
 
@@ -35,7 +35,7 @@ class MedioPagoAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         if change:
-            # Do not rewrite credentials, including a concurrent update from the panel.
+            # Conservar las credenciales, incluso si el panel acaba de actualizarlas.
             obj.save(update_fields=('habilitado', 'datos', 'actualizado'))
         else:
             super().save_model(request, obj, form, change)

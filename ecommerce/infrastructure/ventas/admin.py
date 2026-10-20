@@ -10,5 +10,14 @@ class OrdenCompraAdmin(admin.ModelAdmin):
 
 
 admin.site.register(ConfiguracionGlobal)
-admin.site.register(MedioPago)
+
+
+@admin.register(MedioPago)
+class MedioPagoAdmin(admin.ModelAdmin):
+    # Las credenciales se gestionan desde el panel; tampoco se muestra el texto cifrado.
+    fields = ('codigo', 'habilitado', 'datos', 'actualizado')
+    readonly_fields = ('actualizado',)
+    list_display = ('codigo', 'habilitado', 'actualizado')
+
+
 admin.site.register(Promocion)

@@ -192,36 +192,25 @@ class ProductoListCreateView(CatalogoAPIView):
                         {
                             '$addFields': {
                                 '_precio_efectivo': {
-                                    '$cond': [
-                                        {
-                                            '$and': [
-                                                {'$ne': ['$precio_minimo_vigente', None]},
-                                                {'$gt': ['$precio_minimo_vigente', 0]}
-                                            ]
-                                        },
-                                        '$precio_minimo_vigente',
-                                        {
-                                            '$min': {
-                                                '$map': {
-                                                    'input': {'$ifNull': ['$variantes', []]},
-                                                    'as': 'v',
-                                                    'in': {
-                                                        '$cond': [
-                                                            {
-                                                                '$and': [
-                                                                    {'$ne': ['$$v.precio_oferta', None]},
-                                                                    {'$gt': ['$$v.precio_oferta', 0]},
-                                                                    {'$lt': ['$$v.precio_oferta', '$$v.precio']}
-                                                                ]
-                                                            },
-                                                            '$$v.precio_oferta',
-                                                            '$$v.precio'
+                                    '$min': {
+                                        '$map': {
+                                            'input': {'$ifNull': ['$variantes', []]},
+                                            'as': 'v',
+                                            'in': {
+                                                '$cond': [
+                                                    {
+                                                        '$and': [
+                                                            {'$ne': ['$$v.precio_oferta', None]},
+                                                            {'$gt': ['$$v.precio_oferta', 0]},
+                                                            {'$lt': ['$$v.precio_oferta', '$$v.precio']}
                                                         ]
-                                                    }
-                                                }
+                                                    },
+                                                    '$$v.precio_oferta',
+                                                    '$$v.precio'
+                                                ]
                                             }
                                         }
-                                    ]
+                                    }
                                 }
                             }
                         },

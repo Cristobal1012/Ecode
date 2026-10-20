@@ -109,9 +109,19 @@ def actualizar_producto(producto, cambios):
         if attr == 'variantes':
             valor = [Variante(**datos) for datos in valor]
         setattr(producto, attr, valor)
+
+    # Mantener sincronizado precio_minimo_vigente al editar precios, ofertas o variantes (SCRUM-179 / E01)
+    if 'variantes' in cambios or producto.precio_minimo_vigente is None:
+        producto.actualizar_precio_minimo_vigente()
+
     producto.validate()
     mongo_data = producto.to_mongo()
-    actualizacion = {'$set': {campo: mongo_data[campo] for campo in cambios}}
+    
+    campos_set = {campo: mongo_data[campo] for campo in cambios}
+    if 'variantes' in cambios or 'precio_minimo_vigente' in mongo_data:
+        campos_set['precio_minimo_vigente'] = mongo_data.get('precio_minimo_vigente')
+
+    actualizacion = {'$set': campos_set}
     repo = RepositorioGaleriaMongo()
     repo.programar_borrado(eliminadas)
     consulta = consulta_galeria(producto.id, anteriores) if (

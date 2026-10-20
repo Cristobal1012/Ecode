@@ -757,10 +757,18 @@ class SeguimientoEnvioView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
+        proveedor = orden.proveedor_logistico or 'CHILEXPRESS'
         codigo = orden.numero_seguimiento_tracking
 
-        estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(proveedor, codigo)
+        if proveedor == 'RETIRO_LOCAL':
+            estado_estandarizado = 'Pendiente de retiro en local'
+        elif not codigo or not codigo.strip():
+            estado_estandarizado = 'Pendiente de despacho'
+        else:
+            estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(
+                proveedor,
+                codigo,
+            )
 
         return Response({
             "numero_orden": orden.id,

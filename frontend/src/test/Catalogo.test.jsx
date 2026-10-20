@@ -293,8 +293,7 @@ describe('Catalogo', () => {
     await screen.findByText('Teclado mecánico');
 
     expect(clienteAxios.get).toHaveBeenCalledWith(
-      'configuracion/',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      'configuracion/'
     );
 
     expect(clienteAxios.get).toHaveBeenCalledWith(
@@ -379,6 +378,15 @@ describe('Catalogo', () => {
         })
       );
     });
+  });
+
+  it('usa las opciones globales de la página sin una petición separada de filtros (SCRUM-149)', async () => {
+    configurarRespuestas({ paginacion: { count: 48, total_pages: 2 } });
+    await renderCatalogo();
+    await screen.findByText('Teclado mecánico');
+    fireEvent.change(screen.getByLabelText('Categoría'), { target: { value: 'Periféricos' } });
+    expect(await screen.findByRole('option', { name: 'Bluetooth' })).toBeInTheDocument();
+    expect(clienteAxios.get.mock.calls.some(([url]) => url === 'catalogo/filtros/')).toBe(false);
   });
 
   it('reinicia a la página 1 cuando cambia la categoría o el orden (SCRUM-179)', async () => {

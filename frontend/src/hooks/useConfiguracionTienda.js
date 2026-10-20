@@ -5,10 +5,15 @@ import clienteAxios from '../components/auth/axiosConfig';
 // comparten el header, el footer y la landing; recargarConfiguracion() la vuelve a pedir tras editarla.
 let configuracion = null;
 let peticion = null;
+let cargando = false;
 const oyentes = new Set();
 
-function cargar() {
+function cargar(refrescar = false) {
+  // El catálogo vuelve a consultar al entrar, pero comparte una lectura ya en
+  // curso con App, header y footer durante el montaje inicial.
+  if (refrescar && !cargando) peticion = null;
   if (!peticion) {
+    cargando = true;
     peticion = clienteAxios.get('configuracion/')
       .then(({ data }) => {
         configuracion = Array.isArray(data) ? data[0] : data;
@@ -21,7 +26,8 @@ function cargar() {
         peticion = null;
         oyentes.forEach((avisar) => avisar({}));
         throw error;
-      });
+      })
+      .finally(() => { cargando = false; });
   }
   return peticion;
 }
@@ -47,14 +53,14 @@ function aplicarIdentidad(config) {
   }
 }
 
-export default function useConfiguracionTienda() {
+export default function useConfiguracionTienda({ refrescar = false } = {}) {
   const [valor, setValor] = useState(configuracion);
 
   useEffect(() => {
     oyentes.add(setValor);
-    cargar().catch((error) => console.error('No se pudo cargar la configuración de la tienda:', error));
+    cargar(refrescar).catch((error) => console.error('No se pudo cargar la configuración de la tienda:', error));
     return () => oyentes.delete(setValor);
-  }, []);
+  }, [refrescar]);
 
   return valor;
 }

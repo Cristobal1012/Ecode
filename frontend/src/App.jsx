@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import clienteAxios from './components/auth/axiosConfig';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
@@ -69,38 +68,24 @@ function App() {
     acceptCookies, rejectCookies, openPreferences, closePreferences,
   } = useCookieConsent();
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
-  const [googleClientId, setGoogleClientId] = useState('');
-  const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
+  const configuracion = useConfiguracionTienda();
+  const googleClientId = configuracion?.google_client_id || '';
+  useEffect(() => {
+    if (configuracion?.tema_seleccionado !== undefined) {
+      const serverId = Number(configuracion.tema_seleccionado);
+      localStorage.setItem('ecommerce_palette', serverId.toString());
+      applyPaletteToRoot(serverId);
+    }
+    if (configuracion?.tipografia_seleccionada !== undefined) {
+      localStorage.setItem(CLAVE_TIPOGRAFIA, String(configuracion.tipografia_seleccionada));
+      aplicarTipografia(configuracion.tipografia_seleccionada);
+    }
+  }, [configuracion]);
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     applyPaletteToRoot(initialId);
-
-    // 2. Consulta a Django para sincronizar con la base de datos
-    const syncTheme = async () => {
-      try {
-        const response = await clienteAxios.get('configuracion/');
-        const config = Array.isArray(response.data) ? response.data[0] : response.data;
-        setGoogleClientId(config?.google_client_id || '');
-        setTrackingIds({
-        googleAnalyticsId: config?.google_analytics_id || '', metaPixelId: config?.meta_pixel_id || '',});
-        if (config && config.tema_seleccionado !== undefined) {
-          const serverId = Number(config.tema_seleccionado);
-          localStorage.setItem('ecommerce_palette', serverId.toString());
-          applyPaletteToRoot(serverId);
-        }
-        // RF-01.2: la tipografía elegida por el admin se aplica aquí, en un solo lugar (main.jsx pinta la última conocida)
-        if (config?.tipografia_seleccionada !== undefined) {
-          localStorage.setItem(CLAVE_TIPOGRAFIA, String(config.tipografia_seleccionada));
-          aplicarTipografia(config.tipografia_seleccionada);
-        }
-      } catch (error) {
-        console.error('Error al sincronizar tema global en App:', error);
-      }
-    };
-
-    syncTheme();
 
     // 3. Listener para cambios en la misma pestaña (CustomEvent)
     const handleCustomEvent = (e) => {
@@ -127,8 +112,8 @@ function App() {
   return (
     <BrowserRouter>
       <TrackingScripts
-        googleAnalyticsId={trackingIds.googleAnalyticsId}
-        metaPixelId={trackingIds.metaPixelId}
+        googleAnalyticsId={configuracion?.google_analytics_id || ''}
+        metaPixelId={configuracion?.meta_pixel_id || ''}
         consent={consent}
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>

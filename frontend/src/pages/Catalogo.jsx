@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 import ProductCardGrid from '../components/ProductCardGrid';
@@ -58,16 +59,15 @@ function calcularRangoPaginacion(paginaActual, total) {
 }
 
 export default function Catalogo() {
-  const [temaConfigurado, setTemaConfigurado] = useState(() => {
-    const savedPaletteId = Number(localStorage.getItem('ecommerce_palette'));
-    return savedPaletteId || TEMA_PREDETERMINADO;
-  });
+  const configuracion = useConfiguracionTienda({ refrescar: true });
+  const temaConfigurado = Number(configuracion?.tema_seleccionado)
+    || Number(localStorage.getItem('ecommerce_palette')) || TEMA_PREDETERMINADO;
 
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [filtrosActivos, setFiltrosActivos] = useState({});
   const [orden, setOrden] = useState('destacados');
-  const [layoutCatalogo, setLayoutCatalogo] = useState('GRID_3');
+  const layoutCatalogo = configuracion?.layout_catalogo || 'GRID_3';
 
   // Estado de paginación y filtros del servidor (SCRUM-179)
   const [pagina, setPagina] = useState(1);
@@ -78,51 +78,8 @@ export default function Catalogo() {
   // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
     aplicarPaleta(temaConfigurado);
+    localStorage.setItem('ecommerce_palette', String(temaConfigurado));
   }, [temaConfigurado]);
-
-  // CARGAR CONFIGURACIÓN Y FILTROS INICIALES DEL SERVIDOR
-  useEffect(() => {
-    const controller = new AbortController();
-
-    // Traer configuración de la BD
-    clienteAxios
-      .get('configuracion/', { signal: controller.signal })
-      .then(({ data }) => {
-        const configDb = Array.isArray(data) ? data[0] : data;
-        
-        if (configDb?.layout_catalogo) {
-          setLayoutCatalogo(configDb.layout_catalogo);
-        }
-        
-        if (configDb?.tema_seleccionado !== undefined && configDb?.tema_seleccionado !== null) {
-          const idBackend = Number(configDb.tema_seleccionado);
-          
-          if (!isNaN(idBackend)) {
-            setTemaConfigurado(idBackend); 
-            localStorage.setItem('ecommerce_palette', idBackend.toString()); 
-          }
-        }
-      })
-      .catch((error) => {
-        if (error.name !== 'CanceledError' && error.code !== 'ERR_CANCELED') {
-          console.error('Error cargando la DB:', error);
-        }
-      });
-
-    // Cargar opciones de filtros desde el servidor (RF-01.3)
-    clienteAxios
-      .get('catalogo/filtros/', { signal: controller.signal })
-      .then(({ data }) => {
-        if (data && typeof data === 'object') {
-          setFiltrosServidor(data);
-        }
-      })
-      .catch(() => {
-        // En caso de mock en pruebas o fallo de red, se mantiene el fallback local
-      });
-
-    return () => controller.abort();
-  }, []);
 
   // FETCH DE PRODUCTOS PAGINADOS Y FILTRADOS DESDE EL SERVIDOR (SCRUM-179)
   useEffect(() => {

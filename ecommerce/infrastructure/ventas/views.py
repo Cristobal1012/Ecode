@@ -1014,7 +1014,9 @@ class DashboardMetricasView(APIView):
     
 class PaginaLegalListView(generics.ListAPIView):
     # RF-03.5: el footer solo enlaza las páginas publicadas
-    queryset = PaginaLegal.objects.filter(publicada=True)
+    queryset = PaginaLegal.objects.filter(publicada=True).only(
+        'id', 'tipo_pagina', 'titulo', 'ultima_actualizacion',
+    )
     serializer_class = PaginaLegalSerializer
     permission_classes = [AllowAny]
     authentication_classes = []

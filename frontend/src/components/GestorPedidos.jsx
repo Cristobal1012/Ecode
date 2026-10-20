@@ -104,6 +104,18 @@ export default function GestorPedidos() {
     if (pedido.proveedor_logistico === 'RETIRO_LOCAL') {
       return <span style={{ color: 'var(--color-muted)' }}>Retiro en local</span>;
     }
+    if (pedido.proveedor_logistico === 'ENTREGA_COORDINADA') {
+      // La entrega la hace la tienda: la dirección para coordinarla con el comprador
+      const direccion = pedido.direccion_envio_snapshot || {};
+      const texto = [[direccion.calle, direccion.numero].filter(Boolean).join(' '), direccion.dpto_casa, direccion.comuna]
+        .filter(Boolean).join(', ');
+      return (
+        <div style={{ fontSize: '0.9rem' }}>
+          <span style={{ color: 'var(--color-muted)' }}>Entrega coordinada</span>
+          {texto && <div>{texto}</div>}
+        </div>
+      );
+    }
     if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
       return <span style={{ color: 'var(--color-muted)' }}>{pedido.proveedor_logistico || '—'}</span>;
     }

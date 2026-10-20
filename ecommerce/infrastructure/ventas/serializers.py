@@ -14,7 +14,8 @@ from .models import Promocion
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
-    PROVEEDORES_CON_ORDEN_TRANSPORTE, ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete,
+    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, PROVEEDORES_CON_ORDEN_TRANSPORTE, RETIRO_LOCAL,
+    ConfiguracionCotizacionInvalida, EntregaNoHabilitada, EntregasDeLaTienda, ErrorCotizacion, Paquete,
     SolicitudCotizacion,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
@@ -33,6 +34,7 @@ from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLega
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
+from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -41,6 +43,18 @@ from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
     return MediosPagoDisponibles(DjangoRepositorioMediosPago())
+
+
+def entregas_de_la_tienda():
+    """Retiro en local y entrega coordinada tal como los dejó el admin en el panel (RF-02.3)."""
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    if config is None:
+        return EntregasDeLaTienda()
+    return EntregasDeLaTienda(
+        retiro_activo=config.retiro_en_local_activo,
+        coordinada_activa=config.entrega_coordinada_activa,
+        costo_coordinada=Decimal(config.costo_entrega_coordinada),
+    )
 
 
 CAMPOS_FOTOS_INSTAGRAM = tuple(f'instagram_foto_{numero}' for numero in range(1, 7))
@@ -53,6 +67,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     pasarelas_activas = serializers.SerializerMethodField()
     # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
     google_client_id = serializers.SerializerMethodField()
+    # Sin llaves de Chilexpress el checkout no ofrece despacho ni sucursales (solo dice si hay, nunca cuáles)
+    chilexpress_activo = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionGlobal
@@ -74,6 +90,10 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'entrega_coordinada_activa',
+            'costo_entrega_coordinada',
+            'instrucciones_entrega_coordinada',
+            'chilexpress_activo',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -102,6 +122,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
 
     def get_google_client_id(self, obj):
         return settings.GOOGLE_CLIENT_ID
+
+    def get_chilexpress_activo(self, obj):
+        return DjangoRepositorioCredencialesChilexpress().obtener().configuradas
 
     def get_pasarelas_activas(self, obj):
         # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
@@ -135,6 +158,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     horario_atencion = serializers.CharField(max_length=500, required=False, allow_blank=True)
     # Se acepta '@usuario' o el enlace al perfil; se guarda solo el usuario
     instagram_usuario = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    costo_entrega_coordinada = serializers.IntegerField(min_value=0, max_value=1_000_000, required=False)
 
     class Meta:
         model = ConfiguracionGlobal
@@ -163,6 +187,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'entrega_coordinada_activa',
+            'costo_entrega_coordinada',
+            'instrucciones_entrega_coordinada',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -258,7 +285,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     costo_envio = serializers.FloatField(read_only=True)
     total_final = serializers.FloatField(read_only=True)
     proveedor_logistico = serializers.ChoiceField(
-        choices=['STARKEN', 'CHILEXPRESS', 'RETIRO_LOCAL'], required=False,
+        choices=['STARKEN', 'CHILEXPRESS', RETIRO_LOCAL, ENTREGA_COORDINADA], required=False,
     )
     paquete = PaqueteSerializer(write_only=True, required=False)
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
@@ -338,10 +365,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     {"email_invitado": "Debe proporcionar un correo electronico para comprar como invitado."}
                 )
 
-        config = ConfiguracionGlobal.objects.filter(pk=1).first()
-        
-        # Validamos usando el campo del modelo en lugar de buscar en el antiguo JSON
-        retiro_activo = config.retiro_en_local_activo if config else False
         proveedor = data.get('proveedor_logistico')
 
         # Toda orden necesita una entrega que el servidor pueda costear (RF-02.3)
@@ -350,18 +373,24 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'proveedor_logistico': 'Seleccione una opción de entrega cotizada.'
             })
 
-        if proveedor == 'RETIRO_LOCAL':
-            if not retiro_activo:
-                raise serializers.ValidationError({
-                    'proveedor_logistico': 'El retiro en local no está habilitado en esta tienda.'
-                })
-        else:
+        if proveedor in ENTREGAS_DE_LA_TIENDA:
+            # Retiro o entrega coordinada: solo si el admin la activó, con el costo que él definió
+            try:
+                self._costo_entrega_propia = entregas_de_la_tienda().costo(proveedor)
+            except EntregaNoHabilitada as error:
+                raise serializers.ValidationError({'proveedor_logistico': str(error)})
+
+        if proveedor != RETIRO_LOCAL:
             direccion = data.get('direccion_envio_snapshot') or {}
             if not isinstance(direccion, dict) or not direccion.get('comuna'):
                 raise serializers.ValidationError({
                     'direccion_envio_snapshot': 'Se requiere la comuna de destino.'
                 })
-            if 'paquete' not in data:
+            if proveedor == ENTREGA_COORDINADA and not str(direccion.get('calle') or '').strip():
+                raise serializers.ValidationError({
+                    'direccion_envio_snapshot': 'Se requiere la dirección de entrega.'
+                })
+            if proveedor not in ENTREGAS_DE_LA_TIENDA and 'paquete' not in data:
                 raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
@@ -393,9 +422,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
         
-        # 1. COTIZACIÓN REAL O RETIRO LOCAL (validate ya exige comuna y paquete para un courier)
-        if proveedor == 'RETIRO_LOCAL':
-            costo_envio = 0.0
+        # 1. COTIZACIÓN REAL O ENTREGA DE LA TIENDA (validate ya exige comuna y paquete para un courier)
+        if proveedor in ENTREGAS_DE_LA_TIENDA:
+            costo_envio = float(self._costo_entrega_propia)
         else:
             config = ConfiguracionGlobal.objects.filter(pk=1).first()
             origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
@@ -597,6 +626,8 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
             'nombre_destinatario', 'telefono_destinatario',
+            # La entrega coordinada la hace la tienda: necesita la dirección del comprador
+            'direccion_envio_snapshot',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',

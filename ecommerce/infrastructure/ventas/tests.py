@@ -13,7 +13,7 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal, ProveedorEnvio
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 from .views import token_verificacion_valido
@@ -65,6 +65,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
+             'entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada',
+             'chilexpress_activo',
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
@@ -94,6 +96,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             texto_boton_ingreso='Ver productos',
             banner_url='https://example.com/hero.jpg',
         )
+        # La migración 0022 copia a la base las llaves de Chilexpress que haya en el entorno
+        ProveedorEnvio.objects.all().delete()
 
     @override_settings(GOOGLE_CLIENT_ID='cliente-qa.apps.googleusercontent.com')
     def test_public_endpoint_matches_frontend_contract(self):
@@ -124,6 +128,10 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'numero_origen': '123',
             'dpto_casa_origen': None,
             'retiro_en_local_activo': True,
+            'entrega_coordinada_activa': False,
+            'costo_entrega_coordinada': 0,
+            'instrucciones_entrega_coordinada': '',
+            'chilexpress_activo': False,
             'google_analytics_id': None,
             'meta_pixel_id': None,
             'nombre_tienda': 'Tienda QA',

@@ -15,6 +15,7 @@ import GestorMediosPago from '../components/GestorMediosPago';
 import GestorChilexpress from '../components/GestorChilexpress';
 import GestorPromociones from '../components/GestorPromociones';
 import GestorContacto from '../components/GestorContacto';
+import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -24,6 +25,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
+  { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
@@ -265,6 +267,13 @@ export default function Admin() {
                       </button>
                     </div>
                   </form>
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-entrega-coordinada" />
+                  <GestorEntregaCoordinada />
                 </div>
 
                 <hr className="admin-separador" />

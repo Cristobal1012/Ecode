@@ -34,6 +34,10 @@ class ConfiguracionGlobal(models.Model):
     numero_origen = models.CharField(max_length=50, default='123', blank=True, null=True)
     dpto_casa_origen = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Piso 4, Oficina 405 o Bodega B")
     retiro_en_local_activo = models.BooleanField(default=True, help_text="Permite a los clientes seleccionar retiro gratuito en local")
+    # Entrega coordinada (RF-02.3): la tienda contacta al comprador para acordar la entrega, sin transportista
+    entrega_coordinada_activa = models.BooleanField(default=False)
+    costo_entrega_coordinada = models.PositiveIntegerField(default=0)
+    instrucciones_entrega_coordinada = models.CharField(max_length=300, blank=True, default='')
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en

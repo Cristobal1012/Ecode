@@ -38,13 +38,19 @@ const producto = {
   largo_cm: 10,
 };
 
-function prepararRespuestas({ pasarelas = ['TRANSFERENCIA'], retiroLocal = true } = {}) {
+// entregaCoordinada: null (desactivada) o { costo, instrucciones }
+function prepararRespuestas({ pasarelas = ['TRANSFERENCIA'], retiroLocal = true, chilexpress = true,
+                              entregaCoordinada = null } = {}) {
   getMock.mockImplementation((url) => {
     if (url === 'configuracion/') {
       return Promise.resolve({
         data: {
           pasarelas_activas: pasarelas,
           retiro_en_local_activo: retiroLocal,
+          chilexpress_activo: chilexpress,
+          entrega_coordinada_activa: Boolean(entregaCoordinada),
+          costo_entrega_coordinada: entregaCoordinada?.costo ?? 0,
+          instrucciones_entrega_coordinada: entregaCoordinada?.instrucciones ?? '',
           calle_origen: 'Av. Principal',
           numero_origen: '123',
           comuna_origen: 'Santiago',
@@ -600,4 +606,82 @@ describe('Checkout', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
+});
+
+describe('Checkout: entrega coordinada (RF-02.3)', () => {
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  afterEach(() => cleanup());
+
+  const completarDireccion = () => {
+    fireEvent.change(screen.getByLabelText('Calle'), { target: { value: 'Los Aromos' } });
+    fireEvent.change(screen.getByLabelText('Número'), { target: { value: '1550' } });
+    fireEvent.change(screen.getByLabelText('Comuna'), { target: { value: 'Ñuñoa' } });
+    fireEvent.change(screen.getByLabelText('Ciudad'), { target: { value: 'Santiago' } });
+  };
+
+  it('sin Chilexpress no ofrece despacho ni sucursales, ni pide sus comunas', async () => {
+    prepararRespuestas({ chilexpress: false, retiroLocal: false,
+                         entregaCoordinada: { costo: 3000, instrucciones: 'Te escribimos por WhatsApp.' } });
+    renderCheckout();
+
+    const opcion = await screen.findByRole('radio', { name: 'Entrega coordinada' });
+    expect(opcion).toBeChecked();
+    expect(screen.queryByRole('radio', { name: /a domicilio/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /sucursal/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Te escribimos por WhatsApp.')).toBeInTheDocument();
+    // La comuna se escribe a mano: no hay lista de cobertura
+    expect(screen.getByLabelText('Comuna').tagName).toBe('INPUT');
+    expect(getMock).not.toHaveBeenCalledWith('ventas/logistica/comunas/');
+    expect(screen.queryByText(/no se pudieron cargar las comunas/i)).not.toBeInTheDocument();
+  });
+
+  it('cobra el costo del admin y envía la dirección sin paquete ni cotización', async () => {
+    prepararRespuestas({ chilexpress: false, retiroLocal: false, entregaCoordinada: { costo: 3000 } });
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    await screen.findByRole('radio', { name: 'Entrega coordinada' });
+    expect(screen.getByText('La tienda te contactará para acordar el día y la hora de la entrega.')).toBeInTheDocument();
+    expect(screen.getByText('Total a pagar:').parentElement).toHaveTextContent('$18.000');
+
+    completarDireccion();
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('ventas/checkout/', expect.objectContaining({
+      proveedor_logistico: 'ENTREGA_COORDINADA',
+      paquete: undefined,
+      direccion_envio_snapshot: expect.objectContaining({ calle: 'Los Aromos', numero: '1550', comuna: 'Ñuñoa' }),
+    })));
+    expect(postMock).not.toHaveBeenCalledWith('ventas/logistica/cotizar/', expect.anything(), expect.anything());
+  });
+
+  it('con Chilexpress se ofrece junto al despacho, que sigue siendo la opción por defecto', async () => {
+    prepararRespuestas({ entregaCoordinada: { costo: 0 } });
+    renderCheckout();
+
+    expect(await screen.findByRole('radio', { name: /a domicilio/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /sucursal chilexpress/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /retiro en local/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Entrega coordinada' })).not.toBeChecked();
+  });
+
+  it('sin ninguna forma de entrega lo avisa y no deja pagar', async () => {
+    prepararRespuestas({ chilexpress: false, retiroLocal: false });
+    renderCheckout();
+
+    expect(await screen.findByText('Esta tienda todavía no tiene formas de entrega disponibles.')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    completarDestinatario();
+    expect(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' })).toBeDisabled();
+  });
 });

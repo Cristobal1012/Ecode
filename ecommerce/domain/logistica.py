@@ -47,6 +47,36 @@ class ErrorOrdenTransporte(Exception):
 # Transportistas con los que se genera una orden de transporte (OT) al confirmarse el pago
 PROVEEDORES_CON_ORDEN_TRANSPORTE = frozenset({'CHILEXPRESS'})
 
+# Entregas que hace la propia tienda, sin transportista ni cotización (RF-02.3)
+RETIRO_LOCAL = 'RETIRO_LOCAL'
+# La tienda contacta al comprador para acordar el día y el lugar (ej. entregas en persona en su ciudad)
+ENTREGA_COORDINADA = 'ENTREGA_COORDINADA'
+ENTREGAS_DE_LA_TIENDA = frozenset({RETIRO_LOCAL, ENTREGA_COORDINADA})
+
+
+class EntregaNoHabilitada(Exception):
+    """El comprador eligió una forma de entrega que la tienda no ofrece."""
+
+
+@dataclass(frozen=True)
+class EntregasDeLaTienda:
+    """Formas de entrega propias que el admin activa en el panel; el retiro es gratis y la coordinada tiene su costo."""
+
+    retiro_activo: bool = False
+    coordinada_activa: bool = False
+    costo_coordinada: Decimal = Decimal('0')
+
+    def costo(self, proveedor: str) -> Decimal:
+        if proveedor == RETIRO_LOCAL:
+            if not self.retiro_activo:
+                raise EntregaNoHabilitada('El retiro en local no está habilitado en esta tienda.')
+            return Decimal('0')
+        if proveedor == ENTREGA_COORDINADA:
+            if not self.coordinada_activa:
+                raise EntregaNoHabilitada('La entrega coordinada no está habilitada en esta tienda.')
+            return self.costo_coordinada
+        raise EntregaNoHabilitada('Esa forma de entrega no la hace la tienda.')
+
 
 @dataclass(frozen=True)
 class EnvioSolicitado:

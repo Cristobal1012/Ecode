@@ -230,6 +230,30 @@ class CorreosDelPanelTests(APITestCase):
         self.assertIn('Retiro en el local: Av. Central 50 Providencia', listo.body)
         self.assertNotIn('Número de seguimiento', listo.body)
 
+    def test_entrega_coordinada_explica_como_se_coordina_y_no_ofrece_seguimiento_de_courier(self):
+        ConfiguracionGlobal.objects.filter(pk=1).update(
+            instrucciones_entrega_coordinada='Te escribimos por WhatsApp para coordinar.')
+        orden = self.crear_orden('ENTREGA_COORDINADA')
+        for estado in ('PAGADO', 'EN_PREPARACION', 'ENVIADO'):
+            self.cambiar(orden, estado)
+
+        pagado, _, despacho = mail.outbox
+        self.assertIn('Entrega coordinada: Los Olmos 123, PROVIDENCIA', pagado.body)
+        self.assertIn('Te escribimos por WhatsApp para coordinar.', pagado.body)
+        self.assertIn('Te escribimos por WhatsApp para coordinar.', pagado.alternatives[0][0])
+        self.assertEqual(despacho.subject, f'Tu pedido #{orden.id} va en camino | Tienda QA')
+        self.assertIn('va en camino a entregar tu pedido', despacho.body)
+        # Sin courier no hay número de seguimiento ni botón para seguir el envío
+        for contenido in (despacho.body, despacho.alternatives[0][0]):
+            self.assertNotIn('Número de seguimiento', contenido)
+            self.assertNotIn('Seguir mi pedido', contenido)
+            self.assertNotIn('Entrega_coordinada', contenido)
+
+    def test_entrega_coordinada_sin_instrucciones_avisa_que_la_tienda_contactara(self):
+        orden = self.crear_orden('ENTREGA_COORDINADA')
+        self.cambiar(orden, 'PAGADO')
+        self.assertIn('La tienda te contactará para acordar el día y la hora de la entrega.', mail.outbox[0].body)
+
     def test_cancelacion_del_admin_avisa_devolucion_si_ya_habia_pagado(self):
         orden = self.crear_orden('RETIRO_LOCAL')
         self.cambiar(orden, 'CANCELADO')

@@ -10,6 +10,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
+from ecommerce.domain.logistica import ENTREGA_COORDINADA
 from ecommerce.domain.ventas import EventoPedido
 
 from ..instrucciones_pago import instrucciones_transferencia
@@ -88,6 +89,9 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
             'pago_vencido': orden.motivo_cancelacion == MOTIVO_PAGO_VENCIDO,
             'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
+            'es_entrega_coordinada': orden.proveedor_logistico == ENTREGA_COORDINADA,
+            # Cómo se coordina la entrega (lo escribe el admin); vacío si la entrega no es coordinada
+            'aviso_entrega_coordinada': CorreoNotificadorPedidos._aviso_entrega_coordinada(orden, config),
             'transportista': (orden.proveedor_logistico or '').capitalize(),
             # Número de la orden de transporte (RF-02.3), si ya se generó
             'numero_ot': orden.numero_seguimiento_tracking or '',
@@ -108,6 +112,13 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
         return instrucciones
 
     @staticmethod
+    def _aviso_entrega_coordinada(orden, config):
+        if orden.proveedor_logistico != ENTREGA_COORDINADA:
+            return ''
+        instrucciones = (config.instrucciones_entrega_coordinada if config else '').strip()
+        return instrucciones or 'La tienda te contactará para acordar el día y la hora de la entrega.'
+
+    @staticmethod
     def _entrega(orden, config):
         direccion = orden.direccion_envio_snapshot or {}
         if orden.proveedor_logistico == 'RETIRO_LOCAL':
@@ -118,6 +129,8 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             texto += f", {direccion['dpto_casa']}"
         if direccion.get('comuna'):
             texto += f", {direccion['comuna']}"
+        if orden.proveedor_logistico == ENTREGA_COORDINADA:
+            return f'Entrega coordinada: {texto}'
         tipo = 'Retiro en sucursal' if direccion.get('codigo_sucursal') else 'Despacho a domicilio'
         proveedor = (orden.proveedor_logistico or '').capitalize()
         return f'{tipo} ({proveedor}): {texto}' if proveedor else f'{tipo}: {texto}'

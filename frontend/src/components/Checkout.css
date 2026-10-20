@@ -269,6 +269,11 @@
   font-weight: 600;
 }
 
+/* Instrucciones del admin para la entrega coordinada, sobre la dirección */
+.checkout-entrega-coordinada {
+  margin-bottom: 12px;
+}
+
 .checkout-casilla {
   display: flex;
   align-items: flex-start;

@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -194,6 +194,59 @@ class ConfiguracionNegocioAccessTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.configuracion.refresh_from_db()
         self.assertEqual(self.configuracion.texto_bienvenida, 'Modificado')
+
+
+    def patch_analytics(self, datos):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Token {self.admin_token.key}'
+        )
+        return self.client.patch(
+            reverse('configuracion-negocio'),
+            datos,
+            format='json',
+        )
+
+    def test_admin_can_save_valid_analytics_ids(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-ABC1234567',
+            'meta_pixel_id': '123456789012345',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(
+            self.configuracion.google_analytics_id, 'G-ABC1234567'
+        )
+        self.assertEqual(
+            self.configuracion.meta_pixel_id, '123456789012345'
+        )
+
+    def test_invalid_google_analytics_id_is_rejected(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-123',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('google_analytics_id', response.data)
+
+    def test_invalid_meta_pixel_id_is_rejected(self):
+        response = self.patch_analytics({
+            'meta_pixel_id': 'pixel-invalido',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('meta_pixel_id', response.data)
+
+    def test_empty_analytics_ids_can_disable_integrations(self):
+        response = self.patch_analytics({
+            'google_analytics_id': '',
+            'meta_pixel_id': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.google_analytics_id, '')
+        self.assertEqual(self.configuracion.meta_pixel_id, '')
 
 
 class CheckoutAccessTests(APITestCase):

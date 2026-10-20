@@ -8,6 +8,8 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib import admin
+from django.contrib.admin.models import LogEntry
 from django.core import mail
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -18,6 +20,7 @@ from ecommerce.infrastructure.catalogo.documents import Producto, Variante
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, DetalleOrden, MedioPago, OrdenCompra, Promocion
+from .cifrado import cifrar_json
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 
 
@@ -230,6 +233,121 @@ class MedioPagoAdminTests(TestCase):
         })
         self.assert_sin_credenciales(respuesta)
         self.assertEqual(MedioPago.objects.count(), 3)
+
+    def test_secretos_desconocidos_y_estructuras_no_publicas_se_rechazan_sin_reflejarlos(self):
+        secreto = 'secreto-introducido-177'
+        entradas = [
+            {'access_token': secreto}, {'api_key': secreto}, {'webhook_secret': secreto},
+            {'linkify_secret': secreto}, {'desconocido': secreto},
+            {'banco': {'access_token': secreto}}, {'banco': [secreto]},
+            {'ambiente': secreto}, [secreto], secreto, 177, None,
+        ]
+        for medio in MedioPago.objects.all():
+            antes = MedioPago.objects.values().get(pk=medio.pk)
+            logs = LogEntry.objects.count()
+            for datos in entradas:
+                with self.subTest(codigo=medio.codigo, datos=datos):
+                    respuesta = self.post_con_csrf(
+                        reverse('admin:ventas_mediopago_change', args=[medio.pk]),
+                        {'datos': json.dumps(datos), 'habilitado': '', '_save': 'Guardar'},
+                    )
+                    self.assert_sin_credenciales(respuesta)
+                    self.assertIn('datos', respuesta.context['adminform'].form.errors)
+                    self.assertNotContains(respuesta, secreto)
+                    self.assertEqual(MedioPago.objects.values().get(pk=medio.pk), antes)
+                    self.assertEqual(LogEntry.objects.count(), logs)
+
+    def test_json_malformado_no_refleja_el_secreto_introducido(self):
+        medio = MedioPago.objects.get(codigo='TRANSBANK')
+        antes = MedioPago.objects.values().get(pk=medio.pk)
+        secreto = 'secreto-json-incompleto-177'
+        respuesta = self.post_con_csrf(reverse('admin:ventas_mediopago_change', args=[medio.pk]), {
+            'datos': '{"access_token":"' + secreto + '"',
+        })
+        self.assert_sin_credenciales(respuesta)
+        self.assertIn('datos', respuesta.context['adminform'].form.errors)
+        self.assertNotContains(respuesta, secreto)
+        self.assertEqual(MedioPago.objects.values().get(pk=medio.pk), antes)
+
+    def test_datos_antiguos_no_admitidos_se_ocultan_y_bloquean_guardado_sin_limpiarlos(self):
+        secreto = 'secreto-antiguo-ficticio-177'
+        for medio in MedioPago.objects.all():
+            for contaminacion in ({'access_token': secreto}, {'otra_clave': secreto},
+                                  {'banco': {'anidado': secreto}}):
+                with self.subTest(codigo=medio.codigo, contaminacion=contaminacion):
+                    MedioPago.objects.filter(pk=medio.pk).update(datos={**medio.datos, **contaminacion})
+                    antes = MedioPago.objects.values().get(pk=medio.pk)
+                    url = reverse('admin:ventas_mediopago_change', args=[medio.pk])
+                    for vista in ('change', 'history', 'delete'):
+                        respuesta = self.client.get(reverse(f'admin:ventas_mediopago_{vista}', args=[medio.pk]))
+                        self.assert_sin_credenciales(respuesta)
+                        self.assertNotContains(respuesta, secreto)
+                    self.assertContains(self.client.get(url), 'guardado está bloqueado')
+                    respuesta = self.post_con_csrf(url, {'datos': '{}', 'habilitado': '', '_save': 'Guardar'})
+                    self.assert_sin_credenciales(respuesta)
+                    self.assertTrue(respuesta.context['adminform'].form.non_field_errors())
+                    self.assertNotContains(respuesta, secreto)
+                    self.assertEqual(MedioPago.objects.values().get(pk=medio.pk), antes)
+
+    def test_codigo_existente_es_protegido_y_se_valida_con_el_proveedor_original(self):
+        medio = MedioPago.objects.get(codigo='TRANSBANK')
+        cifrado = medio.credenciales_cifradas
+        url = reverse('admin:ventas_mediopago_change', args=[medio.pk])
+        self.assertNotIn('codigo', self.client.get(url).context['adminform'].form.fields)
+        respuesta = self.post_con_csrf(url, {'codigo': 'TRANSFERENCIA', 'datos': '{"banco":"Banco QA"}'})
+        self.assertIn('datos', respuesta.context['adminform'].form.errors)
+        respuesta = self.post_con_csrf(url, {'codigo': 'TRANSFERENCIA', 'datos': '{"ambiente":"INTEGRACION"}'})
+        self.assertEqual(respuesta.status_code, 302)
+        medio.refresh_from_db()
+        self.assertEqual(medio.codigo, 'TRANSBANK')
+        self.assertEqual(medio.datos, {'ambiente': 'INTEGRACION'})
+        self.assertEqual(medio.credenciales_cifradas, cifrado)
+
+    def test_alta_con_secreto_en_datos_no_crea_medio_ni_lo_refleja(self):
+        MedioPago.objects.filter(codigo='MERCADO_PAGO').delete()
+        secreto = 'secreto-alta-ficticio-177'
+        respuesta = self.post_con_csrf(reverse('admin:ventas_mediopago_add'), {
+            'codigo': 'MERCADO_PAGO', 'datos': json.dumps({'access_token': secreto}),
+        })
+        self.assert_sin_credenciales(respuesta)
+        self.assertIn('datos', respuesta.context['adminform'].form.errors)
+        self.assertNotContains(respuesta, secreto)
+        self.assertFalse(MedioPago.objects.filter(codigo='MERCADO_PAGO').exists())
+
+    def test_edicion_publica_no_sobrescribe_credenciales_actualizadas_por_panel(self):
+        medio = MedioPago.objects.get(codigo='TRANSFERENCIA')
+        configuracion = admin.site._registry[MedioPago]
+        guardar = configuracion.save_model
+        nuevo_cifrado = cifrar_json({'linkify_secret': 'actualizacion-concurrente-ficticia'})
+
+        def actualizar_antes_de_guardar(request, obj, form, change):
+            MedioPago.objects.filter(pk=obj.pk).update(credenciales_cifradas=nuevo_cifrado)
+            guardar(request, obj, form, change)
+
+        with patch.object(configuracion, 'save_model', side_effect=actualizar_antes_de_guardar):
+            respuesta = self.post_con_csrf(reverse('admin:ventas_mediopago_change', args=[medio.pk]), {
+                'datos': '{"banco":"Banco corregido"}', '_save': 'Guardar',
+            })
+        self.assertEqual(respuesta.status_code, 302)
+        medio.refresh_from_db()
+        self.assertEqual(medio.datos, {'banco': 'Banco corregido'})
+        self.assertEqual(medio.credenciales_cifradas, nuevo_cifrado)
+
+    def test_panel_conserva_cifrado_y_datos_publicos_despues_de_editar_admin(self):
+        medio = MedioPago.objects.get(codigo='TRANSBANK')
+        self.assertEqual(self.post_con_csrf(reverse('admin:ventas_mediopago_change', args=[medio.pk]), {
+            'datos': '{"ambiente":"INTEGRACION"}', '_save': 'Guardar',
+        }).status_code, 302)
+        secreto = 'nuevo-secreto-panel-ficticio-177'
+        respuesta = self.client.put(reverse('admin-medio-pago', args=['TRANSBANK']), json.dumps({
+            'habilitado': True, 'datos': {'api_key': secreto},
+        }), content_type='application/json', HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotIn(secreto, respuesta.content.decode())
+        medio.refresh_from_db()
+        self.assertEqual(medio.datos, {'ambiente': 'INTEGRACION'})
+        self.assertNotIn(secreto, medio.credenciales_cifradas)
+        self.assertEqual(DjangoRepositorioMediosPago().obtener('TRANSBANK').datos['api_key'], secreto)
 
 
 class AdminPanelInventarioTests(TestCase):

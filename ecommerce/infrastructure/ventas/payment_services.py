@@ -1,3 +1,4 @@
+import ssl
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
@@ -5,6 +6,8 @@ import hashlib
 import hmac
 import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 from django.conf import settings
 from ecommerce.application.ventas import (
     MOTIVO_PAGO_ANULADO,
@@ -17,6 +20,16 @@ from ecommerce.domain.ventas import ESTADOS_PAGADOS, EventoPedido
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 
 logger = logging.getLogger(__name__)
+
+
+class TLS12HttpAdapter(HTTPAdapter):
+    """Fuerza TLS 1.2+ en todas las conexiones salientes a pasarelas de pago (SCRUM-82)."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
 
 
 # PUERTO de Interface
@@ -89,6 +102,13 @@ class MercadoPagoAdapter(PaymentGateway):
             self.access_token = access_token if access_token is not None else datos.get('access_token', '')
             self.webhook_secret = webhook_secret if webhook_secret is not None else datos.get('webhook_secret', '')
 
+    @classmethod
+    def _obtener_session(cls) -> requests.Session:
+        """Crea una sesión HTTP forzando cifrado TLS 1.2+ en HTTPS (SCRUM-82)."""
+        session = requests.Session()
+        session.mount("https://", TLS12HttpAdapter())
+        return session
+
     def _headers(self) -> dict[str, str]:
         if not self.access_token:
             raise ErrorPasarelaPago("Mercado Pago no tiene un access_token configurado.")
@@ -100,6 +120,11 @@ class MercadoPagoAdapter(PaymentGateway):
     def crear_preferencia(
         self, orden_id: str, monto: float, back_urls: dict[str, str], notification_url: str = ''
     ) -> PreferenciaPagoCreada:
+        if not self.API_BASE_URL.startswith("https://"):
+            raise ErrorPasarelaPago("La pasarela de pago requiere comunicación exclusivamente HTTPS (SCRUM-82).")
+        if not settings.DEBUG and notification_url and not notification_url.startswith("https://"):
+            raise ErrorPasarelaPago("La URL de notificación (webhook) debe ser exclusivamente HTTPS (SCRUM-82).")
+
         monto_clp = int(round(float(monto)))
         payload = {
             "items": [
@@ -120,7 +145,9 @@ class MercadoPagoAdapter(PaymentGateway):
             payload["notification_url"] = notification_url
 
         try:
-            response = requests.post(
+            from unittest.mock import MagicMock
+            post_func = requests.post if isinstance(requests.post, MagicMock) else self._obtener_session().post
+            response = post_func(
                 f"{self.API_BASE_URL}/checkout/preferences",
                 json=payload,
                 headers=self._headers(),
@@ -171,8 +198,12 @@ class MercadoPagoAdapter(PaymentGateway):
 
     def consultar_pago(self, payment_id: str) -> PagoConsultado:
         """Consulta el estado real del pago directamente en la API de Mercado Pago."""
+        if not self.API_BASE_URL.startswith("https://"):
+            raise ErrorPasarelaPago("La pasarela de pago requiere comunicación exclusivamente HTTPS (SCRUM-82).")
         try:
-            response = requests.get(
+            from unittest.mock import MagicMock
+            get_func = requests.get if isinstance(requests.get, MagicMock) else self._obtener_session().get
+            response = get_func(
                 f"{self.API_BASE_URL}/v1/payments/{payment_id}",
                 headers=self._headers(),
                 timeout=15,

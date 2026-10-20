@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 from transbank.webpay.webpay_plus.transaction import Transaction
 from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
@@ -42,6 +43,8 @@ class TransbankWebpayAdapter:
         Paso 1: Crear la transacción.
         Retorna el token y la URL a donde se debe enviar al usuario.
         """
+        if not settings.DEBUG and not return_url.startswith("https://"):
+            raise ValueError("La comunicación de retorno de pago debe realizarse exclusivamente a través de HTTPS (SCRUM-82).")
         try:
             tx = cls._obtener_instancia()
             buy_order = f"ORD-{orden_id}"

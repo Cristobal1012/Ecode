@@ -140,10 +140,13 @@ DATABASES = {
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://root:rootpassword@localhost:27017/ecommerce_mongo_db?authSource=admin')
 connect(host=MONGO_URI)
 
-# Contraseñas con Argon2 (RNF-03; requiere argon2-cffi). Los demás solo verifican contraseñas guardadas con ellos
-# (ej. PBKDF2, el de Django por defecto): al iniciar sesión, Django las vuelve a guardar con Argon2.
+# Contraseñas con Argon2 y compatibilidad bcrypt (SCRUM-82, RNF-03; requiere argon2-cffi).
+# Las contraseñas nuevas se generan con Argon2 por estar de primeras.
+# Si existieran contraseñas guardadas con bcrypt o PBKDF2, Django las valida y al iniciar sesión las migra automáticamente a Argon2.
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
     'django.contrib.auth.hashers.ScryptPasswordHasher',
@@ -232,13 +235,14 @@ CORS_ALLOWED_ORIGINS = env_lista(
     'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173' if DEBUG else '')
 CSRF_TRUSTED_ORIGINS = env_lista('CSRF_TRUSTED_ORIGINS')
 
-# HTTPS: lo termina el hosting; activos por defecto fuera de desarrollo
+# HTTPS: lo termina el hosting; activos por defecto fuera de desarrollo (SCRUM-82)
 SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
 SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
 CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
-# El navegador recuerda HSTS: subirlo (ej. 31536000) solo después de verificar el HTTPS
-SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS') or (0 if DEBUG else 3600))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+# El navegador recuerda HSTS: forzar HTTPS durante 1 año (31536000 s) fuera de desarrollo
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS') or (0 if DEBUG else 31536000))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', not DEBUG)
 # Detrás del proxy del hosting la petición llega por HTTP: sin esto, SECURE_SSL_REDIRECT entra en bucle
 if env_bool('CONFIAR_PROXY_HTTPS', not DEBUG):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

@@ -40,8 +40,8 @@ export default function TablaInventario({ onEditarProducto }) {
   useEffect(() => {
     const cargarProductos = async () => {
       try {
-        const { data } = await clienteAxios.get('catalogo/productos/');
-        setProductos(Array.isArray(data) ? data : []);
+        const { data } = await clienteAxios.get('catalogo/productos/?todos=true');
+        setProductos(Array.isArray(data) ? data : (data?.results || []));
         setError(null);
       } catch (err) {
         console.error('Error al cargar inventario:', err);

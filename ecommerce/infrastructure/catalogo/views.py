@@ -1,4 +1,5 @@
 import logging
+import math
 
 from bson.errors import InvalidId
 from django.conf import settings
@@ -80,6 +81,37 @@ class VitrinaView(CatalogoAPIView):
         return Response({'mas_vendidos': serializar(vitrina.mas_vendidos), 'recientes': serializar(vitrina.recientes)})
 
 
+def obtener_filtros_catalogo():
+    """RF-01.3: extrae las categorías y valores de atributos disponibles de productos activos y publicados."""
+    try:
+        prods = Producto.objects.filter(activo=True, publicado=True)
+        categorias = sorted([c for c in prods.distinct('categoria') if c])
+        atributos = {}
+        for cat in categorias:
+            atributos[cat] = {}
+            for p in Producto.objects.filter(activo=True, publicado=True, categoria=cat).only('atributos_globales'):
+                if p.atributos_globales and isinstance(p.atributos_globales, dict):
+                    for k, val in p.atributos_globales.items():
+                        if k not in atributos[cat]:
+                            atributos[cat][k] = set()
+                        if val is not None and str(val).strip():
+                            atributos[cat][k].add(str(val))
+            atributos[cat] = {k: sorted(list(v)) for k, v in atributos[cat].items()}
+        return {'categorias': categorias, 'atributos': atributos}
+    except Exception as exc:
+        logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)
+        return {'categorias': [], 'atributos': {}}
+
+
+class FiltrosCatalogoView(CatalogoAPIView):
+    """RF-01.3: entrega las categorías y opciones de atributos disponibles en el catálogo."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response(obtener_filtros_catalogo())
+
+
 class ProductoListCreateView(CatalogoAPIView):
     permission_classes = [LecturaPublicaEscrituraAdmin]
 
@@ -88,8 +120,68 @@ class ProductoListCreateView(CatalogoAPIView):
         if not IsAdministrador().has_permission(request, self):
             # El público solo ve lo publicado; el admin también ve los borradores (inventario)
             productos = productos.filter(publicado=True)
-        serializer = ProductoSerializer(productos, many=True, context={'request': request})
-        return Response(serializer.data)
+
+        # Si se solicita la lista completa sin paginar (ej. TablaInventario o FormularioProducto)
+        sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
+        if sin_paginar:
+            serializer = ProductoSerializer(productos, many=True, context={'request': request})
+            return Response(serializer.data)
+
+        # 1. Filtro por categoría en servidor (SCRUM-179, RF-01.3)
+        categoria = request.query_params.get('categoria', '').strip()
+        if categoria:
+            productos = productos.filter(categoria=categoria)
+
+        # 2. Filtros por atributos globales en servidor
+        param_reservados = {'page', 'page_size', 'limite', 'categoria', 'orden', 'todos', 'sin_paginar', 'format'}
+        for clave, valor in request.query_params.items():
+            if clave in param_reservados or not valor:
+                continue
+            nombre_atributo = clave
+            if nombre_atributo.startswith('atributo_'):
+                nombre_atributo = nombre_atributo[len('atributo_'):]
+            elif nombre_atributo.startswith('attr_'):
+                nombre_atributo = nombre_atributo[len('attr_'):]
+            productos = productos.filter(**{f"atributos_globales__{nombre_atributo}": str(valor).strip()})
+
+        # 3. Orden por precio, fecha o nombre en servidor (SCRUM-179)
+        orden = request.query_params.get('orden', 'destacados').strip()
+        if orden == 'recientes':
+            productos = productos.order_by('-fecha_creacion')
+        elif orden == 'nombre':
+            productos = productos.order_by('nombre')
+        elif orden == 'precio-asc':
+            productos = productos.order_by('variantes.precio')
+        elif orden == 'precio-desc':
+            productos = productos.order_by('-variantes.precio')
+        else:
+            productos = productos.order_by('-fecha_creacion')
+
+        # 4. Paginación en servidor (SCRUM-179, 24 productos por página)
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+
+        try:
+            page_size = min(100, max(1, int(request.query_params.get('page_size', request.query_params.get('limite', 24)))))
+        except (ValueError, TypeError):
+            page_size = 24
+
+        total_count = productos.count()
+        total_pages = max(1, math.ceil(total_count / page_size)) if total_count > 0 else 1
+        offset = (page - 1) * page_size
+        productos_pagina = list(productos[offset:offset + page_size])
+
+        serializer = ProductoSerializer(productos_pagina, many=True, context={'request': request})
+        return Response({
+            'count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+            'page_size': page_size,
+            'results': serializer.data,
+            'filtros': obtener_filtros_catalogo(),
+        })
 
     def post(self, request):
         serializer = ProductoSerializer(data=request.data, context={'request': request})

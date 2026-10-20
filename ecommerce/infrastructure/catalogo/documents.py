@@ -19,7 +19,20 @@ class Variante(EmbeddedDocument):
     largo_cm = fields.IntField(default=10)
 
 class Producto(Document):
-    meta = {'collection': 'productos'}
+    meta = {
+        'collection': 'productos',
+        'indexes': [
+            'activo',
+            'publicado',
+            'categoria',
+            'fecha_creacion',
+            ('activo', 'publicado', 'categoria'),
+            ('activo', 'publicado', '-fecha_creacion'),
+            ('activo', 'publicado', 'variantes.precio'),
+            'variantes.sku',
+            'atributos_globales',
+        ],
+    }
 
     nombre = fields.StringField(required=True, max_length=255)
     descripcion = fields.StringField(null=True, blank=True)

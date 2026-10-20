@@ -76,6 +76,8 @@ function App() {
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     applyPaletteToRoot(initialId);
+    
+    const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
 
     // 2. Consulta a Django para sincronizar con la base de datos
     const syncTheme = async () => {
@@ -135,7 +137,7 @@ function App() {
         <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<LandingPage onNombreTiendaTemporal = {setNombreTiendaTemporal} />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
             <Route path="/variantes" element={<VariantSelector />} />
@@ -170,7 +172,7 @@ function App() {
         </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer onOpenCookiePreferences={openPreferences} />
+        <Footer onOpenCookiePreferences={openPreferences} nombreTiendaTemporal = {nombreTiendaTemporal}/>
         <CookieBanner
           consent={consent}
           isOpen={isBannerOpen}

@@ -2,6 +2,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.conf import settings
 
+from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 
 class ConfiguracionGlobal(models.Model):
@@ -38,6 +39,8 @@ class ConfiguracionGlobal(models.Model):
     entrega_coordinada_activa = models.BooleanField(default=False)
     costo_entrega_coordinada = models.PositiveIntegerField(default=0)
     instrucciones_entrega_coordinada = models.CharField(max_length=300, blank=True, default='')
+    # Formulario de cotización y encargos (personalizados, a pedido o en cantidad): el admin lo activa
+    cotizaciones_activas = models.BooleanField(default=False)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -151,6 +154,33 @@ class EmpresaComprador(models.Model):
 
     def __str__(self):
         return f'{self.razon_social} ({self.rut})'
+
+
+class Cotizacion(models.Model):
+    """Solicitud de cotización o encargo de una persona o empresa (domain/cotizaciones.py)."""
+
+    ESTADOS = [(estado.value, etiqueta) for estado, etiqueta in ETIQUETAS_ESTADO_COTIZACION.items()]
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoCotizacion.NUEVA.value)
+    nombre = models.CharField(max_length=120)
+    correo = models.EmailField()
+    telefono = models.CharField(max_length=15)
+    # Del catálogo (id de MongoDB y nombre al cotizar) o descrito por el cliente
+    producto_id = models.CharField(max_length=24, blank=True, default='')
+    producto_nombre = models.CharField(max_length=255, blank=True, default='')
+    descripcion = models.TextField(blank=True, default='')
+    cantidad = models.PositiveIntegerField()
+    personalizacion = models.TextField(blank=True, default='')
+    fecha_requerida = models.DateField(null=True, blank=True)
+    # Cotiza como empresa: los datos para la factura (null si es una persona)
+    datos_empresa = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_creacion', '-id']
+
+    def __str__(self):
+        return f'Cotización #{self.id} - {self.nombre}'
 
 
 class Promocion(models.Model):

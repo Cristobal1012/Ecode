@@ -1,9 +1,11 @@
-"""Adaptadores MongoDB de los puertos CatalogoVariantes e InventarioVariantes."""
+"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes y NombresProductos."""
 
 from decimal import Decimal
 
+from bson.errors import InvalidId
 from mongoengine.errors import ValidationError as MongoValidationError
 
+from ecommerce.application.cotizaciones import NombresProductos
 from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
 from ecommerce.domain.ventas import VarianteCatalogo
 
@@ -47,3 +49,14 @@ class MongoInventarioVariantes(InventarioVariantes):
 
     def reponer(self, producto_id, sku, cantidad):
         Producto.reponer_stock_variante(producto_id, sku, cantidad)
+
+
+class MongoNombresProductos(NombresProductos):
+    """Para cotizar: solo productos activos y publicados (un borrador no existe para el público)."""
+
+    def nombre(self, producto_id):
+        try:
+            producto = Producto.objects(id=producto_id, activo=True, publicado=True).only('nombre').first()
+        except (MongoValidationError, InvalidId):
+            return None
+        return producto.nombre if producto else None

@@ -12,6 +12,12 @@ const ICONOS = {
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
   ),
   ventas: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
+  cotizaciones: (
+    <>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="13" x2="13" y2="13" />
+    </>
+  ),
   configuracion: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -30,6 +36,7 @@ const VISTAS = [
   { id: 'dashboard', nombre: 'Dashboard' },
   { id: 'inventario', nombre: 'Inventario' },
   { id: 'ventas', nombre: 'Ventas' },
+  { id: 'cotizaciones', nombre: 'Cotizaciones' },
   { id: 'configuracion', nombre: 'Configuración' },
   { id: 'paginas', nombre: 'Páginas legales' }
 ];

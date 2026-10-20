@@ -560,3 +560,67 @@
 .selector-paletas-acciones {
   margin: 20px 0 12px;
 }
+
+/* Cotizaciones (GestorCotizaciones.jsx): una tarjeta por solicitud, legible también en el celular */
+.cotizaciones-lista {
+  display: grid;
+  gap: 16px;
+}
+
+.cotizacion-tarjeta {
+  padding: 18px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.cotizacion-tarjeta-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cotizacion-tarjeta-encabezado h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.cotizacion-tarjeta-fecha {
+  margin: 4px 0 12px;
+  font-size: 0.85rem;
+}
+
+.cotizacion-tarjeta-datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.cotizacion-tarjeta-datos dt {
+  color: var(--color-muted);
+}
+
+.cotizacion-tarjeta-datos dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.cotizacion-tarjeta-datos a {
+  color: var(--color-primary);
+}
+
+@media (max-width: 600px) {
+  .cotizacion-tarjeta-datos {
+    grid-template-columns: 1fr;
+  }
+
+  .cotizacion-tarjeta-datos dd {
+    margin-bottom: 6px;
+  }
+}

@@ -31,7 +31,7 @@ from ecommerce.domain.ventas import (
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
-from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
+from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
@@ -95,6 +95,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'costo_entrega_coordinada',
             'instrucciones_entrega_coordinada',
             'chilexpress_activo',
+            'cotizaciones_activas',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -191,6 +192,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'entrega_coordinada_activa',
             'costo_entrega_coordinada',
             'instrucciones_entrega_coordinada',
+            'cotizaciones_activas',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -294,6 +296,42 @@ class DatosEmpresaSerializer(serializers.Serializer):
             return DatosEmpresa.desde(attrs).como_dict()
         except DatosEmpresaInvalidos as error:
             raise serializers.ValidationError(error.errores)
+
+
+class CotizacionSolicitudSerializer(serializers.Serializer):
+    """Formulario público de cotización: solo los datos del cliente; las reglas las aplica el dominio
+    (domain/cotizaciones.py). Cualquier otro campo (estado, id...) se ignora."""
+
+    como_empresa = serializers.BooleanField(default=False)
+    nombre = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    correo = serializers.EmailField(required=False, allow_blank=True)
+    telefono = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    producto_id = serializers.CharField(max_length=24, required=False, allow_blank=True)
+    descripcion = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    cantidad = serializers.IntegerField(required=False, allow_null=True)
+    personalizacion = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    fecha_requerida = serializers.DateField(required=False, allow_null=True)
+    empresa = DatosEmpresaSerializer(required=False, allow_null=True)
+    # Política de Privacidad: checkbox obligatorio, desmarcado por defecto
+    acepta_privacidad = serializers.BooleanField()
+    # Campo trampa: oculto para las personas; si viene lleno, lo envió un bot
+    sitio_web = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_acepta_privacidad(self, value):
+        if value is not True:
+            raise serializers.ValidationError('Debes aceptar la Política de Privacidad.')
+        return value
+
+
+class AdminCotizacionSerializer(serializers.ModelSerializer):
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = Cotizacion
+        fields = ['id', 'fecha_creacion', 'estado', 'estado_display', 'nombre', 'correo', 'telefono',
+                  'producto_id', 'producto_nombre', 'descripcion', 'cantidad', 'personalizacion',
+                  'fecha_requerida', 'datos_empresa']
+        read_only_fields = fields
 
 
 class EmpresaCompradorSerializer(serializers.ModelSerializer):

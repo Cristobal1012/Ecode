@@ -200,6 +200,17 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Enlace al formulario de cotización (encargos personalizados o en cantidad) */
+.detalle-cotizar {
+  margin: 20px 0 0;
+  font-size: 0.9rem;
+}
+
+.detalle-cotizar a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 @media (max-width: 767px) {
   .detalle-contenido {
     grid-template-columns: minmax(0, 1fr);

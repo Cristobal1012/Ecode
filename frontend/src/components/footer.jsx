@@ -62,6 +62,7 @@ export const Footer = ({ onOpenCookiePreferences }) => {
             <li><Link to="/">Inicio</Link></li>
             <li><Link to="/catalogo">Catálogo</Link></li>
             <li><Link to="/seguimiento">Seguimiento de pedido</Link></li>
+            {configuracion?.cotizaciones_activas && <li><Link to="/cotizar">Cotizar un encargo</Link></li>}
           </ul>
         </nav>
 

@@ -58,6 +58,10 @@ ventas_urlpatterns = [
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
     # GET /api/ventas/empresa/: datos de facturación guardados del comprador (compra como empresa)
     path('empresa/', views.EmpresaCompradorView.as_view(), name='empresa-comprador'),
+    # POST /api/ventas/cotizaciones/: formulario público de cotización y encargos
+    path('cotizaciones/', views.CotizacionCreateView.as_view(), name='cotizaciones'),
+    path('admin/cotizaciones/', views.AdminCotizacionListView.as_view(), name='admin-cotizaciones'),
+    path('admin/cotizaciones/<int:pk>/', views.AdminCotizacionEstadoView.as_view(), name='admin-cotizacion-estado'),
     
     # Ruta para descargar la etiqueta de Chilexpress
     path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),

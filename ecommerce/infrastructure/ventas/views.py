@@ -3,6 +3,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
@@ -32,14 +33,19 @@ from ecommerce.application.ventas import (
     SinRevisionPendiente,
 )
 from ecommerce.application.chilexpress import ConfigurarChilexpress
+from ecommerce.application.cotizaciones import (
+    CambiarEstadoCotizacion, CotizacionNoEncontrada, FormularioCotizacionDesactivado, SolicitarCotizacion,
+)
 from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
-from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes
+from ecommerce.domain.cotizaciones import CotizacionInvalida
+from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
 
 from .models import (
-    ConfiguracionGlobal, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal, Promocion,
+    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal,
+    Promocion,
 )
 from .permissions import CanCheckout
 from .payment_services import (
@@ -55,6 +61,8 @@ from .serializers import (
     RevisionCarritoSerializer,
     DireccionEnvioSerializer,
     EmpresaCompradorSerializer,
+    CotizacionSolicitudSerializer,
+    AdminCotizacionSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
@@ -68,7 +76,8 @@ from .serializers import (
     medios_pago,
 )
 from .adapters.logistica import ProveedorLogisticoAdapter
-from .adapters.correo import CorreoNotificadorPedidos
+from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
+from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .instrucciones_pago import instrucciones_transferencia
@@ -87,6 +96,10 @@ def generar_orden_transporte():
 
 def notificador_pedidos():
     return CorreoNotificadorPedidos()
+
+
+def solicitar_cotizacion():
+    return SolicitarCotizacion(DjangoRepositorioCotizaciones(), CorreoNotificadorCotizaciones(), MongoNombresProductos())
 
 
 def confirmar_pago():
@@ -860,6 +873,62 @@ class EmpresaCompradorView(APIView):
         if empresa is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(EmpresaCompradorSerializer(empresa).data)
+
+
+MENSAJE_COTIZACION_RECIBIDA = 'Recibimos tu solicitud. Te enviamos una copia a tu correo y la tienda te contactará pronto.'
+
+
+class CotizacionThrottle(SimpleRateThrottle):
+    """Contra el spam: pocas solicitudes por hora desde la misma IP (DEFAULT_THROTTLE_RATES['cotizaciones'])."""
+    scope = 'cotizaciones'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+class CotizacionCreateView(APIView):
+    """POST /api/ventas/cotizaciones/: el formulario público de cotización y encargos."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [CotizacionThrottle]
+
+    def post(self, request):
+        serializer = CotizacionSolicitudSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = dict(serializer.validated_data)
+        if datos.pop('sitio_web', ''):
+            # Campo trampa lleno: lo envió un bot. Se responde como si nada para no darle pistas
+            return Response({'mensaje': MENSAJE_COTIZACION_RECIBIDA}, status=status.HTTP_201_CREATED)
+        config = ConfiguracionGlobal.objects.filter(pk=1).first()
+        try:
+            solicitar_cotizacion().ejecutar(datos, formulario_activo=bool(config and config.cotizaciones_activas),
+                                            hoy=timezone.localdate())
+        except FormularioCotizacionDesactivado as error:
+            return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+        except CotizacionInvalida as error:
+            return Response(error.errores, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'mensaje': MENSAJE_COTIZACION_RECIBIDA}, status=status.HTTP_201_CREATED)
+
+
+class AdminCotizacionListView(generics.ListAPIView):
+    """Las solicitudes de cotización, de la más reciente a la más antigua."""
+    serializer_class = AdminCotizacionSerializer
+    permission_classes = [IsAdministrador]
+    queryset = Cotizacion.objects.all()
+
+
+class AdminCotizacionEstadoView(APIView):
+    """PATCH {estado}: la tienda registra si la respondió, la aceptaron o la descartó."""
+    permission_classes = [IsAdministrador]
+
+    def patch(self, request, pk):
+        try:
+            CambiarEstadoCotizacion(DjangoRepositorioCotizaciones()).ejecutar(pk, request.data.get('estado'))
+        except CotizacionNoEncontrada as error:
+            raise NotFound(str(error))
+        except ValueError:
+            return Response({'estado': ['Estado no válido.']}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(AdminCotizacionSerializer(Cotizacion.objects.get(pk=pk)).data)
 
 
 class SucursalesChilexpressAPIView(APIView):

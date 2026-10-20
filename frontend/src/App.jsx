@@ -21,6 +21,7 @@ import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a dond
 import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
+import Cotizacion from './pages/Cotizacion';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
@@ -138,6 +139,8 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
+            {/* Encargos, personalizados y compras en cantidad (si el admin activó el formulario) */}
+            <Route path="/cotizar" element={<Cotizacion />} />
             <Route path="/variantes" element={<VariantSelector />} />
             <Route path="/catalogo" element={<Catalogo />} />
             <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />

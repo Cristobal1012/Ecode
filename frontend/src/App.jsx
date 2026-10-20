@@ -71,13 +71,14 @@ function App() {
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const [googleClientId, setGoogleClientId] = useState('');
   const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
+  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     applyPaletteToRoot(initialId);
     
-    const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
 
     // 2. Consulta a Django para sincronizar con la base de datos
     const syncTheme = async () => {

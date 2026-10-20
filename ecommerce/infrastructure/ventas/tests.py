@@ -512,6 +512,58 @@ class SeguimientoEnvioTests(APITestCase):
         )
         consultar_estado.assert_not_called()
 
+    def test_none_en_numero_seguimiento_queda_pendiente_de_despacho(
+        self, consultar_estado
+    ):
+        self.orden.numero_seguimiento_tracking = None
+        self.orden.save(update_fields=['numero_seguimiento_tracking'])
+
+        response = self.consultar(self.orden.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['estado_actual'],
+            'Pendiente de despacho',
+        )
+        consultar_estado.assert_not_called()
+
+
+    def test_retiro_local_entregado_muestra_entregado(
+        self, consultar_estado
+    ):
+        self.orden.proveedor_logistico = 'RETIRO_LOCAL'
+        self.orden.estado = 'ENTREGADO'
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(
+            update_fields=[
+                'proveedor_logistico',
+                'estado',
+                'numero_seguimiento_tracking',
+            ]
+        )
+
+        response = self.consultar(self.orden.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado_actual'], 'Entregado')
+        consultar_estado.assert_not_called()
+
+
+    def test_pedido_cancelado_sin_ot_muestra_cancelado(
+        self, consultar_estado
+    ):
+        self.orden.estado = 'CANCELADO'
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(
+            update_fields=['estado', 'numero_seguimiento_tracking']
+        )
+
+        response = self.consultar(self.orden.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado_actual'], 'Cancelado')
+        consultar_estado.assert_not_called()
+
 
 class CambioEstadoAdminTests(APITestCase):
     """RF-03.3: el admin solo puede hacer las transiciones permitidas."""

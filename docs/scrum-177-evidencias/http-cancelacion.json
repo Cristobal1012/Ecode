@@ -1,0 +1,21 @@
+{
+  "medio_de_ejecucion": "HTTP autenticado con CSRF contra servidor QA",
+  "cancelacion": 200,
+  "repeticion": 400,
+  "antes": {
+    "stock": {
+      "QA177-S": 3,
+      "QA177-M": 8
+    },
+    "correos": 2
+  },
+  "despues": {
+    "stock": {
+      "QA177-S": 5,
+      "QA177-M": 8
+    },
+    "correos": 3
+  },
+  "repeticion_sin_efectos": true,
+  "limite_navegador": "La seleccion Cancelado bloqueo la pestaña; no se declara completada por navegador."
+}

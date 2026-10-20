@@ -1,0 +1,45 @@
+{
+  "etapa": "pedido1-pagado",
+  "stock": {
+    "QA177-S": 3,
+    "QA177-M": 8
+  },
+  "pedidos": [
+    {
+      "id": 1,
+      "estado": "PAGADO",
+      "stock_descontado": true,
+      "requiere_revision": false,
+      "nombre_destinatario": "Persona QA POST verificado",
+      "total_final": 20000.0
+    },
+    {
+      "id": 2,
+      "estado": "PENDIENTE",
+      "stock_descontado": false,
+      "requiere_revision": false,
+      "nombre_destinatario": "Cuenta QA editada Navegador",
+      "total_final": 20000.0
+    }
+  ],
+  "usuario_creado_en_admin": {
+    "nombre": "Cuenta QA editada",
+    "algoritmo": "argon2",
+    "clave_anterior_rechazada": true,
+    "clave_nueva_valida": true
+  },
+  "configuracion_editada": "Tienda QA verificada desde Django admin",
+  "promocion_qa_eliminada": true,
+  "credencial_pago_conservada": true,
+  "numero_correos": 2,
+  "correos": [
+    {
+      "asunto": "Recibimos tu pedido #2 | Ecode QA SCRUM-177",
+      "destinatario": "creada177@example.test"
+    },
+    {
+      "asunto": "Pago confirmado: pedido #1 | Ecode QA SCRUM-177",
+      "destinatario": "pedido177@example.test"
+    }
+  ]
+}

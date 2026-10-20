@@ -1,0 +1,42 @@
+[
+  {
+    "vista": "checkout",
+    "formato": "escritorio",
+    "ancho": 1440,
+    "alto": 900,
+    "anchoDocumento": 1425,
+    "mainVisibles": 1
+  },
+  {
+    "vista": "checkout",
+    "formato": "movil",
+    "ancho": 390,
+    "alto": 844,
+    "anchoDocumento": 390,
+    "mainVisibles": 1
+  },
+  {
+    "vista": "login",
+    "formato": "movil",
+    "ancho": 390,
+    "alto": 844,
+    "anchoDocumento": 375,
+    "mainVisibles": 1
+  },
+  {
+    "vista": "panel-ventas",
+    "formato": "escritorio",
+    "ancho": 1440,
+    "alto": 900,
+    "anchoDocumento": 1425,
+    "mainVisibles": 1
+  },
+  {
+    "vista": "panel-ventas",
+    "formato": "movil",
+    "ancho": 390,
+    "alto": 844,
+    "anchoDocumento": 375,
+    "mainVisibles": 1
+  }
+]

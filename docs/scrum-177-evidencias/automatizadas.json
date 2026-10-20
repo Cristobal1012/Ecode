@@ -1,0 +1,27 @@
+{
+  "backend_base": 398,
+  "backend_final": 433,
+  "nuevas": 35,
+  "frontend_tests": 117,
+  "frontend_archivos": 8,
+  "build": "aprobado; advertencia de bundle mayor a 500 kB ya presente en base",
+  "lint": {
+    "base": {
+      "errores": 0,
+      "advertencias": 1
+    },
+    "final": {
+      "errores": 0,
+      "advertencias": 1
+    },
+    "codigo_fuente": {
+      "errores": 0,
+      "advertencias": 0
+    }
+  },
+  "advertencia_lint_heredada": "frontend/coverage/block-navigation.js; archivo generado ya presente en la linea base",
+  "django_check": "sin incidencias",
+  "migraciones_check_dry_run": "No changes detected",
+  "argon2_real": true,
+  "entorno": "PostgreSQL 15 y MongoDB 6 del Compose existente; bases QA aisladas"
+}

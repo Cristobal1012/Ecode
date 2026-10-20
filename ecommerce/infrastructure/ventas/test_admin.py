@@ -43,7 +43,7 @@ class OrdenCompraAdminTests(TestCase):
 
     def guardar(self, url=None, **cambios):
         url = url or self.url
-        self.client.get(url)
+        self.client.get(reverse('admin:index'))
         datos = {
             'email_invitado': self.orden.email_invitado,
             'metodo_pago': 'TRANSFERENCIA',
@@ -57,15 +57,13 @@ class OrdenCompraAdminTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             return self.client.post(url, datos)
 
-    def test_estado_y_control_de_stock_son_solo_lectura_en_alta_y_edicion(self):
-        for url in (self.url, reverse('admin:ventas_ordencompra_add')):
-            with self.subTest(url=url):
-                respuesta = self.client.get(url)
-                self.assertEqual(respuesta.status_code, 200)
-                formulario = respuesta.context['adminform'].form
-                self.assertNotIn('estado', formulario.fields)
-                self.assertNotIn('stock_descontado', formulario.fields)
-                self.assertContains(respuesta, 'field-estado')
+    def test_estado_y_control_de_stock_son_solo_lectura_en_edicion(self):
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 200)
+        formulario = respuesta.context['adminform'].form
+        self.assertNotIn('estado', formulario.fields)
+        self.assertNotIn('stock_descontado', formulario.fields)
+        self.assertContains(respuesta, 'field-estado')
 
     def test_edicion_permitida_se_guarda_sin_modificar_estado_ni_enviar_correo(self):
         direccion = {'comuna': 'Providencia', 'calle': 'Calle corregida', 'calle_numero': '177'}
@@ -155,16 +153,27 @@ class OrdenCompraAdminTests(TestCase):
                 self.assertEqual(self.orden.nombre_destinatario, 'Persona corregida')
         self.assertEqual(mail.outbox, [])
 
-    def test_alta_manipulada_conserva_estado_inicial_y_stock_sin_descontar(self):
-        respuesta = self.guardar(
-            reverse('admin:ventas_ordencompra_add'), estado='PAGADO', stock_descontado='on',
-        )
-        self.assertEqual(respuesta.status_code, 302)
-        nueva = OrdenCompra.objects.latest('pk')
-        self.assertNotEqual(nueva.pk, self.orden.pk)
-        self.assertEqual(nueva.estado, 'PENDIENTE')
-        self.assertFalse(nueva.stock_descontado)
+    def test_alta_get_y_post_se_rechazan_incluso_con_superusuario_y_csrf_valido(self):
+        url = reverse('admin:ventas_ordencompra_add')
+        antes = list(OrdenCompra.objects.values())
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.guardar(url, estado='PAGADO', stock_descontado='on').status_code, 403)
+        self.assertEqual(list(OrdenCompra.objects.values()), antes)
+        self.assertEqual(DetalleOrden.objects.count(), 0)
         self.assertEqual(mail.outbox, [])
+
+    def test_clonacion_por_post_se_rechaza_sin_modificar_el_pedido_original(self):
+        antes = list(OrdenCompra.objects.values())
+        self.assertEqual(self.guardar(_saveasnew='1').status_code, 403)
+        self.assertEqual(list(OrdenCompra.objects.values()), antes)
+        self.assertEqual(DetalleOrden.objects.count(), 0)
+        self.assertEqual(mail.outbox, [])
+
+    def test_listado_y_edicion_no_ofrecen_agregar_orden(self):
+        for url in (reverse('admin:ventas_ordencompra_changelist'), self.url):
+            respuesta = self.client.get(url)
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertNotContains(respuesta, 'href="' + reverse('admin:ventas_ordencompra_add') + '"')
 
     def test_superusuario_conserva_gestion_de_promociones_y_configuracion(self):
         alta = reverse('admin:ventas_promocion_add')
@@ -525,6 +534,22 @@ class AdminPanelInventarioTests(TestCase):
                 self.assertEqual(list(self.orden.detalles.values()), detalles)
                 self.assertEqual(self.stock(), stock)
                 self.assertEqual(len(mail.outbox), correos)
+
+    def test_alta_y_clonacion_bloqueadas_no_alteran_pedidos_detalles_stock_o_correo(self):
+        antes = list(OrdenCompra.objects.values())
+        detalles = list(DetalleOrden.objects.values())
+        stock = self.stock()
+        respuesta = self.client.post(reverse('admin:ventas_ordencompra_add'), {
+            'metodo_pago': 'TRANSFERENCIA', 'direccion_envio_snapshot': '{"comuna":"Santiago"}',
+            'subtotal': '1', 'costo_envio': '0', 'total_final': '1',
+            'csrfmiddlewaretoken': self.client.cookies['csrftoken'].value,
+        })
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(self.manipular_admin(_saveasnew='1', estado='PAGADO').status_code, 403)
+        self.assertEqual(list(OrdenCompra.objects.values()), antes)
+        self.assertEqual(list(DetalleOrden.objects.values()), detalles)
+        self.assertEqual(self.stock(), stock)
+        self.assertEqual(mail.outbox, [])
 
     def test_cancelacion_manipulada_no_altera_stock_y_panel_lo_repone_una_vez(self):
         self.assertEqual(self.cambiar('PAGADO').status_code, 200)

@@ -109,7 +109,7 @@ function configurarRespuestas({
   },
   paginacion = null,
 } = {}) {
-  clienteAxios.get.mockImplementation((url, config) => {
+  clienteAxios.get.mockImplementation((url) => {
     if (url === 'configuracion/') {
       return Promise.resolve({ data: configuracion });
     }

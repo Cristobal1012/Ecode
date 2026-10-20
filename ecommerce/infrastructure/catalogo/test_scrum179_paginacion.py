@@ -30,7 +30,6 @@ class IndicesMongoCatalogoTests(SimpleTestCase):
         self.assertIn('publicado', indexes)
         self.assertIn('categoria', indexes)
         self.assertIn('fecha_creacion', indexes)
-        self.assertIn('atributos_globales', indexes)
 
         # Validar índices compuestos de alta concurrencia
         self.assertTrue(
@@ -40,7 +39,26 @@ class IndicesMongoCatalogoTests(SimpleTestCase):
             any(('activo', 'publicado', '-fecha_creacion') == idx for idx in indexes)
         )
         self.assertTrue(
-            any(('activo', 'publicado', 'variantes.precio') == idx for idx in indexes)
+            any(('activo', 'publicado', 'precio_minimo_vigente') == idx for idx in indexes)
+        )
+        self.assertTrue(
+            any(('activo', 'publicado', '-precio_minimo_vigente') == idx for idx in indexes)
+        )
+
+        # Validar cobertura de índices sobre rutas internas y dinámicas de atributos (E03)
+        index_specs = Producto._meta.get('index_specs', [])
+        campos_indexados = [spec.get('fields') for spec in index_specs if 'fields' in spec]
+
+        self.assertTrue(
+            any(
+                [('activo', 1), ('publicado', 1), ('categoria', 1), ('atributos_globales.color', 1)] == f
+                for f in campos_indexados
+            ),
+            "Falta índice compuesto sobre activo, publicado, categoria y atributos_globales.color"
+        )
+        self.assertTrue(
+            any([('atributos_globales.$**', 1)] == f for f in campos_indexados),
+            "Falta índice comodín sobre atributos_globales.$**"
         )
 
 
@@ -118,7 +136,7 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         mock_qs.filter.assert_any_call(categoria='Electronica')
 
     @patch('ecommerce.infrastructure.catalogo.documents.Producto.objects')
-    def test_filtro_atributos_se_aplica_al_queryset_en_servidor(self, mock_objects):
+    def test_filtro_atributos_texto_y_numerico_en_servidor(self, mock_objects):
         mock_qs = MagicMock()
         mock_qs.filter.return_value = mock_qs
         mock_qs.order_by.return_value = mock_qs
@@ -126,10 +144,15 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         mock_qs.__getitem__.return_value = []
         mock_objects.filter.return_value = mock_qs
 
-        request = self.factory.get('/api/catalogo/productos/?atributo_color=Azul')
-        self.view(request)
-
+        # 1. Filtro de texto simple
+        request_texto = self.factory.get('/api/catalogo/productos/?atributo_color=Azul')
+        self.view(request_texto)
         mock_qs.filter.assert_any_call(atributos_globales__color='Azul')
+
+        # 2. Filtro numérico (E02): debe probar tanto string como int para coincidir con DictField
+        request_num = self.factory.get('/api/catalogo/productos/?atributo_capacidad_gb=128')
+        self.view(request_num)
+        mock_qs.filter.assert_any_call(atributos_globales__capacidad_gb__in=['128', 128])
 
     @patch('ecommerce.infrastructure.catalogo.documents.Producto.objects')
     def test_orden_precio_asc_y_desc_en_servidor(self, mock_objects):
@@ -140,15 +163,15 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         mock_qs.__getitem__.return_value = []
         mock_objects.filter.return_value = mock_qs
 
-        # Precio ascendente
+        # Precio ascendente (E01)
         request_asc = self.factory.get('/api/catalogo/productos/?orden=precio-asc')
         self.view(request_asc)
-        mock_qs.order_by.assert_called_with('variantes.precio')
+        mock_qs.order_by.assert_called_with('precio_minimo_vigente')
 
-        # Precio descendente
+        # Precio descendente (E01)
         request_desc = self.factory.get('/api/catalogo/productos/?orden=precio-desc')
         self.view(request_desc)
-        mock_qs.order_by.assert_called_with('-variantes.precio')
+        mock_qs.order_by.assert_called_with('-precio_minimo_vigente')
 
         # Más nuevos
         request_recientes = self.factory.get('/api/catalogo/productos/?orden=recientes')
@@ -159,6 +182,57 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         request_nombre = self.factory.get('/api/catalogo/productos/?orden=nombre')
         self.view(request_nombre)
         mock_qs.order_by.assert_called_with('nombre')
+
+    def test_calculo_precio_minimo_vigente_con_ofertas_y_variantes(self):
+        """
+        Validación directa del requerimiento E01:
+        - Oferta mil: normal $10.000 y oferta válida $1.000 -> precio vigente $1.000
+        - Normal dos mil: $2.000 -> precio vigente $2.000
+        - Desde mil: variantes de $1.000 y $90.000 -> precio vigente $1.000
+        """
+        from ecommerce.infrastructure.catalogo.documents import Variante
+
+        # Caso 1: Producto con oferta válida
+        p_oferta = Producto(
+            nombre='Oferta mil',
+            categoria='QA179 Precios',
+            variantes=[Variante(sku='SKU-OFERTA', precio='10000.00', precio_oferta='1000.00')]
+        )
+        p_oferta.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(p_oferta.precio_minimo_vigente), 1000.0)
+
+        # Caso 2: Producto sin oferta
+        p_normal = Producto(
+            nombre='Normal dos mil',
+            categoria='QA179 Precios',
+            variantes=[Variante(sku='SKU-NORMAL', precio='2000.00')]
+        )
+        p_normal.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(p_normal.precio_minimo_vigente), 2000.0)
+
+        # El producto de oferta ($1.000) debe preceder al de $2.000 en ascendente
+        self.assertLess(float(p_oferta.precio_minimo_vigente), float(p_normal.precio_minimo_vigente))
+
+        # Caso 3: Producto con múltiples variantes ("Desde mil")
+        p_variantes = Producto(
+            nombre='Desde mil',
+            categoria='QA179 Precios',
+            variantes=[
+                Variante(sku='SKU-BARATO', precio='1000.00'),
+                Variante(sku='SKU-CARO', precio='90000.00'),
+            ]
+        )
+        p_variantes.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(p_variantes.precio_minimo_vigente), 1000.0)
+
+        # En orden descendente, productos con precio $8.300 deben quedar por encima de $1.000
+        p_caro = Producto(
+            nombre='Caro ocho mil',
+            categoria='QA179 Precios',
+            variantes=[Variante(sku='SKU-CARO-8300', precio='8300.00')]
+        )
+        p_caro.actualizar_precio_minimo_vigente()
+        self.assertGreater(float(p_caro.precio_minimo_vigente), float(p_variantes.precio_minimo_vigente))
 
     @patch('ecommerce.infrastructure.catalogo.views.obtener_filtros_catalogo')
     def test_endpoint_filtros_catalogo_publico(self, mock_filtros):

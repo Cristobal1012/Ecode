@@ -1,124 +1,77 @@
-# SCRUM-177 — Reglas del admin de Django
+# SCRUM-177 — Verificación del admin de Django
 
-Fecha: 19 de octubre de 2026, America/Santiago. Autor: Eidan.
+Guía de QA local, actualizada el 20 de octubre de 2026.
 
-## Resultado y alcance
+## Reglas verificadas
 
-Las tres reglas del ticket tienen pruebas automatizadas sobre las vistas reales del admin:
+- Pedidos: solo se corrigen nombre, teléfono y dirección del destinatario. Los demás campos se consultan; el panel conserva pago, revisión, estados, inventario y notificaciones. Alta y clonación desde el admin devuelven 403.
+- Medios de pago: `datos` admite únicamente los campos públicos definidos para su código. Rechaza secretos, claves desconocidas y estructuras no admitidas sin reflejarlos en errores. El código de un registro existente queda protegido y las ediciones públicas conservan sus credenciales cifradas.
+- Registros con datos antiguos no admitidos: se muestra solo la parte pública y se bloquea el guardado, conservando los valores almacenados. Su regularización debe decidirse individualmente.
+- Usuarios: se mantienen UserAdmin, identificación por email y cambio de contraseña con Argon2 real.
 
-- `OrdenCompraAdmin` excluye `estado` y `stock_descontado` de los formularios procesados por el servidor. Las altas conservan `PENDIENTE` y stock sin descontar. Una edición permitida sí se guarda aunque el POST intente alterar los campos protegidos.
-- `UsuarioAdmin` hereda de `UserAdmin`, utiliza email y los campos propios de `Usuario`, y conserva grupos, permisos, rol y operaciones administrativas. El alta y la edición usan formularios adaptados; el cambio de contraseña usa `AdminPasswordChangeForm`. Se verificó Argon2 real, sin sustituir hashers.
-- `MedioPagoAdmin` muestra únicamente código, habilitación, datos públicos y fecha de actualización. El texto cifrado queda fuera del formulario. Las ediciones permitidas conservan exactamente el valor cifrado almacenado.
+## Requisitos y preparación segura
 
-Los cambios funcionales están en los dos módulos `admin.py` y en el nuevo módulo de formularios de usuarios. No cambian los modelos, migraciones, contratos JSON, casos de uso, configuración de hashers, frontend ni Docker Compose.
+Desde la raíz del repositorio, con Python 3.13 en `venv`, dependencias de `requirements.txt` instaladas, Docker Desktop y PowerShell 7.2 o posterior. Para frontend: Node 24 y dependencias del lockfile (`npm.cmd ci` en `frontend` si faltan).
 
-Base verificada: `eidan` y `origin/eidan` en `6237f1b`; `origin/sprint-6` en `9bf3a1e`, con árboles idénticos. El código validado corresponde a `cd582a9`, después de los cinco commits funcionales y de pruebas. El sexto commit incorpora esta evidencia.
+Se reutilizan los servicios QA versionados, PostgreSQL 15 en 55439 y MongoDB 6 en 27049. Cada ejecución recibe bases nuevas `ecode_qa_scrum177_<id>`. El runner fija sus destinos, impide sustituir settings por argumentos y neutraliza las variables que las migraciones históricas podrían importar como credenciales.
 
-## Entorno y aislamiento
-
-- Backend: Python del `venv`, Django 6.1.1, `localhost:8000`. Frontend Vite: `localhost:5173`.
-- PostgreSQL 15 y MongoDB 6: servicios `db-postgres` y `db-mongo` del Compose existente.
-- Bases nuevas para navegador/HTTP: `ecode_qa_scrum177_20261019_3a71`, tanto en PostgreSQL como en MongoDB. Todas las cuentas, pedidos, productos y datos de pago utilizados son ficticios.
-- Django crea y elimina su base SQL de tests. Las pruebas de integración nuevas vinculan `Producto` a una base MongoDB `test_ecode_admin177_<uuid>` y eliminan únicamente esa base al terminar.
-- La configuración QA temporal está bajo `venv/qa_scrum177`, fuera del contenido versionado. No se modificó `.env` ni se cambiaron contraseñas de cuentas existentes. No se eliminaron volúmenes.
-- Los tests capturan correo en memoria; el servidor QA usa `MAILERS` con backend de archivos. No se enviaron correos a proveedores ni se realizaron cobros o despachos reales. El checkout utilizó transferencia manual y retiro local.
-- Al terminar se detuvieron únicamente los servidores QA iniciados para esta validación y se liberaron los puertos 8000 y 5173. Se conservaron las bases QA, los mensajes originales y los servicios de Docker para revisión posterior.
-
-## Pruebas automatizadas y controles por commit
-
-| Cambio | Verificación previa al commit | Resultado |
-|---|---|---|
-| `c1cf6df` — pedidos protegidos | Tests nuevos del admin, cambios de estado y correos del panel | 16 aprobados |
-| `ee8a8d4` — formularios por email | Formularios y contraseñas existentes | 11 aprobados |
-| `0444546` — UserAdmin | Suite completa de usuarios | 53 aprobados |
-| `f970bda` — credenciales de pago | Admin, repositorio/API de medios de pago y casos de uso | 45 aprobados |
-| `cd582a9` — integración admin/panel | Suite completa de backend | 433 aprobados |
-
-Antes de esos commits se ejecutaron también `check`, `git diff --check` y el build del frontend. Para el commit documental se verifican enlaces, integridad de los artefactos, ausencia de credenciales, `check` y build.
-
-La línea base aprobó **398 tests**; el resultado final aprueba **433**, con **35 tests nuevos**. Las pruebas incluyen POST con sesión y CSRF válido, edición permitida que realmente persiste, cuentas SSO sin contraseña utilizable, validadores de contraseña, permisos y conservación de sesión al cambiar la clave propia. Las pruebas de inventario utilizan MongoDB real y las de notificación ejecutan los callbacks `on_commit`.
-
-| Comprobación final | Resultado |
-|---|---|
-| Backend completo | 433 tests, OK |
-| Frontend | 117 tests en 8 archivos, OK |
-| `makemigrations --check --dry-run` | No changes detected |
-| Django `check` | Sin incidencias |
-| Compilación de los módulos Python modificados | Correcta |
-| Frontend build | Correcto; advertencia de bundle mayor a 500 kB ya presente en la base |
-| ESLint de `src`, con `--max-warnings=0` | 0 errores, 0 advertencias |
-| ESLint global | 0 errores, 1 advertencia, idéntica a la base |
-
-La advertencia global está en `frontend/coverage/block-navigation.js`, un archivo generado ya existente. Se conservó ese trabajo. El primer intento de la suite base detectó que faltaba `django-anymail`; se instaló la versión 15.2 ya declarada en `requirements.txt`, sin modificar dependencias del proyecto, y se repitió la línea base con éxito.
-
-Comandos ejecutados desde la raíz, mediante el envoltorio que fija la configuración QA aislada:
+Los tests utilizan su propia base SQL y bases Mongo temporales. El correo se captura en memoria durante los tests y en archivos al ejecutar el servidor. Los resultados y medios QA se generan fuera del repositorio, bajo `%TEMP%\ecode-qa-scrum177\<id>`. La preparación y el sembrado rechazan datos ya existentes; para repetirlos se elige otro identificador.
 
 ```powershell
-.\venv\Scripts\python.exe venv\qa_scrum177\run.py test --noinput --verbosity 1
-.\venv\Scripts\python.exe venv\qa_scrum177\run.py makemigrations --check --dry-run
-.\venv\Scripts\python.exe venv\qa_scrum177\run.py check
+docker compose -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
+$env:QA177_RUN_ID = 'qa_' + (Get-Date -Format 'yyyyMMdd_HHmmss')
+.\venv\Scripts\python.exe -m unittest tools.qa.scrum177.test_prepare -v
+.\venv\Scripts\python.exe tools/qa/scrum177/prepare.py
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py migrate --noinput
+$env:QA177_PASSWORD = Read-Host -Prompt 'Clave ficticia QA de al menos 12 caracteres' -MaskInput
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py shell -c "from tools.qa.scrum177.seed import seed; seed()"
+Remove-Item Env:QA177_PASSWORD
 ```
 
-Desde `frontend`:
+El fixture crea `qa177.admin@example.test` (superusuario) y `qa177.buyer@example.test`, con la clave introducida; 30 productos con tallas S/M, tres pedidos y medios de pago ficticios. Mercado Pago contiene deliberadamente un dato antiguo ficticio para probar su ocultación y bloqueo. La transferencia manual y el retiro local permiten recorrer el checkout sin cobros ni despachos reales.
+
+## Comandos de comprobación
+
+Conserva `QA177_RUN_ID` en la terminal del backend; en otra terminal del backend debe asignarse el mismo identificador. Usa exclusivamente el runner QA para estos comandos.
 
 ```powershell
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py test --noinput
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py check
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py makemigrations --check --dry-run
+.\venv\Scripts\python.exe tools/qa/scrum177/manage.py runserver 127.0.0.1:8000 --noreload
+```
+
+En otra terminal, desde `frontend`:
+
+```powershell
+$env:VITE_API_URL = 'http://localhost:8000/api/'
 npm.cmd run build
 npm.cmd run test:run
-npm.cmd run lint -- --format json
-npm.cmd exec -- eslint src --max-warnings=0 --format json
+npm.cmd exec -- eslint src --max-warnings=0
+npm.cmd run lint
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-El envoltorio local delega en los mismos comandos de gestión que `manage.py`. Para reproducir en otra instalación se debe seleccionar una configuración QA equivalente, con bases separadas y correo capturado. Los tests nuevos se encuentran en `ventas/test_admin.py`, `usuarios/tests/test_admin.py` y `usuarios/tests/test_admin_forms.py`.
+El backend y Vite necesitan libres los puertos 8000 y 5173. El correo del servidor queda en el subdirectorio `mail` del directorio temporal de la ejecución.
 
-## Recorridos realmente ejecutados
+## Recorridos para repetir
 
-| Recorrido | Medio | Evidencia y resultado |
-|---|---|---|
-| Acceso del superusuario al admin | Navegador | Acceso correcto; [captura 01](scrum-177-capturas/01-admin-acceso.jpg). |
-| Edición de destinatario con estado protegido | Navegador | Cambio guardado; estado y control de stock sin controles editables; [captura 02](scrum-177-capturas/02-pedido-solo-lectura.jpg). |
-| Alta, edición a 15% y borrado de promoción QA | Navegador + consulta SQL | Operaciones completadas; [captura 03](scrum-177-capturas/03-promocion-editada.jpg). La configuración de bienvenida también se actualizó y verificó en SQL. |
-| Gestión de medios de pago | Navegador | Listado, alta, edición, error JSON, historial y confirmación de borrado inspeccionados. Datos públicos editados; credencial conservada en BD. [Listado](scrum-177-capturas/04-pagos-listado.jpg), [edición](scrum-177-capturas/05-pagos-sin-credenciales.jpg), [error](scrum-177-capturas/06-pagos-error-sin-credenciales.jpg). |
-| Alta y edición de usuario | Navegador + consulta SQL | Cuenta creada por email, perfil editado y Argon2 comprobado al crearla; [usuarios](scrum-177-capturas/07-usuarios-gestionados.jpg), [consulta sanitizada](scrum-177-evidencias/password-creation.json). |
-| Cambio de contraseña e inicio de sesión | Navegador + consulta SQL | Formulario estándar completado; la tienda rechazó la clave anterior y aceptó la nueva. Se verificó Argon2 y la clave nueva contra el valor persistido. [Sesión posterior](scrum-177-capturas/08-login-nueva-clave.jpg). |
-| Checkout de dos unidades por transferencia y retiro | Navegador + SQL/Mongo/correo | Pedido #2 creado pendiente, total $20.000, sin descuento prematuro de stock y con un correo capturado. [Checkout escritorio](scrum-177-capturas/09-checkout-escritorio.jpg), [móvil](scrum-177-capturas/10-checkout-movil.jpg), [confirmación](scrum-177-capturas/11-pedido-recibido.jpg). |
-| Confirmación de pago del pedido #1 | Navegador + SQL/Mongo/correo | Paso a pagado, stock 5→3 en su SKU, otra variante sin cambios y un aviso adicional. [Panel](scrum-177-capturas/13-panel-pago-confirmado.jpg). |
-| Cancelación y repetición del pedido #1 | HTTP autenticado contra el servidor QA | Cancelación 200, reposición 3→5 y un correo; repetición 400 sin efectos adicionales. **No se declara completada por navegador.** |
-| Ciclo del pedido #2 y falta de stock del #3 | HTTP autenticado contra el servidor QA | #2: pagado→preparación→listo para retirar→entregado; un único descuento y cuatro avisos. #3: pago en revisión sin stock descontado; su cancelación no repuso unidades. **Estas transiciones se verificaron por HTTP.** |
+1. Entrar en `http://localhost:8000/admin/`. Consultar pedidos y guardar sus tres datos permitidos. Comprobar que no aparece el alta y que `/admin/ventas/ordencompra/add/` devuelve 403. Crear, editar y eliminar una promoción ficticia.
+2. Editar datos públicos de Transbank; intentar introducir `access_token` dentro de `datos` y después JSON malformado. Deben aparecer errores sin el valor secreto. Abrir Mercado Pago y comprobar el bloqueo de su guardado sin limpiar sus datos antiguos.
+3. Crear y editar una cuenta ficticia mediante UserAdmin, restablecer su contraseña y entrar en `http://localhost:5173/login`: la clave anterior debe fallar y la nueva funcionar.
+4. En la tienda, comprobar paginación, categoría y orden por precio. Seleccionar talla y cantidad, comprar por transferencia con retiro local y verificar el pedido pendiente. Desde Ventas del panel, confirmar pago, preparación, entrega y una cancelación; resolver la revisión ficticia. Contrastar inventario y correos capturados.
+5. Repetir catálogo, checkout y ventas a 1440×900 y 390×844: un único `main` visible y ausencia de desbordamiento horizontal del documento.
 
-Los POST manipulados complementan el recorrido visual y se realizaron contra el servidor en ejecución, con una sesión real y CSRF válido:
+Las solicitudes manipuladas con sesión y CSRF, la conservación exacta del cifrado, los detalles, el stock y los correos se verifican automáticamente en `ecommerce/infrastructure/ventas/test_admin.py`. La suite de usuarios comprueba el algoritmo persistido y la autenticación sin sustituir Argon2 por un hasher rápido.
 
-| Intento | Resultado persistido |
-|---|---|
-| POST sin CSRF | 403 |
-| Pedido pendiente: inyectar `PAGADO` y `stock_descontado=true` | Respuesta 302 por la edición permitida; sigue pendiente, stock 5/8, sin correos y detalles intactos |
-| Pedido pagado: inyectar `CANCELADO` y borrar la marca de stock | Respuesta 302 por la edición permitida; sigue pagado, marca verdadera, stock 3/8 y sin nuevos correos |
-| Panel: pendiente→enviado | 400, sin cambios de stock ni correo |
-| Medio de pago: inyectar reemplazo de credenciales al editar datos públicos | Datos públicos guardados y texto cifrado idéntico al anterior |
-| Medio de pago: JSON inválido con credenciales inyectadas | Error de formulario sin reflejar el valor inyectado ni el cifrado almacenado |
+## Resultados ejecutados
 
-Registros sanitizados: [POST iniciales](scrum-177-evidencias/http-checks.json), [pedido pagado](scrum-177-evidencias/http-pagado.json), [cancelación e idempotencia](scrum-177-evidencias/http-cancelacion.json) y [regresión del panel](scrum-177-evidencias/http-panel-regresion.json).
+- Backend: **468 tests correctos**, frente a 454 de la línea base; **5 pruebas de aislamiento** correctas. PostgreSQL y MongoDB reales mediante Docker. Preparación completa repetida con otro identificador y checkout completado en navegador sin credenciales importadas del entorno.
+- Frontend: **125 tests correctos** en 9 archivos; build correcto. ESLint de `src`: cero errores y advertencias. Lint global: cero errores y una advertencia heredada en `coverage/block-navigation.js`; el build conserva el aviso heredado de bundle mayor de 500 kB.
+- Django `check`, comprobación de migraciones y `git diff --check`: correctos.
+- Navegador: acceso al admin; edición permitida y consulta de campos protegidos; secreto rechazado; edición pública válida; registro antiguo bloqueado; alta directa 403; gestión de promociones y usuarios; cambio de contraseña, rechazo de la anterior y login con la nueva. Argon2 comprobado contra el valor persistido sin exportar el hash.
+- Servidor HTTP: **18 comprobaciones correctas**, incluidas altas y clonación 403, CSRF, POST manipulados sobre pedidos pendientes, pagados, entregados y en revisión, preservación de credenciales y rechazo de transiciones.
+- Panel: checkout de dos unidades por $20.000; pago, preparación y entrega; cancelación de otro pedido y resolución de revisión por navegador. Stock del SKU: 5→3 al pagar; otro pago 3→1 y cancelación 1→3. La otra talla permaneció en 8. Siete notificaciones de negocio capturadas; repetir la cancelación devolvió 400 sin efectos adicionales.
+- Regresión SCRUM-149: pruebas de consultas SQL/Mongo, lectura en lote sin secretos, catálogo, filtros, paginación, orden y actualización de contacto público correctos. Catálogo, checkout y ventas comprobados en escritorio y móvil, con un `main` visible y sin desbordamiento del documento.
 
-## Inventario, notificaciones y revisión visual
-
-| Momento | SKU S | SKU M | Correos acumulados |
-|---|---:|---:|---:|
-| POST manipulado inicial | 5 | 8 | 0 |
-| Checkout #2 creado por navegador | 5 | 8 | 1 |
-| Pago #1 por navegador | 3 | 8 | 2 |
-| Intento de cancelación directa en admin | 3 | 8 | 2 |
-| Cancelación #1 por HTTP | 5 | 8 | 3 |
-| Pago #2 por HTTP | 3 | 8 | 4 |
-| Preparación, retiro y entrega #2 por HTTP | 3 | 8 | 7 |
-| Revisión sin stock y cancelación #3 por HTTP | 3 | 8 | 9 |
-
-Se conservaron los mensajes originales en el entorno QA local. La [exportación de los nueve correos](scrum-177-evidencias/correos-capturados.txt) contiene asuntos, destinatarios ficticios y cuerpos, sin credenciales ni cabeceras de autenticación. [Estado final SQL/Mongo](scrum-177-evidencias/estado-final.json).
-
-Se midieron checkout y panel a 1440×900, y login, checkout y panel a 390×844: un único `main` visible y ancho del documento no superior al viewport en cada medición. [Métricas DOM](scrum-177-evidencias/viewport.json), [login móvil](scrum-177-capturas/12-login-movil.jpg), [panel móvil](scrum-177-capturas/14-panel-movil.jpg). La tabla de ventas mantiene su desplazamiento interno en móvil. La captura de sesión posterior al cambio de clave se tomó con el viewport inicial de la tienda, 1280×720.
-
-## Limitación de navegador y evidencia pendiente
-
-Al seleccionar **Cancelado** en Ventas, la herramienta de navegador dejó de responder. La API de diálogos no permitió completar la confirmación existente y los intentos documentados de recuperación no restauraron la interacción. Esa confirmación ya está en el frontend de la base; no se modificó para facilitar la prueba. No se ha demostrado un defecto del producto a partir de ese bloqueo de herramienta.
-
-Queda pendiente completar con navegador la confirmación de cancelación y el resto del ciclo de estados posterior al bloqueo. Esas reglas sí quedaron comprobadas con tests automatizados y con HTTP real autenticado, inventario real y correos capturados, tal como se distingue en las tablas. No se atribuyen esos resultados al navegador.
-
-El [resumen automatizado](scrum-177-evidencias/automatizadas.json) y el [manifiesto SHA-256 de los artefactos](scrum-177-evidencias/sha256.json) permiten contrastar los resultados y la integridad de las capturas. La evidencia publicada contiene únicamente datos ficticios; no incluye contraseñas, hashes de contraseña, sesiones ni credenciales de pasarelas.
+Las capturas y registros de ejecución quedan fuera del contenido versionado. Todos los recorridos indicados se ejecutaron; el bloqueo temporal de una confirmación de revisión se resolvió reabriendo el panel y completando la operación.

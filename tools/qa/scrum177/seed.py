@@ -10,7 +10,7 @@ from PIL import Image
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.infrastructure.catalogo.documents import Producto, Variante
 from ecommerce.infrastructure.ventas.models import (
-    ConfiguracionGlobal, DetalleOrden, MedioPago, OrdenCompra, PaginaLegal,
+    ConfiguracionGlobal, DetalleOrden, MedioPago, OrdenCompra, PaginaLegal, ProveedorEnvio,
 )
 from ecommerce.infrastructure.ventas.repositorio_medios_pago import DjangoRepositorioMediosPago
 from tools.qa.scrum177.prepare import targets
@@ -22,7 +22,8 @@ def seed():
             or get_db().name != destination['name']):
         raise ValueError('Fixture requires the SCRUM-177 QA databases.')
     if (get_user_model().objects.exists() or ConfiguracionGlobal.objects.exists()
-            or OrdenCompra.objects.exists() or MedioPago.objects.exists() or Producto.objects.count()):
+            or OrdenCompra.objects.exists() or MedioPago.objects.exists() or ProveedorEnvio.objects.exists()
+            or Producto.objects.count()):
         raise ValueError('Fixture requires empty QA data; choose a new QA177_RUN_ID.')
     password = os.environ.get('QA177_PASSWORD', '')
     if len(password) < 12:
@@ -67,8 +68,10 @@ def seed():
             activo=True, publicado=True, descripcion='Producto ficticio para QA.',
             fecha_creacion=datetime.now(timezone.utc), atributos_globales={'color': 'Verde'},
             imagenes=['http://localhost:8000/media/qa177.png'],
-            variantes=[Variante(sku=f'QA177-{i:02}-S', precio=10000 + i * 500, stock=5),
-                       Variante(sku=f'QA177-{i:02}-M', precio=12000 + i * 500, stock=8)],
+            variantes=[Variante(sku=f'QA177-{i:02}-S', precio=10000 + i * 500, stock=5,
+                                atributos_variables={'talla': 'S'}),
+                       Variante(sku=f'QA177-{i:02}-M', precio=12000 + i * 500, stock=8,
+                                atributos_variables={'talla': 'M'})],
         ).save())
     for i, state in enumerate(('PENDIENTE', 'PAGADO', 'PENDIENTE')):
         order = OrdenCompra.objects.create(

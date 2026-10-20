@@ -15,6 +15,11 @@ os.environ.update({
     'MONGO_URI': 'mongodb://127.0.0.1:27049/' + _destination['name'],
     'MONGO_TEST_URI': 'mongodb://127.0.0.1:27049/',
     'RESEND_API_KEY': '', 'EMAIL_HOST': '', 'GOOGLE_CLIENT_ID': '',
+    # Historical migrations import these variables into otherwise empty databases.
+    'CHILEXPRESS_API_KEY_COTIZADOR': '', 'CHILEXPRESS_API_KEY_COBERTURAS': '',
+    'CHILEXPRESS_API_KEY_GEO': '', 'CHILEXPRESS_API_KEY_ENVIOS': '',
+    'TRANSBANK_ENVIRONMENT': 'INTEGRACION',
+    'TRANSBANK_WEBPAY_COMMERCE_CODE': '', 'TRANSBANK_WEBPAY_API_KEY': '',
     'DEFAULT_FROM_EMAIL': 'qa177@example.test',
     'SECURE_SSL_REDIRECT': 'False', 'SESSION_COOKIE_SECURE': 'False',
     'CSRF_COOKIE_SECURE': 'False', 'SECURE_HSTS_SECONDS': '0',

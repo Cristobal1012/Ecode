@@ -254,3 +254,14 @@
   font-size: 0.85rem;
   color: var(--color-muted);
 }
+
+.catalogo-paginacion__elipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 44px;
+  color: var(--color-muted);
+  font-weight: 700;
+  user-select: none;
+}

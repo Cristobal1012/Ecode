@@ -219,7 +219,11 @@ class OrdenCompra(models.Model):
     motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado = models.BooleanField(default=False)
-    # Transferencia: ya se le recordó al comprador que le quedan 24 h para pagar (se envía una sola vez)
+    # Transferencia: plazo de pago que tenía la tienda al crear la orden (domain/ventas.py: plazo_pago); un
+    # cambio de plazo posterior no lo altera. Vacíos en los demás medios de pago
+    fecha_limite_pago = models.DateTimeField(null=True, blank=True)
+    fecha_recordatorio_pago = models.DateTimeField(null=True, blank=True)
+    # Transferencia: ya se le recordó al comprador el pago, a la mitad del plazo (se envía una sola vez)
     recordatorio_pago_enviado = models.BooleanField(default=False)
 
     def __str__(self):

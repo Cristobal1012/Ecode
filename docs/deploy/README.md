@@ -19,10 +19,12 @@ python manage.py migrate
 
 ### Plazo de pago de las transferencias (cada hora)
 
-Un pedido pagado por transferencia tiene **48 horas** para pagarse. Este comando:
+Un pedido pagado por transferencia tiene el plazo que eligió la tienda en Configuración > Medios de Pago >
+Transferencia: **12, 24, 48 o 72 horas** (48 si no eligió). El plazo queda fijo en cada pedido al crearse, así que
+cambiarlo no afecta a los pedidos que ya existen. Este comando:
 
-- a las 24 horas sin pago, le envía al comprador un recordatorio con los datos para transferir y la fecha límite
-  (una sola vez por pedido);
+- a la mitad del plazo sin pago, le envía al comprador un recordatorio con los datos para transferir y la fecha
+  límite (una sola vez por pedido);
 - vencido el plazo, cancela el pedido con el motivo "Pago no recibido a tiempo" y avisa al comprador por correo.
 
 ```bash

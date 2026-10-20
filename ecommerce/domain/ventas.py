@@ -175,14 +175,20 @@ ETIQUETAS_ESTADO = {
     EstadoPedido.CANCELADO: 'Cancelado',
 }
 
-# Decidido el 2026-10-13: plazo para pagar una transferencia; vencido, la orden se cancela
-PLAZO_PAGO_TRANSFERENCIA = timedelta(hours=48)
-# Si sigue sin pagar cuando falta esto para vencer, se le recuerda al comprador (una sola vez)
-AVISO_ANTES_DEL_VENCIMIENTO = timedelta(hours=24)
+@dataclass(frozen=True)
+class PlazoPago:
+    """Plazo para pagar una transferencia (decidido el 2026-10-13; desde el 2026-10-19 lo elige cada tienda).
+
+    Vencido, la orden se cancela. A la mitad del plazo se le recuerda el pago al comprador, una sola vez.
+    """
+
+    vence: datetime
+    recordar: datetime
 
 
-def vencimiento_pago_transferencia(creada: datetime) -> datetime:
-    return creada + PLAZO_PAGO_TRANSFERENCIA
+def plazo_pago(creada: datetime, plazo: timedelta) -> PlazoPago:
+    """Se fija al crear la orden: si la tienda cambia el plazo después, los pedidos que ya existen conservan el suyo."""
+    return PlazoPago(vence=creada + plazo, recordar=creada + plazo / 2)
 
 
 # Estados en los que el pago ya se confirmó

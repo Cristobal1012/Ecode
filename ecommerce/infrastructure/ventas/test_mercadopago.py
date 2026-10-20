@@ -124,7 +124,10 @@ class FakeRepositorioOrdenes(RepositorioOrdenes):
     def registrar_orden_transporte(self, orden_id, numero_ot: str = '', error: str = '') -> None:
         pass
 
-    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de, sin_recordatorio: bool = False) -> list:
+    def pagos_vencidos(self, metodo_pago: str, ahora) -> list:
+        return []
+
+    def pagos_por_recordar(self, metodo_pago: str, ahora) -> list:
         return []
 
     def marcar_recordatorio_pago(self, orden_id) -> bool:

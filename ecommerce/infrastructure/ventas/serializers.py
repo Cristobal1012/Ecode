@@ -21,11 +21,11 @@ from ecommerce.domain.logistica import (
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
-from ecommerce.domain.medios_pago import MedioPagoNoDisponible
+from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
     TelefonoInvalido, normalizar_telefono_chile,
-    paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
+    paginas_legales_faltantes, plazo_pago, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
@@ -354,7 +354,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
         # RN-02: el backend rechaza un medio que el admin no habilitó o no terminó de configurar
         try:
-            medios_pago().exigir(data.get('metodo_pago'))
+            self._medio_pago = medios_pago().exigir(data.get('metodo_pago'))
         except MedioPagoNoDisponible as error:
             raise serializers.ValidationError({'metodo_pago': str(error)})
 
@@ -487,6 +487,11 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             
         # 3. CREAR LA ORDEN EN BASE DE DATOS
         orden = super().create(validated_data)
+        if self._medio_pago.codigo == CodigoMedioPago.TRANSFERENCIA:
+            # El plazo de la tienda en este momento: si lo cambia después, esta orden conserva el suyo
+            plazo = plazo_pago(orden.fecha_creacion, plazo_pago_transferencia(self._medio_pago))
+            orden.fecha_limite_pago, orden.fecha_recordatorio_pago = plazo.vence, plazo.recordar
+            orden.save(update_fields=['fecha_limite_pago', 'fecha_recordatorio_pago'])
         DetalleOrden.objects.bulk_create([
             DetalleOrden(
                 orden=orden, producto_mongo_id=linea.producto_id, variante_sku=linea.sku,

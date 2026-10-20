@@ -1,7 +1,6 @@
 """Instrucciones para pagar una orden por transferencia: van en la respuesta del checkout y en el correo."""
 
-from ecommerce.domain.medios_pago import CodigoMedioPago
-from ecommerce.domain.ventas import vencimiento_pago_transferencia
+from ecommerce.domain.medios_pago import CodigoMedioPago, PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO
 
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 
@@ -23,6 +22,11 @@ def instrucciones_transferencia(orden) -> dict | None:
         'monto': int(round(orden.total_final)),
         # El comprador la indica al transferir para que la tienda identifique el pago
         'referencia': f'Pedido #{orden.id}',
-        # Plazo de pago (48 h): después de esta fecha la orden se cancela (manage.py cancelar_pagos_vencidos)
-        'vence': vencimiento_pago_transferencia(orden.fecha_creacion),
+        # Plazo de pago que tenía la tienda al crear la orden: después, se cancela (manage.py cancelar_pagos_vencidos)
+        'vence': fecha_limite_pago(orden),
     }
+
+
+def fecha_limite_pago(orden):
+    """La guardada al crear la orden; las anteriores a guardarla tenían el plazo fijo de 48 horas."""
+    return orden.fecha_limite_pago or orden.fecha_creacion + PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO

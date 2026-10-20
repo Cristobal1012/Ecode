@@ -13,7 +13,7 @@ from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCID
 from ecommerce.domain.logistica import ENTREGA_COORDINADA
 from ecommerce.domain.ventas import EventoPedido
 
-from ..instrucciones_pago import instrucciones_transferencia
+from ..instrucciones_pago import fecha_limite_pago, instrucciones_transferencia
 from ..models import ConfiguracionGlobal, OrdenCompra
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,8 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'metodo_pago': orden.get_metodo_pago_display(),
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
             'pago_vencido': orden.motivo_cancelacion == MOTIVO_PAGO_VENCIDO,
+            # Horas que tuvo para transferir (el plazo de la tienda al crear la orden)
+            'plazo_pago_horas': round((fecha_limite_pago(orden) - orden.fecha_creacion).total_seconds() / 3600),
             'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
             'es_entrega_coordinada': orden.proveedor_logistico == ENTREGA_COORDINADA,
             # Cómo se coordina la entrega (lo escribe el admin); vacío si la entrega no es coordinada

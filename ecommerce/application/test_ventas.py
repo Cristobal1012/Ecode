@@ -16,7 +16,7 @@ from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, EventoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
     PedidoVacio, ProblemaLinea,
     StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
-    VarianteNoDisponible,
+    VarianteNoDisponible, plazo_pago,
 )
 
 
@@ -145,19 +145,25 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         self.cambio_concurrente = None
 
     def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL',
-                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0)):
+                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0), plazo=timedelta(hours=48)):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
             'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
-            'metodo_pago': metodo_pago, 'creada': creada, 'recordatorio_pago': False,
+            'metodo_pago': metodo_pago, 'plazo': plazo_pago(creada, plazo), 'recordatorio_pago': False,
         }
         return self.ordenes[orden_id]
 
-    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
-        return [orden_id for orden_id, datos in self.ordenes.items()
-                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago
-                and datos['creada'] < creadas_antes_de and not (sin_recordatorio and datos['recordatorio_pago'])]
+    def _pendientes(self, metodo_pago):
+        return [(orden_id, datos) for orden_id, datos in self.ordenes.items()
+                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago]
+
+    def pagos_vencidos(self, metodo_pago, ahora):
+        return [orden_id for orden_id, datos in self._pendientes(metodo_pago) if datos['plazo'].vence < ahora]
+
+    def pagos_por_recordar(self, metodo_pago, ahora):
+        return [orden_id for orden_id, datos in self._pendientes(metodo_pago)
+                if datos['plazo'].recordar < ahora and not datos['recordatorio_pago']]
 
     def marcar_recordatorio_pago(self, orden_id):
         datos = self.ordenes[orden_id]
@@ -549,9 +555,17 @@ class CancelarPagosVencidosTests(SimpleTestCase):
         self.notificador = NotificadorFalso()
         self.caso = CancelarPagosVencidos(self.ordenes, self.notificador)
 
-    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA', plazo=48):
         return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
-                                    creada=self.AHORA - timedelta(hours=horas))
+                                    creada=self.AHORA - timedelta(hours=horas), plazo=timedelta(hours=plazo))
+
+    def test_cada_orden_vence_con_el_plazo_que_tenia_la_tienda_al_crearla(self):
+        self.agregar(1, 13, plazo=12)
+        self.agregar(2, 13, plazo=24)
+        self.agregar(3, 71, plazo=72)
+        self.agregar(4, 73, plazo=72)
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1, 4])
 
     def test_cancela_y_avisa_solo_las_transferencias_pendientes_con_mas_de_48_horas(self):
         vencida = self.agregar(1, 49)
@@ -592,9 +606,17 @@ class RecordarPagosPorVencerTests(SimpleTestCase):
         self.notificador = NotificadorFalso()
         self.caso = RecordarPagosPorVencer(self.ordenes, self.notificador)
 
-    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA', plazo=48):
         return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
-                                    creada=self.AHORA - timedelta(hours=horas))
+                                    creada=self.AHORA - timedelta(hours=horas), plazo=timedelta(hours=plazo))
+
+    def test_recuerda_a_la_mitad_del_plazo_de_cada_orden(self):
+        self.agregar(1, 7, plazo=12)
+        self.agregar(2, 5, plazo=12)
+        self.agregar(3, 37, plazo=72)
+        self.agregar(4, 35, plazo=72)
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1, 3])
 
     def test_recuerda_solo_las_transferencias_pendientes_con_mas_de_24_horas(self):
         por_vencer = self.agregar(1, 25)

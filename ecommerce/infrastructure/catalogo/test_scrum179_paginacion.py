@@ -234,6 +234,112 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         p_caro.actualizar_precio_minimo_vigente()
         self.assertGreater(float(p_caro.precio_minimo_vigente), float(p_variantes.precio_minimo_vigente))
 
+    def test_actualizar_producto_sincroniza_precio_minimo_vigente_en_set_atomico(self):
+        """
+        Validación directa del requerimiento de subsanación:
+        Al editar variantes, ofertas o precios mediante actualizar_producto(),
+        precio_minimo_vigente debe incluirse en el $set atómico de MongoDB.
+        """
+        from ecommerce.infrastructure.catalogo.documents import Variante
+        from ecommerce.infrastructure.catalogo.image_adapters import actualizar_producto
+
+        from datetime import datetime, timezone
+
+        p = Producto(
+            id='507f1f77bcf86cd799439011',
+            nombre='Producto Editable',
+            categoria='QA179 Precios',
+            fecha_creacion=datetime.now(timezone.utc),
+            imagenes=[],
+            variantes=[Variante(sku='SKU-INIT', precio='10000.00')]
+        )
+        p.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(p.precio_minimo_vigente), 10000.0)
+
+        with patch('ecommerce.infrastructure.catalogo.image_adapters.modificar_con_referencias') as mock_modificar:
+            mock_modificar.return_value = p
+            cambios = {
+                'variantes': [
+                    {'sku': 'SKU-INIT', 'precio': '10000.00', 'precio_oferta': '1500.00', 'stock': 5}
+                ]
+            }
+            actualizado = actualizar_producto(p, cambios)
+
+            # Verificar que modificar_con_referencias recibió precio_minimo_vigente en el $set
+            self.assertTrue(mock_modificar.called)
+            actualizacion_arg = mock_modificar.call_args[0][1]
+            self.assertIn('$set', actualizacion_arg)
+            self.assertIn('precio_minimo_vigente', actualizacion_arg['$set'])
+            self.assertEqual(float(actualizacion_arg['$set']['precio_minimo_vigente']), 1500.0)
+            self.assertEqual(float(p.precio_minimo_vigente), 1500.0)
+
+    def test_orden_catalogo_con_mas_de_24_productos_tras_edicion(self):
+        """
+        Simulación de 26 productos:
+        - 24 productos con precios entre $3.000 y $5.300
+        - 1 producto "Normal dos mil" con $2.000
+        - 1 producto "Oferta editada" originalmente creado en $10.000 y editado a oferta de $1.000
+        """
+        from ecommerce.infrastructure.catalogo.documents import Variante
+
+        productos = []
+        # 1 producto normal $2.000
+        p_dos_mil = Producto(
+            id='507f1f77bcf86cd799439001',
+            nombre='Normal dos mil',
+            categoria='QA179 Precios',
+            variantes=[Variante(sku='SKU-2000', precio='2000.00')]
+        )
+        p_dos_mil.actualizar_precio_minimo_vigente()
+        productos.append(p_dos_mil)
+
+        # 24 productos entre $3.000 y $5.300
+        for i in range(24):
+            precio = 3000.0 + (i * 100.0)
+            p = Producto(
+                id=f'507f1f77bcf86cd7994391{i:02d}',
+                nombre=f'Producto {i+1}',
+                categoria='QA179 Precios',
+                variantes=[Variante(sku=f'SKU-GEN-{i}', precio=f'{precio:.2f}')]
+            )
+            p.actualizar_precio_minimo_vigente()
+            productos.append(p)
+
+        # Producto editado: originalmente $10.000, ahora con oferta $1.000
+        p_editado = Producto(
+            id='507f1f77bcf86cd799439002',
+            nombre='Oferta editada',
+            categoria='QA179 Precios',
+            variantes=[Variante(sku='SKU-OFERTA', precio='10000.00', precio_oferta='1000.00')]
+        )
+        p_editado.actualizar_precio_minimo_vigente()
+        productos.append(p_editado)
+
+        self.assertEqual(len(productos), 26)
+
+        # 1. En orden ascendente (menor a mayor):
+        ordenados_asc = sorted(productos, key=lambda x: float(x.precio_minimo_vigente))
+        # Página 1 (primeros 24 productos)
+        pagina_1_asc = ordenados_asc[:24]
+        # "Oferta editada" ($1.000) debe ser el primero de la página 1
+        self.assertEqual(pagina_1_asc[0].nombre, 'Oferta editada')
+        self.assertEqual(float(pagina_1_asc[0].precio_minimo_vigente), 1000.0)
+        # "Normal dos mil" ($2.000) debe ser el segundo
+        self.assertEqual(pagina_1_asc[1].nombre, 'Normal dos mil')
+        self.assertEqual(float(pagina_1_asc[1].precio_minimo_vigente), 2000.0)
+
+        # 2. En orden descendente (mayor a menor):
+        ordenados_desc = sorted(productos, key=lambda x: float(x.precio_minimo_vigente), reverse=True)
+        # Página 1 (primeros 24 productos)
+        pagina_1_desc = ordenados_desc[:24]
+        # Página 2 (últimos 2 productos)
+        pagina_2_desc = ordenados_desc[24:]
+
+        # "Oferta editada" ($1.000) debe estar en la página 2, detrás de todos los productos mayores
+        self.assertNotIn(p_editado, pagina_1_desc)
+        self.assertIn(p_editado, pagina_2_desc)
+        self.assertEqual(pagina_2_desc[-1].nombre, 'Oferta editada')
+
     @patch('ecommerce.infrastructure.catalogo.views.obtener_filtros_catalogo')
     def test_endpoint_filtros_catalogo_publico(self, mock_filtros):
         mock_filtros.return_value = {

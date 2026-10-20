@@ -256,6 +256,21 @@ class GaleriaAPITests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['imagenes'], [referencia])
 
+    def test_edicion_variantes_actualiza_precio_minimo_vigente_en_mongo(self):
+        """SCRUM-179 / E01: La API de edición persiste precio_minimo_vigente en MongoDB."""
+        self.producto.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(self.producto.precio_minimo_vigente), 10990.0)
+        nuevas_variantes = [{
+            'sku': 'POL-VERDE',
+            'precio': '10990.00',
+            'precio_oferta': '2990.00',
+            'stock': 7,
+        }]
+        response = self.client.patch(self.detalle, {'variantes': nuevas_variantes}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.producto.reload()
+        self.assertEqual(float(self.producto.precio_minimo_vigente), 2990.0)
+
     def test_lote_invalido_no_asocia_ni_guarda_archivos(self):
         response = self.subir(imagen_archivo(), SimpleUploadedFile('falsa.png', b'bad', content_type='image/png'))
         self.assertEqual(response.status_code, 400)

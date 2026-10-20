@@ -195,3 +195,62 @@
     text-align: left;
   }
 }
+
+/* ---------- Paginación accesible (SCRUM-179, RNF-01) ---------- */
+
+.catalogo-paginacion {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 48px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.catalogo-paginacion__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.catalogo-paginacion__btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-secondary);
+}
+
+.catalogo-paginacion__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.catalogo-paginacion__btn--activa {
+  background: var(--color-primary);
+  color: var(--color-surface);
+  border-color: var(--color-primary);
+  font-weight: 700;
+}
+
+.catalogo-paginacion__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.catalogo-paginacion__info {
+  margin: 0 8px;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}

@@ -28,12 +28,20 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
-  // Simular un catálogo vacío, sin modificar la base de datos
-  await page.route('**/api/catalogo/productos/', async (route) => {
+  // Simular un catálogo vacío con paginación, sin modificar la base de datos (SCRUM-179)
+  await page.route('**/api/catalogo/productos/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([]),
+      body: JSON.stringify({ count: 0, total_pages: 1, current_page: 1, results: [] }),
+    });
+  });
+
+  await page.route('**/api/catalogo/filtros/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ categorias: [], atributos: {} }),
     });
   });
 });

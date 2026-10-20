@@ -120,13 +120,14 @@ export default function FormularioProducto({
     const cargarCategorias = async () => {
       try {
         const { data } = await clienteAxios.get(
-          'catalogo/productos/'
+          'catalogo/productos/?todos=true'
         );
+        const lista = Array.isArray(data) ? data : (data?.results || []);
 
-        if (Array.isArray(data)) {
+        if (Array.isArray(lista)) {
           const categoriasUnicas = [
             ...new Set(
-              data
+              lista
                 .map((p) => p.categoria)
                 .filter(Boolean)
             )

@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    FiltrosCatalogoView,
     ProductoDetailView,
     ProductoEnlaceImagenView,
     ProductoImagenDetailView,
@@ -10,6 +11,7 @@ from .views import (
 
 catalogo_urlpatterns = [
     path('productos/', ProductoListCreateView.as_view(), name='lista_productos'),
+    path('filtros/', FiltrosCatalogoView.as_view(), name='filtros_catalogo'),
     # GET /api/catalogo/vitrina/: más vendidos y últimos agregados para la landing (pública)
     path('vitrina/', VitrinaView.as_view(), name='vitrina'),
     

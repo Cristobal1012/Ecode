@@ -84,19 +84,26 @@ class VitrinaView(CatalogoAPIView):
 def obtener_filtros_catalogo():
     """RF-01.3: extrae las categorías y valores de atributos disponibles de productos activos y publicados."""
     try:
-        prods = Producto.objects.filter(activo=True, publicado=True)
-        categorias = sorted([c for c in prods.distinct('categoria') if c])
+        # Una lectura proyectada conserva las opciones de todas las páginas sin
+        # consultar e hidratar de nuevo los productos de cada categoría.
+        prods = Producto.objects.filter(activo=True, publicado=True).only(
+            'categoria', 'atributos_globales',
+        ).as_pymongo()
         atributos = {}
-        for cat in categorias:
-            atributos[cat] = {}
-            for p in Producto.objects.filter(activo=True, publicado=True, categoria=cat).only('atributos_globales'):
-                if p.atributos_globales and isinstance(p.atributos_globales, dict):
-                    for k, val in p.atributos_globales.items():
-                        if k not in atributos[cat]:
-                            atributos[cat][k] = set()
-                        if val is not None and str(val).strip():
-                            atributos[cat][k].add(str(val))
-            atributos[cat] = {k: sorted(list(v)) for k, v in atributos[cat].items()}
+        for producto in prods:
+            cat = producto.get('categoria')
+            if not cat:
+                continue
+            opciones = atributos.setdefault(cat, {})
+            valores = producto.get('atributos_globales')
+            if isinstance(valores, dict):
+                for clave, valor in valores.items():
+                    opciones.setdefault(clave, set())
+                    if valor is not None and str(valor).strip():
+                        opciones[clave].add(str(valor))
+        categorias = sorted(atributos)
+        atributos = {cat: {clave: sorted(valores) for clave, valores in atributos[cat].items()}
+                     for cat in categorias}
         return {'categorias': categorias, 'atributos': atributos}
     except Exception as exc:
         logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)

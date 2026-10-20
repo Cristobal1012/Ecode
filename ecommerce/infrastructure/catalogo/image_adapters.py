@@ -116,7 +116,7 @@ def actualizar_producto(producto, cambios):
 
     producto.validate()
     mongo_data = producto.to_mongo()
-    
+
     campos_set = {campo: mongo_data[campo] for campo in cambios}
     if 'variantes' in cambios or 'precio_minimo_vigente' in mongo_data:
         campos_set['precio_minimo_vigente'] = mongo_data.get('precio_minimo_vigente')

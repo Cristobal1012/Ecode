@@ -1,5 +1,10 @@
 import { defineConfig } from '@playwright/test';
 import process from 'node:process';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const envFile = fileURLToPath(new URL('../tools/qa/scrum149/.env.local', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 export default defineConfig({
   testDir: './e2e-qa',
@@ -12,7 +17,8 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173',
     browserName: 'chromium',
     channel: 'msedge',
-    trace: 'retain-on-failure',
+    // La prueba administrativa usa credenciales: no registrar tokens en trazas.
+    trace: 'off',
     screenshot: 'only-on-failure',
   },
   webServer: {

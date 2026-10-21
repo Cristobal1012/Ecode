@@ -1,15 +1,18 @@
 """Local, isolated PostgreSQL/MongoDB settings for catalogue verification."""
 import os
 from pathlib import Path
+from qa_env import BACKEND_VARIABLES, require_env
+
+credentials = require_env(BACKEND_VARIABLES)
 
 QA_ROOT = Path(__file__).resolve().parents[3] / '.tmp' / 'scrum149'
 os.environ.update({
     'DEBUG': 'True',
-    'SECRET_KEY': 'scrum149-local-qa-signing-only-no-production',
-    'CLAVE_CIFRADO_CREDENCIALES': 'scrum149-local-qa-encryption-only',
+    'SECRET_KEY': credentials['QA149_SECRET_KEY'],
+    'CLAVE_CIFRADO_CREDENCIALES': credentials['QA149_CLAVE_CIFRADO_CREDENCIALES'],
     'POSTGRES_DB': 'ecode_qa_scrum149',
     'POSTGRES_USER': 'qa149',
-    'POSTGRES_PASSWORD': 'qa149-local-only',
+    'POSTGRES_PASSWORD': credentials['QA149_POSTGRES_PASSWORD'],
     'POSTGRES_HOST': '127.0.0.1',
     'POSTGRES_PORT': '55439',
     'MONGO_URI': 'mongodb://127.0.0.1:27049/ecode_qa_scrum149',

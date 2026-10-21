@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import requests
+from qa_env import ADMIN_VARIABLES, require_env
 
 import manage
 import django
@@ -26,6 +27,7 @@ def price(product):
 
 
 def verify(output):
+    credentials = require_env(ADMIN_VARIABLES)
     assert get_db().name == 'ecode_qa_scrum149'
     assert settings.DATABASES['default']['NAME'] == 'ecode_qa_scrum149'
     checks = []
@@ -75,7 +77,9 @@ def verify(output):
         for i in (1081, 1141, 1171):
             check(f'hidden_detail/{i}', public.get(BASE + f'catalogo/productos/{i:024x}/', timeout=30).status_code == 404)
         check('public_all_mode', len(get('catalogo/productos/', todos='true')) == 1080)
-        login = admin.post(BASE + 'usuarios/token/', json={'email': 'admin149@example.test', 'password': 'QA149-Local-938!Secure'}, timeout=30)
+        login = admin.post(BASE + 'usuarios/token/', json={
+            'email': credentials['QA149_ADMIN_EMAIL'], 'password': credentials['QA149_ADMIN_PASSWORD'],
+        }, timeout=30)
         login.raise_for_status()
         admin.headers['Authorization'] = 'Bearer ' + login.json()['access']
         inventory = get('catalogo/productos/', admin, todos='true')

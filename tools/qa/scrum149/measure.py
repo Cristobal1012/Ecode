@@ -11,6 +11,7 @@ import sys
 import time
 
 import requests
+from qa_env import BACKEND_VARIABLES, require_env
 
 ROOT = Path(__file__).resolve().parents[3]
 BASE = 'http://127.0.0.1:8000'
@@ -68,6 +69,7 @@ def start_backend(log):
 
 
 def measure(args):
+    require_env(BACKEND_VARIABLES)
     # Never terminate/reuse an unrelated service on the measurement port.
     try:
         requests.get(BASE + '/', timeout=1)

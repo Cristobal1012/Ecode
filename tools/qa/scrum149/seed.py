@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from mongoengine.connection import get_db
 from PIL import Image
+from qa_env import ADMIN_VARIABLES, require_env
 
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.infrastructure.catalogo.documents import Producto, Variante
@@ -17,6 +18,7 @@ from ecommerce.infrastructure.ventas.repositorio_medios_pago import DjangoReposi
 
 
 def seed():
+    credentials = require_env(ADMIN_VARIABLES)
     assert settings.DATABASES['default']['NAME'] == 'ecode_qa_scrum149'
     assert get_db().name == 'ecode_qa_scrum149'
     assert not Producto.objects.count(), 'Fixture requires an empty QA catalogue'
@@ -25,7 +27,7 @@ def seed():
     (root / 'media').mkdir(parents=True, exist_ok=True)
     Image.new('RGB', (360, 240), '#69a68e').save(root / 'media' / 'qa149.png')
     get_user_model().objects.create_superuser(
-        'admin149@example.test', 'QA149-Local-938!Secure', rol='ADMIN', nombre='QA',
+        credentials['QA149_ADMIN_EMAIL'], credentials['QA149_ADMIN_PASSWORD'], rol='ADMIN', nombre='QA',
         apellido_paterno='Catalogo', apellido_materno='Local',
     )
     ConfiguracionGlobal.objects.create(

@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ecode_qa_scrum149
       POSTGRES_USER: qa149
-      POSTGRES_PASSWORD: qa149-local-only
+      POSTGRES_PASSWORD: "${QA149_POSTGRES_PASSWORD:?Defina QA149_POSTGRES_PASSWORD en la sesion o el archivo privado de QA}"
     ports: ["127.0.0.1:55439:5432"]
     volumes: ["postgres149:/var/lib/postgresql/data"]
     healthcheck:

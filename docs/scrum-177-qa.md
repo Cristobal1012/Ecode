@@ -12,14 +12,15 @@
 Desde la raíz, con las dependencias del proyecto instaladas y Docker Desktop activo, ejecutar este bloque en una terminal PowerShell nueva. Utiliza los servicios QA existentes y el `manage.py` habitual, sin modificar `.env` ni iniciar servidores.
 
 ```powershell
-docker compose -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
-$env:DJANGO_SETTINGS_MODULE = 'backend_project.settings'
+# Configurar previamente las variables privadas según scrum-149-qa.md.
+docker compose --env-file tools/qa/scrum149/.env.local -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
+# Cargar el archivo privado sin mostrar valores; las variables de sesión prevalecen.
+.\venv\Scripts\python.exe tools/qa/scrum149/manage.py check
+$env:DJANGO_SETTINGS_MODULE = 'qa_settings'
+$env:PYTHONPATH = (Resolve-Path tools/qa/scrum149).Path
 $env:DEBUG = 'True'
-$env:SECRET_KEY = 'scrum177-comprobacion-local-ficticia'
-$env:CLAVE_CIFRADO_CREDENCIALES = 'scrum177-cifrado-local-ficticio'
 $env:POSTGRES_DB = 'ecode_qa_scrum149'
 $env:POSTGRES_USER = 'qa149'
-$env:POSTGRES_PASSWORD = 'qa149-local-only'
 $env:POSTGRES_HOST = '127.0.0.1'
 $env:POSTGRES_PORT = '55439'
 $env:MONGO_URI = 'mongodb://127.0.0.1:27049/ecode_qa_scrum177_comprobacion'

@@ -57,10 +57,24 @@ Esta evidencia cubre SCRUM-149 en desarrollo local. No certifica carga de produc
 
 ## Reproducción
 
+### Credenciales locales
+
+Copiar `tools/qa/scrum149/.env.example` como `.env.local` en esa misma carpeta y completar en privado:
+
+- `QA149_POSTGRES_PASSWORD`: contraseña del usuario `qa149` en PostgreSQL.
+- `QA149_SECRET_KEY`: clave de firma de Django exclusiva de QA.
+- `QA149_CLAVE_CIFRADO_CREDENCIALES`: clave de cifrado de los datos QA.
+- `QA149_ADMIN_EMAIL` y `QA149_ADMIN_PASSWORD`: cuenta administrativa del fixture.
+
+No versionar valores ni imprimir el archivo o la configuración resuelta de Docker. Python y Playwright cargan ese archivo; las variables de sesión prevalecen. Una variable vacía es un error y no activa un valor de respaldo. `--list` descubre las pruebas sin exigir credenciales; ejecutarlas contra QA sí las exige.
+
+Para un entorno existente, reutilizar la contraseña PostgreSQL, la clave de cifrado y la cuenta válidas actuales. Cambiar la variable de Compose **no cambia la contraseña guardada en un volumen inicializado**: si la autenticación falla, corregir la configuración privada para que coincida con el entorno existente. No borrar volúmenes, recrear usuarios ni volver a sembrar. El generador rechaza bases con datos. Para una instalación QA nueva, elegir valores privados antes del primer arranque y conservarlos. No modificar el `.env` de desarrollo.
+
 Desde la raíz, sin otro proceso en el puerto 8000:
 
 ```powershell
-docker compose -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
+docker compose --env-file tools/qa/scrum149/.env.local -p ecode-qa149 -f tools/qa/scrum149/compose.yml config --quiet
+docker compose --env-file tools/qa/scrum149/.env.local -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
 .\venv\Scripts\python.exe tools/qa/scrum149/manage.py migrate --noinput
 # Solo una vez, en bases QA vacías; el generador rechaza datos existentes.
 .\venv\Scripts\python.exe tools/qa/scrum149/manage.py shell -c "exec(open('tools/qa/scrum149/seed.py', encoding='utf-8').read())"
@@ -70,7 +84,9 @@ docker compose -p ecode-qa149 -f tools/qa/scrum149/compose.yml up -d --wait
 .\venv\Scripts\python.exe tools/qa/scrum149/measure.py --phase final --graph optimized --output .tmp/scrum149/medicion.json
 ```
 
-Para HTTP funcional y navegador, iniciar por separado `tools/qa/scrum149/manage.py runserver 127.0.0.1:8000 --noreload`. Ejecutar `verify.py --output .tmp/scrum149/funcional.json`. Desde `frontend`, ejecutar `npm run build`, `npm run test:run` y `npm exec -- playwright test --config playwright.scrum149.config.js`. El navegador inicia su propio preview en 5173 y requiere Edge instalado; no intercepta respuestas de la aplicación. No ejecutar escrituras funcionales ni otras suites durante una medición.
+Para HTTP funcional y navegador, iniciar por separado `tools/qa/scrum149/manage.py runserver 127.0.0.1:8000 --noreload`. Ejecutar `verify.py --output .tmp/scrum149/funcional.json`. Desde `frontend`, ejecutar `npm run build`, `npm run test:run` y `npm run test:e2e:qa`. El navegador inicia su propio preview en 5173 y requiere Edge instalado; no intercepta respuestas de la aplicación. Sus escrituras administrativas se restauran al finalizar y las trazas están desactivadas para no guardar credenciales. No ejecutar escrituras funcionales ni otras suites durante una medición.
+
+La suite habitual `npm run test:e2e` solo ejecuta `e2e/landing.spec.js`, simula toda la API y bloquea llamadas inesperadas y escrituras. No requiere backend, fixture ni credenciales. `npm run test:e2e -- --list` descubre dos pruebas; `npm run test:e2e:qa -- --list` descubre cuatro en `e2e-qa`, incluidas las operaciones administrativas reales.
 
 Para repetir la base, restaurar el código histórico del catálogo/frontend en un checkout de auditoría y usar `--graph baseline` con el mismo fixture. No reemplazar ni resetear `eidan`.
 

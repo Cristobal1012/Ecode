@@ -1,5 +1,18 @@
 // Real Django + PostgreSQL/MongoDB QA services; no route.fulfill or API substitution.
 import { test, expect } from '@playwright/test';
+import process from 'node:process';
+
+test.beforeAll(async ({ request }) => {
+  const names = ['QA149_POSTGRES_PASSWORD', 'QA149_SECRET_KEY', 'QA149_CLAVE_CIFRADO_CREDENCIALES',
+    'QA149_ADMIN_EMAIL', 'QA149_ADMIN_PASSWORD'];
+  const missing = names.filter((name) => !process.env[name]?.trim());
+  if (missing.length) throw new Error(`Faltan variables de QA: ${missing.join(', ')}. Configure tools/qa/scrum149/.env.local o la sesión.`);
+  const response = await request.get('http://127.0.0.1:8000/api/catalogo/productos/');
+  expect(response.ok(), 'El backend QA aislado debe estar disponible').toBeTruthy();
+  const catalog = await response.json();
+  expect(catalog.count, 'Se requiere el fixture QA149; no ejecutar sobre datos de desarrollo').toBe(1080);
+  expect(catalog.results[0].nombre).toMatch(/^Producto QA149 /);
+});
 
 async function checkLayout(page) {
   const layout = await page.evaluate(() => ({
@@ -70,7 +83,7 @@ test('administrador edita precio y contacto; catálogo y pie reciben los cambios
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = 'http://localhost:8000/api/';
   const login = await page.request.post(api + 'usuarios/token/', {
-    data: { email: 'admin149@example.test', password: 'QA149-Local-938!Secure' },
+    data: { email: process.env.QA149_ADMIN_EMAIL, password: process.env.QA149_ADMIN_PASSWORD },
   });
   expect(login.ok()).toBeTruthy();
   const tokens = await login.json();

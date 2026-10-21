@@ -489,7 +489,6 @@ class SeguimientoEnvioTests(APITestCase):
         )
         consultar_estado.assert_not_called()
 
-
     def test_retiro_local_muestra_mensaje_propio(self, consultar_estado):
         self.orden.proveedor_logistico = 'RETIRO_LOCAL'
         self.orden.numero_seguimiento_tracking = ''
@@ -518,7 +517,6 @@ class SeguimientoEnvioTests(APITestCase):
         )
         consultar_estado.assert_not_called()
 
-
     def test_retiro_local_entregado_muestra_entregado(self, consultar_estado):
         self.orden.proveedor_logistico = 'RETIRO_LOCAL'
         self.orden.estado = 'ENTREGADO'
@@ -534,7 +532,6 @@ class SeguimientoEnvioTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['estado_actual'], 'Entregado')
         consultar_estado.assert_not_called()
-
 
     def test_pedido_cancelado_sin_ot_muestra_cancelado(self, consultar_estado):
         self.orden.estado = 'CANCELADO'

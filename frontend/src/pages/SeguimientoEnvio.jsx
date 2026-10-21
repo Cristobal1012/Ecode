@@ -60,6 +60,7 @@ function SeguimientoContenido() {
     const esRetiroLocal = seguimiento?.proveedor === 'RETIRO_LOCAL';
     const pendienteDeDespacho = estadoActual === 'Pendiente de despacho';
     const pendienteDeRetiro = estadoActual === 'Pendiente de retiro en local';
+    const entregado = estadoActual === 'Entregado';
     const cancelado = estadoActual === 'Cancelado';
     const indiceEstadoActual = ESTADOS.indexOf(estadoActual);
 

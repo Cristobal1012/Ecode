@@ -64,6 +64,7 @@ for name in ('products', 'filters', 'price_asc', 'number', 'configuration', 'leg
                 record['sql_explain'].append([row[0] for row in cursor.fetchall()])
     result[name] = record
 output = Path(sys.argv[1])
+output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
 print(json.dumps({k: {x: v[x] for x in ('elapsed_ms', 'mongo_commands')} | {'sql_queries': len(v['sql'])}
                   for k, v in result.items()}, indent=2))

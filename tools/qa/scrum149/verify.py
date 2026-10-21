@@ -28,6 +28,7 @@ def price(product):
 
 def verify(output):
     credentials = require_env(ADMIN_VARIABLES)
+    output.parent.mkdir(parents=True, exist_ok=True)
     assert get_db().name == 'ecode_qa_scrum149'
     assert settings.DATABASES['default']['NAME'] == 'ecode_qa_scrum149'
     checks = []

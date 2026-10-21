@@ -104,7 +104,8 @@ class EvidenciaPublicada(unittest.TestCase):
     def test_crlf_conserva_huella_logica(self):
         manifest = json.loads(self.manifest.read_text(encoding='utf-8'))
         path = self.folder / manifest['runs'][0]['csv']
-        path.write_bytes(path.read_bytes().replace(b'\n', b'\r\n'))
+        # Normalizar primero para no duplicar los retornos de un archivo ya en CRLF.
+        path.write_bytes(path.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
         self.check()
 
 

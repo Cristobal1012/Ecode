@@ -1,4 +1,4 @@
-"""Measure full HTTP responses on the real QA backend; no simulated queries."""
+"""Mide respuestas HTTP completas del backend QA con consultas a las bases reales."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -57,7 +57,7 @@ def start_backend(log):
                                cwd=ROOT, stdout=log, stderr=log)
     for _ in range(150):
         if process.poll() is not None:
-            raise RuntimeError('QA server exited; inspect backend log')
+            raise RuntimeError('El servidor QA terminó; revise el registro temporal del backend')
         try:
             if requests.get(BASE + '/', timeout=.5).status_code == 200:
                 return process
@@ -65,18 +65,18 @@ def start_backend(log):
             pass
         time.sleep(.1)
     process.terminate()
-    raise RuntimeError('QA server did not become ready')
+    raise RuntimeError('El servidor QA no llegó a estar disponible')
 
 
 def measure(args):
     require_env(BACKEND_VARIABLES)
-    # Never terminate/reuse an unrelated service on the measurement port.
+    # No detener ni reutilizar servicios ajenos en el puerto de medición.
     try:
         requests.get(BASE + '/', timeout=1)
     except requests.ConnectionError:
         pass
     else:
-        raise RuntimeError('Port 8000 is occupied; stop only the intended QA server first')
+        raise RuntimeError('El puerto 8000 está ocupado; detenga primero solo el servidor QA correspondiente')
     initial = [SCENARIOS['products'], SCENARIOS['configuration'], SCENARIOS['legal']]
     if args.graph == 'baseline':
         initial += [SCENARIOS['filters'], SCENARIOS['configuration'], SCENARIOS['configuration']]
@@ -85,7 +85,7 @@ def measure(args):
               'environment': {'python': platform.python_version(), 'platform': platform.platform(),
                               'processor': platform.processor(), 'backend': 'Django runserver --noreload DEBUG=True',
                               'postgres': '15 Docker 55439', 'mongo': '6 Docker 27049',
-                              'standard': 'localhost, one visitor, no artificial throttling'},
+                              'standard': 'localhost, un visitante, sin limitación artificial'},
               'fixture': json.loads((ROOT / '.tmp/scrum149/fixture.json').read_text()),
               'warmup_count': 5, 'cold': [], 'series': []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -130,10 +130,10 @@ def measure(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--phase', required=True)
-    parser.add_argument('--graph', choices=('baseline', 'optimized'), required=True)
-    parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--cold', type=int, default=10)
-    parser.add_argument('--series', type=int, default=3)
-    parser.add_argument('--repetitions', type=int, default=30)
+    parser.add_argument('--phase', required=True, help='Identificador de esta ejecución')
+    parser.add_argument('--graph', choices=('baseline', 'optimized'), required=True, help='Grafo inicial histórico u optimizado')
+    parser.add_argument('--output', type=Path, required=True, help='Archivo JSON de muestras temporales')
+    parser.add_argument('--cold', type=int, default=10, help='Primeras cargas con reinicio de Django')
+    parser.add_argument('--series', type=int, default=3, help='Cantidad de series posteriores al calentamiento')
+    parser.add_argument('--repetitions', type=int, default=30, help='Muestras por escenario y serie')
     measure(parser.parse_args())

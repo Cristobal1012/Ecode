@@ -1,4 +1,4 @@
-"""Run Django commands exclusively against the isolated SCRUM-149 services."""
+"""Ejecuta comandos Django exclusivamente sobre los servicios aislados de SCRUM-149."""
 import os
 from pathlib import Path
 import sys

@@ -1,4 +1,4 @@
-"""Check that measurements still use the deterministic, unchanged fixture."""
+"""Comprueba que las mediciones usan el fixture determinista sin alteraciones."""
 from decimal import Decimal
 import json
 

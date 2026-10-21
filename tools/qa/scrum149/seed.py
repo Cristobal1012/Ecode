@@ -1,4 +1,4 @@
-"""Deterministic catalogue fixture. Refuses to overwrite existing QA data."""
+"""Genera el catálogo determinista y rechaza sobrescribir datos QA existentes."""
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
@@ -21,8 +21,8 @@ def seed():
     credentials = require_env(ADMIN_VARIABLES)
     assert settings.DATABASES['default']['NAME'] == 'ecode_qa_scrum149'
     assert get_db().name == 'ecode_qa_scrum149'
-    assert not Producto.objects.count(), 'Fixture requires an empty QA catalogue'
-    assert not get_user_model().objects.exists(), 'Fixture requires empty QA users'
+    assert not Producto.objects.count(), 'El fixture requiere un catálogo QA vacío'
+    assert not get_user_model().objects.exists(), 'El fixture requiere una base QA sin usuarios'
     root = settings.QA_ROOT
     (root / 'media').mkdir(parents=True, exist_ok=True)
     Image.new('RGB', (360, 240), '#69a68e').save(root / 'media' / 'qa149.png')

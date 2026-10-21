@@ -1,4 +1,4 @@
-"""Local, isolated PostgreSQL/MongoDB settings for catalogue verification."""
+"""Configuración local aislada de PostgreSQL y MongoDB para verificar el catálogo."""
 import os
 from pathlib import Path
 from qa_env import BACKEND_VARIABLES, require_env

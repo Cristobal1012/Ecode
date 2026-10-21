@@ -1,4 +1,4 @@
-"""Exercise real HTTP endpoints and inspect their persisted QA documents."""
+"""Verifica endpoints HTTP reales y sus documentos persistidos en QA."""
 import argparse
 from decimal import Decimal
 import json
@@ -37,7 +37,7 @@ def verify(output):
     def check(name, condition):
         checks.append({'case': name, 'passed': bool(condition)})
         if not condition:
-            raise AssertionError(name)
+            raise AssertionError(f'Falló la comprobación: {name}')
     def get(path, session=public, **params):
         response = session.get(BASE + path, params=params, timeout=30)
         response.raise_for_status()
@@ -124,5 +124,5 @@ def verify(output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path, help='Archivo JSON de resultados temporales')
     verify(parser.parse_args().output)

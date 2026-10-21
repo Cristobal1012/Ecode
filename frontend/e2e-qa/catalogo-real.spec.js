@@ -1,4 +1,4 @@
-// Real Django + PostgreSQL/MongoDB QA services; no route.fulfill or API substitution.
+// Servicios QA reales de Django, PostgreSQL y MongoDB, sin sustituir respuestas de la API.
 import { test, expect } from '@playwright/test';
 import process from 'node:process';
 

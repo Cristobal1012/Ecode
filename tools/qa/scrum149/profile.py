@@ -1,4 +1,4 @@
-"""Capture real driver commands and PostgreSQL/MongoDB execution plans."""
+"""Captura comandos reales del controlador y planes de ejecución de PostgreSQL y MongoDB."""
 import json
 from pathlib import Path
 import sys
@@ -27,7 +27,7 @@ class Commands(monitoring.CommandListener):
 
 listener = Commands()
 monitoring.register(listener)
-import manage  # sets QA settings before Django/client initialization
+import manage  # Establece la configuración QA antes de inicializar Django y sus clientes.
 import django
 django.setup()
 from django.db import connection

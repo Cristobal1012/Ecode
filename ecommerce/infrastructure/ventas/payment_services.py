@@ -31,6 +31,12 @@ class TLS12HttpAdapter(HTTPAdapter):
         kwargs['ssl_context'] = context
         return super().init_poolmanager(*args, **kwargs)
 
+    def proxy_manager_for(self, *args, **kwargs):
+        context = create_urllib3_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        kwargs['ssl_context'] = context
+        return super().proxy_manager_for(*args, **kwargs)
+
 
 # PUERTO de Interface
 class PuertoPasarelaPago(ABC):
@@ -144,10 +150,9 @@ class MercadoPagoAdapter(PaymentGateway):
         if notification_url:
             payload["notification_url"] = notification_url
 
+        session = self._obtener_session()
         try:
-            from unittest.mock import MagicMock
-            post_func = requests.post if isinstance(requests.post, MagicMock) else self._obtener_session().post
-            response = post_func(
+            response = session.post(
                 f"{self.API_BASE_URL}/checkout/preferences",
                 json=payload,
                 headers=self._headers(),
@@ -200,10 +205,9 @@ class MercadoPagoAdapter(PaymentGateway):
         """Consulta el estado real del pago directamente en la API de Mercado Pago."""
         if not self.API_BASE_URL.startswith("https://"):
             raise ErrorPasarelaPago("La pasarela de pago requiere comunicación exclusivamente HTTPS (SCRUM-82).")
+        session = self._obtener_session()
         try:
-            from unittest.mock import MagicMock
-            get_func = requests.get if isinstance(requests.get, MagicMock) else self._obtener_session().get
-            response = get_func(
+            response = session.get(
                 f"{self.API_BASE_URL}/v1/payments/{payment_id}",
                 headers=self._headers(),
                 timeout=15,

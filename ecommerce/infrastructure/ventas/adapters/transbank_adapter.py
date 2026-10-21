@@ -1,21 +1,69 @@
 import logging
+import requests
 from django.conf import settings
 from transbank.webpay.webpay_plus.transaction import Transaction
 from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
 
 from ecommerce.domain.medios_pago import AMBIENTE_PRODUCCION, CodigoMedioPago
-
 from ..repositorio_medios_pago import DjangoRepositorioMediosPago
+from ..payment_services import TLS12HttpAdapter
 
 logger = logging.getLogger(__name__)
 
 class TransbankWebpayAdapter:
     """
-    Adaptador para manejar pagos mediante Transbank Webpay Plus.
+    Adaptador para manejar pagos mediante Transbank Webpay Plus forzando TLS 1.2+ (SCRUM-82).
     """
+    _session_tls = None
+
+    @classmethod
+    def _obtener_session_tls(cls) -> requests.Session:
+        if cls._session_tls is None:
+            session = requests.Session()
+            session.mount("https://", TLS12HttpAdapter())
+            cls._session_tls = session
+        return cls._session_tls
+
+    @classmethod
+    def _asegurar_tls12(cls):
+        """Asegura que las llamadas salientes del SDK de Transbank usen TLS 1.2+ y HTTPS (SCRUM-82)."""
+        import transbank.common.request_service as tb_req
+        if not getattr(tb_req.RequestService, '_tls12_forzado', False):
+            session = cls._obtener_session_tls()
+
+            def safe_post(endpoint: str, request: str, options):
+                host = tb_req.RequestService.host(options)
+                full_url = f"{host}{endpoint}"
+                if not full_url.startswith("https://"):
+                    raise ValueError("Transbank exige comunicación exclusivamente por HTTPS (SCRUM-82).")
+                response = session.post(
+                    url=full_url,
+                    data=request,
+                    headers=tb_req.HeadersBuilder.build(options),
+                    timeout=options.timeout,
+                )
+                return tb_req.RequestService.process_response(response)
+
+            def safe_get(endpoint: str, options):
+                host = tb_req.RequestService.host(options)
+                full_url = f"{host}{endpoint}"
+                if not full_url.startswith("https://"):
+                    raise ValueError("Transbank exige comunicación exclusivamente por HTTPS (SCRUM-82).")
+                response = session.get(
+                    url=full_url,
+                    headers=tb_req.HeadersBuilder.build(options),
+                    timeout=options.timeout,
+                )
+                return tb_req.RequestService.process_response(response)
+
+            tb_req.RequestService.post = staticmethod(safe_post)
+            tb_req.RequestService.get = staticmethod(safe_get)
+            tb_req.RequestService._tls12_forzado = True
+
     @classmethod
     def _obtener_instancia(cls) -> Transaction:
+        cls._asegurar_tls12()
         # El ambiente y las credenciales los carga el admin en el panel, no el .env.
         # Se lee aunque Transbank esté deshabilitado: un pago ya iniciado debe poder confirmarse.
         datos = DjangoRepositorioMediosPago().obtener(CodigoMedioPago.TRANSBANK).datos

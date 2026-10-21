@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 import process from 'node:process';
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './e2e-qa',
   testMatch: 'catalogo-real.spec.js',
   workers: 1,
   timeout: 60_000,

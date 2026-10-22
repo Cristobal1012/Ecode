@@ -28,18 +28,35 @@ export default function GestorPedidos() {
   const [aviso, setAviso] = useState(null);
   // Id del pedido que se está actualizando, para no enviar dos cambios a la vez
   const [enCurso, setEnCurso] = useState(null);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPedidos, setTotalPedidos] = useState(0);
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [filtroRevision, setFiltroRevision] = useState(false);
 
-  const cargarPedidos = () => clienteAxios.get('ventas/admin/ordenes/')
-    .then((respuesta) => setPedidos(respuesta.data))
-    .catch((error) => {
-      console.error("Error al cargar las órdenes:", error);
-      setAviso({ tipo: 'error', texto: 'No se pudieron cargar los pedidos.' });
-    })
-    .finally(() => setCargando(false));
+  const cargarPedidos = () => {
+    setCargando(true);
+    
+    const params = new URLSearchParams({ page: paginaActual });
+    if (filtroEstado !== 'Todos') params.append('estado', filtroEstado);
+    if (filtroRevision) params.append('requiere_revision', 'true');
 
+    clienteAxios.get(`ventas/admin/ordenes/?${params.toString()}`)
+      .then((respuesta) => {
+        
+        setPedidos(respuesta.data.results);
+        setTotalPedidos(respuesta.data.count); 
+      })
+      .catch((error) => {
+        console.error("Error al cargar las órdenes:", error);
+        setAviso({ tipo: 'error', texto: 'No se pudieron cargar los pedidos.' });
+      })
+      .finally(() => setCargando(false));
+  };
+
+  // El useEffect ahora se dispara cada vez que cambia la página o un filtro
   useEffect(() => {
     cargarPedidos();
-  }, []);
+  }, [paginaActual, filtroEstado, filtroRevision]);
 
   const handleCambioEstado = async (pedido, nuevoEstado) => {
     if (nuevoEstado === 'CANCELADO' && !window.confirm(
@@ -145,6 +162,32 @@ export default function GestorPedidos() {
         </div>
       )}
 
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <select 
+          value={filtroEstado} 
+          onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
+        >
+          <option value="Todos">Todos los estados</option>
+          {Object.entries(ETIQUETAS_ESTADO).map(([clave, valor]) => (
+            <option key={clave} value={clave}>{valor}</option>
+          ))}
+        </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input 
+            type="checkbox" 
+            checked={filtroRevision} 
+            onChange={(e) => { setFiltroRevision(e.target.checked); setPaginaActual(1); }}
+          />
+          Requiere revisión
+        </label>
+        
+        <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
+          {totalPedidos} pedido(s) encontrado(s)
+        </span>
+      </div>
+
       <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
           <thead style={{ backgroundColor: 'var(--color-secondary)', borderBottom: '2px solid var(--color-border)' }}>
@@ -234,6 +277,29 @@ export default function GestorPedidos() {
             )}
           </tbody>
         </table>
+        {totalPedidos > 20 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px' }}>
+          <button 
+            type="button"
+            disabled={paginaActual === 1}
+            onClick={() => setPaginaActual(p => p - 1)}
+            style={{ padding: '8px 12px', cursor: paginaActual === 1 ? 'not-allowed' : 'pointer' }}
+          >
+            Anterior
+          </button>
+          
+          <span>Página {paginaActual} de {Math.ceil(totalPedidos / 20)}</span>
+          
+          <button 
+            type="button"
+            disabled={paginaActual >= Math.ceil(totalPedidos / 20)}
+            onClick={() => setPaginaActual(p => p + 1)}
+            style={{ padding: '8px 12px', cursor: paginaActual >= Math.ceil(totalPedidos / 20) ? 'not-allowed' : 'pointer' }}
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );

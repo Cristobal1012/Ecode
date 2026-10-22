@@ -71,6 +71,8 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/orden-transporte/ (genera o reintenta la OT)
     path('admin/ordenes/<int:pk>/orden-transporte/', views.AdminOrdenTransporteView.as_view(),
          name='admin-ordenes-orden-transporte'),
+    path('admin/ordenes/<int:pk>/pago-fuera-plazo/', views.AdminRegistrarPagoFueraPlazoView.as_view(),
+        name='admin-ordenes-pago-fuera-plazo'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
     # Ruta resultante: GET /api/ventas/paginas-legales/<tipo>/ (ej. terminos)
     path('paginas-legales/<str:tipo>/', views.PaginaLegalDetalleView.as_view(), name='pagina-legal-detalle'),

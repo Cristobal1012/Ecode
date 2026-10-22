@@ -205,6 +205,59 @@ class ConfiguracionNegocioAccessTests(APITestCase):
         self.assertEqual(self.configuracion.texto_bienvenida, 'Modificado')
 
 
+    def patch_analytics(self, datos):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Token {self.admin_token.key}'
+        )
+        return self.client.patch(
+            reverse('configuracion-negocio'),
+            datos,
+            format='json',
+        )
+
+    def test_admin_can_save_valid_analytics_ids(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-ABC1234567',
+            'meta_pixel_id': '123456789012345',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(
+            self.configuracion.google_analytics_id, 'G-ABC1234567'
+        )
+        self.assertEqual(
+            self.configuracion.meta_pixel_id, '123456789012345'
+        )
+
+    def test_invalid_google_analytics_id_is_rejected(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-123',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('google_analytics_id', response.data)
+
+    def test_invalid_meta_pixel_id_is_rejected(self):
+        response = self.patch_analytics({
+            'meta_pixel_id': 'pixel-invalido',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('meta_pixel_id', response.data)
+
+    def test_empty_analytics_ids_can_disable_integrations(self):
+        response = self.patch_analytics({
+            'google_analytics_id': '',
+            'meta_pixel_id': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.google_analytics_id, '')
+        self.assertEqual(self.configuracion.meta_pixel_id, '')
+
+
 class CheckoutAccessTests(APITestCase):
     @classmethod
     def setUpTestData(cls):
@@ -631,6 +684,62 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(self.resolver().status_code, 403)
         self.orden.refresh_from_db()
         self.assertTrue(self.orden.requiere_revision)
+
+
+    def crear_orden_cancelada(self, motivo):
+        return OrdenCompra.objects.create(
+            email_invitado='prueba@example.test',
+            metodo_pago='TRANSFERENCIA',
+            direccion_envio_snapshot={},
+            subtotal=10000,
+            costo_envio=0,
+            total_final=10000,
+            estado='CANCELADO',
+            motivo_cancelacion=motivo,
+        )
+
+    def test_registrar_pago_fuera_plazo_deja_orden_cancelada_en_revision(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertTrue(orden.requiere_revision)
+        self.assertEqual(
+            orden.motivo_revision,
+            'Transferencia recibida fuera de plazo: reembolsar o crear un pedido nuevo.',
+        )
+
+    def test_no_permite_registrar_pago_si_se_cancelo_por_otro_motivo(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Cancelado por el administrador')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 409)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
+
+    def test_solo_el_admin_puede_registrar_pago_fuera_plazo(self):
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+        self.autenticar(self.buyer_token)
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
 
 
 class AdminOrdenTransporteTests(APITestCase):

@@ -64,6 +64,31 @@ export default function GestorPedidos() {
     }
   };
 
+    // Registra una transferencia recibida después de cancelar el pedido por vencimiento.
+  const handleRegistrarPagoFueraPlazo = async (pedido) => {
+    setEnCurso(pedido.id);
+    setAviso(null);
+
+    try {
+      await clienteAxios.post(
+        `ventas/admin/ordenes/${pedido.id}/pago-fuera-plazo/`
+      );
+
+      setAviso({
+        tipo: 'exito',
+        texto: `Pago fuera de plazo registrado. El pedido #${pedido.id} quedó pendiente de revisión.`,
+      });
+    } catch (error) {
+      setAviso({
+        tipo: 'error',
+        texto: `No se pudo registrar el pago fuera de plazo del pedido #${pedido.id}: ${mensajeDeError(error)}`,
+      });
+    } finally {
+      await cargarPedidos();
+      setEnCurso(null);
+    }
+  };
+
   const handleResolverRevision = async (pedido) => {
     if (!window.confirm(
       `¿Ya resolviste el pedido #${pedido.id}? (por ejemplo, reembolsaste al comprador o conseguiste el producto)`
@@ -237,9 +262,30 @@ export default function GestorPedidos() {
                           </button>
                         </div>
                       </div>
+                                        ) : pedido.estado === 'CANCELADO' &&
+                      pedido.motivo_cancelacion === 'Pago no recibido a tiempo' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRegistrarPagoFueraPlazo(pedido)}
+                        disabled={enCurso === pedido.id}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: 'var(--color-surface)',
+                          color: 'var(--color-primary)',
+                          border: '1px solid var(--color-primary)',
+                          borderRadius: '4px',
+                          cursor: enCurso === pedido.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {enCurso === pedido.id
+                          ? 'Registrando...'
+                          : 'Registrar pago recibido fuera de plazo'}
+                      </button>
                     ) : (
                       <span style={{ color: 'var(--color-muted)' }}>—</span>
                     )}
+
                   </td>
                   <td style={{ padding: '12px' }}>{celdaEnvio(pedido)}</td>
                 </tr>

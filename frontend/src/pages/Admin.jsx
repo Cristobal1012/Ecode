@@ -18,6 +18,7 @@ import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
+import GestorAnalitica from '../components/GestorAnalitica';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -32,7 +33,8 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
-  { id: 'config-promociones', titulo: 'Promociones y Descuentos' }
+  { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
+  { id: 'config-analitica', titulo: 'Analítica y marketing' }
 ];
 
 const TituloSeccion = ({ id }) => (
@@ -319,6 +321,12 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-promociones" />
                   <GestorPromociones />
+                </div>
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-analitica" />
+                  <GestorAnalitica />
                 </div>
 
               </div>

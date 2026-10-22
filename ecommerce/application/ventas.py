@@ -1,4 +1,4 @@
-"""Casos de uso de ventas: validar el carrito, confirmar el pago y cambiar el estado de la orden."""
+﻿"""Casos de uso de ventas: validar el carrito, confirmar el pago y cambiar el estado de la orden."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -350,6 +350,8 @@ def reponer_stock(inventario: InventarioVariantes, items):
 class OrdenNoEncontrada(Exception):
     pass
 
+class PagoFueraPlazoNoPermitido(Exception):
+    """La orden no cumple las condiciones para registrar un pago tardío."""
 
 class PedidoModificado(Exception):
     """Otro proceso cambió el estado de la orden entre la lectura y la escritura."""
@@ -476,3 +478,38 @@ class ResolverRevision:
             raise OrdenNoEncontrada()
         if not self.ordenes.resolver_revision(orden.id):
             raise SinRevisionPendiente()
+
+class RegistrarPagoFueraPlazo:
+    """Registra una transferencia tardía dejando la orden pendiente de revisión."""
+
+    MOTIVO_REVISION = (
+        'Transferencia recibida fuera de plazo: reembolsar o crear un pedido nuevo.'
+    )
+
+    def __init__(self, ordenes: RepositorioOrdenes):
+        self.ordenes = ordenes
+
+    def ejecutar(self, orden_id) -> None:
+        orden = self.ordenes.obtener(orden_id)
+
+        if orden is None:
+            raise OrdenNoEncontrada()
+
+        if (
+            orden.estado != EstadoPedido.CANCELADO
+            or orden.motivo_cancelacion != MOTIVO_PAGO_VENCIDO
+        ):
+            raise PagoFueraPlazoNoPermitido(
+                'Solo se puede registrar un pago tardío en órdenes canceladas por '
+                '"Pago no recibido a tiempo".'
+            )
+
+        if orden.requiere_revision:
+            raise PagoFueraPlazoNoPermitido(
+                'La orden ya tiene una revisión pendiente.'
+            )
+
+        self.ordenes.marcar_revision(
+            orden.id,
+            self.MOTIVO_REVISION,
+        )

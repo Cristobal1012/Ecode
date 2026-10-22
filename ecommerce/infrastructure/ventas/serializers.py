@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 import uuid
 
 from django.conf import settings
@@ -10,7 +10,7 @@ from mongoengine.errors import ValidationError as MongoValidationError
 from ecommerce.infrastructure.catalogo.documents import Producto
 from ecommerce.infrastructure.catalogo.images import ArchivoImagenField
 from .models import Promocion
-
+import re
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
@@ -78,7 +78,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'texto_bienvenida',
             'texto_boton_ingreso',
             'banner_url',
-            'tema_seleccionado', 
+            'tema_seleccionado',
             'tipografia_seleccionada',
             'layout_catalogo',
             'pasarelas_activas',
@@ -205,6 +205,29 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             return normalizar_usuario_instagram(valor)
         except UsuarioInstagramInvalido as error:
             raise serializers.ValidationError(str(error))
+
+
+    def validate_google_analytics_id(self, valor):
+        if not valor:
+            return valor
+
+        if not re.fullmatch(r'G-[A-Za-z0-9]{10}', valor):
+            raise serializers.ValidationError(
+                'Ingresa un ID de Google Analytics válido (ej.: G-XXXXXXXXXX).'
+            )
+
+        return valor
+
+    def validate_meta_pixel_id(self, valor):
+        if not valor:
+            return valor
+
+        if not re.fullmatch(r'[0-9]+', valor):
+            raise serializers.ValidationError(
+                'El ID de Meta Pixel debe contener solo números.'
+            )
+
+        return valor
 
     def update(self, instance, validated_data):
         # Al reemplazar o quitar una imagen se borra el archivo anterior, para no dejar archivos huérfanos
@@ -404,8 +427,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             return obj.email_invitado
         if obj.usuario and obj.usuario.email:
             return obj.usuario.email
-        return None   
-    
+        return None
+
 
     def validate(self, data):
         # RF-04.4: el comprador acepta páginas que debe poder leer (en desarrollo no se exige)
@@ -488,7 +511,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete_data = validated_data.pop('paquete', None)
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
-        
+
         # 1. COTIZACIÓN REAL O ENTREGA DE LA TIENDA (validate ya exige comuna y paquete para un courier)
         if proveedor in ENTREGAS_DE_LA_TIENDA:
             costo_envio = float(self._costo_entrega_propia)
@@ -546,12 +569,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # La orden de transporte se genera con el mismo paquete que se cotizó
         validated_data['paquete'] = (
             {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
-        
+
         # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:
             validated_data['usuario'] = request.user
             validated_data['email_invitado'] = ''
-            
+
         # 3. CREAR LA ORDEN EN BASE DE DATOS
         # DRF no guarda un serializer anidado: los datos de la empresa se asignan después de crear la orden
         datos_empresa = validated_data.pop('datos_empresa', None)
@@ -582,7 +605,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # 4. INTEGRACIÓN CON PASARELAS DE PAGO
         metodo_pago = validated_data.get('metodo_pago')
         url_pago = None
-        
+
         if metodo_pago == 'TRANSBANK':
             if request:
                 host = request.get_host()
@@ -590,16 +613,16 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 return_url = f"{scheme}://{host}/api/ventas/transbank/retorno/"
             else:
                 return_url = "http://localhost:8000/api/ventas/transbank/retorno/"
-                
+
             session_id = str(uuid.uuid4())
-            
+
             respuesta_tbk = TransbankWebpayAdapter.iniciar_transaccion(
                 orden_id=str(orden.id),
                 monto=orden.total_final,
                 return_url=return_url,
                 session_id=session_id
             )
-            
+
             if respuesta_tbk.get('exito'):
                 url_pago = f"{respuesta_tbk['url_pago']}?token_ws={respuesta_tbk['token']}"
                 orden.id_transaccion_pasarela = respuesta_tbk['token']
@@ -660,7 +683,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         # Almacenamos temporalmente la URL para que la vista de Checkout se la pase a React
         orden.url_pago = url_pago
         return orden
-        
+
 class AgregarItemSerializer(serializers.Serializer):
     producto_mongo_id = serializers.CharField(max_length=255)
     variante_sku = serializers.CharField(max_length=255)
@@ -737,14 +760,14 @@ class DireccionEnvioSerializer(serializers.ModelSerializer):
     class Meta:
         model = DireccionEnvio
         fields = [
-            'id', 
-            'calle', 
+            'id',
+            'calle',
             'calle_numero',
             'dpto_casa',
-            'comuna', 
-            'ciudad', 
-            'region', 
-            'codigo_postal', 
+            'comuna',
+            'ciudad',
+            'region',
+            'codigo_postal',
             'es_predeterminado'
         ]
 

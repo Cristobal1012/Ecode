@@ -9,7 +9,8 @@ from ecommerce.application.ventas import (
     OrdenNoEncontrada,
     GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
     RecordarPagosPorVencer, ResolverRevision,
-    ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
+    ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes, MOTIVO_PAGO_VENCIDO,
+    PagoFueraPlazoNoPermitido, RegistrarPagoFueraPlazo
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
@@ -145,10 +146,11 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         self.cambio_concurrente = None
 
     def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL',
-                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0), plazo=timedelta(hours=48)):
+                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0), plazo=timedelta(hours=48),
+                motivo_cancelacion=''):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
-            'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
+            'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': motivo_cancelacion,
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
             'metodo_pago': metodo_pago, 'plazo': plazo_pago(creada, plazo), 'recordatorio_pago': False,
         }
@@ -190,7 +192,8 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
     def obtener(self, orden_id):
         datos = self.ordenes.get(orden_id)
         return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'],
-                                         datos['stock_descontado'], datos['requiere_revision'])
+                                         datos['stock_descontado'], datos['requiere_revision'],
+                                         motivo_cancelacion=datos['motivo_cancelacion'])
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         datos = self.ordenes[orden_id]
@@ -663,6 +666,58 @@ class ResolverRevisionTests(SimpleTestCase):
             self.caso.ejecutar(1)
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(99)
+
+class RegistrarPagoFueraPlazoTests(SimpleTestCase):
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.caso = RegistrarPagoFueraPlazo(self.ordenes)
+
+    def test_registra_pago_tardio_sin_cambiar_estado_ni_stock(self):
+        orden = self.ordenes.agregar(
+            1,
+            'CANCELADO',
+            [],
+            motivo_cancelacion=MOTIVO_PAGO_VENCIDO,
+        )
+
+        self.caso.ejecutar(1)
+
+        self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+        self.assertTrue(orden['requiere_revision'])
+        self.assertEqual(
+            orden['motivo_revision'],
+            RegistrarPagoFueraPlazo.MOTIVO_REVISION,
+        )
+        self.assertFalse(orden['stock_descontado'])
+
+    def test_rechaza_orden_cancelada_por_otro_motivo(self):
+        orden = self.ordenes.agregar(
+            1,
+            'CANCELADO',
+            [],
+            motivo_cancelacion='Cancelado por el administrador',
+        )
+
+        with self.assertRaises(PagoFueraPlazoNoPermitido):
+            self.caso.ejecutar(1)
+
+        self.assertFalse(orden['requiere_revision'])
+        self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+
+    def test_rechaza_orden_que_no_esta_cancelada(self):
+        self.ordenes.agregar(
+            1,
+            'PENDIENTE',
+            [],
+            motivo_cancelacion=MOTIVO_PAGO_VENCIDO,
+        )
+
+        with self.assertRaises(PagoFueraPlazoNoPermitido):
+            self.caso.ejecutar(1)
+
+    def test_rechaza_orden_inexistente(self):
+        with self.assertRaises(OrdenNoEncontrada):
+            self.caso.ejecutar(999)
 
 class CalculoTotalesQATest(TestCase):
 

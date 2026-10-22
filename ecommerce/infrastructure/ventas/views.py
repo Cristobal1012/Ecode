@@ -21,6 +21,7 @@ import json
 import base64
 from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
+from decimal import Decimal
 
 import requests
 from ecommerce.application.logistica import ServicioCotizacion
@@ -29,7 +30,7 @@ from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdmin
 from ecommerce.application.ventas import (
     MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
-    SinRevisionPendiente,
+    SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
 from ecommerce.application.chilexpress import ConfigurarChilexpress
 from ecommerce.application.medios_pago import ConfigurarMedioPago
@@ -243,6 +244,30 @@ class AdminResolverRevisionView(APIView):
             return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
         return Response({'id': pk, 'requiere_revision': False})
 
+class AdminRegistrarPagoFueraPlazoView(APIView):
+    """Registra un pago recibido después de cancelar la orden por vencimiento."""
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pk):
+        try:
+            RegistrarPagoFueraPlazo(DjangoRepositorioOrdenes()).ejecutar(pk)
+        except OrdenNoEncontrada:
+            return Response(
+                {'detail': 'Orden no encontrada.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except PagoFueraPlazoNoPermitido as error:
+            return Response(
+                {'detail': str(error)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response({
+            'id': pk,
+            'estado': 'CANCELADO',
+            'requiere_revision': True,
+            'motivo_revision': RegistrarPagoFueraPlazo.MOTIVO_REVISION,
+        })
 
 class AdminOrdenTransporteView(APIView):
     """RF-02.3: el admin genera o reintenta la orden de transporte de un pedido pagado."""

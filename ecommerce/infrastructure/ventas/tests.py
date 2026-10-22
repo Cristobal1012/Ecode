@@ -1,4 +1,4 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -675,6 +675,62 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(self.resolver().status_code, 403)
         self.orden.refresh_from_db()
         self.assertTrue(self.orden.requiere_revision)
+
+
+    def crear_orden_cancelada(self, motivo):
+        return OrdenCompra.objects.create(
+            email_invitado='prueba@example.test',
+            metodo_pago='TRANSFERENCIA',
+            direccion_envio_snapshot={},
+            subtotal=10000,
+            costo_envio=0,
+            total_final=10000,
+            estado='CANCELADO',
+            motivo_cancelacion=motivo,
+        )
+
+    def test_registrar_pago_fuera_plazo_deja_orden_cancelada_en_revision(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertTrue(orden.requiere_revision)
+        self.assertEqual(
+            orden.motivo_revision,
+            'Transferencia recibida fuera de plazo: reembolsar o crear un pedido nuevo.',
+        )
+
+    def test_no_permite_registrar_pago_si_se_cancelo_por_otro_motivo(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Cancelado por el administrador')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 409)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
+
+    def test_solo_el_admin_puede_registrar_pago_fuera_plazo(self):
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+        self.autenticar(self.buyer_token)
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
 
 
 class AdminOrdenTransporteTests(APITestCase):

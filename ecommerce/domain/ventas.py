@@ -247,7 +247,7 @@ class OrdenRegistrada:
     stock_descontado: bool = False
     requiere_revision: bool = False
     total_final: Decimal = Decimal('0')
-
+    motivo_cancelacion: str = ''
 
 class EventoPedido(StrEnum):
     """RF-04.2: hitos del pedido que se le avisan al comprador."""

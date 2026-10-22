@@ -184,6 +184,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+#ruta fisica donde se guardan los archivos estáticos recopilados por collectstatic. En producción, el servidor web debe servir estos archivos desde STATIC_ROOT.
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Product images use Django's default storage. MEDIA_ROOT is separate from code
 # and static assets; production must serve MEDIA_URL through its media server.

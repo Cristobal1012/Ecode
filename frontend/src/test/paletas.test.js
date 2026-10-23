@@ -73,4 +73,13 @@ describe.each(PALETTES)('Contraste AA del tema $name', ({ colors }) => {
   it.each(combinaciones)('%s', (_, texto, fondo) => {
     expect(contraste(texto, fondo)).toBeGreaterThanOrEqual(4.5);
   });
+
+  it('permite identificar los campos sobre cada fondo sin oscurecer bordes decorativos', () => {
+    aplicarPaleta(PALETTES.find(p => p.colors === colors).id);
+    expect(variable('--color-control-border')).toBe(colors.controlBorder);
+    for (const fondo of [colors.surface, colors.background, colors.secondary]) {
+      expect(contraste(colors.controlBorder, fondo)).toBeGreaterThanOrEqual(3);
+    }
+    expect(colors.controlBorder).not.toBe(colors.border);
+  });
 });

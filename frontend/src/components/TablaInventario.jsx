@@ -99,7 +99,7 @@ export default function TablaInventario({ onEditarProducto }) {
   const selectStyle = {
     padding: '8px 12px',
     borderRadius: '4px',
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--color-control-border)',
     backgroundColor: 'var(--color-surface)',
     color: 'var(--color-text)',
     width: '100%'

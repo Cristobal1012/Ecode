@@ -33,7 +33,7 @@ const estiloCampo = {
   width: '100%',
   maxWidth: '400px',
   borderRadius: '4px',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--color-control-border)',
   fontSize: '1rem'
 };
 

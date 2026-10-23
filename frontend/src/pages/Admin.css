@@ -367,7 +367,7 @@
 .admin-contenido textarea {
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radio);
   background: var(--color-surface);
   color: var(--color-text);

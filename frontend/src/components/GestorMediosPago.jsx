@@ -18,7 +18,7 @@ const ESTILOS_AVISO = {
   exito: { backgroundColor: '#f0fdf4', border: '1px solid #86efac', color: '#166534' }
 };
 
-const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-border)', borderRadius: '4px' };
+const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-control-border)', borderRadius: '4px' };
 const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--color-text)' };
 
 const formularioDe = (medio) => ({ habilitado: medio.habilitado, datos: { ...medio.datos } });

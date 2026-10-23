@@ -14,6 +14,7 @@ export const PALETTES = [
       surface: '#FFFFFF',     // tarjetas y formularios
       text: '#2A2622',
       muted: '#615A52',       // texto secundario
+      controlBorder: '#76716A',
       border: '#E3DCD2',
       footer: '#2A2622'       // fondo del footer (texto claro encima)
     }
@@ -30,6 +31,7 @@ export const PALETTES = [
       surface: '#FFFFFF',
       text: '#1F2A1F',
       muted: '#556052',
+      controlBorder: '#76716A',
       border: '#D9DFD2',
       footer: '#1F2A1F'
     }
@@ -46,6 +48,7 @@ export const PALETTES = [
       surface: '#FFFFFF',
       text: '#1C2530',
       muted: '#535E6A',
+      controlBorder: '#76716A',
       border: '#D5DCE3',
       footer: '#1C2530'
     }
@@ -62,6 +65,7 @@ export const PALETTES = [
       surface: '#FFFFFF',
       text: '#1A1917',
       muted: '#5B5750',
+      controlBorder: '#76716A',
       border: '#DDD9D1',
       footer: '#1A1917'
     }
@@ -86,6 +90,7 @@ export function aplicarPaleta(id) {
     '--color-text': colors.text,
     '--color-muted': colors.muted,
     '--color-border': colors.border,
+    '--color-control-border': colors.controlBorder,
     '--color-footer': colors.footer,
     // Nombres que ya usa Catalogo.css
     '--catalogo-primary': colors.primary,

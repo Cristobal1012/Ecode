@@ -548,7 +548,7 @@ export default function FormularioProducto({
   const inputStyle = {
     width: '100%',
     padding: '10px',
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--color-control-border)',
     borderRadius: '4px',
     marginTop: '5px',
     backgroundColor: 'var(--color-surface)',

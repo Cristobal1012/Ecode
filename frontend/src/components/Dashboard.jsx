@@ -201,7 +201,7 @@ export default function Dashboard() {
             onChange={(e) => setFechaInicio(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid var(--color-border)',
+              border: '1px solid var(--color-control-border)',
               borderRadius: '8px',
               color: 'var(--color-text)',
               backgroundColor: 'var(--color-surface)',
@@ -230,7 +230,7 @@ export default function Dashboard() {
             onChange={(e) => setFechaFin(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid var(--color-border)',
+              border: '1px solid var(--color-control-border)',
               borderRadius: '8px',
               color: 'var(--color-text)',
               backgroundColor: 'var(--color-surface)',

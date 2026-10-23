@@ -7,7 +7,7 @@ const ESTILOS_AVISO = {
   incompleto: { backgroundColor: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e' }
 };
 
-const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-border)', borderRadius: '4px' };
+const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-control-border)', borderRadius: '4px' };
 const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--color-text)' };
 
 // RNF-03: el admin carga las llaves de las APIs de Chilexpress; llegan enmascaradas y, si se devuelven

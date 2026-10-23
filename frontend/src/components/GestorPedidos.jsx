@@ -145,7 +145,7 @@ export default function GestorPedidos() {
         </div>
       )}
 
-      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
+      <div tabIndex={0} role="region" aria-label="Pedidos y operaciones de venta" style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
           <thead style={{ backgroundColor: 'var(--color-secondary)', borderBottom: '2px solid var(--color-border)' }}>
             <tr>

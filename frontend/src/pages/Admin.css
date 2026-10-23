@@ -51,7 +51,8 @@
 }
 
 .config-titulo:focus {
-  outline: none;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 /* En pantallas angostas el índice va arriba del contenido y deja de ser fijo */

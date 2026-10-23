@@ -102,7 +102,7 @@ export default function RecentOrders({ ordenes = [] }) {
           No hay pedidos registrados.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div tabIndex={0} role="region" aria-label="Últimos pedidos" style={{ overflowX: 'auto' }}>
           <table
             style={{
               width: '100%',

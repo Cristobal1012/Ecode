@@ -148,7 +148,7 @@ export default function GestorPromociones() {
       {/* TABLA DE PROMOCIONES ACTIVAS */}
       <div style={{ backgroundColor: 'var(--color-surface)', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
         <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Códigos activos</h4>
-        <div style={{ overflowX: 'auto' }}>
+        <div tabIndex={0} role="region" aria-label="Promociones y acciones" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)', backgroundColor: 'var(--color-secondary)' }}>

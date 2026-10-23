@@ -177,7 +177,7 @@ export default function DetalleProducto() {
     return (
       <div className="detalle-page">
         <Header />
-        <main className="contenedor detalle-estado" id="contenido">
+        <main tabIndex={-1} className="contenedor detalle-estado" id="contenido">
           {cargando ? (
             <p role="status">Cargando producto...</p>
           ) : (
@@ -198,7 +198,7 @@ export default function DetalleProducto() {
   return (
     <div className="detalle-page">
       <Header />
-      <main className="contenedor detalle" id="contenido">
+      <main tabIndex={-1} className="contenedor detalle" id="contenido">
         <nav className="detalle-migas" aria-label="Ruta de navegación">
           <ol className="lista-sin-estilo">
             <li><Link to="/catalogo">Catálogo</Link></li>

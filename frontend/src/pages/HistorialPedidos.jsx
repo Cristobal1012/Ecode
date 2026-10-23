@@ -116,7 +116,7 @@ const HistorialPedidos = () => {
         <>
             <Header />
 
-            <main className="historial-main">
+            <main tabIndex={-1} id="contenido" className="historial-main">
                 <div className="contenedor">
                     <button type="button" className="enlace-flecha historial-volver" onClick={() => navigate('/catalogo')}>
                         <span aria-hidden="true">←</span> Volver al catálogo

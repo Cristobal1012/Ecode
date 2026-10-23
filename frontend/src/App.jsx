@@ -24,6 +24,7 @@ import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
 import Header from './components/header/header';
+import AccesibilidadNavegacion from './components/AccesibilidadNavegacion';
 import useConfiguracionTienda from './hooks/useConfiguracionTienda';
 import { PORTADA_POR_DEFECTO } from './components/landing/textosPorDefecto';
 import './components/auth/auth.css';
@@ -42,7 +43,7 @@ function AuthPage({ googleHabilitado }) {
   return (
     <>
       <Header />
-      <main className="auth-main">
+      <main tabIndex={-1} id="contenido" className="auth-main">
         <div className="auth-imagen" aria-hidden="true" style={{ backgroundImage: `url("${portada}")` }}>
           {configuracion?.nombre_tienda && <span className="auth-imagen-nombre">{configuracion.nombre_tienda}</span>}
         </div>
@@ -111,6 +112,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <AccesibilidadNavegacion />
       <TrackingScripts
         googleAnalyticsId={configuracion?.google_analytics_id || ''}
         metaPixelId={configuracion?.meta_pixel_id || ''}
@@ -123,7 +125,7 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
-            <Route path="/variantes" element={<VariantSelector />} />
+            <Route path="/variantes" element={<main id="contenido" tabIndex={-1} className="contenedor"><h1>Selección de variantes</h1><VariantSelector /></main>} />
             <Route path="/catalogo" element={<Catalogo />} />
             <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
             <Route path="/mis-direcciones" element={<MisDirecciones />} />

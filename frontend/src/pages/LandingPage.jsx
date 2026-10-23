@@ -81,7 +81,7 @@ function LandingPage() {
   return (
     <>
       <Header vistaPrevia={edicion.editando ? { nombre_tienda: vista.nombre_tienda, logo: vista.logo } : undefined} />
-      <main id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
+      <main tabIndex={-1} id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
         {configuracion ? (
           <>
             {edicion.editando && (

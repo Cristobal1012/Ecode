@@ -31,7 +31,7 @@ export default function ProtectedRoute({ allowedRoles }) {
     }, []);
 
     if (cargando) {
-        return <p>Verificando sesion...</p>;
+        return <main id="contenido" tabIndex={-1}><p role="status">Verificando sesión...</p></main>;
     }
 
     if (!autenticado) {

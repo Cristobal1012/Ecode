@@ -33,7 +33,7 @@ export default function PaginaLegal() {
     <>
       <Header />
 
-      <main className="legal-main">
+      <main tabIndex={-1} id="contenido" className="legal-main">
         <div className="legal">
           {cargando ? (
             <p className="legal-estado" role="status">Cargando...</p>

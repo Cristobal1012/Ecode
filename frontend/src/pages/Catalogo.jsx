@@ -215,7 +215,7 @@ export default function Catalogo() {
   return (
     <div className="catalogo-page">
       <Header />
-      <main className="catalogo" id="contenido">
+      <main tabIndex={-1} className="catalogo" id="contenido">
         <section className="catalogo-encabezado" aria-labelledby="catalogo-titulo">
           <div className="contenedor">
             <span className="antetitulo">Tienda</span>

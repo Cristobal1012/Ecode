@@ -320,7 +320,7 @@ export default function Admin() {
         navigate={navigate}
       />
 
-      <main className="admin-principal">
+      <main tabIndex={-1} id="contenido" className="admin-principal">
         <AdminTopbar />
         <div className="admin-contenido">
           {renderizarContenido()}

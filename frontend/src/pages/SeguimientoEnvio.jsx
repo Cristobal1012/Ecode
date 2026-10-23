@@ -72,7 +72,7 @@ function SeguimientoContenido() {
         : {};
 
     return (
-        <main className="seguimiento-main">
+        <main tabIndex={-1} id="contenido" className="seguimiento-main">
             <div className="seguimiento">
                 <span className="antetitulo">Tu pedido</span>
                 <h1 className="seguimiento-titulo">Seguimiento de pedido</h1>

@@ -37,10 +37,9 @@ export function recargarConfiguracion() {
   return cargar();
 }
 
-// Nombre de la pestaña y favicon del negocio (RF-01.2)
+// Favicon del negocio (RF-01.2); cada vista conserva su título descriptivo.
 function aplicarIdentidad(config) {
   if (!config) return;
-  if (config.nombre_tienda) document.title = config.nombre_tienda;
   if (config.favicon) {
     let icono = document.querySelector('link[rel="icon"]');
     if (!icono) {

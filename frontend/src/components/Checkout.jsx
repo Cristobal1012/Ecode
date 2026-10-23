@@ -46,7 +46,7 @@ export default function Checkout() {
     return (
         <>
             <Header />
-            <main className="checkout-main">
+            <main tabIndex={-1} id="contenido" className="checkout-main">
                 <CheckoutContenido />
             </main>
         </>

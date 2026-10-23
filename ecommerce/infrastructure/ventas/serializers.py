@@ -20,6 +20,7 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
@@ -32,6 +33,7 @@ from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalog
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
+from .models import FotoPublicacion, Publicacion
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
@@ -96,6 +98,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'instrucciones_entrega_coordinada',
             'chilexpress_activo',
             'cotizaciones_activas',
+            # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
+            'blog_activo',
+            'blog_nombre',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -161,6 +166,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     # Se acepta '@usuario' o el enlace al perfil; se guarda solo el usuario
     instagram_usuario = serializers.CharField(max_length=200, required=False, allow_blank=True)
     costo_entrega_coordinada = serializers.IntegerField(min_value=0, max_value=1_000_000, required=False)
+    # Se ordenan los espacios antes de medirlo; vacío vuelve a "Nosotros" (domain/blog.py)
+    blog_nombre = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
     class Meta:
         model = ConfiguracionGlobal
@@ -193,6 +200,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'costo_entrega_coordinada',
             'instrucciones_entrega_coordinada',
             'cotizaciones_activas',
+            'blog_activo',
+            'blog_nombre',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -204,6 +213,12 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         try:
             return normalizar_usuario_instagram(valor)
         except UsuarioInstagramInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_blog_nombre(self, valor):
+        try:
+            return normalizar_nombre_blog(valor)
+        except NombreBlogInvalido as error:
             raise serializers.ValidationError(str(error))
 
 
@@ -804,6 +819,58 @@ class PaginaLegalAdminSerializer(serializers.ModelSerializer):
         if publicada and not tiene_texto(contenido):
             raise serializers.ValidationError({'contenido': 'No se puede publicar una página sin contenido.'})
         return data
+
+
+class PublicacionEntradaSerializer(serializers.Serializer):
+    """Formulario del panel para una publicación del blog. Las reglas (título, estado...) están en domain/blog.py."""
+
+    titulo = serializers.CharField(required=False, allow_blank=True, default='', max_length=1000)
+    resumen = serializers.CharField(required=False, allow_blank=True, default='', max_length=1000)
+    contenido = serializers.CharField(required=False, allow_blank=True, default='', max_length=100_000,
+                                      trim_whitespace=False)
+    estado = serializers.CharField(required=False, allow_blank=True, default='')
+    # Sin portada ni quitar_portada, la portada queda como estaba
+    portada = ArchivoImagenField(required=False)
+    quitar_portada = serializers.BooleanField(required=False, default=False)
+
+    def validate_contenido(self, value):
+        # Se muestra tal cual en la tienda: solo queda el formato del editor (XSS)
+        return limpiar_html(value)
+
+
+class FotosPublicacionSerializer(serializers.Serializer):
+    fotos = serializers.ListField(child=ArchivoImagenField(), allow_empty=False, max_length=MAX_FOTOS_PUBLICACION)
+
+
+class FotoPublicacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FotoPublicacion
+        fields = ['id', 'imagen']
+
+
+class PublicacionResumenSerializer(serializers.ModelSerializer):
+    """Tarjeta de la lista pública del blog: sin el texto ni la galería."""
+
+    class Meta:
+        model = Publicacion
+        fields = ['titulo', 'slug', 'resumen', 'portada', 'fecha_publicacion']
+
+
+class PublicacionDetalleSerializer(serializers.ModelSerializer):
+    fotos = FotoPublicacionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Publicacion
+        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'fecha_publicacion']
+
+
+class PublicacionAdminSerializer(serializers.ModelSerializer):
+    fotos = FotoPublicacionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Publicacion
+        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'estado', 'fecha_publicacion',
+                  'actualizada']
 
 class MedioPagoAdminSerializer(serializers.Serializer):
     """Entrada del panel: las credenciales pueden volver enmascaradas (se conservan) o vacías (se borran)."""

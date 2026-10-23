@@ -7,7 +7,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
-from django.db.models import Q, Sum, Count
+from django.db.models import F, Q, Sum, Count
 from django.db.models.functions import TruncDate
 from .models import Promocion
 from .serializers import PromocionSerializer
@@ -23,6 +23,7 @@ import base64
 from django.http import HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 from decimal import Decimal
+from math import ceil
 
 import requests
 from ecommerce.application.logistica import ServicioCotizacion
@@ -33,6 +34,10 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
+from ecommerce.application.blog import (
+    SIN_CAMBIO, AgregarFotos, BlogDesactivado, EliminarPublicacion, FotoNoEncontrada, GuardarPublicacion,
+    PublicacionNoEncontrada, QuitarFoto, VerBlog, VerPublicacion,
+)
 from ecommerce.application.chilexpress import ConfigurarChilexpress
 from ecommerce.application.cotizaciones import (
     CambiarEstadoCotizacion, CotizacionNoEncontrada, FormularioCotizacionDesactivado, SolicitarCotizacion,
@@ -41,12 +46,14 @@ from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
+from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
+from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
 from .models import (
     ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal,
-    Promocion,
+    Promocion, Publicacion,
 )
 from .permissions import CanCheckout
 from .payment_services import (
@@ -70,6 +77,11 @@ from .serializers import (
     PaginaLegalSerializer,
     PaginaLegalDetalleSerializer,
     PaginaLegalAdminSerializer,
+    FotosPublicacionSerializer,
+    PublicacionAdminSerializer,
+    PublicacionDetalleSerializer,
+    PublicacionEntradaSerializer,
+    PublicacionResumenSerializer,
     MedioPagoAdminSerializer,
     CredencialesChilexpressSerializer,
     chilexpress_para_panel,
@@ -81,7 +93,9 @@ from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPed
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
+from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
+from .repositorio_blog import DjangoRepositorioPublicaciones
 from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
@@ -1177,6 +1191,151 @@ class AdminPaginaLegalView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(tipo_pagina=tipo)
         return Response(serializer.data, status=status.HTTP_200_OK if pagina else status.HTTP_201_CREATED)
+
+
+def repositorio_publicaciones():
+    return DjangoRepositorioPublicaciones()
+
+
+def blog_activo():
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    return bool(config and config.blog_activo)
+
+
+def publicacion_para_panel(publicacion_id, request):
+    publicacion = Publicacion.objects.prefetch_related('fotos').get(id=publicacion_id)
+    return PublicacionAdminSerializer(publicacion, context={'request': request}).data
+
+
+class BlogPublicoView(APIView):
+    """GET /api/ventas/blog/?pagina=N: las publicaciones del blog, si el admin lo activó (RF-01.1)."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        try:
+            pagina = max(int(request.query_params.get('pagina', 1)), 1)
+        except ValueError:
+            pagina = 1
+        caso = VerBlog(repositorio_publicaciones())
+        try:
+            resultado = caso.ejecutar(blog_activo(), pagina)
+        except BlogDesactivado as error:
+            raise NotFound(str(error))
+        publicaciones = Publicacion.objects.in_bulk(resultado.ids)
+        return Response({
+            'resultados': PublicacionResumenSerializer(
+                [publicaciones[i] for i in resultado.ids if i in publicaciones], many=True,
+                context={'request': request}).data,
+            'total': resultado.total,
+            'pagina': pagina,
+            'paginas': ceil(resultado.total / caso.por_pagina),
+        })
+
+
+class BlogPublicacionView(APIView):
+    """GET /api/ventas/blog/<slug>/: un borrador responde igual que una publicación inexistente."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        try:
+            publicacion_id = VerPublicacion(repositorio_publicaciones()).ejecutar(slug, blog_activo())
+        except (BlogDesactivado, PublicacionNoEncontrada) as error:
+            raise NotFound(str(error))
+        publicacion = Publicacion.objects.prefetch_related('fotos').get(id=publicacion_id)
+        return Response(PublicacionDetalleSerializer(publicacion, context={'request': request}).data)
+
+
+class SubidaFotosBlogMixin:
+    """Corta subidas de demasiados archivos o muy pesados antes de que Django los escriba (como el catálogo)."""
+
+    def initialize_request(self, request, *args, **kwargs):
+        request.upload_handlers.insert(0, CatalogoImageUploadHandler(request))
+        return super().initialize_request(request, *args, **kwargs)
+
+
+def guardar_publicacion(request, publicacion_id, estado_http):
+    """Crea (id None) o edita una publicación con lo que envió el panel."""
+    serializer = PublicacionEntradaSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    datos = dict(serializer.validated_data)
+    portada = datos.pop('portada', None)
+    if portada is None:
+        portada = None if datos.pop('quitar_portada') else SIN_CAMBIO
+    try:
+        publicacion_id = GuardarPublicacion(repositorio_publicaciones()).ejecutar(
+            publicacion_id, datos, contenido_tiene_texto=tiene_texto(datos['contenido']), ahora=timezone.now(),
+            portada=portada)
+    except PublicacionNoEncontrada as error:
+        raise NotFound(str(error))
+    except PublicacionInvalida as error:
+        return Response(error.errores, status=status.HTTP_400_BAD_REQUEST)
+    return Response(publicacion_para_panel(publicacion_id, request), status=estado_http)
+
+
+class AdminBlogView(SubidaFotosBlogMixin, APIView):
+    """GET todas las publicaciones (los borradores primero) y POST para crear una. Funciona con el blog apagado."""
+    permission_classes = [IsAdministrador]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get(self, request):
+        publicaciones = Publicacion.objects.prefetch_related('fotos').order_by(
+            F('fecha_publicacion').desc(nulls_first=True), '-id')
+        return Response(PublicacionAdminSerializer(publicaciones, many=True, context={'request': request}).data)
+
+    def post(self, request):
+        return guardar_publicacion(request, None, status.HTTP_201_CREATED)
+
+
+class AdminPublicacionView(SubidaFotosBlogMixin, APIView):
+    """GET, PUT (el formulario completo) y DELETE de una publicación."""
+    permission_classes = [IsAdministrador]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get(self, request, pk):
+        if not Publicacion.objects.filter(id=pk).exists():
+            raise NotFound('Publicación no encontrada.')
+        return Response(publicacion_para_panel(pk, request))
+
+    def put(self, request, pk):
+        return guardar_publicacion(request, pk, status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        try:
+            EliminarPublicacion(repositorio_publicaciones()).ejecutar(pk)
+        except PublicacionNoEncontrada as error:
+            raise NotFound(str(error))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminFotosPublicacionView(SubidaFotosBlogMixin, APIView):
+    """POST multipart con el campo `fotos` repetido por archivo: se agregan al final de la galería."""
+    permission_classes = [IsAdministrador]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, pk):
+        serializer = FotosPublicacionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            AgregarFotos(repositorio_publicaciones()).ejecutar(pk, serializer.validated_data['fotos'])
+        except PublicacionNoEncontrada as error:
+            raise NotFound(str(error))
+        except LimiteFotosExcedido as error:
+            return Response({'fotos': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(publicacion_para_panel(pk, request), status=status.HTTP_201_CREATED)
+
+
+class AdminFotoPublicacionView(APIView):
+    """DELETE de una foto de la galería; responde la publicación actualizada."""
+    permission_classes = [IsAdministrador]
+
+    def delete(self, request, pk, foto_id):
+        try:
+            QuitarFoto(repositorio_publicaciones()).ejecutar(pk, foto_id)
+        except FotoNoEncontrada as error:
+            raise NotFound(str(error))
+        return Response(publicacion_para_panel(pk, request))
 
 def codigo_medio_pago(codigo):
     """Código válido de medio de pago (sin distinguir mayúsculas), o None."""

@@ -2,6 +2,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.conf import settings
 
+from ecommerce.domain.blog import (
+    LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
+)
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 
@@ -41,6 +44,9 @@ class ConfiguracionGlobal(models.Model):
     instrucciones_entrega_coordinada = models.CharField(max_length=300, blank=True, default='')
     # Formulario de cotización y encargos (personalizados, a pedido o en cantidad): el admin lo activa
     cotizaciones_activas = models.BooleanField(default=False)
+    # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
+    blog_activo = models.BooleanField(default=False)
+    blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -305,6 +311,46 @@ class PaginaLegal(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_pagina_display()} - {self.titulo}"
+
+
+class Publicacion(models.Model):
+    """Entrada del blog o portafolio de la tienda (domain/blog.py, application/blog.py)."""
+
+    ESTADOS = [(EstadoPublicacion.BORRADOR.value, 'Borrador'), (EstadoPublicacion.PUBLICADA.value, 'Publicada')]
+
+    titulo = models.CharField(max_length=LARGO_TITULO)
+    # Con espacio para el sufijo de los títulos repetidos (-2, -3...)
+    slug = models.SlugField(max_length=LARGO_SLUG + 10, unique=True)
+    resumen = models.CharField(max_length=LARGO_RESUMEN, blank=True, default='')
+    # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
+    contenido = models.TextField(blank=True, default='')
+    portada = models.ImageField(upload_to='blog/portadas/', blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoPublicacion.BORRADOR.value)
+    # Se fija la primera vez que se publica y ordena el blog; None si nunca salió de borrador
+    fecha_publicacion = models.DateTimeField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_publicacion', '-id']
+        indexes = [models.Index(fields=['estado', '-fecha_publicacion'], name='publicacion_estado_fecha')]
+
+    def __str__(self):
+        return self.titulo
+
+
+class FotoPublicacion(models.Model):
+    """Foto de la galería de una publicación (hasta MAX_FOTOS_PUBLICACION)."""
+
+    publicacion = models.ForeignKey(Publicacion, on_delete=models.CASCADE, related_name='fotos')
+    imagen = models.ImageField(upload_to='blog/fotos/')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f'Foto {self.orden} de {self.publicacion}'
 
 class Carrito(models.Model):
     # Relación 1 a 1: Cada usuario tiene exactamente un carrito

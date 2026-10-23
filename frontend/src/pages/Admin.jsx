@@ -18,6 +18,7 @@ import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
+import GestorBlog from '../components/GestorBlog';
 import GestorAnalitica from '../components/GestorAnalitica';
 import './Admin.css';
 
@@ -33,6 +34,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
+  { id: 'config-blog', titulo: 'Blog o Portafolio' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   { id: 'config-analitica', titulo: 'Analítica y marketing' }
 ];
@@ -314,6 +316,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-cotizaciones" />
                   <GestorFormularioCotizacion />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-blog" />
+                  <GestorBlog />
                 </div>
 
                 <hr className="admin-separador" />

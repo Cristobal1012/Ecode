@@ -412,7 +412,13 @@
   padding: 36px;
   background: var(--color-surface);
   text-align: center;
+  border: 0;
+  color: var(--color-text);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
+
+.checkout-modal::backdrop { background: rgb(0 0 0 / 60%); }
 
 .checkout-modal p {
   margin-bottom: 24px;

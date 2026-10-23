@@ -134,7 +134,11 @@
   overflow-y: auto;
   padding: clamp(24px, 4vw, 36px);
   background: var(--color-surface);
+  border: 0;
+  color: var(--color-text);
 }
+
+.historial-dialogo::backdrop { background: rgb(0 0 0 / 45%); }
 
 .historial-dialogo h2 {
   font-size: 1.75rem;

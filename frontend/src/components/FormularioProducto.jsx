@@ -604,6 +604,7 @@ export default function FormularioProducto({
 
         <button
           type="button"
+          aria-label="Cerrar formulario de producto"
           onClick={alCancelar}
           style={{
             background: 'transparent',
@@ -623,6 +624,7 @@ export default function FormularioProducto({
 
       {error && (
         <p
+          role="alert"
           style={{
             color: '#b91c1c',
             backgroundColor: '#fee2e2',
@@ -989,6 +991,7 @@ export default function FormularioProducto({
 
               <button
                 type="button"
+                aria-label={`Borrar atributo ${index + 1}`}
                 onClick={() =>
                   eliminarAtributoGlobal(index)
                 }
@@ -1078,6 +1081,7 @@ export default function FormularioProducto({
 
               <button
                 type="button"
+                aria-label={`Eliminar Variante ${varIndex + 1}`}
                 onClick={() =>
                   eliminarVariante(
                     varIndex
@@ -1500,6 +1504,7 @@ export default function FormularioProducto({
 
                     <button
                       type="button"
+                      aria-label={`Eliminar atributo ${attrIndex + 1} de la variante ${varIndex + 1}`}
                       onClick={() =>
                         eliminarAtributoVariante(
                           varIndex,

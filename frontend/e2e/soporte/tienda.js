@@ -30,6 +30,8 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
     llamadas.push({ metodo: peticion.method(), ruta });
     const respuestas = {
       'configuracion/': configuracion,
+      'configuracion/negocio/': configuracion,
+      'ventas/dashboard/metricas/': { metricas: {}, historico: [], ultimas_ordenes: [] },
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
       'ventas/checkout/reglas/': { modo_autenticacion: 'INVITADO' },
       'ventas/logistica/comunas/': { comunas: ['Santiago'] },

@@ -105,7 +105,7 @@ test('administrador edita precio y contacto; catálogo y pie reciben los cambios
     await page.getByRole('button', { name: 'Inventario', exact: true }).click();
     await expect(page.getByText('Mostrando 1140 de 1140 producto(s)', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Filtrar por Categoría').locator('option')).toHaveCount(13);
-    await page.getByRole('row').filter({ hasText: 'Producto QA149 0095' }).getByRole('button', { name: 'Editar', exact: true }).click();
+    await page.getByRole('button', { name: 'Editar Producto QA149 0095', exact: true }).click();
     await expect(page.getByLabel('Categoría', { exact: true }).locator('option')).toHaveCount(13);
     await page.getByLabel('Precio', { exact: true }).fill('20000');
     await page.getByLabel('Precio Oferta', { exact: true }).fill('');

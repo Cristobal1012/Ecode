@@ -18,6 +18,12 @@ const ICONOS = {
       <line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="13" x2="13" y2="13" />
     </>
   ),
+  blog: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </>
+  ),
   configuracion: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -37,6 +43,7 @@ const VISTAS = [
   { id: 'inventario', nombre: 'Inventario' },
   { id: 'ventas', nombre: 'Ventas' },
   { id: 'cotizaciones', nombre: 'Cotizaciones' },
+  { id: 'blog', nombre: 'Blog' },
   { id: 'configuracion', nombre: 'Configuración' },
   { id: 'paginas', nombre: 'Páginas legales' }
 ];

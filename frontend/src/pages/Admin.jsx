@@ -19,6 +19,7 @@ import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
 import GestorBlog from '../components/GestorBlog';
+import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import './Admin.css';
 
@@ -180,6 +181,8 @@ export default function Admin() {
             <GestorCotizaciones />
           </div>
         );
+      case 'blog':
+        return <GestorPublicaciones />;
       case 'configuracion':
         return (
           <div>

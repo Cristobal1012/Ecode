@@ -624,3 +624,136 @@
     margin-bottom: 6px;
   }
 }
+
+/* ---------- Blog: lista de publicaciones y formulario ---------- */
+
+.blog-admin-apagado {
+  background: var(--color-secondary);
+  color: var(--color-text);
+}
+
+.blog-admin-lista {
+  display: grid;
+  gap: 12px;
+}
+
+.blog-admin-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--color-border);
+}
+
+.blog-admin-item-texto {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.blog-admin-item-titulo {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.blog-admin-estado {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--color-secondary);
+  color: var(--color-text);
+}
+
+.blog-admin-estado--publicada {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.publicacion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.publicacion-acciones .boton,
+.blog-admin-item .boton {
+  padding: 0.7rem 1.25rem;
+}
+
+/* El editor de texto necesita más ancho que los formularios cortos del panel */
+.publicacion-formulario {
+  max-width: 860px;
+}
+
+/* Rótulo de la portada y del editor, igual que los <label> de .admin-campo */
+.publicacion-etiqueta {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Con .admin-contenido para ganarle a ".admin-contenido img { max-width: 100% }" */
+.admin-contenido .publicacion-portada {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--color-accent);
+}
+
+.publicacion-editor .ql-toolbar,
+.publicacion-editor .ql-container {
+  border-color: var(--color-border);
+}
+
+/* Quill trae height: 100%, que aquí se desborda sobre los botones: el editor crece con el texto */
+.publicacion-editor .ql-container {
+  height: auto;
+  font-family: var(--fuente-texto);
+  font-size: 1rem;
+}
+
+.publicacion-editor .ql-editor {
+  height: auto;
+  min-height: 260px;
+}
+
+/* "Elegir portada" es el <label> del input de archivo: se ve como botón, no como rótulo de campo */
+.publicacion-formulario .admin-campo label.boton {
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  color: var(--color-text);
+}
+
+.publicacion-fotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.publicacion-foto {
+  display: grid;
+  gap: 8px;
+}
+
+.publicacion-foto img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--color-accent);
+}
+
+.publicacion-foto .boton {
+  padding: 0.55rem 0.75rem;
+}

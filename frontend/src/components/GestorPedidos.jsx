@@ -78,6 +78,9 @@ export default function GestorPedidos() {
       // Las transiciones disponibles dependen del nuevo estado
       await cargarPedidos();
       setEnCurso(null);
+      setTimeout(() => {
+        setAviso(null);
+      }, 5000);
     }
   };
 
@@ -175,6 +178,26 @@ export default function GestorPedidos() {
   };
 
   if (cargando) return <div style={{ padding: '20px' }}>Cargando panel de pedidos...</div>;
+
+  const obtenerMensajeVacio = () => {
+  if (filtroRevision) return 'No hay pedidos que requieran revisión.';
+
+  // Verifica que el filtro no esté en su valor por defecto (ej. '' o 'TODOS')
+  if (filtroEstado && filtroEstado !== 'Todos' && filtroEstado !== '') {
+    const textosEstado = {
+      'PENDIENTE': 'pendientes',
+      'PAGADO': 'pagados',
+      'EN_PREPARACION': 'en preparación',
+      'EN_RUTA': 'en ruta',
+      'ENTREGADO': 'entregados',
+      'CANCELADO': 'cancelados'
+    };
+    const estadoFormateado = textosEstado[filtroEstado] || filtroEstado.toLowerCase();
+    return `No hay pedidos ${estadoFormateado} en este momento.`;
+  }
+
+  return 'No hay pedidos registrados en la tienda.';
+};
 
   return (
     <div>
@@ -317,7 +340,7 @@ export default function GestorPedidos() {
             {pedidos.length === 0 && (
               <tr>
                 <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-muted)' }}>
-                  No hay pedidos registrados en la tienda.
+                  {obtenerMensajeVacio()}
                 </td>
               </tr>
             )}

@@ -15,6 +15,27 @@ pip install -r requirements.txt   # ej. django-anymail (correo) y argon2-cffi (s
 python manage.py migrate
 ```
 
+## Archivos subidos por la tienda
+
+Las imágenes que sube el emprendedor desde el panel se guardan en `MEDIA_ROOT` (por defecto `<proyecto>/media`) y
+se publican en `MEDIA_URL` (por defecto `/media/`):
+
+| Carpeta | Qué guarda |
+|---|---|
+| `negocio/` | Logo, favicon, portada y fotos de la página de inicio (Nosotros e Instagram) |
+| `catalogo/productos/` | Fotos de los productos |
+| `blog/portadas/` y `blog/fotos/` | Portada y galería de cada publicación del blog (si el emprendedor lo activa) |
+
+- **La carpeta tiene que sobrevivir a cada versión nueva.** En un VPS o con Docker, monta un disco o volumen
+  persistente en `MEDIA_ROOT`. En una plataforma sin disco persistente, las fotos se pierden al reiniciar.
+- **Con `DEBUG=False`, Django no sirve estos archivos.** El servidor web (Nginx, Caddy u otro) tiene que publicar
+  la carpeta `MEDIA_ROOT` en la ruta `MEDIA_URL`.
+- **Respaldos:** respalda esta carpeta junto con PostgreSQL, porque los registros de la base apuntan a estos
+  archivos.
+- **Límites de subida:** las variables `CATALOGO_IMAGEN_*` de `.env.example` valen para todas las imágenes, también
+  las del blog (por defecto, 5 MB por foto y 10 fotos por subida). Además, cada publicación del blog admite hasta
+  10 fotos en su galería; ese tope es fijo.
+
 ## Tareas programadas
 
 ### Plazo de pago de las transferencias (cada hora)

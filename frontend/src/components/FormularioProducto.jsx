@@ -1,5 +1,6 @@
 import { useId, useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 
 const crearVarianteVacia = () => ({
@@ -569,12 +570,12 @@ export default function FormularioProducto({
   // ============================================================
 
   return (
-    <form
+    <form className="formulario-producto"
       onSubmit={handleSubmit}
       style={{
         maxWidth: '900px',
         backgroundColor: 'var(--color-secondary)',
-        padding: '25px',
+        padding: 'clamp(12px, 3vw, 25px)',
         borderRadius: '8px'
       }}
     >
@@ -651,10 +652,9 @@ export default function FormularioProducto({
         Datos Generales
       </h4>
 
-      <div
+      <div className="producto-campos"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
           gap: '20px',
           marginBottom: '20px'
         }}
@@ -933,6 +933,7 @@ export default function FormularioProducto({
 
           <button
             type="button"
+            aria-label="Agregar atributo global"
             onClick={agregarAtributoGlobal}
             style={{
               padding: '5px 10px',
@@ -1101,11 +1102,9 @@ export default function FormularioProducto({
 
             {/* SKU / PRECIO / STOCK */}
 
-            <div
+            <div className="producto-campos"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 
-                '1fr 1fr 1fr 1fr',
                 gap: '15px',
                 marginBottom: '15px'
               }}
@@ -1191,7 +1190,7 @@ export default function FormularioProducto({
                       e.target.value
                     )
                   }
-                  style={{...inputStyle, border: '1px solid #ffcccc'}}
+                  style={inputStyle}
                   min="0"
                   step="0.01"
                 />
@@ -1231,11 +1230,9 @@ export default function FormularioProducto({
                 DIMENSIONES LOGÍSTICAS
             =================================================== */}
 
-            <div
+            <div className="producto-campos"
               style={{
                 display: 'grid',
-                gridTemplateColumns:
-                  'repeat(4, 1fr)',
                 gap: '15px',
                 marginBottom: '15px',
                 padding: '10px',

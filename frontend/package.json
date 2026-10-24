@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:qa": "playwright test --config playwright.scrum149.config.js"
+    "test:e2e:qa": "playwright test --config playwright.scrum149.config.js",
+    "test:e2e:a11y:qa": "playwright test --config playwright.scrum149.config.js accesibilidad-real.spec.js"
   },
   "dependencies": {
     "@fontsource-variable/cormorant-garamond": "^5.3.0",

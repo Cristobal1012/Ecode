@@ -29,6 +29,25 @@ for (const tema of [1, 2, 3, 4]) {
       return (Math.max(borde, fondo) + 0.05) / (Math.min(borde, fondo) + 0.05);
     });
     expect(contraste).toBeGreaterThanOrEqual(3);
+    const entrar = page.getByRole('button', { name: 'Entrar', exact: true });
+    await entrar.hover();
+    // La opacidad del hover afecta también al texto: componer ambos sobre el fondo real.
+    const contrasteHover = await entrar.evaluate(boton => {
+      const rgb = color => color.match(/[\d.]+/g).slice(0, 3).map(Number);
+      const luminancia = canales => canales.map(valor => valor / 255)
+        .map(valor => valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4)
+        .reduce((total, valor, indice) => total + valor * [0.2126, 0.7152, 0.0722][indice], 0);
+      let padre = boton.parentElement;
+      while (getComputedStyle(padre).backgroundColor === 'rgba(0, 0, 0, 0)') padre = padre.parentElement;
+      const fondo = rgb(getComputedStyle(padre).backgroundColor);
+      const estilo = getComputedStyle(boton);
+      const opacidad = Number(estilo.opacity);
+      const componer = color => rgb(color).map((valor, indice) => valor * opacidad + fondo[indice] * (1 - opacidad));
+      const texto = luminancia(componer(estilo.color));
+      const superficie = luminancia(componer(estilo.backgroundColor));
+      return (Math.max(texto, superficie) + 0.05) / (Math.min(texto, superficie) + 0.05);
+    });
+    expect(contrasteHover).toBeGreaterThanOrEqual(4.5);
     const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(resultado.violations).toEqual([]);
     expect(inesperadas).toEqual([]);

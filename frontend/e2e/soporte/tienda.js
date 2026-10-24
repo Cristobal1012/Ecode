@@ -15,6 +15,7 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
     texto_bienvenida: 'Productos de prueba', texto_boton_ingreso: 'Ver catálogo',
     retiro_en_local_activo: true, pasarelas_activas: ['MERCADO_PAGO', 'TRANSFERENCIA'],
     calle_origen: 'Calle de prueba', numero_origen: '148', comuna_origen: 'Santiago',
+    banner_url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22%3E%3Crect width=%2210%22 height=%2210%22 fill=%22%232a2622%22/%3E%3C/svg%3E',
   };
   await page.addInitScript(({ sesion, producto }) => {
     localStorage.setItem('ecode_cookie_consent', 'rejected');
@@ -35,7 +36,7 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'ventas/admin/ordenes/': [],
       'ventas/admin/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos QA', contenido: '<p>Texto legal QA.</p>', publicada: true }],
       'ventas/admin/medios-pago/': [],
-      'ventas/admin/chilexpress/': { campos: [], datos: {} },
+      'ventas/admin/chilexpress/': { campos: [], datos: {}, faltantes: [], configurada: false },
       'ventas/promociones/': [],
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
       'ventas/checkout/reglas/': { modo_autenticacion: 'INVITADO' },

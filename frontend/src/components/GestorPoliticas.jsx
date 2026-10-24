@@ -183,7 +183,7 @@ export default function GestorPoliticas() {
         />
       </div>
 
-      <div style={{ marginBottom: '20px', height: '350px' }}>
+      <div className="editor-legal" style={{ marginBottom: '20px' }}>
         <span id="pagina-legal-contenido" style={estiloEtiqueta}>Contenido:</span>
         <ReactQuill
           ref={prepararEditor}
@@ -196,11 +196,10 @@ export default function GestorPoliticas() {
             editar('contenido', valor);
             if (origen === 'user') setModificado(true);
           }}
-          style={{ height: '280px' }}
         />
       </div>
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '60px', cursor: 'pointer', color: 'var(--color-text)' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px', cursor: 'pointer', color: 'var(--color-text)' }}>
         <input
           type="checkbox"
           checked={formulario.publicada}

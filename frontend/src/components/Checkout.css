@@ -388,6 +388,9 @@
 }
 
 .checkout-pagar {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   width: 100%;
   padding-top: 1.05rem;
   padding-bottom: 1.05rem;

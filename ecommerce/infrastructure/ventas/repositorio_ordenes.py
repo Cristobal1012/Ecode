@@ -26,6 +26,7 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
         )
         return OrdenRegistrada(orden.id, EstadoPedido(orden.estado), items, orden.stock_descontado,
                                orden.requiere_revision, Decimal(str(round(orden.total_final))),
+                               motivo_cancelacion=orden.motivo_cancelacion,
                                )
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
@@ -79,12 +80,16 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             numero_ot=orden.numero_seguimiento_tracking or '',
         )
 
-    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
-        ordenes = OrdenCompra.objects.filter(
-            estado=EstadoPedido.PENDIENTE.value, metodo_pago=metodo_pago, fecha_creacion__lt=creadas_antes_de)
-        if sin_recordatorio:
-            ordenes = ordenes.filter(recordatorio_pago_enviado=False)
+    @staticmethod
+    def _pendientes(metodo_pago, **filtros):
+        ordenes = OrdenCompra.objects.filter(estado=EstadoPedido.PENDIENTE.value, metodo_pago=metodo_pago, **filtros)
         return list(ordenes.order_by('id').values_list('id', flat=True))
+
+    def pagos_vencidos(self, metodo_pago, ahora):
+        return self._pendientes(metodo_pago, fecha_limite_pago__lt=ahora)
+
+    def pagos_por_recordar(self, metodo_pago, ahora):
+        return self._pendientes(metodo_pago, fecha_recordatorio_pago__lt=ahora, recordatorio_pago_enviado=False)
 
     def marcar_recordatorio_pago(self, orden_id):
         return OrdenCompra.objects.filter(

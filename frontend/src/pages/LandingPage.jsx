@@ -15,7 +15,7 @@ const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados
 
 // RF-01.1: la raíz del dominio muestra la landing (nunca el catálogo directo). El admin la edita en su mismo
 // lugar (modo edición); los productos salen de la vitrina (más vendidos y últimos agregados).
-function LandingPage() {
+function LandingPage({ onNombreTiendaTemporal }) {
   const configuracion = useConfiguracionTienda();
   const edicion = useEdicionLanding(configuracion);
   // null mientras carga: así se sabe cuándo ya están dibujadas las secciones de productos
@@ -77,6 +77,15 @@ function LandingPage() {
   }, [edicion.hayCambios]);
 
   const vista = edicion.vista;
+  useEffect(() => {
+    onNombreTiendaTemporal?.(
+      edicion.editando ? (vista?.nombre_tienda ?? '') : null
+    );
+  }, [edicion.editando, vista?.nombre_tienda, onNombreTiendaTemporal]);
+
+  useEffect(() => {
+    return () => onNombreTiendaTemporal?.(null);
+  }, [onNombreTiendaTemporal]);
 
   return (
     <>

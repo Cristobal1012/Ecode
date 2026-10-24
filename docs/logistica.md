@@ -16,7 +16,15 @@ El catálogo de comunas (nombre → código de cobertura) se descarga desde Chil
 
 La configuración de la tienda vive en campos de `ConfiguracionGlobal`: `comuna_origen`, `region_origen`,
 `calle_origen`, `numero_origen`, `dpto_casa_origen` y `retiro_en_local_activo`. Son públicos (el checkout
-muestra la dirección de retiro); las claves nunca se exponen.
+muestra la dirección de retiro); las claves nunca se exponen. La configuración pública también trae
+`chilexpress_activo` (solo `true`/`false`): sin llaves cargadas, el checkout no ofrece despacho ni sucursales y
+no pide las comunas.
+
+La **entrega coordinada** la hace la propia tienda, sin transportista: el comprador deja su dirección y la tienda
+lo contacta para acordar el día y el lugar. El admin la activa en Configuración > Entrega Coordinada
+(`entrega_coordinada_activa`, `costo_entrega_coordinada` en CLP y `instrucciones_entrega_coordinada`, que ve el
+comprador en el checkout y en los correos). No necesita la dirección del local. La regla de qué entrega propia
+está activa y cuánto cuesta vive en `domain/logistica.py` (`EntregasDeLaTienda`).
 
 ### `POST /api/ventas/logistica/cotizar/`
 
@@ -40,10 +48,12 @@ Errores, siempre con el cuerpo `{"error": "..."}`:
 
 ### Checkout (`POST /api/ventas/checkout/`)
 
-Recibe `proveedor_logistico` (`CHILEXPRESS` o `RETIRO_LOCAL`) y, para despacho, `paquete` con `peso_kg`,
-`alto_cm`, `ancho_cm`, `largo_cm` más la `comuna` en `direccion_envio_snapshot`. El backend recalcula la tarifa
-y el total, ignorando `costo_envio`/`total_final` enviados por el cliente. `RETIRO_LOCAL` cuesta cero y se
-rechaza con `400` si `retiro_en_local_activo` está desactivado. Si Chilexpress falla, responde `503` y no se
+Recibe `proveedor_logistico` (`CHILEXPRESS`, `RETIRO_LOCAL` o `ENTREGA_COORDINADA`) y, para despacho, `paquete`
+con `peso_kg`, `alto_cm`, `ancho_cm`, `largo_cm` más la `comuna` en `direccion_envio_snapshot`. El backend
+recalcula la tarifa y el total, ignorando `costo_envio`/`total_final` enviados por el cliente. `RETIRO_LOCAL`
+cuesta cero y se rechaza con `400` si `retiro_en_local_activo` está desactivado. `ENTREGA_COORDINADA` cobra
+`costo_entrega_coordinada`, no se cotiza ni lleva paquete, exige `comuna` y `calle` y se rechaza con `400` si
+está desactivada; el envío gratis sobre un monto también la cubre. Si Chilexpress falla, responde `503` y no se
 crea la orden.
 
 Las pruebas automatizadas (`ventas/test_logistica.py`) simulan el catálogo y las respuestas HTTP de

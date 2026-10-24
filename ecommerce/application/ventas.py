@@ -1,4 +1,4 @@
-"""Casos de uso de ventas: validar el carrito, confirmar el pago y cambiar el estado de la orden."""
+﻿"""Casos de uso de ventas: validar el carrito, confirmar el pago y cambiar el estado de la orden."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -11,8 +11,7 @@ from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    AVISO_ANTES_DEL_VENCIMIENTO, OrdenTransporteNoPermitida, PedidoVacio, PLAZO_PAGO_TRANSFERENCIA,
-    SubtotalDesactualizado, VarianteCatalogo,
+    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo,
     armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -136,11 +135,14 @@ class RepositorioOrdenes(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def pendientes_de_pago(self, metodo_pago: str, creadas_antes_de: datetime, sin_recordatorio: bool = False) -> list:
-        """Ids de las órdenes Pendientes con ese medio de pago creadas antes de la fecha.
+    def pagos_vencidos(self, metodo_pago: str, ahora: datetime) -> list:
+        """Ids de las órdenes Pendientes con ese medio de pago cuya fecha límite de pago ya pasó."""
+        raise NotImplementedError
 
-        Con `sin_recordatorio`, solo las que aún no recibieron el recordatorio de pago.
-        """
+    @abstractmethod
+    def pagos_por_recordar(self, metodo_pago: str, ahora: datetime) -> list:
+        """Ids de las órdenes Pendientes con ese medio de pago a las que ya les toca el recordatorio y aún no
+        lo recibieron."""
         raise NotImplementedError
 
     @abstractmethod
@@ -348,6 +350,8 @@ def reponer_stock(inventario: InventarioVariantes, items):
 class OrdenNoEncontrada(Exception):
     pass
 
+class PagoFueraPlazoNoPermitido(Exception):
+    """La orden no cumple las condiciones para registrar un pago tardío."""
 
 class PedidoModificado(Exception):
     """Otro proceso cambió el estado de la orden entre la lectura y la escritura."""
@@ -409,7 +413,7 @@ EVENTO_POR_ESTADO = {
 
 
 class CancelarPagosVencidos:
-    """Plazo de pago: una transferencia que no se paga dentro del plazo (48 h) se cancela y se avisa.
+    """Plazo de pago: una transferencia que no se paga dentro del plazo de la tienda se cancela y se avisa.
 
     - No toca stock: la transferencia no lo reserva mientras está Pendiente.
     - El UPDATE condicional evita cancelar una orden que el admin validó mientras tanto.
@@ -422,8 +426,7 @@ class CancelarPagosVencidos:
 
     def ejecutar(self, ahora: datetime) -> list:
         canceladas = []
-        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value,
-                                                         ahora - PLAZO_PAGO_TRANSFERENCIA):
+        for orden_id in self.ordenes.pagos_vencidos(CodigoMedioPago.TRANSFERENCIA.value, ahora):
             if not self.ordenes.cambiar_estado(orden_id, EstadoPedido.PENDIENTE, EstadoPedido.CANCELADO,
                                                MOTIVO_PAGO_VENCIDO):
                 continue
@@ -434,7 +437,7 @@ class CancelarPagosVencidos:
 
 
 class RecordarPagosPorVencer:
-    """Plazo de pago de la transferencia: a las 24 h sin pagar se le recuerda al comprador que le quedan 24 h.
+    """Plazo de pago de la transferencia: a la mitad del plazo sin pagar se le recuerda al comprador.
 
     - Se ejecuta después de CancelarPagosVencidos, para no recordar una orden que ya venció.
     - El UPDATE condicional evita repetir el recordatorio y saltarse una orden que el admin validó mientras tanto.
@@ -446,9 +449,7 @@ class RecordarPagosPorVencer:
 
     def ejecutar(self, ahora: datetime) -> list:
         recordadas = []
-        creadas_antes_de = ahora - (PLAZO_PAGO_TRANSFERENCIA - AVISO_ANTES_DEL_VENCIMIENTO)
-        for orden_id in self.ordenes.pendientes_de_pago(CodigoMedioPago.TRANSFERENCIA.value, creadas_antes_de,
-                                                         sin_recordatorio=True):
+        for orden_id in self.ordenes.pagos_por_recordar(CodigoMedioPago.TRANSFERENCIA.value, ahora):
             if not self.ordenes.marcar_recordatorio_pago(orden_id):
                 continue
             if self.notificador:
@@ -477,3 +478,38 @@ class ResolverRevision:
             raise OrdenNoEncontrada()
         if not self.ordenes.resolver_revision(orden.id):
             raise SinRevisionPendiente()
+
+class RegistrarPagoFueraPlazo:
+    """Registra una transferencia tardía dejando la orden pendiente de revisión."""
+
+    MOTIVO_REVISION = (
+        'Transferencia recibida fuera de plazo: reembolsar o crear un pedido nuevo.'
+    )
+
+    def __init__(self, ordenes: RepositorioOrdenes):
+        self.ordenes = ordenes
+
+    def ejecutar(self, orden_id) -> None:
+        orden = self.ordenes.obtener(orden_id)
+
+        if orden is None:
+            raise OrdenNoEncontrada()
+
+        if (
+            orden.estado != EstadoPedido.CANCELADO
+            or orden.motivo_cancelacion != MOTIVO_PAGO_VENCIDO
+        ):
+            raise PagoFueraPlazoNoPermitido(
+                'Solo se puede registrar un pago tardío en órdenes canceladas por '
+                '"Pago no recibido a tiempo".'
+            )
+
+        if orden.requiere_revision:
+            raise PagoFueraPlazoNoPermitido(
+                'La orden ya tiene una revisión pendiente.'
+            )
+
+        self.ordenes.marcar_revision(
+            orden.id,
+            self.MOTIVO_REVISION,
+        )

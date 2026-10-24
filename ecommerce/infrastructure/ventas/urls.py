@@ -56,6 +56,12 @@ ventas_urlpatterns = [
     path('direcciones/', views.DireccionEnvioListCreateView.as_view(), name='direcciones-list-create'),
     # Ruta resultante: GET/PUT/PATCH/DELETE /api/ventas/direcciones/<id>/
     path('direcciones/<int:pk>/', views.DireccionEnvioDetailView.as_view(), name='direcciones-detail'),
+    # GET /api/ventas/empresa/: datos de facturación guardados del comprador (compra como empresa)
+    path('empresa/', views.EmpresaCompradorView.as_view(), name='empresa-comprador'),
+    # POST /api/ventas/cotizaciones/: formulario público de cotización y encargos
+    path('cotizaciones/', views.CotizacionCreateView.as_view(), name='cotizaciones'),
+    path('admin/cotizaciones/', views.AdminCotizacionListView.as_view(), name='admin-cotizaciones'),
+    path('admin/cotizaciones/<int:pk>/', views.AdminCotizacionEstadoView.as_view(), name='admin-cotizacion-estado'),
     
     # Ruta para descargar la etiqueta de Chilexpress
     path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),
@@ -71,12 +77,23 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/orden-transporte/ (genera o reintenta la OT)
     path('admin/ordenes/<int:pk>/orden-transporte/', views.AdminOrdenTransporteView.as_view(),
          name='admin-ordenes-orden-transporte'),
+    path('admin/ordenes/<int:pk>/pago-fuera-plazo/', views.AdminRegistrarPagoFueraPlazoView.as_view(),
+        name='admin-ordenes-pago-fuera-plazo'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
     # Ruta resultante: GET /api/ventas/paginas-legales/<tipo>/ (ej. terminos)
     path('paginas-legales/<str:tipo>/', views.PaginaLegalDetalleView.as_view(), name='pagina-legal-detalle'),
     # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
     path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
     path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
+    # Blog o portafolio (si el admin lo activó): GET /api/ventas/blog/?pagina=N y GET /api/ventas/blog/<slug>/
+    path('blog/', views.BlogPublicoView.as_view(), name='blog'),
+    path('blog/<slug:slug>/', views.BlogPublicacionView.as_view(), name='blog-publicacion'),
+    # Panel: GET/POST publicaciones, GET/PUT/DELETE una, POST fotos (multipart) y DELETE una foto
+    path('admin/blog/', views.AdminBlogView.as_view(), name='admin-blog'),
+    path('admin/blog/<int:pk>/', views.AdminPublicacionView.as_view(), name='admin-blog-publicacion'),
+    path('admin/blog/<int:pk>/fotos/', views.AdminFotosPublicacionView.as_view(), name='admin-blog-fotos'),
+    path('admin/blog/<int:pk>/fotos/<int:foto_id>/', views.AdminFotoPublicacionView.as_view(),
+         name='admin-blog-foto'),
     # Medios de pago (RN-02): GET la lista y PUT /api/ventas/admin/medios-pago/<codigo>/ (ej. transferencia)
     path('admin/medios-pago/', views.AdminMediosPagoView.as_view(), name='admin-medios-pago'),
     path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),

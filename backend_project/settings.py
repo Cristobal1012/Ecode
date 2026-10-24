@@ -217,6 +217,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Solo los endpoints que declaran su throttle (ej. el formulario público de cotización)
+    'DEFAULT_THROTTLE_RATES': {
+        'cotizaciones': '10/hour',
+    },
 }
 
 SIMPLE_JWT = {

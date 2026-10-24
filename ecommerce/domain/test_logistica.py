@@ -3,8 +3,31 @@ from decimal import Decimal
 from django.test import SimpleTestCase
 
 from ecommerce.domain.logistica import (
-    ENTREGA_COORDINADA, RETIRO_LOCAL, EntregaNoHabilitada, EntregasDeLaTienda,
+    AVISO_ENTREGA_COORDINADA, ENTREGA_COORDINADA, RETIRO_LOCAL, EntregaNoHabilitada, EntregasDeLaTienda,
+    aviso_entrega_coordinada, estado_entrega_de_la_tienda,
 )
+from ecommerce.domain.ventas import EstadoPedido
+
+
+class SeguimientoEntregaDeLaTiendaTests(SimpleTestCase):
+    """RF-02.4: sin courier, el comprador ve el avance según el estado del pedido."""
+
+    def test_el_estado_sigue_al_pedido_y_cambia_al_final_segun_la_entrega(self):
+        for proveedor, enviado, entregado in (
+            (ENTREGA_COORDINADA, 'La tienda coordinará la entrega contigo', 'Entregado'),
+            (RETIRO_LOCAL, 'Listo para retirar', 'Retirado'),
+        ):
+            with self.subTest(proveedor=proveedor):
+                self.assertEqual(estado_entrega_de_la_tienda(proveedor, EstadoPedido.PAGADO), 'Pago confirmado')
+                self.assertEqual(estado_entrega_de_la_tienda(proveedor, 'EN_PREPARACION'), 'En preparación')
+                self.assertEqual(estado_entrega_de_la_tienda(proveedor, EstadoPedido.ENVIADO), enviado)
+                self.assertEqual(estado_entrega_de_la_tienda(proveedor, EstadoPedido.ENTREGADO), entregado)
+                self.assertEqual(estado_entrega_de_la_tienda(proveedor, 'CANCELADO'), 'Cancelado')
+
+    def test_el_aviso_usa_las_instrucciones_del_admin_o_el_aviso_por_defecto(self):
+        self.assertEqual(aviso_entrega_coordinada('  Te escribimos por WhatsApp. '), 'Te escribimos por WhatsApp.')
+        self.assertEqual(aviso_entrega_coordinada(''), AVISO_ENTREGA_COORDINADA)
+        self.assertEqual(aviso_entrega_coordinada(None), AVISO_ENTREGA_COORDINADA)
 
 
 class EntregasDeLaTiendaTests(SimpleTestCase):

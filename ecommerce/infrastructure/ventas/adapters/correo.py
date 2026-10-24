@@ -13,7 +13,7 @@ from django.utils import timezone
 from ecommerce.application.cotizaciones import NotificadorCotizaciones
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.empresa import DatosEmpresa
-from ecommerce.domain.logistica import ENTREGA_COORDINADA
+from ecommerce.domain.logistica import ENTREGA_COORDINADA, aviso_entrega_coordinada
 from ecommerce.domain.ventas import EventoPedido
 
 from ..instrucciones_pago import fecha_limite_pago, instrucciones_transferencia
@@ -123,8 +123,7 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
     def _aviso_entrega_coordinada(orden, config):
         if orden.proveedor_logistico != ENTREGA_COORDINADA:
             return ''
-        instrucciones = (config.instrucciones_entrega_coordinada if config else '').strip()
-        return instrucciones or 'La tienda te contactará para acordar el día y la hora de la entrega.'
+        return aviso_entrega_coordinada(config.instrucciones_entrega_coordinada if config else '')
 
     @staticmethod
     def _entrega(orden, config):

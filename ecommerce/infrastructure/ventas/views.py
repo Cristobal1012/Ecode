@@ -1,5 +1,6 @@
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -27,7 +28,10 @@ from math import ceil
 
 import requests
 from ecommerce.application.logistica import ServicioCotizacion
-from ecommerce.domain.logistica import ConfiguracionCotizacionInvalida, ErrorOrdenTransporte
+from ecommerce.domain.logistica import (
+    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, NOMBRES_ENTREGAS_DE_LA_TIENDA, ConfiguracionCotizacionInvalida,
+    ErrorOrdenTransporte, aviso_entrega_coordinada, estado_entrega_de_la_tienda,
+)
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
     MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
@@ -788,6 +792,17 @@ class ReglasCheckoutView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def instrucciones_entrega_de_la_tienda(proveedor):
+    """Cómo recibe el comprador un pedido que entrega la propia tienda (se muestra en el seguimiento)."""
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    if proveedor == ENTREGA_COORDINADA:
+        return aviso_entrega_coordinada(config.instrucciones_entrega_coordinada if config else '')
+    partes = [config.calle_origen, config.numero_origen, config.comuna_origen] if config else []
+    direccion = ' '.join(str(parte) for parte in partes if parte)
+    return (f'Retíralo en {direccion} presentando tu número de orden.' if direccion
+            else 'Retíralo en el local presentando tu número de orden.')
+
+
 class SeguimientoEnvioView(APIView):
     permission_classes = [AllowAny]
 
@@ -811,6 +826,18 @@ class SeguimientoEnvioView(APIView):
                 {"error": "No se encontró un pedido que coincida con esos datos. Verifica la información."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        if orden.proveedor_logistico in ENTREGAS_DE_LA_TIENDA:
+            # Retiro o entrega coordinada: no hay courier ni código; el avance es el estado del pedido
+            return Response({
+                "numero_orden": orden.id,
+                "entrega_de_la_tienda": True,
+                "proveedor": NOMBRES_ENTREGAS_DE_LA_TIENDA[orden.proveedor_logistico],
+                "estado_actual": estado_entrega_de_la_tienda(orden.proveedor_logistico, orden.estado),
+                "instrucciones": instrucciones_entrega_de_la_tienda(orden.proveedor_logistico),
+                "linea_tiempo_estandar": [],
+                "codigo_seguimiento": None,
+            }, status=status.HTTP_200_OK)
 
         proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
         codigo = orden.numero_seguimiento_tracking
@@ -949,10 +976,17 @@ class CotizacionCreateView(APIView):
         return Response({'mensaje': MENSAJE_COTIZACION_RECIBIDA}, status=status.HTTP_201_CREATED)
 
 
+class PaginacionCotizaciones(PageNumberPagination):
+    """De a 20 con ?pagina=N: responde { count, next, previous, results }."""
+    page_size = 20
+    page_query_param = 'pagina'
+
+
 class AdminCotizacionListView(generics.ListAPIView):
-    """Las solicitudes de cotización, de la más reciente a la más antigua."""
+    """Las solicitudes de cotización, de la más reciente a la más antigua, paginadas."""
     serializer_class = AdminCotizacionSerializer
     permission_classes = [IsAdministrador]
+    pagination_class = PaginacionCotizaciones
     queryset = Cotizacion.objects.all()
 
 

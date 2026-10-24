@@ -138,7 +138,7 @@ describe('Panel: cotizaciones', () => {
   afterEach(() => cleanup());
 
   it('muestra cada solicitud con sus datos y la de la empresa', async () => {
-    clienteAxios.get.mockResolvedValue({ data: [COTIZACION] });
+    clienteAxios.get.mockResolvedValue({ data: { count: 1, results: [COTIZACION] } });
     render(<GestorCotizaciones />);
 
     expect(await screen.findByRole('heading', { name: '#7 · Taza de cerámica' })).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('Panel: cotizaciones', () => {
   });
 
   it('la tienda cambia el estado y lo ve confirmado', async () => {
-    clienteAxios.get.mockResolvedValue({ data: [COTIZACION] });
+    clienteAxios.get.mockResolvedValue({ data: { count: 1, results: [COTIZACION] } });
     clienteAxios.patch.mockResolvedValue({ data: { ...COTIZACION, estado: 'RESPONDIDA', estado_display: 'Respondida' } });
     render(<GestorCotizaciones />);
 
@@ -160,7 +160,7 @@ describe('Panel: cotizaciones', () => {
   });
 
   it('sin solicitudes lo dice', async () => {
-    clienteAxios.get.mockResolvedValue({ data: [] });
+    clienteAxios.get.mockResolvedValue({ data: { count: 0, results: [] } });
     render(<GestorCotizaciones />);
     expect(await screen.findByText('Todavía no hay solicitudes de cotización.')).toBeInTheDocument();
   });

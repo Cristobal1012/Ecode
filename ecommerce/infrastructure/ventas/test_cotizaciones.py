@@ -133,8 +133,23 @@ class PanelCotizacionesTests(APITestCase):
 
     def test_lista_de_la_mas_reciente_a_la_mas_antigua(self):
         datos = self.client.get(reverse('admin-cotizaciones')).data
-        self.assertEqual([c['id'] for c in datos], [self.reciente.id, self.antigua.id])
-        self.assertEqual(datos[0]['estado_display'], 'Nueva')
+        self.assertEqual(datos['count'], 2)
+        self.assertEqual([c['id'] for c in datos['results']], [self.reciente.id, self.antigua.id])
+        self.assertEqual(datos['results'][0]['estado_display'], 'Nueva')
+
+    def test_lista_paginada_de_a_20(self):
+        Cotizacion.objects.bulk_create(
+            Cotizacion(nombre=f'Cliente {n}', correo=f'c{n}@example.test', telefono='+56912345678', cantidad=1,
+                       descripcion='Tazas')
+            for n in range(21))
+
+        primera = self.client.get(reverse('admin-cotizaciones')).data
+        segunda = self.client.get(reverse('admin-cotizaciones'), {'pagina': 2}).data
+
+        self.assertEqual((primera['count'], len(primera['results'])), (23, 20))
+        self.assertIsNotNone(primera['next'])
+        self.assertEqual(len(segunda['results']), 3)
+        self.assertIsNone(segunda['next'])
 
     def test_la_tienda_registra_en_que_quedo(self):
         url = reverse('admin-cotizacion-estado', args=[self.antigua.id])

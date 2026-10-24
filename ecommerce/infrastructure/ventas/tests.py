@@ -542,6 +542,60 @@ class SeguimientoEnvioTests(APITestCase):
                 self.assertEqual(response.data, esperado.data)
         consultar_estado.assert_not_called()
 
+    def orden_de_la_tienda(self, proveedor, estado):
+        return OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK', estado=estado,
+            direccion_envio_snapshot={'comuna': 'PROVIDENCIA', 'calle': 'Los Olmos', 'numero': '123'},
+            subtotal=10000, costo_envio=0, total_final=10000, proveedor_logistico=proveedor,
+        )
+
+    def test_entrega_coordinada_sin_courier_ni_codigo_y_con_las_instrucciones(self, consultar_estado):
+        ConfiguracionGlobal.objects.update_or_create(pk=1, defaults={
+            'nombre_tienda': 'Tienda QA', 'instrucciones_entrega_coordinada': 'Te escribimos por WhatsApp.'})
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'ENVIADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['entrega_de_la_tienda'])
+        self.assertEqual(response.data['proveedor'], 'Entrega coordinada')
+        self.assertEqual(response.data['estado_actual'], 'La tienda coordinará la entrega contigo')
+        self.assertEqual(response.data['instrucciones'], 'Te escribimos por WhatsApp.')
+        self.assertIsNone(response.data['codigo_seguimiento'])
+        self.assertEqual(response.data['linea_tiempo_estandar'], [])
+        consultar_estado.assert_not_called()
+
+    def test_entrega_coordinada_sin_instrucciones_avisa_que_la_tienda_contactara(self, consultar_estado):
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'PAGADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.data['estado_actual'], 'Pago confirmado')
+        self.assertEqual(response.data['instrucciones'],
+                         'La tienda te contactará para acordar el día y la hora de la entrega.')
+
+    def test_retiro_en_local_dice_donde_retirar(self, consultar_estado):
+        ConfiguracionGlobal.objects.update_or_create(pk=1, defaults={
+            'nombre_tienda': 'Tienda QA', 'calle_origen': 'Av. Central', 'numero_origen': '50',
+            'comuna_origen': 'Providencia'})
+        orden = self.orden_de_la_tienda('RETIRO_LOCAL', 'ENVIADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.data['proveedor'], 'Retiro en local')
+        self.assertEqual(response.data['estado_actual'], 'Listo para retirar')
+        self.assertEqual(response.data['instrucciones'],
+                         'Retíralo en Av. Central 50 Providencia presentando tu número de orden.')
+        consultar_estado.assert_not_called()
+
+    def test_entrega_de_la_tienda_con_otro_correo_recibe_la_respuesta_generica(self, consultar_estado):
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'ENVIADO')
+        esperado = self.consultar(999999)
+
+        response = self.consultar(orden.id, 'otro@example.test')
+
+        self.assertEqual((response.status_code, response.data), (404, esperado.data))
+
 
 class CambioEstadoAdminTests(APITestCase):
     """RF-03.3: el admin solo puede hacer las transiciones permitidas."""

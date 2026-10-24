@@ -14,18 +14,35 @@ const formatearFecha = (iso) => new Date(iso).toLocaleString('es-CL', { dateStyl
 // '2026-11-05' es una fecha sin hora: se muestra tal cual, sin pasar por la zona horaria
 const formatearDia = (dia) => dia.split('-').reverse().join('-');
 
+// Igual que PaginacionCotizaciones en el backend
+const POR_PAGINA = 20;
+
 export default function GestorCotizaciones() {
   const [cotizaciones, setCotizaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [pagina, setPagina] = useState(1);
+  // A qué página corresponde lo cargado: si no coincide con la pedida, aún está cargando
+  const [cargada, setCargada] = useState({ pagina: null, total: 0 });
   const [aviso, setAviso] = useState(null);
   const [enCurso, setEnCurso] = useState(null);
 
   useEffect(() => {
-    clienteAxios.get('ventas/admin/cotizaciones/')
-      .then(({ data }) => setCotizaciones(data))
-      .catch(() => setAviso({ tipo: 'error', texto: 'No se pudieron cargar las cotizaciones.' }))
-      .finally(() => setCargando(false));
-  }, []);
+    clienteAxios.get('ventas/admin/cotizaciones/', { params: { pagina } })
+      .then(({ data }) => {
+        setCotizaciones(data.results);
+        setCargada({ pagina, total: data.count });
+      })
+      .catch(() => {
+        setAviso({ tipo: 'error', texto: 'No se pudieron cargar las cotizaciones.' });
+        setCargada((actual) => ({ ...actual, pagina }));
+      });
+  }, [pagina]);
+
+  const cargando = cargada.pagina !== pagina;
+  const paginas = Math.ceil(cargada.total / POR_PAGINA);
+  const irA = (nueva) => {
+    setAviso(null);
+    setPagina(nueva);
+  };
 
   const cambiarEstado = async (cotizacion, estado) => {
     setEnCurso(cotizacion.id);
@@ -97,6 +114,19 @@ export default function GestorCotizaciones() {
             </li>
           ))}
         </ul>
+      )}
+
+      {paginas > 1 && (
+        <nav className="publicacion-acciones cotizaciones-paginacion" aria-label="Páginas de cotizaciones">
+          <button type="button" className="boton boton-contorno" disabled={pagina === 1} onClick={() => irA(pagina - 1)}>
+            <span aria-hidden="true">←</span> Anteriores
+          </button>
+          <span className="texto-secundario">Página {pagina} de {paginas}</span>
+          <button type="button" className="boton boton-contorno" disabled={pagina === paginas}
+            onClick={() => irA(pagina + 1)}>
+            Siguientes <span aria-hidden="true">→</span>
+          </button>
+        </nav>
       )}
     </>
   );

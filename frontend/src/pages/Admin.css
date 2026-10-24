@@ -757,3 +757,8 @@
 .publicacion-foto .boton {
   padding: 0.55rem 0.75rem;
 }
+
+.cotizaciones-paginacion {
+  justify-content: center;
+  margin-top: 24px;
+}

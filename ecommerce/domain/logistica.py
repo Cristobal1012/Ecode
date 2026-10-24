@@ -52,6 +52,34 @@ RETIRO_LOCAL = 'RETIRO_LOCAL'
 # La tienda contacta al comprador para acordar el día y el lugar (ej. entregas en persona en su ciudad)
 ENTREGA_COORDINADA = 'ENTREGA_COORDINADA'
 ENTREGAS_DE_LA_TIENDA = frozenset({RETIRO_LOCAL, ENTREGA_COORDINADA})
+NOMBRES_ENTREGAS_DE_LA_TIENDA = {RETIRO_LOCAL: 'Retiro en local', ENTREGA_COORDINADA: 'Entrega coordinada'}
+# Lo que se le dice al comprador si el admin no escribió cómo coordina las entregas
+AVISO_ENTREGA_COORDINADA = 'La tienda te contactará para acordar el día y la hora de la entrega.'
+
+# Seguimiento de una entrega de la tienda: no hay courier, el avance es el estado del pedido (domain/ventas.py)
+_ESTADOS_ENTREGA_DE_LA_TIENDA = {
+    'PENDIENTE': 'Esperando el pago',
+    'PAGADO': 'Pago confirmado',
+    'EN_PREPARACION': 'En preparación',
+    'CANCELADO': 'Cancelado',
+}
+_ESTADOS_FINALES_ENTREGA_DE_LA_TIENDA = {
+    # ENVIADO es "Despachado" en el panel; para estas entregas significa que la tienda ya puede entregarlo
+    RETIRO_LOCAL: {'ENVIADO': 'Listo para retirar', 'ENTREGADO': 'Retirado'},
+    ENTREGA_COORDINADA: {'ENVIADO': 'La tienda coordinará la entrega contigo', 'ENTREGADO': 'Entregado'},
+}
+
+
+def aviso_entrega_coordinada(instrucciones: str) -> str:
+    """Las instrucciones que escribió el admin o, si no hay, el aviso de que la tienda contactará al comprador."""
+    return (instrucciones or '').strip() or AVISO_ENTREGA_COORDINADA
+
+
+def estado_entrega_de_la_tienda(proveedor: str, estado_pedido: str) -> str:
+    """RF-02.4: estado que ve el comprador en el seguimiento de un retiro o una entrega coordinada."""
+    estado = str(estado_pedido)
+    return (_ESTADOS_FINALES_ENTREGA_DE_LA_TIENDA.get(proveedor, {}).get(estado)
+            or _ESTADOS_ENTREGA_DE_LA_TIENDA.get(estado, estado))
 
 
 class EntregaNoHabilitada(Exception):

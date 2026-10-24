@@ -15,6 +15,10 @@ class RepositorioMediosPago(ABC):
         """Devuelve el medio sin configurar (deshabilitado y sin datos) si aún no existe."""
         raise NotImplementedError
 
+    def obtener_varios(self, codigos: list[CodigoMedioPago]) -> list[MedioPagoConfigurado]:
+        """Lectura en orden; los adaptadores existentes conservan su compatibilidad."""
+        return [self.obtener(codigo) for codigo in codigos]
+
     @abstractmethod
     def guardar(self, medio: MedioPagoConfigurado) -> None:
         raise NotImplementedError
@@ -42,7 +46,7 @@ class MediosPagoDisponibles:
         self.repositorio = repositorio
 
     def listar(self) -> list[MedioPagoConfigurado]:
-        return [self.repositorio.obtener(d.codigo) for d in MEDIOS_PAGO]
+        return self.repositorio.obtener_varios([d.codigo for d in MEDIOS_PAGO])
 
     def disponibles(self) -> list[CodigoMedioPago]:
         return [medio.codigo for medio in self.listar() if medio.disponible]

@@ -40,6 +40,7 @@
 }
 
 .auth-tarjeta {
+  min-width: 0;
   width: 100%;
   max-width: 420px;
 }
@@ -69,9 +70,11 @@
 }
 
 .auth-campo input {
+  min-width: 0;
+  width: 100%;
   min-height: 48px;
   padding: 10px 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radio);
   background: var(--color-surface);
   color: var(--color-text);

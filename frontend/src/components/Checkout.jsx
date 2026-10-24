@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
@@ -7,6 +7,7 @@ import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empr
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
+import Dialogo from './Dialogo';
 
 const OPCION_RETIRO_LOCAL = {
     proveedor: 'RETIRO_LOCAL', nombre: 'Retiro en Tienda / Local', tipo: 'RETIRO', costo_envio: 0,
@@ -55,7 +56,7 @@ export default function Checkout() {
     return (
         <>
             <Header />
-            <main className="checkout-main">
+            <main tabIndex={-1} id="contenido" className="checkout-main">
                 <CheckoutContenido />
             </main>
         </>
@@ -129,12 +130,22 @@ function CheckoutContenido() {
 
     const usuarioAutenticado = !!localStorage.getItem('access_token');
     const [esperandoPago, setEsperandoPago] = useState(null);
+    const [mostrarDialogoPago, setMostrarDialogoPago] = useState(false);
+    const consultaEnCurso = useRef(false);
+    const botonReabrirPago = useRef(null);
+    const cerrarAvisoPago = () => {
+        setMostrarDialogoPago(false);
+        // El disparador original queda deshabilitado mientras existe una orden pendiente.
+        // Esperamos a que aparezca la acción que permite reabrir el mismo aviso.
+        requestAnimationFrame(() => botonReabrirPago.current?.focus());
+    };
     const [verificando, setVerificando] = useState(false);
     const [procesandoPago, setProcesandoPago] = useState(false);
     const navigate = useNavigate();
 
     const verificarEstadoOrden = useCallback(async (idOrden) => {
-        if (!idOrden) return;
+        if (!idOrden || consultaEnCurso.current) return;
+        consultaEnCurso.current = true;
         setVerificando(true);
         try {
             const res = await consultarPagoPendiente(idOrden);
@@ -155,6 +166,7 @@ function CheckoutContenido() {
         } catch (err) {
             console.error('Error verificando pago:', err);
         } finally {
+            consultaEnCurso.current = false;
             setVerificando(false);
         }
     }, [usuarioAutenticado, navigate]);
@@ -513,6 +525,7 @@ function CheckoutContenido() {
                     localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
                     localStorage.setItem('orden_pendiente_token', respuesta.data.token_verificacion);
                     setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
+                    setMostrarDialogoPago(true);
                     const ventana = window.open(respuesta.data.url_pago, '_blank');
                     if (!ventana) {
                         window.location.assign(respuesta.data.url_pago);
@@ -891,7 +904,7 @@ function CheckoutContenido() {
                                 const habilitado = validadoParaPagar && !procesandoPago;
                                 return (
                                     <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
+                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado || Boolean(esperandoPago)}
                                         className="boton boton-primario checkout-pagar"
                                     >
                                         {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
@@ -903,11 +916,16 @@ function CheckoutContenido() {
                 </aside>
             </div>
 
-            {esperandoPago && (
-                <div className="checkout-modal-fondo">
-                    <div className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-titulo">
+            {esperandoPago && !mostrarDialogoPago && (
+                <div className="checkout-aviso" role="status">
+                    El pago de la orden #{esperandoPago.ordenId} sigue pendiente. Cerrar el aviso no cancela el pedido.
+                    <button ref={botonReabrirPago} type="button" className="boton boton-contorno" onClick={() => setMostrarDialogoPago(true)}>Volver a ver el pago pendiente</button>
+                </div>
+            )}
+            {esperandoPago && mostrarDialogoPago && (
+                    <Dialogo className="checkout-modal" tituloId="checkout-modal-titulo" onCerrar={cerrarAvisoPago}>
                         <span className="antetitulo">Pago en curso</span>
-                        <h2 id="checkout-modal-titulo">Completando pago en Mercado Pago</h2>
+                        <h2 id="checkout-modal-titulo" tabIndex={-1} data-foco-inicial>Completando pago en Mercado Pago</h2>
                         <p className="texto-secundario">
                             Se abrió la ventana de Mercado Pago para la <strong>Orden #{esperandoPago.ordenId}</strong>.
                             Completa tu pago allá. Esta pantalla detectará tu pago automáticamente tan pronto como se acredite.
@@ -927,16 +945,12 @@ function CheckoutContenido() {
                             <button
                                 type="button"
                                 className="boton-texto"
-                                onClick={() => {
-                                    setEsperandoPago(null);
-                                    olvidarOrdenPendiente();
-                                }}
+                                onClick={cerrarAvisoPago}
                             >
-                                Cancelar y volver al checkout
+                                Cerrar y volver al checkout
                             </button>
                         </div>
-                    </div>
-                </div>
+                    </Dialogo>
             )}
         </div>
     );

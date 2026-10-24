@@ -1,5 +1,6 @@
 import { useId, useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 
 const crearVarianteVacia = () => ({
@@ -120,13 +121,14 @@ export default function FormularioProducto({
     const cargarCategorias = async () => {
       try {
         const { data } = await clienteAxios.get(
-          'catalogo/productos/'
+          'catalogo/productos/?todos=true'
         );
+        const lista = Array.isArray(data) ? data : (data?.results || []);
 
-        if (Array.isArray(data)) {
+        if (Array.isArray(lista)) {
           const categoriasUnicas = [
             ...new Set(
-              data
+              lista
                 .map((p) => p.categoria)
                 .filter(Boolean)
             )
@@ -547,7 +549,7 @@ export default function FormularioProducto({
   const inputStyle = {
     width: '100%',
     padding: '10px',
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--color-control-border)',
     borderRadius: '4px',
     marginTop: '5px',
     backgroundColor: 'var(--color-surface)',
@@ -568,12 +570,12 @@ export default function FormularioProducto({
   // ============================================================
 
   return (
-    <form
+    <form className="formulario-producto"
       onSubmit={handleSubmit}
       style={{
         maxWidth: '900px',
         backgroundColor: 'var(--color-secondary)',
-        padding: '25px',
+        padding: 'clamp(12px, 3vw, 25px)',
         borderRadius: '8px'
       }}
     >
@@ -603,6 +605,7 @@ export default function FormularioProducto({
 
         <button
           type="button"
+          aria-label="Cerrar formulario de producto"
           onClick={alCancelar}
           style={{
             background: 'transparent',
@@ -622,6 +625,7 @@ export default function FormularioProducto({
 
       {error && (
         <p
+          role="alert"
           style={{
             color: '#b91c1c',
             backgroundColor: '#fee2e2',
@@ -648,10 +652,9 @@ export default function FormularioProducto({
         Datos Generales
       </h4>
 
-      <div
+      <div className="producto-campos"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
           gap: '20px',
           marginBottom: '20px'
         }}
@@ -930,6 +933,7 @@ export default function FormularioProducto({
 
           <button
             type="button"
+            aria-label="Agregar atributo global"
             onClick={agregarAtributoGlobal}
             style={{
               padding: '5px 10px',
@@ -988,6 +992,7 @@ export default function FormularioProducto({
 
               <button
                 type="button"
+                aria-label={`Borrar atributo ${index + 1}`}
                 onClick={() =>
                   eliminarAtributoGlobal(index)
                 }
@@ -1077,6 +1082,7 @@ export default function FormularioProducto({
 
               <button
                 type="button"
+                aria-label={`Eliminar Variante ${varIndex + 1}`}
                 onClick={() =>
                   eliminarVariante(
                     varIndex
@@ -1096,11 +1102,9 @@ export default function FormularioProducto({
 
             {/* SKU / PRECIO / STOCK */}
 
-            <div
+            <div className="producto-campos"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 
-                '1fr 1fr 1fr 1fr',
                 gap: '15px',
                 marginBottom: '15px'
               }}
@@ -1186,7 +1190,7 @@ export default function FormularioProducto({
                       e.target.value
                     )
                   }
-                  style={{...inputStyle, border: '1px solid #ffcccc'}}
+                  style={inputStyle}
                   min="0"
                   step="0.01"
                 />
@@ -1226,11 +1230,9 @@ export default function FormularioProducto({
                 DIMENSIONES LOGÍSTICAS
             =================================================== */}
 
-            <div
+            <div className="producto-campos"
               style={{
                 display: 'grid',
-                gridTemplateColumns:
-                  'repeat(4, 1fr)',
                 gap: '15px',
                 marginBottom: '15px',
                 padding: '10px',
@@ -1499,6 +1501,7 @@ export default function FormularioProducto({
 
                     <button
                       type="button"
+                      aria-label={`Eliminar atributo ${attrIndex + 1} de la variante ${varIndex + 1}`}
                       onClick={() =>
                         eliminarAtributoVariante(
                           varIndex,

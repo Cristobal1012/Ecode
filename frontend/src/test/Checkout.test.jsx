@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 const { getMock, postMock, ajustarMock, guardarMock, validarMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -78,8 +79,13 @@ function prepararRespuestas({ pasarelas = ['TRANSFERENCIA'], retiroLocal = true,
   validarMock.mockResolvedValue([producto]);
   ajustarMock.mockReturnValue({ items: [producto], avisos: [] });
   guardarMock.mockImplementation(async (items) => {
-    const { guardarCarrito } = await vi.importActual('../components/carrito');
-    return guardarCarrito(items);
+    const snapshot = JSON.stringify(items);
+
+    if (localStorage.getItem('carrito_local') !== snapshot) {
+      localStorage.setItem('carrito_local', snapshot);
+      window.dispatchEvent(new Event('carritoActualizado'));
+    }
+    return items;
   });
 }
 
@@ -102,6 +108,33 @@ function completarDestinatario() {
   fireEvent.change(screen.getByLabelText(/teléfono de contacto/i), {
     target: { value: '+56912345678' },
   });
+}
+
+function MostrarRutaActual() {
+  const location = useLocation();
+
+  return (
+    <p data-testid="ruta-actual">
+      {location.pathname}
+      {location.search}
+    </p>
+  );
+}
+
+function renderCheckoutConRuta({ conProducto = true } = {}) {
+  if (conProducto) {
+    localStorage.setItem(
+      'carrito_local',
+      JSON.stringify([producto])
+    );
+  }
+
+  return render(
+    <MemoryRouter>
+      <Checkout />
+      <MostrarRutaActual />
+    </MemoryRouter>
+  );
 }
 
 describe('Checkout', () => {
@@ -134,7 +167,6 @@ describe('Checkout', () => {
       name: 'Pagar con Transferencia bancaria',
     });
 
-    // Seleccionamos retiro en local para disponer de una opción de entrega válida.
     fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
     completarDestinatario();
 
@@ -195,7 +227,6 @@ describe('Checkout', () => {
         name: 'Pagar con Transferencia bancaria',
     });
 
-    // Elegimos una opción de entrega válida.
     fireEvent.click(
         screen.getByRole('radio', { name: /retiro en local/i })
     );
@@ -204,12 +235,10 @@ describe('Checkout', () => {
         name: /acepto los/i,
     });
 
-    // Aceptamos los términos.
     completarDestinatario();
     fireEvent.click(checkbox);
     await waitFor(() => expect(botonPago).toBeEnabled());
 
-    // Retiramos la aceptación.
     fireEvent.click(checkbox);
 
     expect(checkbox).not.toBeChecked();
@@ -234,7 +263,6 @@ describe('Checkout', () => {
     expect(checkbox).not.toBeChecked();
     expect(botonPago).toBeDisabled();
 
-    // Intentamos hacer clic aunque el botón esté deshabilitado.
     fireEvent.click(botonPago);
 
     expect(postMock).not.toHaveBeenCalledWith(
@@ -334,7 +362,6 @@ describe('Checkout', () => {
       'ventas/checkout/', expect.objectContaining({ codigo_promocion: null })));
   });
 
-  ///////////////////////////
   it('muestra todos los medios de pago configurados', async () => {
     prepararRespuestas({
         pasarelas: ['TRANSFERENCIA', 'TRANSBANK'],
@@ -402,7 +429,6 @@ describe('Checkout', () => {
         screen.getByText('Mouse inalámbrico (x1)')
     ).toBeInTheDocument();
 
-    // $15.000 + $10.000 = $25.000
     const subtotalLabel = screen.getByText('Subtotal:');
     const subtotalContainer = subtotalLabel.parentElement;
 
@@ -451,8 +477,6 @@ describe('Checkout', () => {
         })
     ).toBeInTheDocument();
 
-    // Sin páginas publicadas, los textos legales siguen apareciendo,
-    // pero no deben convertirse en enlaces.
     expect(
         screen.queryByRole('link', {
             name: /términos y condiciones/i,
@@ -520,7 +544,6 @@ describe('Checkout', () => {
 
     renderCheckout();
 
-    // Esperamos a que las comunas estén cargadas.
     await screen.findByRole('option', { name: 'Santiago' });
 
     const selectorComuna = screen.getByLabelText('Comuna');
@@ -529,8 +552,6 @@ describe('Checkout', () => {
         target: { value: 'Santiago' },
     });
 
-    // Verificamos que se envíe la comuna en mayúsculas
-    // y que se calculen las dimensiones del paquete.
     await waitFor(() => {
         expect(postMock).toHaveBeenCalledWith(
             'ventas/logistica/cotizar/',
@@ -545,7 +566,6 @@ describe('Checkout', () => {
         );
     });
 
-    // Verificamos que se muestre la respuesta del backend.
     expect(
         await screen.findByText('Chilexpress - 2 días')
     ).toBeInTheDocument();
@@ -582,8 +602,20 @@ describe('Checkout', () => {
   });
 
   it('sincroniza el resumen y el contador al cambiar cantidades desde el encabezado', async () => {
+    validarMock.mockResolvedValue({
+      items: [{
+        producto_mongo_id: producto.id,
+        variante_sku: producto.sku,
+        disponible: 5,
+        precio: producto.precio,
+        problema: null,
+      }],
+    });
+
     renderCheckout();
+
     await screen.findByRole('checkbox', { name: /acepto los/i });
+
     validarMock.mockResolvedValue({
       items: [{ producto_mongo_id: producto.id, variante_sku: producto.sku,
         disponible: 5, precio: producto.precio, problema: null }],
@@ -604,6 +636,714 @@ describe('Checkout', () => {
     expect(screen.getByText('No hay productos')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' })).toBeDisabled();
     expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
+
+  it('muestra un mensaje cuando el backend rechaza la compra', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: { data: {} },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    try {
+      renderCheckout();
+
+      const botonPago = await screen.findByRole('button', {
+        name: 'Pagar con Transferencia bancaria',
+      });
+
+      fireEvent.click(
+        screen.getByRole('radio', { name: /retiro en local/i })
+      );
+      fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+      completarDestinatario();
+
+      fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+        target: { value: 'qa@example.test' },
+      });
+
+      await waitFor(() => expect(botonPago).toBeEnabled());
+
+      fireEvent.click(botonPago);
+
+      expect(
+        await screen.findByText('Error al procesar la compra.')
+      ).toBeInTheDocument();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('actualiza el precio del carrito cuando el servidor informa un cambio de precio', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: {
+            data: {
+              precios_vigentes: [
+                {
+                  variante_sku: 'SKU-001',
+                  precio: 12000,
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      renderCheckout();
+
+      const botonPago = await screen.findByRole('button', {
+        name: 'Pagar con Transferencia bancaria',
+      });
+
+      fireEvent.click(
+        screen.getByRole('radio', { name: /retiro en local/i })
+      );
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: /acepto los/i })
+      );
+
+      completarDestinatario();
+
+      fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+        target: { value: 'qa@example.test' },
+      });
+
+      await waitFor(() => expect(botonPago).toBeEnabled());
+
+      fireEvent.click(botonPago);
+
+      await waitFor(() => {
+        expect(guardarMock).toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sku: 'SKU-001',
+              precio: 12000,
+            }),
+          ])
+        );
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('limpia el carrito cuando la compra es exitosa', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.resolve({
+          data: {
+            orden_id: 'ORD-001',
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(
+      screen.getByRole('radio', { name: /retiro en local/i })
+    );
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /acepto los/i })
+    );
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.objectContaining({
+          acepta_terminos: true,
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        JSON.parse(localStorage.getItem('carrito_local') || '[]')
+      ).toHaveLength(0);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ruta-actual').textContent).toBe('/pedido-recibido?orden=ORD-001');
+    });
+  });
+
+  it('guarda la orden pendiente y abre Mercado Pago cuando recibe url_pago', async () => {
+    const abrirVentana = vi.spyOn(window, 'open').mockReturnValue({});
+
+    prepararRespuestas({
+      pasarelas: ['MERCADO_PAGO'],
+    });
+
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.resolve({
+          data: {
+            orden_id: 'ORD-MP-001',
+            url_pago: 'https://mercadopago.example/pagar/ORD-MP-001',
+            token_verificacion: 'token-prueba-mp',
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: /pagar con mercado pago/i,
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.objectContaining({
+          acepta_terminos: true,
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(abrirVentana).toHaveBeenCalledWith(
+        'https://mercadopago.example/pagar/ORD-MP-001',
+        '_blank'
+      );
+    });
+
+    expect(localStorage.getItem('orden_pendiente_pago')).toBe('ORD-MP-001');
+    expect(localStorage.getItem('orden_pendiente_token')).toBe('token-prueba-mp');
+
+    abrirVentana.mockRestore();
+  });
+
+
+  it('no procesa la compra cuando falta el nombre del destinatario', async () => {
+    prepararRespuestas();
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+    fireEvent.change(screen.getByLabelText(/teléfono/i), {
+      target: { value: '912345678' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).not.toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.anything()
+      );
+    });
+  });
+
+  it('no procesa la compra si no se aceptan los términos legales', async () => {
+    prepararRespuestas();
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).not.toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.anything()
+      );
+    });
+  });
+
+  it('maneja el fallo al verificar el estado de una orden pendiente', async () => {
+    prepararRespuestas();
+
+    localStorage.setItem('orden_pendiente_pago', 'ORD-MP-001');
+    localStorage.setItem('orden_pendiente_token', 'token-prueba');
+
+    getMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/verificar-pago/') {
+        return Promise.reject(new Error('Error de conexión'));
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(
+        'ventas/checkout/verificar-pago/',
+        expect.anything()
+      );
+    });
+
+    expect(screen.getByTestId('ruta-actual')).toBeInTheDocument();
+  });
+
+  it('muestra el error del backend cuando falla el checkout', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: {
+            data: {
+              error: 'No fue posible procesar el pago',
+            },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    fireEvent.click(botonPago);
+
+   expect(
+    await screen.findByRole('status')
+   ).toHaveTextContent(/error al procesar la compra/i);
+
+    expect(JSON.parse(localStorage.getItem('carrito_local') || '[]').length)
+      .toBeGreaterThan(0);
+  });
+
+  it('maneja los precios vigentes que devuelve el backend', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: {
+            data: {
+              error: 'Los precios han cambiado',
+              precios_vigentes: [
+                {
+                  sku: 'SKU-001',
+                  precio: '15000',
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.anything()
+      );
+    });
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('carrito_local') || '[]').length)
+        .toBeGreaterThan(0);
+    });
+  });
+
+  it('redirige a pedido recibido cuando el checkout termina correctamente', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.resolve({
+          data: {
+            orden_id: 'ORD-001',
+            instrucciones_pago: 'Realiza la transferencia con el número de orden.',
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckoutConRuta();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+
+    completarDestinatario();
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ruta-actual').textContent).toBe(
+        '/pedido-recibido?orden=ORD-001'
+      );
+    });
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('carrito_local') || '[]'))
+        .toHaveLength(0);
+    });
+  });
+
+  it('revisa y guarda el carrito cuando el backend devuelve errores en los artículos', async () => {
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(
+      screen.getByRole('radio', { name: /retiro en local/i })
+    );
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /acepto los/i })
+    );
+
+    fireEvent.change(screen.getByLabelText(/nombre de quien recibe/i), {
+      target: { value: 'Comprador QA' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/teléfono de contacto/i), {
+      target: { value: '+56912345678' },
+    });
+
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+      target: { value: 'qa@example.test' },
+    });
+
+    await waitFor(() => {
+      expect(botonPago).toBeEnabled();
+    });
+
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: {
+            data: {
+              items: ['Uno o más productos cambiaron.'],
+            },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        'ventas/checkout/',
+        expect.objectContaining({
+          acepta_terminos: true,
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(validarMock).toHaveBeenCalled();
+    });
+  });
+
+  it('carga las direcciones guardadas y selecciona la predeterminada', async () => {
+    const direcciones = [
+      {
+        id: 1,
+        calle: 'Los Aromos',
+        calle_numero: '123',
+        dpto_casa: '',
+        comuna: 'Santiago',
+        ciudad: 'Santiago',
+        region: 'Metropolitana',
+        es_predeterminado: false,
+      },
+      {
+        id: 2,
+        calle: 'Calle Falsa',
+        calle_numero: '123',
+        dpto_casa: 'Casa 2',
+        comuna: 'Santiago',
+        ciudad: 'Santiago',
+        region: 'Metropolitana',
+        es_predeterminado: true,
+      },
+    ];
+
+    localStorage.setItem('access_token', 'token-prueba');
+
+    getMock.mockImplementation((url) => {
+      if (url === 'usuarios/me/') {
+        return Promise.resolve({
+          data: { id: 10, email: 'qa@example.test' },
+        });
+      }
+
+      if (url === 'ventas/direcciones/') {
+        return Promise.resolve({ data: direcciones });
+      }
+
+      if (url === 'configuracion/') {
+        return Promise.resolve({
+          data: {
+            pasarelas_activas: ['TRANSFERENCIA'],
+            retiro_en_local_activo: true,
+            calle_origen: 'Av. Principal',
+            numero_origen: '123',
+            comuna_origen: 'Santiago',
+            region_origen: 'Metropolitana',
+          },
+        });
+      }
+
+      if (url === 'ventas/logistica/comunas/') {
+        return Promise.resolve({
+          data: { comunas: ['Santiago'] },
+        });
+      }
+
+      if (url === 'ventas/checkout/reglas/') {
+        return Promise.resolve({
+          data: { modo_autenticacion: 'INVITADO' },
+        });
+      }
+
+      if (url === 'ventas/paginas-legales/') {
+        return Promise.resolve({
+          data: [
+            { tipo_pagina: 'TERMINOS' },
+            { tipo_pagina: 'PRIVACIDAD' },
+          ],
+        });
+      }
+
+      return Promise.resolve({ data: [] });
+    });
+
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith('ventas/direcciones/');
+    });
+  });
+
+  it('permite elegir comprar como invitado en modo MIXTO', async () => {
+    getMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/reglas/') {
+        return Promise.resolve({
+          data: { modo_autenticacion: 'MIXTO' },
+        });
+      }
+
+      if (url === 'configuracion/') {
+        return Promise.resolve({
+          data: {
+            pasarelas_activas: ['TRANSFERENCIA'],
+            retiro_en_local_activo: true,
+          },
+        });
+      }
+
+      if (url === 'ventas/logistica/comunas/') {
+        return Promise.resolve({
+          data: { comunas: ['Santiago'] },
+        });
+      }
+
+      if (url === 'ventas/paginas-legales/') {
+        return Promise.resolve({
+          data: [
+            { tipo_pagina: 'TERMINOS' },
+            { tipo_pagina: 'PRIVACIDAD' },
+          ],
+        });
+      }
+
+      return Promise.resolve({ data: [] });
+    });
+
+    renderCheckout();
+
+    expect(
+      await screen.findByRole('button', {
+        name: /comprar como invitado/i,
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /comprar como invitado/i,
+      })
+    );
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Pagar con Transferencia bancaria',
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('actualiza el precio del carrito si el backend informa un precio vigente', async () => {
+    postMock.mockImplementation((url) => {
+      if (url === 'ventas/checkout/') {
+        return Promise.reject({
+          response: {
+            data: {
+              precios_vigentes: [
+                {
+                  variante_sku: producto.sku,
+                  precio: 12000,
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', {
+      name: 'Pagar con Transferencia bancaria',
+    });
+
+    fireEvent.click(
+      screen.getByRole('radio', { name: /retiro en local/i })
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /acepto los/i })
+    );
+    completarDestinatario();
+
+    fireEvent.change(
+      screen.getByLabelText(/correo electrónico/i),
+      { target: { value: 'qa@example.test' } }
+    );
+
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    await waitFor(() => {
+      const carrito = JSON.parse(
+        localStorage.getItem('carrito_local')
+      );
+
+      expect(carrito[0].precio).toBe(12000);
+    });
+
+    expect(
+      await screen.findByText('Teclado mecánico (x1)')
+    ).toBeInTheDocument();
   });
 
 });

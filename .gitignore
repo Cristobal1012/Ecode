@@ -52,3 +52,7 @@ Thumbs.db
 # =========================
 .coverage
 htmlcov/
+
+# Resultados y datos locales reproducibles de QA; la evidencia seleccionada va en docs.
+/.tmp/scrum149/
+/.tmp/scrum148/

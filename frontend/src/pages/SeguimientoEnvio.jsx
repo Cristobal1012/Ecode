@@ -29,6 +29,7 @@ function SeguimientoContenido() {
     const [email, setEmail] = useState('');
     const [seguimiento, setSeguimiento] = useState(null);
     const [mensaje, setMensaje] = useState('');
+    const [cargando, setCargando] = useState(false);
     const tituloResultado = useRef(null);
 
     // Al llegar el resultado, el foco pasa a su título para que el lector de pantalla lo anuncie
@@ -41,6 +42,7 @@ function SeguimientoContenido() {
 
         setMensaje('');
         setSeguimiento(null);
+        setCargando(true);
 
         try {
             const respuesta = await clienteAxios.post(
@@ -57,11 +59,14 @@ function SeguimientoContenido() {
                 error.response?.data?.error ||
                 'No se pudo consultar el seguimiento del pedido.'
             );
+        } finally {
+            setCargando(false);
         }
     };
 
     const estadoActual = seguimiento?.estado_actual;
     const entregaDeLaTienda = Boolean(seguimiento?.entrega_de_la_tienda);
+    const cancelado = estadoActual === 'Cancelado';
     const pendienteDeDespacho =
         estadoActual === 'Pendiente de despacho';
 
@@ -73,7 +78,7 @@ function SeguimientoContenido() {
         : {};
 
     return (
-        <main className="seguimiento-main">
+        <main tabIndex={-1} id="contenido" className="seguimiento-main">
             <div className="seguimiento">
                 <span className="antetitulo">Tu pedido</span>
                 <h1 className="seguimiento-titulo">Seguimiento de pedido</h1>
@@ -109,8 +114,8 @@ function SeguimientoContenido() {
                         />
                     </div>
 
-                    <button type="submit" className="boton boton-primario">
-                        Consultar seguimiento
+                    <button type="submit" className="boton boton-primario" disabled={cargando}>
+                        {cargando ? 'Consultando...' : 'Consultar seguimiento'}
                     </button>
                 </form>
 
@@ -130,7 +135,7 @@ function SeguimientoContenido() {
                             {/* Retiro o entrega coordinada: la hace la tienda, sin courier ni código */}
                             <dt>{entregaDeLaTienda ? 'Entrega' : 'Proveedor'}</dt>
                             <dd className={entregaDeLaTienda ? undefined : 'seguimiento-proveedor'}>{seguimiento.proveedor}</dd>
-                            {!entregaDeLaTienda && (
+                            {!entregaDeLaTienda && !cancelado && (
                                 <>
                                     <dt>Código de seguimiento</dt>
                                     <dd>{seguimiento.codigo_seguimiento || 'Pendiente'}</dd>
@@ -145,6 +150,11 @@ function SeguimientoContenido() {
                         {entregaDeLaTienda ? (
                             <div className="seguimiento-aviso">
                                 <p>{seguimiento.instrucciones}</p>
+                            </div>
+                        ) : cancelado ? (
+                            <div className="seguimiento-aviso">
+                                <strong>Pedido cancelado</strong>
+                                <p>Este pedido fue cancelado.</p>
                             </div>
                         ) : pendienteDeDespacho ? (
                             <div className="seguimiento-aviso">

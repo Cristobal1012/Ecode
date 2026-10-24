@@ -128,7 +128,7 @@
   width: 100%;
   min-height: 48px;
   padding: 10px 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radio);
   background: var(--color-surface);
   color: var(--color-text);
@@ -410,6 +410,9 @@
 }
 
 .checkout-pagar {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   width: 100%;
   padding-top: 1.05rem;
   padding-bottom: 1.05rem;
@@ -434,7 +437,13 @@
   padding: 36px;
   background: var(--color-surface);
   text-align: center;
+  border: 0;
+  color: var(--color-text);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
+
+.checkout-modal::backdrop { background: rgb(0 0 0 / 60%); }
 
 .checkout-modal p {
   margin-bottom: 24px;

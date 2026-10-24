@@ -51,7 +51,8 @@
 }
 
 .config-titulo:focus {
-  outline: none;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 /* En pantallas angostas el índice va arriba del contenido y deja de ser fijo */
@@ -199,7 +200,13 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   text-align: left;
+  overflow-wrap: anywhere;
 }
+
+.editor-legal .ql-editor { min-height: 280px; font-family: var(--fuente-texto); }
+.editor-legal .ql-toolbar,
+.editor-legal .ql-container { border-color: var(--color-control-border); }
+.editor-legal .ql-editor:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; }
 
 .admin-titulo {
   font-size: clamp(1.75rem, 3vw, 2.25rem);
@@ -367,7 +374,7 @@
 .admin-contenido textarea {
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radio);
   background: var(--color-surface);
   color: var(--color-text);

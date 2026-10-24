@@ -1,4 +1,4 @@
-"""Real SQL regression coverage for the catalogue's initial public requests."""
+"""Regresión SQL de las solicitudes públicas iniciales del catálogo."""
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -18,12 +18,14 @@ class ConsultasInicialesPostgresTests(APITestCase):
         cls.admin = create_user('sql149@example.test', rol='ADMIN')
         ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='QA149')
 
-    def test_configuracion_resuelve_disponibilidad_en_dos_consultas_sin_filtrar_secretos(self):
+    def test_configuracion_resuelve_pagos_y_envios_en_tres_consultas_sin_filtrar_secretos(self):
         repo = DjangoRepositorioMediosPago()
         repo.guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {'ambiente': 'INTEGRACION'}))
         repo.guardar(MedioPagoConfigurado(CodigoMedioPago.MERCADO_PAGO, True,
                                         {'access_token': 'qa149-ficticio', 'webhook_secret': 'qa149-firma'}))
-        with self.assertNumQueries(2):
+        # Configuración, medios de pago en lote y disponibilidad de Chilexpress.
+        # La tercera lectura corresponde al campo público añadido en sprint-6.
+        with self.assertNumQueries(3):
             response = self.client.get(reverse('configuracion-global'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['pasarelas_activas'], ['TRANSBANK', 'MERCADO_PAGO'])
@@ -56,7 +58,7 @@ class ConsultasInicialesPostgresTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.client.patch(reverse('configuracion-negocio'), {'nombre_tienda': 'Editada QA149'}, format='json')
         self.client.force_authenticate(None)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):
             response = self.client.get(reverse('configuracion-global'))
         self.assertEqual(response.data['nombre_tienda'], 'Editada QA149')
         self.assertEqual(response.data['pasarelas_activas'], ['TRANSBANK'])

@@ -841,15 +841,32 @@ class SeguimientoEnvioView(APIView):
 
         proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
         codigo = orden.numero_seguimiento_tracking
+        # Los estados finales tienen prioridad sobre el tipo de entrega
+        if orden.estado == 'CANCELADO':
+            estado_estandarizado = 'Cancelado'
+        elif orden.estado == 'ENTREGADO':
+            estado_estandarizado = 'Entregado'
+        elif not codigo or not codigo.strip():
+            estado_estandarizado = 'Pendiente de despacho'
+        else:
+            estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(
+                proveedor,
+                codigo,
+            )
 
-        estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(proveedor, codigo)
+        linea_tiempo = [
+            'En origen',
+            'En tránsito',
+            'En reparto',
+            'Entregado',
+        ]
 
         return Response({
             "numero_orden": orden.id,
             "estado_actual": estado_estandarizado,
-            "linea_tiempo_estandar": ["En origen", "En tránsito", "En reparto", "Entregado"],
+            "linea_tiempo_estandar": linea_tiempo,
             "proveedor": proveedor,
-            "codigo_seguimiento": codigo
+            "codigo_seguimiento": codigo or '',
         }, status=status.HTTP_200_OK)
 
 

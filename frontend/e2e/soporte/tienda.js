@@ -46,6 +46,7 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'catalogo/filtros/': { categorias: ['Prueba'], atributos: {} },
       [`catalogo/productos/${producto.id}/`]: producto,
       'usuarios/me/': { id: 1, nombre: 'Visitante QA', email: 'qa@example.test', rol: 'ADMIN' },
+      'ventas/empresa/': {},
       'ventas/carrito/': { items: [] },
       'ventas/carrito/validar/': { items: [{ producto_mongo_id: producto.id, variante_sku: 'QA-1', disponible: 5, precio: 1000, problema: null }] },
       'ventas/direcciones/': [],

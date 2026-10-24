@@ -1,9 +1,11 @@
+from datetime import timedelta
 from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from ecommerce.application.medios_pago import ConfigurarMedioPago, MediosPagoDisponibles, RepositorioMediosPago
 from ecommerce.domain.medios_pago import (
     CodigoMedioPago, DefinicionMedioPago, DatosMedioPagoInvalidos, MedioPagoConfigurado, MedioPagoNoDisponible, enmascarar,
+    plazo_pago_transferencia,
 )
 
 C = CodigoMedioPago
@@ -123,3 +125,31 @@ class MediosPagoDisponiblesTests(SimpleTestCase):
         for codigo in ('PAYPAL', '', 'transbank'):
             with self.subTest(codigo=codigo), self.assertRaises(MedioPagoNoDisponible):
                 self.casos.exigir(codigo)
+
+
+class PlazoPagoTransferenciaTests(SimpleTestCase):
+    def transferencia(self, **datos):
+        return MedioPagoConfigurado(C.TRANSFERENCIA, True, {**DATOS_BANCO, **datos})
+
+    def test_usa_el_plazo_que_eligio_la_tienda(self):
+        for horas in ('12', '24', '48', '72'):
+            with self.subTest(horas=horas):
+                self.assertEqual(plazo_pago_transferencia(self.transferencia(plazo_pago_horas=horas)),
+                                 timedelta(hours=int(horas)))
+
+    def test_sin_elegir_son_48_horas_y_la_transferencia_sigue_disponible(self):
+        medio = self.transferencia()
+        self.assertEqual(plazo_pago_transferencia(medio), timedelta(hours=48))
+        self.assertTrue(medio.disponible)
+
+    def test_un_valor_guardado_fuera_de_las_opciones_vuelve_a_48_horas(self):
+        self.assertEqual(plazo_pago_transferencia(self.transferencia(plazo_pago_horas='5')), timedelta(hours=48))
+
+    def test_el_panel_rechaza_un_plazo_que_no_esta_entre_las_opciones(self):
+        repositorio = RepositorioMediosPagoFalso()
+        with self.assertRaises(DatosMedioPagoInvalidos) as error:
+            ConfigurarMedioPago(repositorio).ejecutar(C.TRANSFERENCIA, True, {**DATOS_BANCO, 'plazo_pago_horas': '36'})
+        self.assertIn('plazo_pago_horas', error.exception.errores)
+
+    def test_el_comprador_no_recibe_el_plazo_entre_los_datos_bancarios(self):
+        self.assertNotIn('plazo_pago_horas', self.transferencia(plazo_pago_horas='24').datos_para_comprador())

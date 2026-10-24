@@ -8,8 +8,8 @@ from ...views import notificador_pedidos
 
 
 class Command(BaseCommand):
-    help = ('Cancela las órdenes por transferencia que no se pagaron dentro de 48 horas y avisa al comprador; '
-            'a las que llevan 24 horas sin pagar les envía un recordatorio (ver docs/deploy/README.md). '
+    help = ('Cancela las órdenes por transferencia que no se pagaron dentro del plazo de la tienda y avisa al '
+            'comprador; a la mitad del plazo sin pagar les envía un recordatorio (ver docs/deploy/README.md). '
             'Programarlo para que corra periódicamente, por ejemplo cada hora.')
 
     def handle(self, *args, **options):

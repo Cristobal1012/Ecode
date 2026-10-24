@@ -64,6 +64,31 @@ export default function GestorPedidos() {
     }
   };
 
+    // Registra una transferencia recibida después de cancelar el pedido por vencimiento.
+  const handleRegistrarPagoFueraPlazo = async (pedido) => {
+    setEnCurso(pedido.id);
+    setAviso(null);
+
+    try {
+      await clienteAxios.post(
+        `ventas/admin/ordenes/${pedido.id}/pago-fuera-plazo/`
+      );
+
+      setAviso({
+        tipo: 'exito',
+        texto: `Pago fuera de plazo registrado. El pedido #${pedido.id} quedó pendiente de revisión.`,
+      });
+    } catch (error) {
+      setAviso({
+        tipo: 'error',
+        texto: `No se pudo registrar el pago fuera de plazo del pedido #${pedido.id}: ${mensajeDeError(error)}`,
+      });
+    } finally {
+      await cargarPedidos();
+      setEnCurso(null);
+    }
+  };
+
   const handleResolverRevision = async (pedido) => {
     if (!window.confirm(
       `¿Ya resolviste el pedido #${pedido.id}? (por ejemplo, reembolsaste al comprador o conseguiste el producto)`
@@ -103,6 +128,18 @@ export default function GestorPedidos() {
     }
     if (pedido.proveedor_logistico === 'RETIRO_LOCAL') {
       return <span style={{ color: 'var(--color-muted)' }}>Retiro en local</span>;
+    }
+    if (pedido.proveedor_logistico === 'ENTREGA_COORDINADA') {
+      // La entrega la hace la tienda: la dirección para coordinarla con el comprador
+      const direccion = pedido.direccion_envio_snapshot || {};
+      const texto = [[direccion.calle, direccion.numero].filter(Boolean).join(' '), direccion.dpto_casa, direccion.comuna]
+        .filter(Boolean).join(', ');
+      return (
+        <div style={{ fontSize: '0.9rem' }}>
+          <span style={{ color: 'var(--color-muted)' }}>Entrega coordinada</span>
+          {texto && <div>{texto}</div>}
+        </div>
+      );
     }
     if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
       return <span style={{ color: 'var(--color-muted)' }}>{pedido.proveedor_logistico || '—'}</span>;
@@ -174,6 +211,14 @@ export default function GestorPedidos() {
                         )}
                       </div>
                     )}
+                    {pedido.datos_empresa && (
+                      // Compra como empresa: la tienda emite la factura con estos datos
+                      <div style={{ marginTop: '4px', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+                        <strong style={{ color: 'var(--color-text)' }}>Factura:</strong> {pedido.datos_empresa.razon_social} · RUT {pedido.datos_empresa.rut}
+                        <div>{pedido.datos_empresa.giro} · {pedido.datos_empresa.direccion}</div>
+                        <a href={`mailto:${pedido.datos_empresa.correo}`} style={{ color: 'var(--color-primary)' }}>{pedido.datos_empresa.correo}</a>
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '12px' }}>${Number(pedido.total_final).toLocaleString('es-CL')}</td>
                   <td style={{ padding: '12px' }}>
@@ -217,9 +262,30 @@ export default function GestorPedidos() {
                           </button>
                         </div>
                       </div>
+                                        ) : pedido.estado === 'CANCELADO' &&
+                      pedido.motivo_cancelacion === 'Pago no recibido a tiempo' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRegistrarPagoFueraPlazo(pedido)}
+                        disabled={enCurso === pedido.id}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: 'var(--color-surface)',
+                          color: 'var(--color-primary)',
+                          border: '1px solid var(--color-primary)',
+                          borderRadius: '4px',
+                          cursor: enCurso === pedido.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {enCurso === pedido.id
+                          ? 'Registrando...'
+                          : 'Registrar pago recibido fuera de plazo'}
+                      </button>
                     ) : (
                       <span style={{ color: 'var(--color-muted)' }}>—</span>
                     )}
+
                   </td>
                   <td style={{ padding: '12px' }}>{celdaEnvio(pedido)}</td>
                 </tr>

@@ -1,0 +1,103 @@
+import { useEffect, useState } from 'react';
+import clienteAxios from './auth/axiosConfig';
+
+// Las solicitudes del formulario de cotización: la tienda las responde por correo o teléfono y aquí anota en qué
+// quedó cada una
+const ESTADOS = [
+  ['NUEVA', 'Nueva'],
+  ['RESPONDIDA', 'Respondida'],
+  ['ACEPTADA', 'Aceptada'],
+  ['DESCARTADA', 'Descartada']
+];
+
+const formatearFecha = (iso) => new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' });
+// '2026-11-05' es una fecha sin hora: se muestra tal cual, sin pasar por la zona horaria
+const formatearDia = (dia) => dia.split('-').reverse().join('-');
+
+export default function GestorCotizaciones() {
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [aviso, setAviso] = useState(null);
+  const [enCurso, setEnCurso] = useState(null);
+
+  useEffect(() => {
+    clienteAxios.get('ventas/admin/cotizaciones/')
+      .then(({ data }) => setCotizaciones(data))
+      .catch(() => setAviso({ tipo: 'error', texto: 'No se pudieron cargar las cotizaciones.' }))
+      .finally(() => setCargando(false));
+  }, []);
+
+  const cambiarEstado = async (cotizacion, estado) => {
+    setEnCurso(cotizacion.id);
+    setAviso(null);
+    try {
+      const { data } = await clienteAxios.patch(`ventas/admin/cotizaciones/${cotizacion.id}/`, { estado });
+      setCotizaciones(actuales => actuales.map(c => (c.id === data.id ? data : c)));
+      setAviso({ tipo: 'exito', texto: `La cotización #${data.id} quedó como ${data.estado_display}.` });
+    } catch {
+      setAviso({ tipo: 'error', texto: `No se pudo cambiar el estado de la cotización #${cotizacion.id}.` });
+    } finally {
+      setEnCurso(null);
+    }
+  };
+
+  if (cargando) return <p className="texto-secundario">Cargando cotizaciones...</p>;
+
+  return (
+    <>
+      <p className="texto-secundario admin-descripcion">
+        Responde cada solicitud por correo o teléfono (basta con responder el correo que te llegó) y anota aquí en
+        qué quedó. El formulario se activa en Configuración &gt; Cotizaciones y Encargos.
+      </p>
+
+      {aviso && (
+        <p role={aviso.tipo === 'error' ? 'alert' : 'status'} className={`admin-aviso admin-aviso--${aviso.tipo}`}>
+          {aviso.texto}
+        </p>
+      )}
+
+      {cotizaciones.length === 0 ? (
+        <p className="texto-secundario">Todavía no hay solicitudes de cotización.</p>
+      ) : (
+        <ul className="lista-sin-estilo cotizaciones-lista">
+          {cotizaciones.map(c => (
+            <li key={c.id} className="cotizacion-tarjeta">
+              <article aria-labelledby={`cotizacion-${c.id}-titulo`}>
+                <div className="cotizacion-tarjeta-encabezado">
+                  <h3 id={`cotizacion-${c.id}-titulo`}>#{c.id} · {c.producto_nombre || 'Producto descrito por el cliente'}</h3>
+                  <label className="cotizacion-tarjeta-estado">
+                    <span className="visualmente-oculto">Estado de la cotización #{c.id}</span>
+                    <select value={c.estado} disabled={enCurso === c.id}
+                      onChange={(e) => cambiarEstado(c, e.target.value)}>
+                      {ESTADOS.map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <p className="texto-secundario cotizacion-tarjeta-fecha">Recibida el {formatearFecha(c.fecha_creacion)}</p>
+                <dl className="cotizacion-tarjeta-datos">
+                  {c.descripcion && <><dt>Qué necesita</dt><dd>{c.descripcion}</dd></>}
+                  <dt>Cantidad</dt><dd>{c.cantidad}</dd>
+                  {c.personalizacion && <><dt>Personalización</dt><dd>{c.personalizacion}</dd></>}
+                  {c.fecha_requerida && <><dt>Lo necesita para el</dt><dd>{formatearDia(c.fecha_requerida)}</dd></>}
+                  <dt>Contacto</dt>
+                  <dd>
+                    {c.nombre} · <a href={`mailto:${c.correo}`}>{c.correo}</a> · <a href={`tel:${c.telefono}`}>{c.telefono}</a>
+                  </dd>
+                  {c.datos_empresa && (
+                    <>
+                      <dt>Factura</dt>
+                      <dd>
+                        {c.datos_empresa.razon_social} · RUT {c.datos_empresa.rut} · {c.datos_empresa.giro}
+                        <br />{c.datos_empresa.direccion} · {c.datos_empresa.correo}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}

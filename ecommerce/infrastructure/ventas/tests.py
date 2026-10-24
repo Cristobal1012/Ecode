@@ -13,7 +13,7 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal, ProveedorEnvio
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 from .views import token_verificacion_valido
@@ -65,6 +65,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
+             'entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada',
+             'chilexpress_activo', 'cotizaciones_activas', 'blog_activo', 'blog_nombre',
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
@@ -94,6 +96,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             texto_boton_ingreso='Ver productos',
             banner_url='https://example.com/hero.jpg',
         )
+        # La migración 0022 copia a la base las llaves de Chilexpress que haya en el entorno
+        ProveedorEnvio.objects.all().delete()
 
     @override_settings(GOOGLE_CLIENT_ID='cliente-qa.apps.googleusercontent.com')
     def test_public_endpoint_matches_frontend_contract(self):
@@ -124,6 +128,13 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'numero_origen': '123',
             'dpto_casa_origen': None,
             'retiro_en_local_activo': True,
+            'entrega_coordinada_activa': False,
+            'costo_entrega_coordinada': 0,
+            'instrucciones_entrega_coordinada': '',
+            'chilexpress_activo': False,
+            'cotizaciones_activas': False,
+            'blog_activo': False,
+            'blog_nombre': 'Nosotros',
             'google_analytics_id': None,
             'meta_pixel_id': None,
             'nombre_tienda': 'Tienda QA',
@@ -194,6 +205,59 @@ class ConfiguracionNegocioAccessTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.configuracion.refresh_from_db()
         self.assertEqual(self.configuracion.texto_bienvenida, 'Modificado')
+
+
+    def patch_analytics(self, datos):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Token {self.admin_token.key}'
+        )
+        return self.client.patch(
+            reverse('configuracion-negocio'),
+            datos,
+            format='json',
+        )
+
+    def test_admin_can_save_valid_analytics_ids(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-ABC1234567',
+            'meta_pixel_id': '123456789012345',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(
+            self.configuracion.google_analytics_id, 'G-ABC1234567'
+        )
+        self.assertEqual(
+            self.configuracion.meta_pixel_id, '123456789012345'
+        )
+
+    def test_invalid_google_analytics_id_is_rejected(self):
+        response = self.patch_analytics({
+            'google_analytics_id': 'G-123',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('google_analytics_id', response.data)
+
+    def test_invalid_meta_pixel_id_is_rejected(self):
+        response = self.patch_analytics({
+            'meta_pixel_id': 'pixel-invalido',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('meta_pixel_id', response.data)
+
+    def test_empty_analytics_ids_can_disable_integrations(self):
+        response = self.patch_analytics({
+            'google_analytics_id': '',
+            'meta_pixel_id': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.configuracion.refresh_from_db()
+        self.assertEqual(self.configuracion.google_analytics_id, '')
+        self.assertEqual(self.configuracion.meta_pixel_id, '')
 
 
 class CheckoutAccessTests(APITestCase):
@@ -622,6 +686,62 @@ class PanelPedidosAdminTests(APITestCase):
         self.assertEqual(self.resolver().status_code, 403)
         self.orden.refresh_from_db()
         self.assertTrue(self.orden.requiere_revision)
+
+
+    def crear_orden_cancelada(self, motivo):
+        return OrdenCompra.objects.create(
+            email_invitado='prueba@example.test',
+            metodo_pago='TRANSFERENCIA',
+            direccion_envio_snapshot={},
+            subtotal=10000,
+            costo_envio=0,
+            total_final=10000,
+            estado='CANCELADO',
+            motivo_cancelacion=motivo,
+        )
+
+    def test_registrar_pago_fuera_plazo_deja_orden_cancelada_en_revision(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertTrue(orden.requiere_revision)
+        self.assertEqual(
+            orden.motivo_revision,
+            'Transferencia recibida fuera de plazo: reembolsar o crear un pedido nuevo.',
+        )
+
+    def test_no_permite_registrar_pago_si_se_cancelo_por_otro_motivo(self):
+        self.autenticar(self.admin_token)
+        orden = self.crear_orden_cancelada('Cancelado por el administrador')
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 409)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
+
+    def test_solo_el_admin_puede_registrar_pago_fuera_plazo(self):
+        orden = self.crear_orden_cancelada('Pago no recibido a tiempo')
+        self.autenticar(self.buyer_token)
+
+        response = self.client.post(
+            reverse('admin-ordenes-pago-fuera-plazo', args=[orden.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'CANCELADO')
+        self.assertFalse(orden.requiere_revision)
 
 
 class AdminOrdenTransporteTests(APITestCase):

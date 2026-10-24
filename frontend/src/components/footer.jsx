@@ -15,10 +15,11 @@ const lineasDireccion = (configuracion) => {
   ].filter(Boolean);
 };
 
-export const Footer = ({ onOpenCookiePreferences }) => {
+export const Footer = ({ onOpenCookiePreferences, nombreTiendaTemporal = null }) => {
   const { pathname } = useLocation();
   const configuracion = useConfiguracionTienda();
-  const nombreTienda = configuracion?.nombre_tienda || 'Tienda';
+  const nombreTienda =
+    nombreTiendaTemporal ?? (configuracion?.nombre_tienda || 'Tienda');
   const direccion = lineasDireccion(configuracion);
   const correo = configuracion?.correo_contacto;
   const horario = configuracion?.horario_atencion?.trim();
@@ -61,7 +62,9 @@ export const Footer = ({ onOpenCookiePreferences }) => {
           <ul>
             <li><Link to="/">Inicio</Link></li>
             <li><Link to="/catalogo">Catálogo</Link></li>
+            {configuracion?.blog_activo && <li><Link to="/blog">{configuracion.blog_nombre || 'Nosotros'}</Link></li>}
             <li><Link to="/seguimiento">Seguimiento de pedido</Link></li>
+            {configuracion?.cotizaciones_activas && <li><Link to="/cotizar">Cotizar un encargo</Link></li>}
           </ul>
         </nav>
 

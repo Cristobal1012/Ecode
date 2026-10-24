@@ -21,6 +21,9 @@ import PagoCancelado from './components/PagoCancelado'; // Ajusta la ruta a dond
 import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
+import Cotizacion from './pages/Cotizacion';
+import Blog from './pages/Blog';
+import PublicacionBlog from './pages/PublicacionBlog';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
@@ -71,11 +74,14 @@ function App() {
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const [googleClientId, setGoogleClientId] = useState('');
   const [trackingIds, setTrackingIds] = useState({googleAnalyticsId: '',metaPixelId: '',});
+  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+
   useEffect(() => {
     // 1. Carga inicial instantánea desde localStorage
     const saved = localStorage.getItem('ecommerce_palette');
     const initialId = saved ? Number(saved) : 1;
     applyPaletteToRoot(initialId);
+    
 
     // 2. Consulta a Django para sincronizar con la base de datos
     const syncTheme = async () => {
@@ -135,9 +141,14 @@ function App() {
         <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<LandingPage onNombreTiendaTemporal = {setNombreTiendaTemporal} />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
+            {/* Encargos, personalizados y compras en cantidad (si el admin activó el formulario) */}
+            <Route path="/cotizar" element={<Cotizacion />} />
+            {/* Blog o portafolio (si el admin lo activó; si no, las páginas avisan que no está disponible) */}
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<PublicacionBlog />} />
             <Route path="/variantes" element={<VariantSelector />} />
             <Route path="/catalogo" element={<Catalogo />} />
             <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />
@@ -170,7 +181,7 @@ function App() {
         </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer onOpenCookiePreferences={openPreferences} />
+        <Footer onOpenCookiePreferences={openPreferences} nombreTiendaTemporal = {nombreTiendaTemporal}/>
         <CookieBanner
           consent={consent}
           isOpen={isBannerOpen}

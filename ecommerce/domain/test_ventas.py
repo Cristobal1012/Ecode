@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta
+
 from django.test import SimpleTestCase
 
 from ecommerce.domain.ventas import (
     EstadoPedido, OrdenTransporteNoPermitida, TelefonoInvalido, TransicionNoPermitida,
-    normalizar_telefono_chile, paginas_legales_faltantes, transiciones_desde,
+    normalizar_telefono_chile, paginas_legales_faltantes, plazo_pago, transiciones_desde,
     validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -81,3 +83,14 @@ class PaginasLegalesParaVenderTests(SimpleTestCase):
         self.assertEqual(paginas_legales_faltantes([]), ['TERMINOS', 'PRIVACIDAD'])
         self.assertEqual(paginas_legales_faltantes(['REEMBOLSOS', 'PRIVACIDAD']), ['TERMINOS'])
         self.assertEqual(paginas_legales_faltantes(['PRIVACIDAD', 'TERMINOS']), [])
+
+
+class PlazoPagoTests(SimpleTestCase):
+    def test_vence_al_terminar_el_plazo_y_recuerda_a_la_mitad(self):
+        creada = datetime(2026, 10, 19, 10, 0)
+        for horas, recordar in ((12, datetime(2026, 10, 19, 16, 0)), (48, datetime(2026, 10, 20, 10, 0)),
+                                (72, datetime(2026, 10, 20, 22, 0))):
+            with self.subTest(horas=horas):
+                plazo = plazo_pago(creada, timedelta(hours=horas))
+                self.assertEqual(plazo.vence, creada + timedelta(hours=horas))
+                self.assertEqual(plazo.recordar, recordar)

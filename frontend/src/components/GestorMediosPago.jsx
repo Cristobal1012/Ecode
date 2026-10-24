@@ -4,7 +4,12 @@ import clienteAxios from './auth/axiosConfig';
 // Textos de la interfaz para los valores que guarda el backend
 const ETIQUETAS_OPCION = {
   INTEGRACION: 'Integración (pruebas, sin cobros reales)',
-  PRODUCCION: 'Producción (cobros reales)'
+  PRODUCCION: 'Producción (cobros reales)',
+  // Plazo para pagar una transferencia (plazo_pago_horas)
+  12: '12 horas',
+  24: '24 horas',
+  48: '48 horas',
+  72: '72 horas'
 };
 
 const ESTILOS_ESTADO = {

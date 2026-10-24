@@ -8,6 +8,12 @@ import './HistorialPedidos.css';
 
 const TEMA_PREDETERMINADO = 1;
 
+// Entregas que hace la propia tienda, sin transportista (RF-02.3)
+const NOMBRES_ENTREGA = {
+    RETIRO_LOCAL: 'Retiro en local',
+    ENTREGA_COORDINADA: 'Entrega coordinada'
+};
+
 const diccionarioEstados = {
     'PENDIENTE': 'Pendiente',
     'PAGADO': 'Pagado',
@@ -192,7 +198,7 @@ const HistorialPedidos = () => {
 
                         <dl className="historial-detalle">
                             <dt>Proveedor logístico</dt>
-                            <dd className="historial-proveedor">{pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</dd>
+                            <dd className="historial-proveedor">{NOMBRES_ENTREGA[pedidoSeleccionado.proveedor_logistico] || pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</dd>
                             <dt>Estado del pago</dt>
                             <dd>{diccionarioEstados[pedidoSeleccionado.estado] || pedidoSeleccionado.estado}</dd>
                             <dt>Información pasarela / OT</dt>

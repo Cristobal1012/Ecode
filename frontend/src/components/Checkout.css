@@ -269,6 +269,28 @@
   font-weight: 600;
 }
 
+/* Compra como empresa: datos para la factura (DatosEmpresa.jsx) */
+.datos-empresa {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.datos-empresa + .checkout-casilla {
+  margin-top: 12px;
+}
+
+.checkout-error-campo {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: #8A2418;
+}
+
+/* Instrucciones del admin para la entrega coordinada, sobre la dirección */
+.checkout-entrega-coordinada {
+  margin-bottom: 12px;
+}
+
 .checkout-casilla {
   display: flex;
   align-items: flex-start;

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-
+import { useState } from 'react';
 const { getMock, patchMock } = vi.hoisted(() => ({ getMock: vi.fn(), patchMock: vi.fn() }));
 
 vi.mock('../components/auth/axiosConfig', () => ({ default: { get: getMock, patch: patchMock } }));
@@ -44,6 +44,29 @@ async function renderLanding() {
   return render(<MemoryRouter><LandingPage /></MemoryRouter>);
 }
 
+function LandingConFooter({ LandingPage, Footer }) {
+  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+
+  return (
+    <MemoryRouter>
+      <LandingPage onNombreTiendaTemporal={setNombreTiendaTemporal} />
+      <Footer nombreTiendaTemporal={nombreTiendaTemporal} />
+    </MemoryRouter>
+  );
+}
+
+async function renderLandingConFooter() {
+  vi.resetModules();
+
+  const [{ default: LandingPage }, { default: Footer }] = await Promise.all([
+    import('../pages/LandingPage'),
+    import('../components/footer')
+  ]);
+
+  return render(
+    <LandingConFooter LandingPage={LandingPage} Footer={Footer} />
+  );
+}
 describe('LandingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,9 +157,44 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     // jsdom no implementa las vistas previas de archivos
     URL.createObjectURL = vi.fn(() => 'blob:vista-previa');
     URL.revokeObjectURL = vi.fn();
+
   });
 
   afterEach(() => cleanup());
+
+  it('actualiza el nombre y el copyright del footer al editar y los restaura al descartar', 
+  async () => {
+    localStorage.setItem('rol', 'ADMIN');
+    responder();
+
+    await renderLandingConFooter();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
+
+    const footer = await screen.findByRole('contentinfo');
+    const campoNombre = screen.getByLabelText('Nombre de la tienda');
+    const anio = new Date().getFullYear();
+
+    fireEvent.change(campoNombre, {
+      target: { value: 'Mi nueva tienda' }
+    });
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent('Mi nueva tienda');
+      expect(footer).toHaveTextContent(
+        `© ${anio} Mi nueva tienda. Todos los derechos reservados.`
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar' }));
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent('Taller Maché');
+      expect(footer).toHaveTextContent(
+        `© ${anio} Taller Maché. Todos los derechos reservados.`
+      );
+    });
+  });
 
   async function entrarComoAdmin() {
     localStorage.setItem('rol', 'ADMIN');

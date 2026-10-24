@@ -1,6 +1,7 @@
 """Medios de pago configurables por el emprendedor (RN-02), independientes de Django."""
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import StrEnum
 
 
@@ -62,6 +63,10 @@ class DefinicionMedioPago:
 AMBIENTE_INTEGRACION = 'INTEGRACION'
 AMBIENTE_PRODUCCION = 'PRODUCCION'
 
+# Horas para pagar una transferencia: las elige cada tienda (decidido el 2026-10-19); sin elegir, 48
+PLAZOS_PAGO_TRANSFERENCIA = ('12', '24', '48', '72')
+PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO = timedelta(hours=48)
+
 # Orden en que se muestran al comprador y en el panel. Un medio nuevo (ej. Linkify) se agrega aquí.
 MEDIOS_PAGO = (
     DefinicionMedioPago(CodigoMedioPago.TRANSBANK, 'Transbank Webpay Plus', (
@@ -86,7 +91,10 @@ MEDIOS_PAGO = (
         CampoMedioPago('rut_titular', 'RUT del titular'),
         CampoMedioPago('nombre_titular', 'Nombre del titular'),
         CampoMedioPago('email', 'Correo para el comprobante'),
-        
+        # Opcional para no dejar incompletas las tiendas que ya tenían la transferencia configurada
+        CampoMedioPago('plazo_pago_horas', 'Plazo para pagar (si no eliges, 48 horas)',
+                       opciones=PLAZOS_PAGO_TRANSFERENCIA, obligatorio=False, para_comprador=False),
+
         # Linkify valida las transferencias automáticamente; es opcional, así que una tienda sin Linkify
         # igual ofrece la transferencia
         CampoMedioPago('verificar_con_linkify', 'Verificar automáticamente con Linkify',
@@ -95,6 +103,12 @@ MEDIOS_PAGO = (
                        obligatorio_si=('verificar_con_linkify', 'Sí')),
     )),
 )
+
+def plazo_pago_transferencia(medio: 'MedioPagoConfigurado') -> timedelta:
+    """El plazo que eligió la tienda para pagar una transferencia; sin elegir, 48 horas."""
+    horas = medio.datos.get('plazo_pago_horas')
+    return timedelta(hours=int(horas)) if horas in PLAZOS_PAGO_TRANSFERENCIA else PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO
+
 
 def definicion_medio(codigo) -> DefinicionMedioPago:
     codigo = CodigoMedioPago(codigo)

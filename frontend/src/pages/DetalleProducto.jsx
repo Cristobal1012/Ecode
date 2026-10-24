@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import VariantSelector from '../components/VariantSelector';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
@@ -9,6 +10,7 @@ import './DetalleProducto.css';
 
 export default function DetalleProducto() {
   const { id } = useParams();
+  const configuracion = useConfiguracionTienda();
   const [producto, setProducto] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -286,6 +288,13 @@ export default function DetalleProducto() {
             <div className="detalle-compra">
               <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
             </div>
+
+            {configuracion?.cotizaciones_activas && (
+              <p className="detalle-cotizar texto-secundario">
+                ¿Lo necesitas personalizado o en cantidad?{' '}
+                <Link to={`/cotizar?producto=${encodeURIComponent(producto.id)}`}>Pide una cotización</Link>
+              </p>
+            )}
           </div>
         </div>
       </main>

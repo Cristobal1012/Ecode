@@ -4,16 +4,20 @@ import logging
 import os
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from ecommerce.application.cotizaciones import NotificadorCotizaciones
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
+from ecommerce.domain.empresa import DatosEmpresa
+from ecommerce.domain.logistica import ENTREGA_COORDINADA, aviso_entrega_coordinada
 from ecommerce.domain.ventas import EventoPedido
 
-from ..instrucciones_pago import instrucciones_transferencia
-from ..models import ConfiguracionGlobal, OrdenCompra
+from ..instrucciones_pago import fecha_limite_pago, instrucciones_transferencia
+from ..models import ConfiguracionGlobal, Cotizacion, OrdenCompra
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +91,16 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'metodo_pago': orden.get_metodo_pago_display(),
             'anulado_por_comprador': orden.motivo_cancelacion == MOTIVO_PAGO_ANULADO,
             'pago_vencido': orden.motivo_cancelacion == MOTIVO_PAGO_VENCIDO,
+            # Horas que tuvo para transferir (el plazo de la tienda al crear la orden)
+            'plazo_pago_horas': round((fecha_limite_pago(orden) - orden.fecha_creacion).total_seconds() / 3600),
             'es_retiro_local': orden.proveedor_logistico == 'RETIRO_LOCAL',
+            'es_entrega_coordinada': orden.proveedor_logistico == ENTREGA_COORDINADA,
+            # Cómo se coordina la entrega (lo escribe el admin); vacío si la entrega no es coordinada
+            'aviso_entrega_coordinada': CorreoNotificadorPedidos._aviso_entrega_coordinada(orden, config),
             'transportista': (orden.proveedor_logistico or '').capitalize(),
+            # Compra como empresa: [(etiqueta, valor)] con los datos para la factura; vacío si compró una persona
+            'datos_factura': [(etiqueta, (orden.datos_empresa or {}).get(campo, ''))
+                              for campo, etiqueta in DatosEmpresa.CAMPOS] if orden.datos_empresa else [],
             # Número de la orden de transporte (RF-02.3), si ya se generó
             'numero_ot': orden.numero_seguimiento_tracking or '',
             # Datos bancarios, monto y referencia si la orden se paga por transferencia (None si no)
@@ -108,6 +120,12 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
         return instrucciones
 
     @staticmethod
+    def _aviso_entrega_coordinada(orden, config):
+        if orden.proveedor_logistico != ENTREGA_COORDINADA:
+            return ''
+        return aviso_entrega_coordinada(config.instrucciones_entrega_coordinada if config else '')
+
+    @staticmethod
     def _entrega(orden, config):
         direccion = orden.direccion_envio_snapshot or {}
         if orden.proveedor_logistico == 'RETIRO_LOCAL':
@@ -118,6 +136,72 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             texto += f", {direccion['dpto_casa']}"
         if direccion.get('comuna'):
             texto += f", {direccion['comuna']}"
+        if orden.proveedor_logistico == ENTREGA_COORDINADA:
+            return f'Entrega coordinada: {texto}'
         tipo = 'Retiro en sucursal' if direccion.get('codigo_sucursal') else 'Despacho a domicilio'
         proveedor = (orden.proveedor_logistico or '').capitalize()
         return f'{tipo} ({proveedor}): {texto}' if proveedor else f'{tipo}: {texto}'
+
+
+class CorreoNotificadorCotizaciones(NotificadorCotizaciones):
+    """Avisa a la tienda de una solicitud de cotización y le confirma al cliente que llegó."""
+
+    def notificar_nueva(self, cotizacion_id):
+        # Igual que los pedidos: no se avisa una solicitud que luego haga rollback
+        transaction.on_commit(lambda: self._enviar(cotizacion_id))
+
+    def _enviar(self, cotizacion_id):
+        try:
+            cotizacion = Cotizacion.objects.get(id=cotizacion_id)
+            config = ConfiguracionGlobal.objects.filter(pk=1).first()
+            tienda = config.nombre_tienda if config and config.nombre_tienda else 'Nuestra tienda'
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+            contexto = {
+                'tienda': tienda, 'cotizacion': cotizacion, 'url_panel': f'{frontend_url}/admin',
+                'detalle': self._detalle(cotizacion),
+                'datos_factura': [(etiqueta, cotizacion.datos_empresa.get(campo, ''))
+                                  for campo, etiqueta in DatosEmpresa.CAMPOS] if cotizacion.datos_empresa else [],
+            }
+            correos_tienda = self._correos_tienda(config)
+            if correos_tienda:
+                # Responder este correo le llega al cliente
+                self._mandar('cotizacion_tienda', f'Nueva solicitud de cotización #{cotizacion.id} | {tienda}',
+                             contexto, correos_tienda, responder_a=[cotizacion.correo])
+            else:
+                logger.warning('La tienda no tiene correo de contacto ni administradores: la cotización %s '
+                               'solo queda en el panel', cotizacion_id)
+            self._mandar('cotizacion_recibida', f'Recibimos tu solicitud de cotización #{cotizacion.id} | {tienda}',
+                         contexto, [cotizacion.correo], responder_a=correos_tienda[:1])
+        except Exception:
+            # La solicitud ya quedó guardada y se ve en el panel: solo se registra (sin datos del cliente)
+            logger.exception('No se pudo enviar el aviso de la cotización %s', cotizacion_id)
+
+    @staticmethod
+    def _mandar(plantilla, asunto, contexto, para, responder_a):
+        correo = EmailMultiAlternatives(
+            subject=asunto, body=render_to_string(f'ventas/correos/{plantilla}.txt', contexto),
+            from_email=settings.DEFAULT_FROM_EMAIL, to=para, reply_to=responder_a or None,
+        )
+        correo.attach_alternative(render_to_string(f'ventas/correos/{plantilla}.html', contexto), 'text/html')
+        correo.send()
+
+    @staticmethod
+    def _correos_tienda(config):
+        """El correo de contacto de la tienda; si no lo cargó, el de sus administradores."""
+        if config and config.correo_contacto:
+            return [config.correo_contacto]
+        return list(get_user_model().objects.filter(rol='ADMIN', is_active=True)
+                    .exclude(email='').order_by('id').values_list('email', flat=True))
+
+    @staticmethod
+    def _detalle(cotizacion):
+        filas = [('Producto', cotizacion.producto_nombre or 'Descrito por el cliente')]
+        if cotizacion.descripcion:
+            filas.append(('Qué necesita', cotizacion.descripcion))
+        filas.append(('Cantidad', str(cotizacion.cantidad)))
+        if cotizacion.personalizacion:
+            filas.append(('Personalización', cotizacion.personalizacion))
+        if cotizacion.fecha_requerida:
+            filas.append(('Lo necesita para el', cotizacion.fecha_requerida.strftime('%d-%m-%Y')))
+        filas += [('Nombre', cotizacion.nombre), ('Correo', cotizacion.correo), ('Teléfono', cotizacion.telefono)]
+        return filas

@@ -61,6 +61,7 @@ function SeguimientoContenido() {
     };
 
     const estadoActual = seguimiento?.estado_actual;
+    const entregaDeLaTienda = Boolean(seguimiento?.entrega_de_la_tienda);
     const pendienteDeDespacho =
         estadoActual === 'Pendiente de despacho';
 
@@ -126,17 +127,26 @@ function SeguimientoContenido() {
                         </h2>
 
                         <dl className="seguimiento-datos">
-                            <dt>Proveedor</dt>
-                            <dd className="seguimiento-proveedor">{seguimiento.proveedor}</dd>
-                            <dt>Código de seguimiento</dt>
-                            <dd>{seguimiento.codigo_seguimiento || 'Pendiente'}</dd>
+                            {/* Retiro o entrega coordinada: la hace la tienda, sin courier ni código */}
+                            <dt>{entregaDeLaTienda ? 'Entrega' : 'Proveedor'}</dt>
+                            <dd className={entregaDeLaTienda ? undefined : 'seguimiento-proveedor'}>{seguimiento.proveedor}</dd>
+                            {!entregaDeLaTienda && (
+                                <>
+                                    <dt>Código de seguimiento</dt>
+                                    <dd>{seguimiento.codigo_seguimiento || 'Pendiente'}</dd>
+                                </>
+                            )}
                             <dt>Estado actual</dt>
                             <dd>{seguimiento.estado_actual}</dd>
                         </dl>
 
-                        <h3>Estado del envío</h3>
+                        <h3>{entregaDeLaTienda ? 'Cómo recibes tu pedido' : 'Estado del envío'}</h3>
 
-                        {pendienteDeDespacho ? (
+                        {entregaDeLaTienda ? (
+                            <div className="seguimiento-aviso">
+                                <p>{seguimiento.instrucciones}</p>
+                            </div>
+                        ) : pendienteDeDespacho ? (
                             <div className="seguimiento-aviso">
                                 <strong>Pendiente de despacho</strong>
                                 <p>El pedido aún no ha sido entregado al proveedor logístico.</p>

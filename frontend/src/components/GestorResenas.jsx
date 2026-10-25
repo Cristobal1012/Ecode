@@ -33,16 +33,15 @@ export default function GestorResenas() {
     let vigente = true;
     clienteAxios.get('ventas/admin/resenas/', { params: { estado: filtro.estado, pagina: filtro.pagina } })
       .then(({ data }) => {
+        if (vigente) setCargada({ filtro, resenas: data.results, total: data.count });
+      })
+      .catch((error) => {
         if (!vigente) return;
-        // Al moderar la última reseña de una página, se vuelve a la anterior
-        if (data.results.length === 0 && filtro.pagina > 1) {
+        // Al moderar la última reseña de una página, esa página deja de existir (404): se vuelve a la anterior
+        if (error.response?.status === 404 && filtro.pagina > 1) {
           setFiltro(actual => ({ ...actual, pagina: actual.pagina - 1 }));
           return;
         }
-        setCargada({ filtro, resenas: data.results, total: data.count });
-      })
-      .catch(() => {
-        if (!vigente) return;
         setAviso({ tipo: 'error', texto: 'No se pudieron cargar las reseñas.' });
         setCargada({ filtro, resenas: [], total: 0 });
       });

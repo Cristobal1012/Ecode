@@ -82,7 +82,7 @@ class CheckoutCompraEmpresaTests(APITestCase):
         self.comprar()
         self.client.force_authenticate(create_user('admin-factura@example.test', rol='ADMIN'))
 
-        pedido, = self.client.get(reverse('admin-ordenes-list')).data
+        pedido, = self.client.get(reverse('admin-ordenes-list')).data['results']
 
         self.assertEqual(pedido['datos_empresa']['rut'], '76.123.456-0')
 

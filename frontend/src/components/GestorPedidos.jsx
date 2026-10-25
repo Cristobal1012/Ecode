@@ -21,42 +21,86 @@ const mensajeDeError = (error) => {
   return data?.estado?.[0] || data?.detail || 'Error inesperado. Inténtalo nuevamente.';
 };
 
+// Igual que PaginacionPedidos en el backend
+const POR_PAGINA = 20;
+
+// Para el mensaje de lista vacía con un filtro de estado
+const PLURAL_ESTADO = {
+  PENDIENTE: 'pendientes',
+  PAGADO: 'pagados',
+  EN_PREPARACION: 'en preparación',
+  ENVIADO: 'despachados',
+  ENTREGADO: 'entregados',
+  CANCELADO: 'cancelados'
+};
+
+const mensajeVacio = ({ estado, revision }) => {
+  if (revision) return 'No hay pedidos que requieran revisión.';
+  if (estado) return `No hay pedidos ${PLURAL_ESTADO[estado]} en este momento.`;
+  return 'No hay pedidos registrados en la tienda.';
+};
+
 export default function GestorPedidos() {
-  const [pedidos, setPedidos] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  // `estado` vacío muestra todos. `version` vuelve a pedir la misma página después de una acción
+  const [consulta, setConsulta] = useState({ estado: '', revision: false, pagina: 1, version: 0 });
+  // A qué consulta corresponde lo cargado: si no coincide con la pedida, aún está cargando
+  const [cargada, setCargada] = useState({ consulta: null, pedidos: [], total: 0 });
   // { tipo: 'error' | 'exito', texto }
   const [aviso, setAviso] = useState(null);
   // Id del pedido que se está actualizando, para no enviar dos cambios a la vez
   const [enCurso, setEnCurso] = useState(null);
-  const [paginaActual, setPaginaActual] = useState(1);
-  const [totalPedidos, setTotalPedidos] = useState(0);
-  const [filtroEstado, setFiltroEstado] = useState('Todos');
-  const [filtroRevision, setFiltroRevision] = useState(false);
 
-  const cargarPedidos = () => {
-    setCargando(true);
-    
-    const params = new URLSearchParams({ page: paginaActual });
-    if (filtroEstado !== 'Todos') params.append('estado', filtroEstado);
-    if (filtroRevision) params.append('requiere_revision', 'true');
-
-    clienteAxios.get(`ventas/admin/ordenes/?${params.toString()}`)
-      .then((respuesta) => {
-        
-        setPedidos(respuesta.data.results);
-        setTotalPedidos(respuesta.data.count); 
+  useEffect(() => {
+    let vigente = true;
+    const params = { pagina: consulta.pagina };
+    if (consulta.estado) params.estado = consulta.estado;
+    if (consulta.revision) params.requiere_revision = 'true';
+    clienteAxios.get('ventas/admin/ordenes/', { params })
+      .then(({ data }) => {
+        if (vigente) setCargada({ consulta, pedidos: data.results, total: data.count });
       })
       .catch((error) => {
+        if (!vigente) return;
+        // La última página se quedó vacía (sus pedidos cambiaron de estado): se vuelve a la anterior
+        if (error.response?.status === 404 && consulta.pagina > 1) {
+          setConsulta(actual => ({ ...actual, pagina: actual.pagina - 1 }));
+          return;
+        }
         console.error("Error al cargar las órdenes:", error);
         setAviso({ tipo: 'error', texto: 'No se pudieron cargar los pedidos.' });
-      })
-      .finally(() => setCargando(false));
+        setCargada({ consulta, pedidos: [], total: 0 });
+      });
+    return () => { vigente = false; };
+  }, [consulta]);
+
+  // Los avisos de éxito se ocultan solos; los errores y las revisiones quedan hasta la próxima acción
+  useEffect(() => {
+    if (aviso?.tipo !== 'exito') return;
+    const temporizador = setTimeout(() => setAviso(null), 5000);
+    return () => clearTimeout(temporizador);
+  }, [aviso]);
+
+  const primeraCarga = !cargada.consulta;
+  // Tras una acción (cambia solo `version`) la tabla sigue a la vista mientras se recarga, sin acciones
+  const recargando = cargada.consulta !== consulta;
+  const cargando = primeraCarga || cargada.consulta.estado !== consulta.estado
+    || cargada.consulta.revision !== consulta.revision || cargada.consulta.pagina !== consulta.pagina;
+  const ocupado = (pedido) => recargando || enCurso === pedido.id;
+  const paginas = Math.ceil(cargada.total / POR_PAGINA);
+  const pedidos = cargada.pedidos;
+
+  const filtrar = (cambios) => {
+    setAviso(null);
+    setConsulta(actual => ({ ...actual, ...cambios, pagina: 1, version: 0 }));
   };
 
-  // El useEffect ahora se dispara cada vez que cambia la página o un filtro
-  useEffect(() => {
-    cargarPedidos();
-  }, [paginaActual, filtroEstado, filtroRevision]);
+  const irA = (pagina) => {
+    setAviso(null);
+    setConsulta(actual => ({ ...actual, pagina }));
+  };
+
+  // Las transiciones disponibles dependen del nuevo estado: se recarga la página actual
+  const recargar = () => setConsulta(actual => ({ ...actual, version: actual.version + 1 }));
 
   const handleCambioEstado = async (pedido, nuevoEstado) => {
     if (nuevoEstado === 'CANCELADO' && !window.confirm(
@@ -75,12 +119,8 @@ export default function GestorPedidos() {
     } catch (error) {
       setAviso({ tipo: 'error', texto: `No se pudo actualizar el pedido #${pedido.id}: ${mensajeDeError(error)}` });
     } finally {
-      // Las transiciones disponibles dependen del nuevo estado
-      await cargarPedidos();
+      recargar();
       setEnCurso(null);
-      setTimeout(() => {
-        setAviso(null);
-      }, 5000);
     }
   };
 
@@ -104,7 +144,7 @@ export default function GestorPedidos() {
         texto: `No se pudo registrar el pago fuera de plazo del pedido #${pedido.id}: ${mensajeDeError(error)}`,
       });
     } finally {
-      await cargarPedidos();
+      recargar();
       setEnCurso(null);
     }
   };
@@ -122,7 +162,7 @@ export default function GestorPedidos() {
     } catch (error) {
       setAviso({ tipo: 'error', texto: `No se pudo resolver la revisión del pedido #${pedido.id}: ${mensajeDeError(error)}` });
     } finally {
-      await cargarPedidos();
+      recargar();
       setEnCurso(null);
     }
   };
@@ -137,7 +177,7 @@ export default function GestorPedidos() {
     } catch (error) {
       setAviso({ tipo: 'error', texto: `No se pudo generar la orden de transporte del pedido #${pedido.id}: ${mensajeDeError(error)}` });
     } finally {
-      await cargarPedidos();
+      recargar();
       setEnCurso(null);
     }
   };
@@ -178,7 +218,7 @@ export default function GestorPedidos() {
             <button
               type="button"
               onClick={() => handleGenerarOT(pedido)}
-              disabled={enCurso === pedido.id}
+              disabled={ocupado(pedido)}
               style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
             >
               {pedido.error_orden_transporte ? 'Reintentar OT' : 'Generar OT'}
@@ -189,27 +229,7 @@ export default function GestorPedidos() {
     );
   };
 
-  if (cargando) return <div style={{ padding: '20px' }}>Cargando panel de pedidos...</div>;
-
-  const obtenerMensajeVacio = () => {
-  if (filtroRevision) return 'No hay pedidos que requieran revisión.';
-
-  // Verifica que el filtro no esté en su valor por defecto (ej. '' o 'TODOS')
-  if (filtroEstado && filtroEstado !== 'Todos' && filtroEstado !== '') {
-    const textosEstado = {
-      'PENDIENTE': 'pendientes',
-      'PAGADO': 'pagados',
-      'EN_PREPARACION': 'en preparación',
-      'EN_RUTA': 'en ruta',
-      'ENTREGADO': 'entregados',
-      'CANCELADO': 'cancelados'
-    };
-    const estadoFormateado = textosEstado[filtroEstado] || filtroEstado.toLowerCase();
-    return `No hay pedidos ${estadoFormateado} en este momento.`;
-  }
-
-  return 'No hay pedidos registrados en la tienda.';
-};
+  if (primeraCarga) return <div style={{ padding: '20px' }}>Cargando panel de pedidos...</div>;
 
   return (
     <div>
@@ -222,33 +242,42 @@ export default function GestorPedidos() {
         </div>
       )}
 
-
+      {/* Los filtros siguen a la vista mientras se carga, para no perder el foco */}
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <select
-          value={filtroEstado}
-          onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
-        >
-          <option value="Todos">Todos los estados</option>
-          {Object.entries(ETIQUETAS_ESTADO).map(([clave, valor]) => (
-            <option key={clave} value={clave}>{valor}</option>
-          ))}
-        </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          Estado
+          <select
+            value={consulta.estado}
+            onChange={(e) => filtrar({ estado: e.target.value })}
+            style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
+          >
+            <option value="">Todos los estados</option>
+            {Object.entries(ETIQUETAS_ESTADO).map(([clave, valor]) => (
+              <option key={clave} value={clave}>{valor}</option>
+            ))}
+          </select>
+        </label>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <input
             type="checkbox"
-            checked={filtroRevision}
-            onChange={(e) => { setFiltroRevision(e.target.checked); setPaginaActual(1); }}
+            checked={consulta.revision}
+            onChange={(e) => filtrar({ revision: e.target.checked })}
           />
           Requiere revisión
         </label>
 
-        <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
-          {totalPedidos} pedido(s) encontrado(s)
-        </span>
+        {!cargando && (
+          <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
+            {cargada.total} pedido(s) encontrado(s)
+          </span>
+        )}
       </div>
 
+      {cargando ? (
+        <p style={{ padding: '20px', color: 'var(--color-muted)' }}>Cargando pedidos...</p>
+      ) : (
+      <>
       <div tabIndex={0} role="region" aria-label="Pedidos y operaciones de venta" style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
  
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
@@ -294,7 +323,7 @@ export default function GestorPedidos() {
                       aria-label={`Estado del pedido #${pedido.id}`}
                       value={pedido.estado}
                       onChange={(e) => handleCambioEstado(pedido, e.target.value)}
-                      disabled={transiciones.length === 0 || enCurso === pedido.id}
+                      disabled={transiciones.length === 0 || ocupado(pedido)}
                       style={{
                         padding: '6px',
                         borderRadius: '4px',
@@ -323,7 +352,7 @@ export default function GestorPedidos() {
                           <button
                             type="button"
                             onClick={() => handleResolverRevision(pedido)}
-                            disabled={enCurso === pedido.id}
+                            disabled={ocupado(pedido)}
                             style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'var(--color-surface)', color: '#92400e', border: '1px solid #d97706', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                           >
                             Marcar como revisada
@@ -335,14 +364,14 @@ export default function GestorPedidos() {
                       <button
                         type="button"
                         onClick={() => handleRegistrarPagoFueraPlazo(pedido)}
-                        disabled={enCurso === pedido.id}
+                        disabled={ocupado(pedido)}
                         style={{
                           padding: '6px 10px',
                           backgroundColor: 'var(--color-surface)',
                           color: 'var(--color-primary)',
                           border: '1px solid var(--color-primary)',
                           borderRadius: '4px',
-                          cursor: enCurso === pedido.id ? 'not-allowed' : 'pointer',
+                          cursor: ocupado(pedido) ? 'not-allowed' : 'pointer',
                           fontWeight: 'bold',
                         }}
                       >
@@ -362,36 +391,39 @@ export default function GestorPedidos() {
             {pedidos.length === 0 && (
               <tr>
                 <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-muted)' }}>
-                  {obtenerMensajeVacio()}
+                  {mensajeVacio(cargada.consulta)}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-        {totalPedidos > 20 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px' }}>
-          <button 
+      </div>
+
+      {paginas > 1 && (
+        <nav aria-label="Páginas de pedidos" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px' }}>
+          <button
             type="button"
-            disabled={paginaActual === 1}
-            onClick={() => setPaginaActual(p => p - 1)}
-            style={{ padding: '8px 12px', cursor: paginaActual === 1 ? 'not-allowed' : 'pointer' }}
+            disabled={consulta.pagina === 1}
+            onClick={() => irA(consulta.pagina - 1)}
+            style={{ padding: '8px 12px', cursor: consulta.pagina === 1 ? 'not-allowed' : 'pointer' }}
           >
             Anterior
           </button>
-          
-          <span>Página {paginaActual} de {Math.ceil(totalPedidos / 20)}</span>
-          
-          <button 
+
+          <span>Página {consulta.pagina} de {paginas}</span>
+
+          <button
             type="button"
-            disabled={paginaActual >= Math.ceil(totalPedidos / 20)}
-            onClick={() => setPaginaActual(p => p + 1)}
-            style={{ padding: '8px 12px', cursor: paginaActual >= Math.ceil(totalPedidos / 20) ? 'not-allowed' : 'pointer' }}
+            disabled={consulta.pagina >= paginas}
+            onClick={() => irA(consulta.pagina + 1)}
+            style={{ padding: '8px 12px', cursor: consulta.pagina >= paginas ? 'not-allowed' : 'pointer' }}
           >
             Siguiente
           </button>
-        </div>
+        </nav>
       )}
-      </div>
+      </>
+      )}
     </div>
   );
 }

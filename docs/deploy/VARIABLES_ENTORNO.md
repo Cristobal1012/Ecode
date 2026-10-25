@@ -1,18 +1,21 @@
 # Documentación de Variables de Entorno (.env)
 
-Este documento detalla todas las variables necesarias para desplegar el proyecto. Copia el archivo `.env.example` a `.env` y configura los siguientes valores. 
+Este documento resume las variables necesarias para desplegar el proyecto. Copia el archivo `.env.example` a `.env`
+y configura los siguientes valores. El detalle y los valores de ejemplo están en `.env.example` (backend) y
+`frontend/.env.example` (frontend); si agregas una variable, actualiza el `.env.example` que corresponda y este
+documento.
 
 ## 1. Configuración Core y Seguridad (Django)
 | Variable | Descripción |
 | :--- | :--- |
 | `DEBUG` | `True` para desarrollo. En producción omitir o usar `False` para activar ajustes de seguridad por defecto. |
-| `SECRET_KEY` | Llave criptográfica de Django. Obligatoria si `DEBUG=False`. Cambiarla cierra todas las sesiones. |
-| `CLAVE_CIFRADO_CREDENCIALES` | Semilla para cifrar credenciales de pago desde el panel. Si cambia, hay que recargar las credenciales. |
+| `SECRET_KEY` | Llave criptográfica de Django. Obligatoria si `DEBUG=False`. Cambiarla cierra todas las sesiones e invalida los enlaces de reseña ya enviados. |
+| `CLAVE_CIFRADO_CREDENCIALES` | Cifra las credenciales de pago y de Chilexpress que el admin carga desde el panel. Obligatoria si `DEBUG=False`. Si cambia, hay que volver a cargar las credenciales. |
 | `ALLOWED_HOSTS` | Dominios que atiende el backend (separados por coma). |
 | `CORS_ALLOWED_ORIGINS` | URLs del frontend autorizadas para consumir la API. |
 | `CSRF_TRUSTED_ORIGINS` | Orígenes HTTPS de confianza para formularios con CSRF. |
-| `FRONTEND_URL` | URL pública del frontend (usada para redirecciones tras pagos como Webpay). |
-| `EXIGIR_PAGINAS_LEGALES` | Exige Términos y Condiciones para comprar (Activo por defecto en producción). |
+| `FRONTEND_URL` | URL pública del frontend. La usan las redirecciones tras el pago (Webpay) y los enlaces de los correos (seguimiento y reseñas). |
+| `EXIGIR_PAGINAS_LEGALES` | Exige Términos y Condiciones y Política de Privacidad publicadas para comprar (activo por defecto en producción). |
 
 ## 2. Bases de Datos (PostgreSQL y MongoDB)
 | Variable | Descripción |
@@ -23,12 +26,14 @@ Este documento detalla todas las variables necesarias para desplegar el proyecto
 | `MONGO_TEST_URI` | Opcional: Servidor donde los tests del catálogo crean bases temporales. |
 
 ## 3. Correos Electrónicos (Resend o SMTP)
-El sistema prioriza Resend (`RESEND_API_KEY`) sobre SMTP (`EMAIL_HOST`). Si ambas faltan, los correos se imprimen en consola.
+El sistema prioriza Resend (`RESEND_API_KEY`) sobre SMTP (`EMAIL_HOST`). Si ambas faltan, los correos se imprimen en
+consola. Los pasos para Gmail y Resend están en `README.md` de esta carpeta.
+
 | Variable | Descripción |
 | :--- | :--- |
 | `RESEND_API_KEY` | Llave de API para usar el servicio de envío Resend. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` | Configuración del servidor SMTP (ej. `smtp.gmail.com`, `587`, `True`). |
-| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Credenciales de la cuenta de correo o contraseña de aplicación. |
+| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de correo y su contraseña de aplicación (nunca la contraseña normal). |
 | `DEFAULT_FROM_EMAIL` | Remitente visible para el comprador (ej. `Mi Tienda <ventas@mitienda.cl>`). |
 | `EMAIL_TIMEOUT` | Segundos máximos de espera al servidor de correo (por defecto 10). |
 
@@ -43,15 +48,28 @@ El sistema prioriza Resend (`RESEND_API_KEY`) sobre SMTP (`EMAIL_HOST`). Si amba
 ## 5. Gestión de Imágenes del Catálogo
 | Variable | Descripción |
 | :--- | :--- |
-| `MEDIA_ROOT`, `MEDIA_URL` | Ruta y URL de almacenamiento (por defecto `/media/`). |
+| `MEDIA_ROOT`, `MEDIA_URL` | Ruta y URL de almacenamiento (por defecto `/media/`). La carpeta tiene que estar en un disco persistente. |
 | `CATALOGO_IMAGEN_MAX_BYTES` | Peso máximo por imagen (ej. `5242880` = 5MB). |
 | `CATALOGO_IMAGEN_MAX_ARCHIVOS`, `CATALOGO_IMAGEN_MAX_GALERIA` | Límites de subida por petición y por galería de producto. |
 | `CATALOGO_IMAGEN_MAX_PIXELES` | Límite de megapíxeles para evitar ataques de descompresión (ej. `20000000`). |
 
-## 6. Proveedores de Logística y Pago
-Actualmente, las plataformas de pago (Transbank, Mercado Pago) y logística (Chilexpress) **se configuran directamente desde el panel de administración** y sus credenciales se guardan cifradas. 
+## 6. Servidor
+| Variable | Descripción |
+| :--- | :--- |
+| `STATIC_ROOT` | Carpeta donde `python manage.py collectstatic` junta los estilos del admin de Django (los sirve whitenoise). |
+| `LOG_LEVEL` | Nivel de los registros en la consola: `DEBUG`, `INFO` (por defecto), `WARNING` o `ERROR`. |
 
-Si el despliegue inicial requiere inyectar estas credenciales vía `.env` por requerimientos de migración, se debe utilizar formato JSON:
-```env
-CREDENCIALES_PAGO='{"provider": "mercadopago", "public_key": "TEST-123", "access_token": "TEST-456"}'
-CREDENCIALES_LOGISTICA='{"provider": "chilexpress", "api_key": "api123", "secret": "sec123", "endpoint": "..."}'
+## 7. Frontend (`frontend/.env`)
+Vite las lee al compilar (`npm run build`) y quedan dentro del JavaScript publicado: aquí nunca va nada secreto.
+
+| Variable | Descripción |
+| :--- | :--- |
+| `VITE_API_URL` | Dirección de la API terminada en `/api/`. En la tienda publicada, `/api/` (relativa); en desarrollo, si no se define, `http://localhost:8000/api/`. |
+
+## 8. Proveedores de Logística y Pago
+Las credenciales de los medios de pago (Transbank, Mercado Pago, transferencia) y de Chilexpress **no van en el
+`.env`**: el emprendedor las carga desde el panel (Configuración > Medios de pago y Configuración > Envíos con
+Chilexpress) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Nunca se escriben en archivos de configuración.
+
+Las antiguas `TRANSBANK_ENVIRONMENT`, `TRANSBANK_WEBPAY_*` y `CHILEXPRESS_API_KEY_*` solo se leen una vez, al migrar,
+para conservar la configuración de instalaciones anteriores. En un despliegue nuevo no se usan.

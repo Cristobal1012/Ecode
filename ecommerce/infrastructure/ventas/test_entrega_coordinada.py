@@ -81,7 +81,7 @@ class CheckoutEntregaCoordinadaTests(APITestCase):
         self.assertEqual(self.comprar().status_code, 201)
         self.client.force_authenticate(create_user('admin-pedidos@example.test', rol='ADMIN'))
 
-        pedido, = self.client.get(reverse('admin-ordenes-list')).data
+        pedido, = self.client.get(reverse('admin-ordenes-list')).data['results']
 
         self.assertEqual(pedido['proveedor_logistico'], 'ENTREGA_COORDINADA')
         self.assertEqual(pedido['direccion_envio_snapshot']['calle'], 'Los Aromos')

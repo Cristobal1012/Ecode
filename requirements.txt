@@ -12,6 +12,7 @@ djangorestframework==3.18.0
 djangorestframework_simplejwt==5.5.1
 dnspython==2.8.0
 google-auth==2.49.1
+gunicorn==26.2.0
 idna==3.19
 marshmallow==3.26.1
 mongoengine==0.29.3
@@ -30,3 +31,4 @@ sqlparse==0.6.0
 transbank-sdk==6.1.0
 tzdata==2026.3
 urllib3==2.7.0
+whitenoise==6.12.0

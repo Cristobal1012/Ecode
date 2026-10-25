@@ -13,7 +13,15 @@ cambia, hay que volver a cargarlas.
 ```bash
 pip install -r requirements.txt   # ej. django-anymail (correo) y argon2-cffi (sin él no se puede iniciar sesión)
 python manage.py migrate
+python manage.py collectstatic --noinput   # estilos del admin de Django en STATIC_ROOT (los sirve whitenoise)
 ```
+
+El backend se ejecuta con gunicorn (`gunicorn backend_project.wsgi --bind 0.0.0.0:8000`), no con `runserver`.
+Los registros salen por la consola, con el nivel de `LOG_LEVEL`.
+
+**Salud:** `GET /api/salud/` responde 200 con `{"estado": "ok", "postgres": "ok", "mongo": "ok"}` si las dos bases
+responden, y 503 si alguna no. No muestra datos sensibles y no redirige a HTTPS, para que el chequeo interno
+funcione sin pasar por el proxy. Úsalo en el healthcheck del contenedor y en el monitor externo.
 
 ## Archivos subidos por la tienda
 

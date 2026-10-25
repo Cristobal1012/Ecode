@@ -24,6 +24,7 @@ from ecommerce.infrastructure.ventas.urls import (
     ventas_urlpatterns,
 )
 from ecommerce.infrastructure.catalogo.urls import catalogo_urlpatterns
+from ecommerce.infrastructure.salud import salud
 from django.http import JsonResponse
 
 def bienvenida_api(request):
@@ -35,6 +36,8 @@ def bienvenida_api(request):
 
 urlpatterns = [
     path('', bienvenida_api, name='bienvenida_api'),
+    # Healthcheck de Docker y del monitor externo: 200 si PostgreSQL y MongoDB responden, 503 si no
+    path('api/salud/', salud, name='salud'),
     path('api/configuracion/', include(configuracion_urlpatterns)),
     path('admin/', admin.site.urls),
     path('api/usuarios/', include(usuarios_urlpatterns)),

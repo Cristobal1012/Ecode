@@ -33,7 +33,7 @@ from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalog
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
-from .models import FotoPublicacion, Publicacion
+from .models import FotoPublicacion, Publicacion, Resena, ResenaProducto
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
@@ -101,6 +101,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
             'blog_activo',
             'blog_nombre',
+            # Reseñas: activas, la landing y la ficha muestran las aprobadas
+            'resenas_activas',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -202,6 +204,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'cotizaciones_activas',
             'blog_activo',
             'blog_nombre',
+            'resenas_activas',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -369,6 +372,25 @@ class AdminCotizacionSerializer(serializers.ModelSerializer):
         fields = ['id', 'fecha_creacion', 'estado', 'estado_display', 'nombre', 'correo', 'telefono',
                   'producto_id', 'producto_nombre', 'descripcion', 'cantidad', 'personalizacion',
                   'fecha_requerida', 'datos_empresa']
+        read_only_fields = fields
+
+
+class ResenaProductoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResenaProducto
+        fields = ['producto_mongo_id', 'producto_nombre', 'estrellas', 'comentario']
+        read_only_fields = fields
+
+
+class AdminResenaSerializer(serializers.ModelSerializer):
+    """Para moderar en el panel: todo es de solo lectura (el admin no edita reseñas) y sin el correo del comprador."""
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    productos = ResenaProductoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Resena
+        fields = ['id', 'orden_id', 'fecha_creacion', 'estado', 'estado_display', 'estrellas', 'comentario',
+                  'nombre_publico', 'productos']
         read_only_fields = fields
 
 

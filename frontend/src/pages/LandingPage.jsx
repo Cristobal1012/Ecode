@@ -6,6 +6,8 @@ import Portada from "../components/landing/Portada";
 import SeccionProductos from "../components/landing/SeccionProductos";
 import SeccionNosotros from "../components/landing/SeccionNosotros";
 import SeccionInstagram from "../components/landing/SeccionInstagram";
+import SeccionResenas from "../components/landing/SeccionResenas";
+import useResenas from "../hooks/useResenas";
 import BarraEdicion from "../components/landing/BarraEdicion";
 import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
 import useEdicionLanding from "../hooks/useEdicionLanding";
@@ -20,6 +22,8 @@ function LandingPage({ onNombreTiendaTemporal }) {
   const edicion = useEdicionLanding(configuracion);
   // null mientras carga: así se sabe cuándo ya están dibujadas las secciones de productos
   const [vitrina, setVitrina] = useState(null);
+  const resenasActivas = configuracion ? Boolean(configuracion.resenas_activas) : undefined;
+  const resenas = useResenas("ventas/resenas/tienda/", resenasActivas);
   const { hash } = useLocation();
   const [parametros, setParametros] = useSearchParams();
   // El rol solo decide si se ofrece el botón; quien de verdad autoriza los cambios es el backend
@@ -35,11 +39,11 @@ function LandingPage({ onNombreTiendaTemporal }) {
   }, []);
 
   // El enlace "Nosotros" del header lleva a /#nosotros. Se baja cuando ya está todo lo de arriba (portada y
-  // productos); si no, el contenido que llega después corre la sección
+  // productos y reseñas); si no, el contenido que llega después corre la sección
   useEffect(() => {
-    if (!hash || !configuracion || !vitrina) return;
+    if (!hash || !configuracion || !vitrina || !resenas) return;
     document.getElementById(hash.slice(1))?.scrollIntoView();
-  }, [hash, configuracion, vitrina]);
+  }, [hash, configuracion, vitrina, resenas]);
 
   // El panel abre la landing directo en modo edición con /?editar=1. Se abre una sola vez, en el render (no en
   // un efecto), apenas llega la configuración
@@ -104,6 +108,7 @@ function LandingPage({ onNombreTiendaTemporal }) {
             <SeccionProductos id="recientes" antetitulo="Recién llegados" titulo="Últimos agregados"
               productos={vitrina?.recientes} etiqueta="Nuevo"
               nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+            <SeccionResenas resumen={resenas} activas={resenasActivas} edicion={edicion} />
             <SeccionNosotros configuracion={vista} edicion={edicion} />
             <SeccionInstagram configuracion={vista} edicion={edicion} />
           </>

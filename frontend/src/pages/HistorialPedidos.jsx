@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
@@ -168,6 +168,20 @@ const HistorialPedidos = () => {
                                                         >
                                                             Ver detalle envío
                                                         </button>
+                                                    )}
+
+                                                    {/* Reseña: entregado, sin reseña y dentro del plazo (lo decide el servidor) */}
+                                                    {orden.token_resena && (
+                                                        <Link
+                                                            to={`/resena?t=${encodeURIComponent(orden.token_resena)}`}
+                                                            className="historial-enlace"
+                                                            aria-label={`Dejar reseña del pedido #${orden.id}`}
+                                                        >
+                                                            Dejar reseña
+                                                        </Link>
+                                                    )}
+                                                    {orden.resena_enviada && (
+                                                        <span className="historial-resena-enviada">Reseña enviada</span>
                                                     )}
                                                 </div>
                                             </td>

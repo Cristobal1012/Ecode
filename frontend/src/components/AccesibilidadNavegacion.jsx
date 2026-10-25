@@ -8,7 +8,7 @@ const TITULOS = {
   '/mis-direcciones': 'Mis direcciones', '/mis-pedidos': 'Mis pedidos',
   '/pago-exitoso': 'Resultado del pago', '/pedido-recibido': 'Pedido recibido',
   '/pago-cancelado': 'Pago cancelado', '/pago-rechazado': 'Pago rechazado',
-  '/admin': 'Panel de administración', '/variantes': 'Selección de variantes',
+  '/admin': 'Panel de administración', '/variantes': 'Selección de variantes', '/resena': 'Deja tu reseña',
 };
 
 export default function AccesibilidadNavegacion() {

@@ -21,6 +21,7 @@ import PedidoRecibido from './components/PedidoRecibido';
 import Footer from './components/footer';
 import PaginaLegal from './pages/PaginaLegal';
 import Cotizacion from './pages/Cotizacion';
+import Resena from './pages/Resena';
 import Blog from './pages/Blog';
 import PublicacionBlog from './pages/PublicacionBlog';
 import TrackingScripts from './components/TrackingScripts';
@@ -131,6 +132,8 @@ function App() {
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
             {/* Encargos, personalizados y compras en cantidad (si el admin activó el formulario) */}
             <Route path="/cotizar" element={<Cotizacion />} />
+            {/* Enlace firmado del correo de entrega: /resena?t=... */}
+            <Route path="/resena" element={<Resena />} />
             {/* Blog o portafolio (si el admin lo activó; si no, las páginas avisan que no está disponible) */}
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<PublicacionBlog />} />

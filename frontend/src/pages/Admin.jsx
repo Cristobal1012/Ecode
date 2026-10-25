@@ -21,6 +21,8 @@ import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion
 import GestorBlog from '../components/GestorBlog';
 import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
+import GestorResenas from '../components/GestorResenas';
+import GestorActivarResenas from '../components/GestorActivarResenas';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -36,6 +38,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
+  { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   { id: 'config-analitica', titulo: 'Analítica y marketing' }
 ];
@@ -179,6 +182,13 @@ export default function Admin() {
           <div>
             <h2 className="admin-titulo">Cotizaciones</h2>
             <GestorCotizaciones />
+          </div>
+        );
+      case 'resenas':
+        return (
+          <div>
+            <h2 className="admin-titulo">Reseñas</h2>
+            <GestorResenas />
           </div>
         );
       case 'blog':
@@ -326,6 +336,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-blog" />
                   <GestorBlog />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-resenas" />
+                  <GestorActivarResenas />
                 </div>
 
                 <hr className="admin-separador" />

@@ -37,7 +37,11 @@ describe('Formulario de cotización', () => {
     vi.clearAllMocks();
     localStorage.clear();
     configuracion.actual = { nombre_tienda: 'Tienda QA', cotizaciones_activas: true };
-    clienteAxios.get.mockImplementation((url) => Promise.resolve({ data: url === 'catalogo/productos/' ? PRODUCTOS : [] }));
+    // Como el backend: sin `todos` el catálogo llega paginado
+    clienteAxios.get.mockImplementation((url) => Promise.resolve({ data: {
+      'catalogo/productos/?todos=true': PRODUCTOS,
+      'catalogo/productos/': { count: PRODUCTOS.length, results: PRODUCTOS }
+    }[url] ?? [] }));
     clienteAxios.post.mockResolvedValue({ data: { mensaje: 'Recibimos tu solicitud.' } });
   });
 

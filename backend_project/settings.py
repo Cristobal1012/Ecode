@@ -220,6 +220,8 @@ REST_FRAMEWORK = {
     # Solo los endpoints que declaran su throttle (ej. el formulario público de cotización)
     'DEFAULT_THROTTLE_RATES': {
         'cotizaciones': '10/hour',
+        # Envío del formulario de reseña: deja corregir errores, pero no inundar la tienda
+        'resenas': '20/hour',
     },
 }
 

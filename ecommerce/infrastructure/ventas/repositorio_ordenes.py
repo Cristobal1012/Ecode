@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Concat
+from django.utils import timezone
 
 from ecommerce.application.ventas import RepositorioOrdenes
 from ecommerce.domain.logistica import EnvioSolicitado, Paquete
@@ -36,6 +37,9 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             cambios['motivo_cancelacion'] = motivo_cancelacion
         if motivo_revision:
             cambios.update(requiere_revision=True, motivo_revision=motivo_revision)
+        if hacia == EstadoPedido.ENTREGADO:
+            # Desde aquí corre el plazo para dejar la reseña (domain/resenas.py)
+            cambios['fecha_entrega'] = timezone.now()
         return OrdenCompra.objects.filter(
             id=orden_id, estado=EstadoPedido(desde).value).update(**cambios) == 1
 
@@ -60,6 +64,9 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             return None
         direccion = orden.direccion_envio_snapshot or {}
         paquete = orden.paquete
+        usuario = orden.usuario
+        # Usuario hereda de AbstractBaseUser: no tiene get_full_name
+        nombre_cuenta = ' '.join(filter(None, [usuario.nombre, usuario.apellido_paterno])) if usuario else ''
         return EnvioSolicitado(
             orden_id=orden.id,
             proveedor=orden.proveedor_logistico or '',
@@ -68,8 +75,7 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             numero=str(direccion.get('numero', '')),
             complemento=direccion.get('dpto_casa', ''),
             # Órdenes anteriores a pedir el destinatario en el checkout: el nombre de la cuenta
-            destinatario=orden.nombre_destinatario
-            or (orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
+            destinatario=orden.nombre_destinatario or nombre_cuenta or 'Cliente',
             email=orden.email_invitado or (orden.usuario.email if orden.usuario else ''),
             # Se declara el valor de los productos, no el del envío
             valor_declarado=int(orden.subtotal),

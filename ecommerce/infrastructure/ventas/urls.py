@@ -62,6 +62,14 @@ ventas_urlpatterns = [
     path('cotizaciones/', views.CotizacionCreateView.as_view(), name='cotizaciones'),
     path('admin/cotizaciones/', views.AdminCotizacionListView.as_view(), name='admin-cotizaciones'),
     path('admin/cotizaciones/<int:pk>/', views.AdminCotizacionEstadoView.as_view(), name='admin-cotizacion-estado'),
+    # Reseñas (si el admin las activó): formulario con el enlace firmado del correo, envío y lo aprobado
+    path('resenas/', views.ResenaEnvioView.as_view(), name='resenas'),
+    path('resenas/formulario/', views.ResenaFormularioView.as_view(), name='resena-formulario'),
+    path('resenas/tienda/', views.ResenasTiendaView.as_view(), name='resenas-tienda'),
+    path('resenas/producto/<str:producto_id>/', views.ResenasProductoView.as_view(), name='resenas-producto'),
+    # Panel: GET ?estado=&pagina= y PATCH {estado} para aprobar u ocultar
+    path('admin/resenas/', views.AdminResenaListView.as_view(), name='admin-resenas'),
+    path('admin/resenas/<int:pk>/', views.AdminResenaEstadoView.as_view(), name='admin-resena-estado'),
     
     # Ruta para descargar la etiqueta de Chilexpress
     path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),

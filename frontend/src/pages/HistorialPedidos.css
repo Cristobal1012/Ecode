@@ -114,6 +114,11 @@
   color: var(--color-primary);
 }
 
+.historial-resena-enviada {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
 /* ---------- Detalle del envío (diálogo) ---------- */
 
 .historial-fondo {

@@ -31,7 +31,9 @@ services:
       retries: 10
 
   mongo:
-    image: mongo:6
+    # 8.0 es la versión con soporte largo (hasta 2029). "mongo:8" sigue las versiones de ciclo corto (8.1, 8.2...).
+    # Desarrollo usa mongo:6 (docker-compose.yml de la raíz): el código funciona con ambas
+    image: mongo:8.0
     restart: unless-stopped
     <<: *registros
     environment:

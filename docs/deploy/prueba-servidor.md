@@ -1,9 +1,12 @@
-# Tiendas de prueba en Oracle Cloud (Always Free)
+# Tiendas de prueba en un servidor propio
 
 Guía para publicar las tiendas de prueba que el equipo entrega a cada emprendedor: varias tiendas en una sola
-máquina gratuita de Oracle Cloud, cada una con su dirección `sslip.io` y HTTPS. Usa la publicación con Docker del
+máquina virtual con Ubuntu, cada una con su dirección `sslip.io` y HTTPS. Usa la publicación con Docker del
 [manual](README.md#publicar-con-docker). El despliegue final en los clientes lo hace otro grupo y puede usar otro
 proveedor.
+
+La prueba usa **Azure for Students**, que no pide tarjeta. Oracle Cloud Always Free es la alternativa gratuita, pero
+su registro rechaza muchas tarjetas. Solo el paso 1 depende del proveedor; desde el paso 2 la guía es la misma.
 
 ```
 Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443, certificados automáticos)
@@ -11,36 +14,71 @@ Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443, certific
                      └─ daniela.<ip>.sslip.io ──> tienda "daniela" (127.0.0.1:8082)
 ```
 
-Los límites gratuitos de Oracle cambian: revísalos al crear la cuenta.
+Cada tienda usa alrededor de 1 GB de RAM: dos tiendas caben en una máquina de 4 GB.
 
-## 1. Cuenta
+## 1. La máquina
 
-- Crea la cuenta Free Tier con un **correo del equipo**, no uno personal, para que cualquiera pueda administrarla.
-- **Región de origen: Chile Central (Santiago).** No se puede cambiar después.
-- Oracle pide una tarjeta solo para verificar la identidad; una cuenta Always Free no cobra.
-- **No pases la cuenta a "Pay As You Go".** En ese modo se cobra lo que exceda el límite gratuito; en la cuenta
-  gratuita, lo que lo excede solo se detiene.
+### Azure for Students
 
-## 2. Máquina virtual
+**Cuenta.** En la página de Azure for Students, verifica que eres estudiante con tu correo de la universidad. No pide
+tarjeta y entrega 100 USD de crédito para usar en 12 meses. Revisa las condiciones vigentes al registrarte.
 
-- Forma **VM.Standard.A1.Flex** (ARM Ampere) con el máximo gratuito vigente de OCPU y memoria; imagen
-  **Ubuntu 24.04 (aarch64)**; disco de 100 GB; la clave SSH del equipo.
-- Si aparece "Out of host capacity", prueba otro dominio de disponibilidad o reintenta más tarde.
-- Asigna una **IP pública reservada**: la dirección `sslip.io` depende de la IP, y si la IP cambia, cambia la
-  dirección de las tiendas.
+- **Cuando el crédito llega a cero, Azure no cobra: desactiva la suscripción y las tiendas se caen.** Revisa el saldo
+  una vez por semana en la página de saldo de Microsoft Azure Sponsorships. Una máquina de 4 GB, con su IP y su
+  disco, consume del orden de 40 a 50 USD al mes según la región: el crédito alcanza para unos dos meses.
+- **Nunca aceptes pasar la suscripción a pago por uso** ("Pay-As-You-Go"): desde ahí sí se cobra.
 
-## 3. Red: se abre en dos lugares
+**Regiones permitidas.** Azure for Students limita las regiones donde se pueden crear recursos (suelen ser cinco),
+y en otra la creación falla con `RequestDisallowedByAzure`. Antes de crear la máquina, en el portal busca
+**Directiva** (Policy) > **Asignaciones**, abre "Allowed resource deployment regions" y revisa la lista. Elige la más
+cercana a Chile: Chile Central si aparece; si no, Brazil South; si no, una de Estados Unidos (East US suele ser la
+más barata).
 
-1. **En Oracle:** en la Security List de la VCN, reglas de entrada TCP 80 y 443 desde `0.0.0.0/0`. El 22 (SSH),
-   si se puede, solo desde las IPs del equipo.
-2. **Dentro de Ubuntu:** las imágenes de Oracle traen reglas de `iptables` que rechazan todo salvo SSH:
+**Máquina virtual.** En el portal, **Máquinas virtuales > Crear > Máquina virtual de Azure**:
 
-   ```bash
-   sudo iptables -I INPUT -p tcp -m state --state NEW -m multiport --dports 80,443 -j ACCEPT
-   sudo netfilter-persistent save
-   ```
+- **Conceptos básicos:**
+  - Suscripción "Azure for Students" y un grupo de recursos nuevo, `tiendas-prueba`.
+  - Nombre `tiendas-prueba`, la región elegida y "No se requiere redundancia de la infraestructura".
+  - Imagen **Ubuntu Server 24.04 LTS (x64)**.
+  - Tamaño **Standard_B2s** (2 vCPU, 4 GB). Si no está disponible en la región, otro de 2 vCPU y 4 GB de la serie B
+    (B2s_v2 o B2as_v2).
+  - Autenticación con **clave pública SSH**, usuario `azureuser`, "Generar un nuevo par de claves" (descarga el
+    `.pem` y guárdalo bien: sin él no se entra al servidor) o la clave pública del equipo.
+  - Puertos de entrada públicos: **SSH (22), HTTP (80) y HTTPS (443)**.
+- **Discos:** SSD estándar, de 64 GB.
+- **Redes:** una IP pública nueva (SKU estándar, que es estática: la dirección `sslip.io` depende de ella). Deja
+  desmarcado "Eliminar la IP pública cuando se elimine la máquina virtual".
+- **Administración:** **apagado automático desactivado**: si no, las tiendas se apagan cada noche.
+- **Revisar y crear.** Al terminar, anota la IP pública de la máquina.
 
-## 4. Preparar el servidor
+**Red.** Las reglas de entrada quedan en el grupo de seguridad de red (NSG) de la máquina: 22, 80 y 443. Si se puede,
+limita el 22 a las IPs del equipo (en la regla de SSH, origen "Mi dirección IP"). Ubuntu en Azure no trae un
+firewall propio que bloquee los puertos, así que no hay que configurar nada más.
+
+**Correo.** Azure bloquea la salida por el puerto 25, pero no por el 587 que usa Gmail.
+
+Entra con `ssh -i <archivo .pem> azureuser@<IP pública>` y sigue en el paso 2.
+
+### Alternativa: Oracle Cloud Always Free
+
+- Cuenta Free Tier con un **correo del equipo**, región de origen **Chile Central (Santiago)** (no se puede cambiar
+  después). Pide una tarjeta solo para verificar la identidad; suele rechazar tarjetas de débito y prepago. **No
+  pases la cuenta a "Pay As You Go".**
+- Forma **VM.Standard.A1.Flex** (ARM Ampere) con el máximo gratuito vigente, imagen **Ubuntu 24.04 (aarch64)**,
+  disco de 100 GB y una **IP pública reservada**. Si aparece "Out of host capacity", prueba otro dominio de
+  disponibilidad o reintenta más tarde.
+- Red en dos lugares: en la Security List de la VCN, entrada TCP 80 y 443 desde `0.0.0.0/0` (y el 22 limitado si se
+  puede); y dentro de Ubuntu, porque las imágenes de Oracle traen `iptables` que rechaza todo salvo SSH:
+
+  ```bash
+  sudo iptables -I INPUT -p tcp -m state --state NEW -m multiport --dports 80,443 -j ACCEPT
+  sudo netfilter-persistent save
+  ```
+
+- Oracle puede detener una máquina gratuita con muy poco uso durante 7 días, y avisa por correo antes. Si pasa, se
+  vuelve a encender desde la consola sin perder datos.
+
+## 2. Preparar el servidor
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -69,10 +107,11 @@ sudo usermod -aG docker despliegue
 sudo mkdir -p /opt/tiendas/respaldos && sudo chown -R despliegue: /opt/tiendas
 ```
 
-Copia en `/home/despliegue/.ssh/authorized_keys` las claves públicas del equipo. El SSH queda solo con clave (las
-imágenes de Oracle ya tienen desactivada la contraseña: compruébalo con `sudo sshd -T | grep passwordauthentication`).
+Copia en `/home/despliegue/.ssh/authorized_keys` las claves públicas del equipo (con permisos `700` la carpeta y
+`600` el archivo, a nombre de `despliegue`). El SSH queda solo con clave: compruébalo con
+`sudo sshd -T | grep passwordauthentication`, que debe decir `no`.
 
-## 5. Código y variables de cada tienda
+## 3. Código y variables de cada tienda
 
 Como `despliegue`:
 
@@ -89,17 +128,19 @@ Con la IP `203.0.113.5` (ejemplo), las direcciones son `alan.203-0-113-5.sslip.i
 
 - `ARCHIVO_TIENDA` con su propia ruta (`/opt/tiendas/alan.env`).
 - `DIRECCION_SITIO=:80`, `IP_WEB=127.0.0.1` y puertos distintos: Alan `PUERTO_WEB=8081` y `PUERTO_WEB_HTTPS=8441`;
-  Daniela `8082` y `8442`. Deja `IP_WEB` en `127.0.0.1`: Docker publica los puertos sin pasar por el `iptables`
-  del paso 3, y así solo el Caddy de borde llega a las tiendas.
+  Daniela `8082` y `8442`. Deja `IP_WEB` en `127.0.0.1`: Docker publica los puertos sin pasar por el firewall de
+  Ubuntu, y así solo el Caddy de borde llega a las tiendas.
 - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` con la dirección de esa tienda.
 - `SECRET_KEY`, `CLAVE_CIFRADO_CREDENCIALES`, `POSTGRES_PASSWORD` y `MONGO_CLAVE` **distintas en cada tienda**,
   generadas con los comandos de la plantilla.
-- `GOOGLE_CLIENT_ID`: el mismo cliente OAuth sirve para las dos tiendas (paso 9).
-- Correo: Gmail por SMTP con la cuenta del equipo y una contraseña de aplicación, y `DEFAULT_FROM_EMAIL` con el
-  nombre de la tienda (ej. `Taller Maché <cuenta@gmail.com>`). Ver [Correo](README.md#correo).
+- `GOOGLE_CLIENT_ID`: el mismo cliente OAuth sirve para las dos tiendas (paso 8).
+- Correo: Gmail por SMTP con una contraseña de aplicación, y `DEFAULT_FROM_EMAIL` con el nombre de la tienda
+  (ej. `Taller Maché <cuenta@gmail.com>`). Ver [Correo](README.md#correo). Usa una cuenta de Gmail **solo para
+  esto**, distinta de la que administra el servidor: la contraseña de aplicación queda en el servidor y da acceso
+  completo a esa cuenta.
 - `SECURE_HSTS_SECONDS=3600`. Súbelo solo cuando todo funcione.
 
-## 6. Caddy de borde
+## 4. Caddy de borde
 
 Instala Caddy con su paquete oficial (queda como servicio de systemd):
 
@@ -125,7 +166,7 @@ daniela.203-0-113-5.sslip.io {
 `sudo systemctl reload caddy`. Caddy obtiene y renueva los certificados de Let's Encrypt solo, la primera vez que
 alguien entra a cada dirección.
 
-## 7. Levantar las tiendas
+## 5. Levantar las tiendas
 
 Como `despliegue`, desde `/opt/tiendas/codigo`. La primera vez la compilación tarda varios minutos:
 
@@ -138,27 +179,19 @@ curl https://alan.203-0-113-5.sslip.io/api/salud/
 El último comando debe responder `{"estado": "ok", "postgres": "ok", "mongo": "ok"}`. Revisa también el candado
 del navegador en las dos direcciones.
 
-## 8. Datos iniciales de cada tienda
+## 6. Datos iniciales de cada tienda
 
 ```bash
 docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec backend python manage.py createsuperuser
 docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec backend python manage.py preparar_tienda_prueba --nombre "<nombre del negocio>"
 ```
 
-`createsuperuser` con el correo del emprendedor y una contraseña temporal fuerte, que se le entrega por otro canal
-(nunca en el mismo correo que la dirección de la tienda). Lo mismo para Daniela.
+`createsuperuser` con el correo del emprendedor, su nombre y apellidos, y una contraseña temporal fuerte, que se le
+entrega por otro canal (nunca en el mismo correo que la dirección de la tienda). Lo mismo para Daniela.
 
-## 9. Google y correo
+## 7. Tareas programadas y respaldos
 
-- En Google Cloud Console, en el cliente OAuth: agrega `https://alan...` y `https://daniela...` en los orígenes de
-  JavaScript autorizados. La pantalla de consentimiento tiene que estar **"En producción"**; en "Prueba" solo
-  entran los usuarios agregados a mano.
-- `docker compose -p alan ... exec backend python manage.py sendtestemail <correo que no sea del equipo>`:
-  confirma que Oracle deja salir el puerto 587 (solo bloquea el 25).
-
-## 10. Tareas programadas y respaldos
-
-`crontab -e` como `despliegue` (la hora es la de Santiago, paso 4):
+`crontab -e` como `despliegue` (la hora es la de Santiago, paso 2):
 
 ```cron
 # Plazo de pago de las transferencias, cada hora
@@ -171,7 +204,15 @@ docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan
 
 Una vez por semana, descarga una copia de `/opt/tiendas/respaldos/` fuera del servidor (ej. con `scp`).
 
-## 11. Monitoreo
+## 8. Google y correo
+
+- En Google Cloud Console, en el cliente OAuth: agrega `https://alan...` y `https://daniela...` en los orígenes de
+  JavaScript autorizados. La pantalla de consentimiento tiene que estar **"En producción"**; en "Prueba" solo
+  entran los usuarios agregados a mano.
+- `docker compose -p alan ... exec backend python manage.py sendtestemail <correo que no sea del equipo>`:
+  confirma que el correo sale del servidor.
+
+## 9. Monitoreo
 
 Un monitor gratuito (ej. UptimeRobot) que revise `https://<tienda>/api/salud/` cada 5 minutos y avise por correo al
 equipo. Responde 503 si alguna base no contesta.
@@ -181,9 +222,7 @@ equipo. Responde 503 si alguna base no contesta.
 - **Actualizar:** respaldar, `git pull` en `/opt/tiendas/codigo` y el mismo `up -d --build` de cada tienda (las
   migraciones corren solas). Avisa antes a los emprendedores.
 - **Revisión semanal:** `docker compose -p <tienda> ... ps` (todo `healthy`), `df -h` (disco), errores en
-  `docker compose -p <tienda> ... logs --since 24h backend` y el estado del monitor.
-- **Recuperación por inactividad:** Oracle puede detener una máquina gratuita con muy poco uso durante 7 días, y
-  avisa por correo antes. Si pasa, se vuelve a encender desde la consola sin perder datos.
+  `docker compose -p <tienda> ... logs --since 24h backend`, el estado del monitor y, en Azure, el saldo del crédito.
 - **Pasar al dominio del emprendedor:** un registro A del dominio hacia la IP; cambiar la dirección en el Caddyfile
   de borde y en `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL`; agregar el origen
   en Google; y volver a levantar la tienda con `up -d`.

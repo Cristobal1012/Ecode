@@ -1,8 +1,9 @@
 # Manual de despliegue (RNF-04)
 
 Un despliegue es una tienda. Este manual cubre la publicación con Docker (cualquier servidor con Docker), las
-tareas programadas, los respaldos y el correo. La guía paso a paso de la tienda de prueba en Oracle Cloud está en
-[`prueba-oracle.md`](prueba-oracle.md), y el resumen de las variables en [`VARIABLES_ENTORNO.md`](VARIABLES_ENTORNO.md).
+tareas programadas, los respaldos y el correo. La guía paso a paso de las tiendas de prueba en un servidor (Azure for
+Students u Oracle Cloud) está en [`prueba-servidor.md`](prueba-servidor.md), y el resumen de las variables en
+[`VARIABLES_ENTORNO.md`](VARIABLES_ENTORNO.md).
 
 Toda la configuración va por variables de entorno, documentadas en `.env.example`. Las credenciales de los
 proveedores **no** van en el entorno: el emprendedor las carga desde el panel (Configuración > Medios de pago y
@@ -14,7 +15,8 @@ cambia, hay que volver a cargarlas.
 `deploy/docker-compose.yml` levanta una tienda completa: `web` (Caddy con el frontend compilado y las fotos),
 `backend` (Django con gunicorn), `postgres` (PostgreSQL 15) y `mongo` (MongoDB 8.0). Los datos quedan en volúmenes
 de Docker, las bases no publican puertos y el backend corre sin permisos de root. Requiere Docker Engine con el
-plugin `docker compose`, y funciona en servidores x86 y ARM. Cada tienda usa alrededor de 1 GB de RAM.
+plugin `docker compose`, y funciona en servidores x86 y ARM. Cada tienda usa unos 650 MB de RAM en reposo (la
+mayor parte es la caché de MongoDB); calcula 1 GB por tienda.
 
 ### Variables de la tienda
 
@@ -42,7 +44,8 @@ docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/
 
 - `-p` es el nombre de la tienda: separa sus contenedores y volúmenes de los de otras tiendas en el mismo servidor.
 - Al arrancar, el backend aplica las migraciones y junta los estilos del admin de Django; no hay que hacerlo a mano.
-- `createsuperuser` crea la cuenta del emprendedor (Admin). Úsala con su correo y una contraseña temporal fuerte.
+- `createsuperuser` crea la cuenta del emprendedor (Admin): pide su correo, nombre, apellidos y una contraseña
+  temporal fuerte.
 - `preparar_tienda_prueba` deja la configuración inicial, Transbank en integración, una transferencia con datos
   ficticios y los borradores de las páginas legales. Se puede correr de nuevo: no pisa lo que el admin cambió.
   Después, el emprendedor completa y publica las páginas legales: sin ellas no se puede comprar.

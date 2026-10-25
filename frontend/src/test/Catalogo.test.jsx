@@ -100,13 +100,37 @@ const productosEjemplo = [
 function configurarRespuestas({
   configuracion = { tema_seleccionado: 1, layout_catalogo: 'GRID_3' },
   productos = productosEjemplo,
+  filtros = {
+    categorias: ['Periféricos', 'Monitores'],
+    atributos: {
+      Periféricos: { color: ['Negro', 'Blanco'], conexion: ['USB', 'Bluetooth'] },
+      Monitores: { resolucion: ['4K'] },
+    },
+  },
+  paginacion = null,
 } = {}) {
   clienteAxios.get.mockImplementation((url) => {
     if (url === 'configuracion/') {
       return Promise.resolve({ data: configuracion });
     }
 
+    if (url === 'catalogo/filtros/') {
+      return Promise.resolve({ data: filtros });
+    }
+
     if (url === 'catalogo/productos/') {
+      if (paginacion) {
+        return Promise.resolve({
+          data: {
+            count: paginacion.count ?? productos.length,
+            total_pages: paginacion.total_pages ?? 2,
+            current_page: paginacion.current_page ?? 1,
+            page_size: 24,
+            results: productos,
+            filtros,
+          },
+        });
+      }
       return Promise.resolve({ data: productos });
     }
 
@@ -318,5 +342,88 @@ describe('Catalogo', () => {
     await waitFor(() => {
       expect(localStorage.getItem('ecommerce_palette')).toBe('2');
     });
+  });
+
+  it('muestra controles de paginación accesibles y permite cambiar de página (SCRUM-179)', async () => {
+    configurarRespuestas({
+      paginacion: {
+        count: 48,
+        total_pages: 2,
+        current_page: 1,
+      },
+    });
+
+    renderCatalogo();
+
+    const paginacionNav = await screen.findByRole('navigation', { name: 'Paginación del catálogo' });
+    expect(paginacionNav).toBeInTheDocument();
+
+    const btnAnterior = screen.getByRole('button', { name: 'Página anterior' });
+    const btnSiguiente = screen.getByRole('button', { name: 'Página siguiente' });
+    const btnPagina1 = screen.getByRole('button', { name: 'Página 1' });
+    const btnPagina2 = screen.getByRole('button', { name: 'Página 2' });
+
+    expect(btnAnterior).toBeDisabled();
+    expect(btnSiguiente).not.toBeDisabled();
+    expect(btnPagina1).toHaveAttribute('aria-current', 'page');
+    expect(btnPagina2).not.toHaveAttribute('aria-current');
+
+    // Navegar a la página 2
+    fireEvent.click(btnPagina2);
+
+    await waitFor(() => {
+      expect(clienteAxios.get).toHaveBeenCalledWith(
+        'catalogo/productos/',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 2 }),
+        })
+      );
+    });
+  });
+
+  it('reinicia a la página 1 cuando cambia la categoría o el orden (SCRUM-179)', async () => {
+    configurarRespuestas({
+      paginacion: {
+        count: 48,
+        total_pages: 2,
+        current_page: 1,
+      },
+    });
+
+    renderCatalogo();
+
+    const selectCategoria = await screen.findByLabelText('Categoría');
+    fireEvent.change(selectCategoria, { target: { value: 'Periféricos' } });
+
+    await waitFor(() => {
+      expect(clienteAxios.get).toHaveBeenCalledWith(
+        'catalogo/productos/',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, categoria: 'Periféricos' }),
+        })
+      );
+    });
+  });
+
+  it('muestra elipsis en la paginación cuando hay muchas páginas (ej. 10 páginas)', async () => {
+    configurarRespuestas({
+      paginacion: {
+        count: 240,
+        total_pages: 10,
+        current_page: 1,
+      },
+    });
+
+    renderCatalogo();
+
+    const paginacionNav = await screen.findByRole('navigation', { name: 'Paginación del catálogo' });
+    expect(paginacionNav).toBeInTheDocument();
+
+    // Deben existir páginas iniciales y la última página 10
+    expect(screen.getByRole('button', { name: 'Página 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Página 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Página 10' })).toBeInTheDocument();
+    // La elipsis debe existir como elemento decorativo
+    expect(document.querySelector('.catalogo-paginacion__elipsis')).toBeInTheDocument();
   });
 });

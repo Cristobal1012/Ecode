@@ -19,7 +19,29 @@ class Variante(EmbeddedDocument):
     largo_cm = fields.IntField(default=10)
 
 class Producto(Document):
-    meta = {'collection': 'productos'}
+    meta = {
+        'collection': 'productos',
+        'indexes': [
+            'activo',
+            'publicado',
+            'categoria',
+            'fecha_creacion',
+            ('activo', 'publicado', 'categoria'),
+            ('activo', 'publicado', '-fecha_creacion'),
+            ('activo', 'publicado', 'precio_minimo_vigente'),
+            ('activo', 'publicado', '-precio_minimo_vigente'),
+            ('activo', 'publicado', 'variantes.precio'),
+            'variantes.sku',
+            # Índices sobre rutas internas de atributos y comodín dinámico (SCRUM-179 / E03)
+            {'fields': [('activo', 1), ('publicado', 1), ('categoria', 1), ('atributos_globales.color', 1)]},
+            {'fields': [('activo', 1), ('publicado', 1), ('categoria', 1), ('atributos_globales.capacidad_gb', 1)]},
+            {'fields': [('activo', 1), ('publicado', 1), ('categoria', 1), ('atributos_globales.talla', 1)]},
+            {'fields': [('activo', 1), ('publicado', 1), ('categoria', 1), ('atributos_globales.marca', 1)]},
+            {'fields': [('atributos_globales.color', 1)]},
+            {'fields': [('atributos_globales.capacidad_gb', 1)]},
+            {'fields': [('atributos_globales.$**', 1)]},
+        ],
+    }
 
     nombre = fields.StringField(required=True, max_length=255)
     descripcion = fields.StringField(null=True, blank=True)
@@ -34,8 +56,43 @@ class Producto(Document):
     publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
     
+    # Campo calculado para ordenamiento O(1) de precio vigente (SCRUM-179 / E01)
+    precio_minimo_vigente = fields.DecimalField(null=True, precision=2)
+
     # relación de 1 a N embebida dentro del mismo documento
     variantes = fields.EmbeddedDocumentListField(Variante)
+
+    def actualizar_precio_minimo_vigente(self):
+        """Calcula el precio mínimo vigente considerando precio_oferta y múltiples variantes (E01)."""
+        precios = []
+        for v in (self.variantes or []):
+            if v.precio is None:
+                continue
+            try:
+                p = float(v.precio)
+            except (ValueError, TypeError):
+                continue
+            if v.precio_oferta is not None:
+                try:
+                    o = float(v.precio_oferta)
+                    if 0 < o < p:
+                        precios.append(o)
+                    else:
+                        precios.append(p)
+                except (ValueError, TypeError):
+                    precios.append(p)
+            else:
+                precios.append(p)
+        self.precio_minimo_vigente = min(precios) if precios else None
+        return self.precio_minimo_vigente
+
+    def clean(self):
+        super().clean()
+        self.actualizar_precio_minimo_vigente()
+
+    def save(self, *args, **kwargs):
+        self.actualizar_precio_minimo_vigente()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.nombre} ({self.categoria})"

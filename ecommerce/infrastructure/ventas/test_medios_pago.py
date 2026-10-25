@@ -288,6 +288,6 @@ class TransbankConfiguracionTests(TestCase):
         DjangoRepositorioMediosPago().guardar(
             MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {'ambiente': 'PRODUCCION'}))
         with self.assertLogs('ecommerce.infrastructure.ventas.adapters.transbank_adapter', level='ERROR'):
-            resultado = TransbankWebpayAdapter.iniciar_transaccion('1', 1000, 'http://x/retorno/', 's')
+            resultado = TransbankWebpayAdapter.iniciar_transaccion('1', 1000, 'https://x/retorno/', 's')
         self.assertFalse(resultado['exito'])
         transaction.assert_not_called()

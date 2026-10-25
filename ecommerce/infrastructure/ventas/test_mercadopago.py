@@ -1,6 +1,7 @@
 from decimal import Decimal
 import hashlib
 import hmac
+import requests
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -720,7 +721,8 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             "sandbox_init_point": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=pref-123",
         }
 
-        with patch("requests.post", return_value=mock_resp):
+        with patch("requests.post", return_value=mock_resp), \
+             patch.object(requests.Session, "post", return_value=mock_resp):
             pref = adapter.crear_preferencia(
                 orden_id="42",
                 monto=10000,

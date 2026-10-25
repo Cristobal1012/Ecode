@@ -38,7 +38,8 @@ export default function Cotizacion() {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    clienteAxios.get('catalogo/productos/')
+    // Sin `todos` el catálogo llega paginado; el selector necesita la lista completa
+    clienteAxios.get('catalogo/productos/?todos=true')
       // Con sesión de admin también llegan los borradores: solo se cotiza lo publicado
       .then(({ data }) => setProductos((data || []).filter(p => p.activo !== false && p.publicado !== false)))
       .catch(() => setProductos([]));

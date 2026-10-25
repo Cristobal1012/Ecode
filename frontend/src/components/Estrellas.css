@@ -1,0 +1,19 @@
+/* Calificación con estrellas (Estrellas.jsx). Las vacías llevan borde para distinguirse sin depender del color */
+.estrellas {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--color-primary);
+  vertical-align: middle;
+}
+
+.estrella {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.estrella--llena {
+  fill: currentColor;
+}

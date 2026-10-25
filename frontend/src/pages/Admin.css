@@ -769,3 +769,35 @@
   justify-content: center;
   margin-top: 24px;
 }
+
+/* Reseñas (GestorResenas.jsx): filtros por estado y las calificaciones de cada reseña */
+.resenas-filtros {
+  margin-bottom: 20px;
+}
+
+.resenas-filtros .boton {
+  padding: 0.7rem 1.25rem;
+}
+
+.resenas-filtros .boton[aria-pressed='true'] {
+  background: var(--color-text);
+  color: var(--color-background);
+}
+
+/* Cada término con su descripción sigue en la grilla de la tarjeta */
+.resena-calificacion {
+  display: contents;
+}
+
+.resena-comentario {
+  display: block;
+  margin-top: 4px;
+}
+
+.resena-acciones {
+  margin-top: 16px;
+}
+
+.resena-acciones .boton {
+  padding: 0.7rem 1.25rem;
+}

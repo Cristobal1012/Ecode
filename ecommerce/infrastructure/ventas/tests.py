@@ -5,6 +5,7 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from rest_framework import status
 
 from ecommerce.application.test_medios_pago import DATOS_BANCO
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso

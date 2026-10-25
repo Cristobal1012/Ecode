@@ -34,6 +34,9 @@ services:
     # 8.0 es la versión con soporte largo (hasta 2029). "mongo:8" sigue las versiones de ciclo corto (8.1, 8.2...).
     # Desarrollo usa mongo:6 (docker-compose.yml de la raíz): el código funciona con ambas
     image: mongo:8.0
+    # Sin límite, MongoDB usa para su caché la mitad de la RAM del servidor, y con varias tiendas en la misma
+    # máquina se quedan sin memoria. Un catálogo de tienda cabe de sobra en 0,5 GB
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-0.5}"]
     restart: unless-stopped
     <<: *registros
     environment:

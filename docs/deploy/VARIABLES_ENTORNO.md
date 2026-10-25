@@ -66,7 +66,20 @@ Vite las lee al compilar (`npm run build`) y quedan dentro del JavaScript public
 | :--- | :--- |
 | `VITE_API_URL` | Dirección de la API terminada en `/api/`. En la tienda publicada, `/api/` (relativa); en desarrollo, si no se define, `http://localhost:8000/api/`. |
 
-## 8. Proveedores de Logística y Pago
+## 8. Publicación con Docker (`deploy/tienda.env.example`)
+Además de las anteriores, el archivo de cada tienda lleva las variables del stack de `deploy/docker-compose.yml`.
+`POSTGRES_HOST`, `POSTGRES_PORT`, `MONGO_URI`, `MEDIA_ROOT` y `STATIC_ROOT` las fija el stack: no van en el archivo.
+
+| Variable | Descripción |
+| :--- | :--- |
+| `ARCHIVO_TIENDA` | Ruta del mismo archivo de la tienda: de ahí el backend lee todas sus variables. |
+| `DIRECCION_SITIO` | `:80` detrás de un proxy que termina el HTTPS, o el dominio de la tienda para que su Caddy obtenga el certificado. |
+| `IP_WEB`, `PUERTO_WEB`, `PUERTO_WEB_HTTPS` | Dónde publica la tienda. Detrás de un proxy: `127.0.0.1` y puertos distintos por tienda. Con dominio propio: `0.0.0.0`, `80` y `443`. |
+| `MONGO_USUARIO`, `MONGO_CLAVE`, `MONGO_BASE` | Usuario, contraseña y base de MongoDB del stack. La contraseña, solo con letras y números. |
+| `MONGO_CACHE_GB` | Caché de MongoDB en GB (por defecto `0.5`), para que varias tiendas compartan un servidor. |
+| `GUNICORN_WORKERS`, `GUNICORN_THREADS` | Procesos e hilos del backend (por defecto `2` y `4`). |
+
+## 9. Proveedores de Logística y Pago
 Las credenciales de los medios de pago (Transbank, Mercado Pago, transferencia) y de Chilexpress **no van en el
 `.env`**: el emprendedor las carga desde el panel (Configuración > Medios de pago y Configuración > Envíos con
 Chilexpress) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Nunca se escriben en archivos de configuración.

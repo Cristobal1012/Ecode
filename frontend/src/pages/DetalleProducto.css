@@ -211,6 +211,41 @@
   text-decoration: underline;
 }
 
+/* Promedio de las reseñas junto al nombre: lleva a la lista del final */
+.detalle-calificacion {
+  display: inline-block;
+  margin: -4px 0 16px;
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+/* El subrayado no pasa a los hijos de un inline-flex: va en el texto, para que se vea que es un enlace */
+.detalle-calificacion .resenas-promedio > span:last-child {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.detalle-resenas {
+  margin-top: clamp(48px, 7vw, 96px);
+  padding-top: clamp(32px, 4vw, 48px);
+  border-top: 1px solid var(--color-border);
+  /* Al saltar a #resenas, la sección no queda tapada por el header fijo */
+  scroll-margin-top: 80px;
+}
+
+.detalle-resenas-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: clamp(24px, 3vw, 36px);
+}
+
+.detalle-resenas-encabezado h2 {
+  margin: 0;
+}
+
 @media (max-width: 767px) {
   .detalle-contenido {
     grid-template-columns: minmax(0, 1fr);

@@ -535,3 +535,25 @@ a.instagram-foto:hover img {
     width: 100%;
   }
 }
+
+/* ---------- Reseñas (SeccionResenas.jsx) ---------- */
+
+.resenas-landing-encabezado {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-bottom: clamp(28px, 4vw, 48px);
+  text-align: center;
+}
+
+.resenas-landing-encabezado h2 {
+  margin: 0;
+}
+
+.resenas-landing-encabezado .resenas-promedio {
+  justify-content: center;
+}
+
+.resenas-landing-nota {
+  text-align: center;
+}

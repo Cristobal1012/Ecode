@@ -12,6 +12,21 @@ const ICONOS = {
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
   ),
   ventas: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
+  cotizaciones: (
+    <>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="13" x2="13" y2="13" />
+    </>
+  ),
+  resenas: (
+    <path d="M12 2.5l2.94 5.96 6.56.95-4.75 4.63 1.12 6.54L12 17.5l-5.87 3.08 1.12-6.54L2.5 9.41l6.56-.95z" />
+  ),
+  blog: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </>
+  ),
   configuracion: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -30,6 +45,9 @@ const VISTAS = [
   { id: 'dashboard', nombre: 'Dashboard' },
   { id: 'inventario', nombre: 'Inventario' },
   { id: 'ventas', nombre: 'Ventas' },
+  { id: 'cotizaciones', nombre: 'Cotizaciones' },
+  { id: 'resenas', nombre: 'Reseñas' },
+  { id: 'blog', nombre: 'Blog' },
   { id: 'configuracion', nombre: 'Configuración' },
   { id: 'paginas', nombre: 'Páginas legales' }
 ];

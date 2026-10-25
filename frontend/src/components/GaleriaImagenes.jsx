@@ -52,6 +52,7 @@ export default function GaleriaImagenes({
     setArchivosSeleccionados((prev) =>
       prev.filter((_, i) => i !== index)
     );
+    document.getElementById(idInput)?.focus();
   };
 
   /*
@@ -110,6 +111,7 @@ export default function GaleriaImagenes({
       const nuevasImagenes = imagenes.filter((_, i) => i !== index);
 
       onImagenesChange(nuevasImagenes);
+      document.getElementById(idInput)?.focus();
 
       // Actualizar archivos gestionados si el padre los utiliza
       if (onArchivosChange) {
@@ -280,6 +282,7 @@ export default function GaleriaImagenes({
 
                 <button
                   type="button"
+                  aria-label={`Quitar imagen seleccionada ${archivo.name}`}
                   onClick={() => eliminarSeleccionada(index)}
                   style={{
                     width: '100%',
@@ -366,6 +369,7 @@ export default function GaleriaImagenes({
 
                 <button
                   type="button"
+                  aria-label={`Eliminar imagen ${index + 1} de la galería`}
                   onClick={() =>
                     eliminarImagenExistente(url, index)
                   }

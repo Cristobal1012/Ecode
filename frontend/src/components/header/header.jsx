@@ -37,7 +37,11 @@ function Header({ vistaPrevia }) {
           <div className="header-links">
             <NavLink to="/" end>Inicio</NavLink>
             <NavLink to="/catalogo">Catálogo</NavLink>
-            {configuracion?.nosotros_texto && <Link to="/#nosotros">Nosotros</Link>}
+            {/* Con el blog activo, "Nosotros" (o el nombre que eligió el admin) lleva al blog; si no, a la landing */}
+            {configuracion?.blog_activo ? (
+              <NavLink to="/blog">{configuracion.blog_nombre || 'Nosotros'}</NavLink>
+            ) : configuracion?.nosotros_texto && <Link to="/#nosotros">Nosotros</Link>}
+            {configuracion?.cotizaciones_activas && <NavLink to="/cotizar">Cotizar</NavLink>}
 
             {/* Si es ADMIN, le damos un atajo rápido a su panel */}
             {rol === 'ADMIN' && (

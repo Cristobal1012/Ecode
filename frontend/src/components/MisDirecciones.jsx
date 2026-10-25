@@ -145,7 +145,7 @@ const MisDirecciones = () => {
         <>
             <Header />
 
-            <main className="direcciones-main">
+            <main tabIndex={-1} id="contenido" className="direcciones-main">
                 <div className="contenedor">
                     <button type="button" className="enlace-flecha direcciones-volver" onClick={() => navigate('/catalogo')}>
                         <span aria-hidden="true">←</span> Volver a la tienda

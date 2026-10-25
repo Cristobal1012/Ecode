@@ -14,25 +14,30 @@ import re
 # Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
 from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
-    PROVEEDORES_CON_ORDEN_TRANSPORTE, ConfiguracionCotizacionInvalida, ErrorCotizacion, Paquete,
+    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, PROVEEDORES_CON_ORDEN_TRANSPORTE, RETIRO_LOCAL,
+    ConfiguracionCotizacionInvalida, EntregaNoHabilitada, EntregasDeLaTienda, ErrorCotizacion, Paquete,
     SolicitudCotizacion,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
-from ecommerce.domain.medios_pago import MedioPagoNoDisponible
+from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
+from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
     TelefonoInvalido, normalizar_telefono_chile,
-    paginas_legales_faltantes, transiciones_desde, validar_generacion_orden_transporte,
+    paginas_legales_faltantes, plazo_pago, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
-from .models import ConfiguracionGlobal, OrdenCompra, DireccionEnvio, PaginaLegal
+from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
+from .models import FotoPublicacion, Publicacion, Resena, ResenaProducto
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
+from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 # NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
 from .adapters.logistica import ProveedorLogisticoAdapter
@@ -41,6 +46,18 @@ from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
     return MediosPagoDisponibles(DjangoRepositorioMediosPago())
+
+
+def entregas_de_la_tienda():
+    """Retiro en local y entrega coordinada tal como los dejó el admin en el panel (RF-02.3)."""
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    if config is None:
+        return EntregasDeLaTienda()
+    return EntregasDeLaTienda(
+        retiro_activo=config.retiro_en_local_activo,
+        coordinada_activa=config.entrega_coordinada_activa,
+        costo_coordinada=Decimal(config.costo_entrega_coordinada),
+    )
 
 
 CAMPOS_FOTOS_INSTAGRAM = tuple(f'instagram_foto_{numero}' for numero in range(1, 7))
@@ -53,6 +70,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     pasarelas_activas = serializers.SerializerMethodField()
     # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
     google_client_id = serializers.SerializerMethodField()
+    # Sin llaves de Chilexpress el checkout no ofrece despacho ni sucursales (solo dice si hay, nunca cuáles)
+    chilexpress_activo = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionGlobal
@@ -74,6 +93,16 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'entrega_coordinada_activa',
+            'costo_entrega_coordinada',
+            'instrucciones_entrega_coordinada',
+            'chilexpress_activo',
+            'cotizaciones_activas',
+            # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
+            'blog_activo',
+            'blog_nombre',
+            # Reseñas: activas, la landing y la ficha muestran las aprobadas
+            'resenas_activas',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -102,6 +131,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
 
     def get_google_client_id(self, obj):
         return settings.GOOGLE_CLIENT_ID
+
+    def get_chilexpress_activo(self, obj):
+        return DjangoRepositorioCredencialesChilexpress().obtener().configuradas
 
     def get_pasarelas_activas(self, obj):
         # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
@@ -135,6 +167,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     horario_atencion = serializers.CharField(max_length=500, required=False, allow_blank=True)
     # Se acepta '@usuario' o el enlace al perfil; se guarda solo el usuario
     instagram_usuario = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    costo_entrega_coordinada = serializers.IntegerField(min_value=0, max_value=1_000_000, required=False)
+    # Se ordenan los espacios antes de medirlo; vacío vuelve a "Nosotros" (domain/blog.py)
+    blog_nombre = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
     class Meta:
         model = ConfiguracionGlobal
@@ -163,6 +198,13 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'numero_origen',
             'dpto_casa_origen',
             'retiro_en_local_activo',
+            'entrega_coordinada_activa',
+            'costo_entrega_coordinada',
+            'instrucciones_entrega_coordinada',
+            'cotizaciones_activas',
+            'blog_activo',
+            'blog_nombre',
+            'resenas_activas',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -174,6 +216,12 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         try:
             return normalizar_usuario_instagram(valor)
         except UsuarioInstagramInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_blog_nombre(self, valor):
+        try:
+            return normalizar_nombre_blog(valor)
+        except NombreBlogInvalido as error:
             raise serializers.ValidationError(str(error))
 
 
@@ -275,13 +323,90 @@ class RevisionCarritoSerializer(serializers.Serializer):
         }
 
 
+class DatosEmpresaSerializer(serializers.Serializer):
+    """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""
+
+    razon_social = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    rut = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    giro = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    direccion = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    correo = serializers.EmailField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        try:
+            return DatosEmpresa.desde(attrs).como_dict()
+        except DatosEmpresaInvalidos as error:
+            raise serializers.ValidationError(error.errores)
+
+
+class CotizacionSolicitudSerializer(serializers.Serializer):
+    """Formulario público de cotización: solo los datos del cliente; las reglas las aplica el dominio
+    (domain/cotizaciones.py). Cualquier otro campo (estado, id...) se ignora."""
+
+    como_empresa = serializers.BooleanField(default=False)
+    nombre = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    correo = serializers.EmailField(required=False, allow_blank=True)
+    telefono = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    producto_id = serializers.CharField(max_length=24, required=False, allow_blank=True)
+    descripcion = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    cantidad = serializers.IntegerField(required=False, allow_null=True)
+    personalizacion = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    fecha_requerida = serializers.DateField(required=False, allow_null=True)
+    empresa = DatosEmpresaSerializer(required=False, allow_null=True)
+    # Política de Privacidad: checkbox obligatorio, desmarcado por defecto
+    acepta_privacidad = serializers.BooleanField()
+    # Campo trampa: oculto para las personas; si viene lleno, lo envió un bot
+    sitio_web = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_acepta_privacidad(self, value):
+        if value is not True:
+            raise serializers.ValidationError('Debes aceptar la Política de Privacidad.')
+        return value
+
+
+class AdminCotizacionSerializer(serializers.ModelSerializer):
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+
+    class Meta:
+        model = Cotizacion
+        fields = ['id', 'fecha_creacion', 'estado', 'estado_display', 'nombre', 'correo', 'telefono',
+                  'producto_id', 'producto_nombre', 'descripcion', 'cantidad', 'personalizacion',
+                  'fecha_requerida', 'datos_empresa']
+        read_only_fields = fields
+
+
+class ResenaProductoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResenaProducto
+        fields = ['producto_mongo_id', 'producto_nombre', 'estrellas', 'comentario']
+        read_only_fields = fields
+
+
+class AdminResenaSerializer(serializers.ModelSerializer):
+    """Para moderar en el panel: todo es de solo lectura (el admin no edita reseñas) y sin el correo del comprador."""
+    estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    productos = ResenaProductoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Resena
+        fields = ['id', 'orden_id', 'fecha_creacion', 'estado', 'estado_display', 'estrellas', 'comentario',
+                  'nombre_publico', 'productos']
+        read_only_fields = fields
+
+
+class EmpresaCompradorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmpresaComprador
+        fields = ['razon_social', 'rut', 'giro', 'direccion', 'correo']
+
+
 class OrdenCompraSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=0, min_value=Decimal('0'))
     # Los calcula el servidor (cotización + subtotal del catálogo); lo que envíe el navegador se ignora
     costo_envio = serializers.FloatField(read_only=True)
     total_final = serializers.FloatField(read_only=True)
     proveedor_logistico = serializers.ChoiceField(
-        choices=['STARKEN', 'CHILEXPRESS', 'RETIRO_LOCAL'], required=False,
+        choices=['STARKEN', 'CHILEXPRESS', RETIRO_LOCAL, ENTREGA_COORDINADA], required=False,
     )
     paquete = PaqueteSerializer(write_only=True, required=False)
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
@@ -292,6 +417,10 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
     telefono_destinatario = serializers.CharField(max_length=30)
+    # Compra como empresa: la tienda emite la factura con estos datos (null si compra una persona)
+    datos_empresa = DatosEmpresaSerializer(required=False, allow_null=True)
+    # Con sesión: guardar los datos de la empresa para las próximas compras
+    guardar_datos_empresa = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = OrdenCompra
@@ -305,6 +434,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             'direccion_envio_snapshot',
             'nombre_destinatario',
             'telefono_destinatario',
+            'datos_empresa',
+            'guardar_datos_empresa',
             'subtotal',
             'costo_envio',
             'total_final',
@@ -350,7 +481,7 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
         # RN-02: el backend rechaza un medio que el admin no habilitó o no terminó de configurar
         try:
-            medios_pago().exigir(data.get('metodo_pago'))
+            self._medio_pago = medios_pago().exigir(data.get('metodo_pago'))
         except MedioPagoNoDisponible as error:
             raise serializers.ValidationError({'metodo_pago': str(error)})
 
@@ -361,10 +492,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                     {"email_invitado": "Debe proporcionar un correo electronico para comprar como invitado."}
                 )
 
-        config = ConfiguracionGlobal.objects.filter(pk=1).first()
-
-        # Validamos usando el campo del modelo en lugar de buscar en el antiguo JSON
-        retiro_activo = config.retiro_en_local_activo if config else False
         proveedor = data.get('proveedor_logistico')
 
         # Toda orden necesita una entrega que el servidor pueda costear (RF-02.3)
@@ -373,18 +500,24 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'proveedor_logistico': 'Seleccione una opción de entrega cotizada.'
             })
 
-        if proveedor == 'RETIRO_LOCAL':
-            if not retiro_activo:
-                raise serializers.ValidationError({
-                    'proveedor_logistico': 'El retiro en local no está habilitado en esta tienda.'
-                })
-        else:
+        if proveedor in ENTREGAS_DE_LA_TIENDA:
+            # Retiro o entrega coordinada: solo si el admin la activó, con el costo que él definió
+            try:
+                self._costo_entrega_propia = entregas_de_la_tienda().costo(proveedor)
+            except EntregaNoHabilitada as error:
+                raise serializers.ValidationError({'proveedor_logistico': str(error)})
+
+        if proveedor != RETIRO_LOCAL:
             direccion = data.get('direccion_envio_snapshot') or {}
             if not isinstance(direccion, dict) or not direccion.get('comuna'):
                 raise serializers.ValidationError({
                     'direccion_envio_snapshot': 'Se requiere la comuna de destino.'
                 })
-            if 'paquete' not in data:
+            if proveedor == ENTREGA_COORDINADA and not str(direccion.get('calle') or '').strip():
+                raise serializers.ValidationError({
+                    'direccion_envio_snapshot': 'Se requiere la dirección de entrega.'
+                })
+            if proveedor not in ENTREGAS_DE_LA_TIENDA and 'paquete' not in data:
                 raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
@@ -416,9 +549,9 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         paquete = Paquete(**paquete_data) if paquete_data else None
         proveedor = validated_data.get('proveedor_logistico')
 
-        # 1. COTIZACIÓN REAL O RETIRO LOCAL (validate ya exige comuna y paquete para un courier)
-        if proveedor == 'RETIRO_LOCAL':
-            costo_envio = 0.0
+        # 1. COTIZACIÓN REAL O ENTREGA DE LA TIENDA (validate ya exige comuna y paquete para un courier)
+        if proveedor in ENTREGAS_DE_LA_TIENDA:
+            costo_envio = float(self._costo_entrega_propia)
         else:
             config = ConfiguracionGlobal.objects.filter(pk=1).first()
             origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
@@ -480,7 +613,23 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             validated_data['email_invitado'] = ''
 
         # 3. CREAR LA ORDEN EN BASE DE DATOS
+        # DRF no guarda un serializer anidado: los datos de la empresa se asignan después de crear la orden
+        datos_empresa = validated_data.pop('datos_empresa', None)
+        guardar_datos_empresa = validated_data.pop('guardar_datos_empresa', False)
         orden = super().create(validated_data)
+        completar = {}
+        if datos_empresa:
+            completar['datos_empresa'] = datos_empresa
+        if self._medio_pago.codigo == CodigoMedioPago.TRANSFERENCIA:
+            # El plazo de la tienda en este momento: si lo cambia después, esta orden conserva el suyo
+            plazo = plazo_pago(orden.fecha_creacion, plazo_pago_transferencia(self._medio_pago))
+            completar.update(fecha_limite_pago=plazo.vence, fecha_recordatorio_pago=plazo.recordar)
+        if completar:
+            for campo, valor in completar.items():
+                setattr(orden, campo, valor)
+            orden.save(update_fields=list(completar))
+        if datos_empresa and guardar_datos_empresa and orden.usuario_id:
+            EmpresaComprador.objects.update_or_create(usuario_id=orden.usuario_id, defaults=datos_empresa)
         DetalleOrden.objects.bulk_create([
             DetalleOrden(
                 orden=orden, producto_mongo_id=linea.producto_id, variante_sku=linea.sku,
@@ -620,6 +769,10 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fecha_creacion', 'estado', 'email_invitado', 'email_cliente', 'metodo_pago',
             'nombre_destinatario', 'telefono_destinatario',
+            # La entrega coordinada la hace la tienda: necesita la dirección del comprador
+            'direccion_envio_snapshot',
+            # Compra como empresa: con estos datos la tienda emite la factura
+            'datos_empresa',
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',
@@ -688,6 +841,58 @@ class PaginaLegalAdminSerializer(serializers.ModelSerializer):
         if publicada and not tiene_texto(contenido):
             raise serializers.ValidationError({'contenido': 'No se puede publicar una página sin contenido.'})
         return data
+
+
+class PublicacionEntradaSerializer(serializers.Serializer):
+    """Formulario del panel para una publicación del blog. Las reglas (título, estado...) están en domain/blog.py."""
+
+    titulo = serializers.CharField(required=False, allow_blank=True, default='', max_length=1000)
+    resumen = serializers.CharField(required=False, allow_blank=True, default='', max_length=1000)
+    contenido = serializers.CharField(required=False, allow_blank=True, default='', max_length=100_000,
+                                      trim_whitespace=False)
+    estado = serializers.CharField(required=False, allow_blank=True, default='')
+    # Sin portada ni quitar_portada, la portada queda como estaba
+    portada = ArchivoImagenField(required=False)
+    quitar_portada = serializers.BooleanField(required=False, default=False)
+
+    def validate_contenido(self, value):
+        # Se muestra tal cual en la tienda: solo queda el formato del editor (XSS)
+        return limpiar_html(value)
+
+
+class FotosPublicacionSerializer(serializers.Serializer):
+    fotos = serializers.ListField(child=ArchivoImagenField(), allow_empty=False, max_length=MAX_FOTOS_PUBLICACION)
+
+
+class FotoPublicacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FotoPublicacion
+        fields = ['id', 'imagen']
+
+
+class PublicacionResumenSerializer(serializers.ModelSerializer):
+    """Tarjeta de la lista pública del blog: sin el texto ni la galería."""
+
+    class Meta:
+        model = Publicacion
+        fields = ['titulo', 'slug', 'resumen', 'portada', 'fecha_publicacion']
+
+
+class PublicacionDetalleSerializer(serializers.ModelSerializer):
+    fotos = FotoPublicacionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Publicacion
+        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'fecha_publicacion']
+
+
+class PublicacionAdminSerializer(serializers.ModelSerializer):
+    fotos = FotoPublicacionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Publicacion
+        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'estado', 'fecha_publicacion',
+                  'actualizada']
 
 class MedioPagoAdminSerializer(serializers.Serializer):
     """Entrada del panel: las credenciales pueden volver enmascaradas (se conservan) o vacías (se borran)."""

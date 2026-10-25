@@ -149,6 +149,18 @@ export default function GestorPedidos() {
     if (pedido.proveedor_logistico === 'RETIRO_LOCAL') {
       return <span style={{ color: 'var(--color-muted)' }}>Retiro en local</span>;
     }
+    if (pedido.proveedor_logistico === 'ENTREGA_COORDINADA') {
+      // La entrega la hace la tienda: la dirección para coordinarla con el comprador
+      const direccion = pedido.direccion_envio_snapshot || {};
+      const texto = [[direccion.calle, direccion.numero].filter(Boolean).join(' '), direccion.dpto_casa, direccion.comuna]
+        .filter(Boolean).join(', ');
+      return (
+        <div style={{ fontSize: '0.9rem' }}>
+          <span style={{ color: 'var(--color-muted)' }}>Entrega coordinada</span>
+          {texto && <div>{texto}</div>}
+        </div>
+      );
+    }
     if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
       return <span style={{ color: 'var(--color-muted)' }}>{pedido.proveedor_logistico || '—'}</span>;
     }
@@ -210,9 +222,10 @@ export default function GestorPedidos() {
         </div>
       )}
 
+
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <select 
-          value={filtroEstado} 
+        <select
+          value={filtroEstado}
           onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
           style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
         >
@@ -223,20 +236,21 @@ export default function GestorPedidos() {
         </select>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input 
-            type="checkbox" 
-            checked={filtroRevision} 
+          <input
+            type="checkbox"
+            checked={filtroRevision}
             onChange={(e) => { setFiltroRevision(e.target.checked); setPaginaActual(1); }}
           />
           Requiere revisión
         </label>
-        
+
         <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
           {totalPedidos} pedido(s) encontrado(s)
         </span>
       </div>
 
-      <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
+      <div tabIndex={0} role="region" aria-label="Pedidos y operaciones de venta" style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>
+ 
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
           <thead style={{ backgroundColor: 'var(--color-secondary)', borderBottom: '2px solid var(--color-border)' }}>
             <tr>
@@ -263,6 +277,14 @@ export default function GestorPedidos() {
                         {pedido.telefono_destinatario && (
                           <> · <a href={`tel:${pedido.telefono_destinatario}`} style={{ color: 'var(--color-primary)' }}>{pedido.telefono_destinatario}</a></>
                         )}
+                      </div>
+                    )}
+                    {pedido.datos_empresa && (
+                      // Compra como empresa: la tienda emite la factura con estos datos
+                      <div style={{ marginTop: '4px', fontSize: '0.85rem', color: 'var(--color-muted)' }}>
+                        <strong style={{ color: 'var(--color-text)' }}>Factura:</strong> {pedido.datos_empresa.razon_social} · RUT {pedido.datos_empresa.rut}
+                        <div>{pedido.datos_empresa.giro} · {pedido.datos_empresa.direccion}</div>
+                        <a href={`mailto:${pedido.datos_empresa.correo}`} style={{ color: 'var(--color-primary)' }}>{pedido.datos_empresa.correo}</a>
                       </div>
                     )}
                   </td>

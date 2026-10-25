@@ -15,7 +15,14 @@ import GestorMediosPago from '../components/GestorMediosPago';
 import GestorChilexpress from '../components/GestorChilexpress';
 import GestorPromociones from '../components/GestorPromociones';
 import GestorContacto from '../components/GestorContacto';
+import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
+import GestorCotizaciones from '../components/GestorCotizaciones';
+import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
+import GestorBlog from '../components/GestorBlog';
+import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
+import GestorResenas from '../components/GestorResenas';
+import GestorActivarResenas from '../components/GestorActivarResenas';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -25,9 +32,13 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
+  { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
+  { id: 'config-blog', titulo: 'Blog o Portafolio' },
+  { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   { id: 'config-analitica', titulo: 'Analítica y marketing' }
 ];
@@ -166,6 +177,22 @@ export default function Admin() {
           </div>
         );
 
+      case 'cotizaciones':
+        return (
+          <div>
+            <h2 className="admin-titulo">Cotizaciones</h2>
+            <GestorCotizaciones />
+          </div>
+        );
+      case 'resenas':
+        return (
+          <div>
+            <h2 className="admin-titulo">Reseñas</h2>
+            <GestorResenas />
+          </div>
+        );
+      case 'blog':
+        return <GestorPublicaciones />;
       case 'configuracion':
         return (
           <div>
@@ -272,6 +299,13 @@ export default function Admin() {
                 <hr className="admin-separador" />
 
                 <div>
+                  <TituloSeccion id="config-entrega-coordinada" />
+                  <GestorEntregaCoordinada />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
                   <TituloSeccion id="config-contacto" />
                   <GestorContacto />
                 </div>
@@ -291,7 +325,28 @@ export default function Admin() {
                 </div>
 
                 <hr className="admin-separador" />
-        
+
+                <div>
+                  <TituloSeccion id="config-cotizaciones" />
+                  <GestorFormularioCotizacion />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-blog" />
+                  <GestorBlog />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-resenas" />
+                  <GestorActivarResenas />
+                </div>
+
+                <hr className="admin-separador" />
+
                 <div>
                   <TituloSeccion id="config-promociones" />
                   <GestorPromociones />
@@ -328,7 +383,7 @@ export default function Admin() {
         navigate={navigate}
       />
 
-      <main className="admin-principal">
+      <main tabIndex={-1} id="contenido" className="admin-principal">
         <AdminTopbar />
         <div className="admin-contenido">
           {renderizarContenido()}

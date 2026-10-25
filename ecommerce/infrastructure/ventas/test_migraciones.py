@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
@@ -42,3 +44,27 @@ class MigracionRevisionYStockTests(TransactionTestCase):
         self.assertEqual(ordenes['RECHAZADO'].motivo_cancelacion, 'Pago rechazado')
         self.assertEqual(ordenes['CANCELADO'].motivo_cancelacion, '')
         self.assertFalse(any(orden.requiere_revision for orden in ordenes.values()))
+
+
+class MigracionPlazoPagoTests(TransactionTestCase):
+    """0031 fija a las transferencias existentes el plazo de entonces: 48 horas, con el recordatorio a las 24."""
+
+    migrar = MigracionRevisionYStockTests.migrar
+    tearDown = MigracionRevisionYStockTests.tearDown
+
+    def test_solo_las_transferencias_reciben_su_fecha_limite(self):
+        OrdenCompra = self.migrar([('ventas', '0030_entrega_coordinada')]).get_model('ventas', 'OrdenCompra')
+        ids = {
+            metodo: OrdenCompra.objects.create(
+                metodo_pago=metodo, direccion_envio_snapshot={}, subtotal=1000, costo_envio=0, total_final=1000,
+            ).id
+            for metodo in ('TRANSFERENCIA', 'TRANSBANK')
+        }
+
+        OrdenCompra = self.migrar([('ventas', '0031_plazo_pago_por_orden')]).get_model('ventas', 'OrdenCompra')
+
+        transferencia = OrdenCompra.objects.get(id=ids['TRANSFERENCIA'])
+        self.assertEqual(transferencia.fecha_limite_pago, transferencia.fecha_creacion + timedelta(hours=48))
+        self.assertEqual(transferencia.fecha_recordatorio_pago, transferencia.fecha_creacion + timedelta(hours=24))
+        webpay = OrdenCompra.objects.get(id=ids['TRANSBANK'])
+        self.assertIsNone(webpay.fecha_limite_pago)

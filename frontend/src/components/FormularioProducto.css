@@ -1,0 +1,12 @@
+.formulario-producto { min-width: 0; overflow-wrap: anywhere; }
+.formulario-producto > div:first-child { flex-wrap: wrap; gap: 12px; }
+.formulario-producto .producto-campos {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+.formulario-producto input,
+.formulario-producto textarea,
+.formulario-producto select,
+.producto-campos > div { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) {
+  .formulario-producto .producto-campos { grid-template-columns: minmax(0, 1fr); }
+}

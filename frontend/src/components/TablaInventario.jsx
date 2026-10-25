@@ -40,8 +40,8 @@ export default function TablaInventario({ onEditarProducto }) {
   useEffect(() => {
     const cargarProductos = async () => {
       try {
-        const { data } = await clienteAxios.get('catalogo/productos/');
-        setProductos(Array.isArray(data) ? data : []);
+        const { data } = await clienteAxios.get('catalogo/productos/?todos=true');
+        setProductos(Array.isArray(data) ? data : (data?.results || []));
         setError(null);
       } catch (err) {
         console.error('Error al cargar inventario:', err);
@@ -93,13 +93,13 @@ export default function TablaInventario({ onEditarProducto }) {
     return resultado;
   }, [productos, categoriaFiltro, ordenFiltro]);
 
-  if (cargando) return <p style={{ color: 'var(--color-text)' }}>Cargando inventario...</p>;
-  if (error) return <p style={{ color: '#b91c1c' }}>{error}</p>;
+  if (cargando) return <p role="status" style={{ color: 'var(--color-text)' }}>Cargando inventario...</p>;
+  if (error) return <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>;
 
   const selectStyle = {
     padding: '8px 12px',
     borderRadius: '4px',
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--color-control-border)',
     backgroundColor: 'var(--color-surface)',
     color: 'var(--color-text)',
     width: '100%'
@@ -133,7 +133,7 @@ export default function TablaInventario({ onEditarProducto }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', marginLeft: 'auto' }}>
-          <span style={{ fontSize: '0.9em', color: 'var(--color-muted)' }}>
+          <span role="status" style={{ fontSize: '0.9em', color: 'var(--color-muted)' }}>
             Mostrando {productosFiltradosYOrdenados.length} de {productos.length} producto(s)
           </span>
         </div>
@@ -142,11 +142,11 @@ export default function TablaInventario({ onEditarProducto }) {
       {productosFiltradosYOrdenados.length === 0 ? (
         <p style={{ color: 'var(--color-text)', textAlign: 'center', padding: '40px 0' }}>No hay productos que coincidan con estos filtros.</p>
       ) : (
-        <div style={{ overflowX: 'auto', backgroundColor: 'var(--color-surface)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+        <div tabIndex={0} role="region" aria-label="Inventario de productos y variantes" style={{ overflowX: 'auto', backgroundColor: 'var(--color-surface)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead style={{ backgroundColor: 'var(--color-background)', borderBottom: '2px solid var(--color-primary)' }}>
               <tr>
-                <th style={{ width: '50px', padding: '15px' }}></th>
+                <th scope="col" style={{ width: '50px', padding: '15px' }}><span className="visualmente-oculto">Variantes</span></th>
                 <th style={{ padding: '15px', color: 'var(--color-text)', fontWeight: 'bold' }}>Imagen</th>
                 <th style={{ padding: '15px', color: 'var(--color-text)', fontWeight: 'bold' }}>Producto</th>
                 <th style={{ padding: '15px', color: 'var(--color-text)', fontWeight: 'bold' }}>Categoría</th>
@@ -174,7 +174,12 @@ export default function TablaInventario({ onEditarProducto }) {
                       onClick={() => toggleFila(id)}
                     >
                       <td style={{ padding: '15px', textAlign: 'center', color: 'var(--color-primary)', fontWeight: 'bold' }}>
-                        {estaExpandida ? '▼' : '▶'}
+                        <button type="button" aria-expanded={Boolean(estaExpandida)}
+                          aria-label={`${estaExpandida ? 'Ocultar' : 'Mostrar'} variantes de ${producto.nombre}`}
+                          onClick={evento => { evento.stopPropagation(); toggleFila(id); }}
+                          style={{ minWidth: '44px', minHeight: '44px', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer' }}>
+                          <span aria-hidden="true">{estaExpandida ? '▼' : '▶'}</span>
+                        </button>
                       </td>
                       <td style={{ padding: '15px' }}>
                         {producto.imagenes && producto.imagenes.length > 0 ? (
@@ -211,8 +216,8 @@ export default function TablaInventario({ onEditarProducto }) {
                         </span>
                       </td>
                       <td style={{ padding: '15px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                        <button style={{ background: 'transparent', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: '10px', fontWeight: 'bold' }} onClick={() => onEditarProducto(producto)}>Editar</button>
-                        <button style={{ background: 'transparent', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => eliminarProducto(id)}>Borrar</button>
+                        <button aria-label={`Editar ${producto.nombre}`} style={{ background: 'transparent', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: '10px', fontWeight: 'bold' }} onClick={() => onEditarProducto(producto)}>Editar</button>
+                        <button aria-label={`Borrar ${producto.nombre}`} style={{ background: 'transparent', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => eliminarProducto(id)}>Borrar</button>
                       </td>
                     </tr>
 

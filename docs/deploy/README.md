@@ -15,14 +15,37 @@ pip install -r requirements.txt   # ej. django-anymail (correo) y argon2-cffi (s
 python manage.py migrate
 ```
 
+## Archivos subidos por la tienda
+
+Las imágenes que sube el emprendedor desde el panel se guardan en `MEDIA_ROOT` (por defecto `<proyecto>/media`) y
+se publican en `MEDIA_URL` (por defecto `/media/`):
+
+| Carpeta | Qué guarda |
+|---|---|
+| `negocio/` | Logo, favicon, portada y fotos de la página de inicio (Nosotros e Instagram) |
+| `catalogo/productos/` | Fotos de los productos |
+| `blog/portadas/` y `blog/fotos/` | Portada y galería de cada publicación del blog (si el emprendedor lo activa) |
+
+- **La carpeta tiene que sobrevivir a cada versión nueva.** En un VPS o con Docker, monta un disco o volumen
+  persistente en `MEDIA_ROOT`. En una plataforma sin disco persistente, las fotos se pierden al reiniciar.
+- **Con `DEBUG=False`, Django no sirve estos archivos.** El servidor web (Nginx, Caddy u otro) tiene que publicar
+  la carpeta `MEDIA_ROOT` en la ruta `MEDIA_URL`.
+- **Respaldos:** respalda esta carpeta junto con PostgreSQL, porque los registros de la base apuntan a estos
+  archivos.
+- **Límites de subida:** las variables `CATALOGO_IMAGEN_*` de `.env.example` valen para todas las imágenes, también
+  las del blog (por defecto, 5 MB por foto y 10 fotos por subida). Además, cada publicación del blog admite hasta
+  10 fotos en su galería; ese tope es fijo.
+
 ## Tareas programadas
 
 ### Plazo de pago de las transferencias (cada hora)
 
-Un pedido pagado por transferencia tiene **48 horas** para pagarse. Este comando:
+Un pedido pagado por transferencia tiene el plazo que eligió la tienda en Configuración > Medios de Pago >
+Transferencia: **12, 24, 48 o 72 horas** (48 si no eligió). El plazo queda fijo en cada pedido al crearse, así que
+cambiarlo no afecta a los pedidos que ya existen. Este comando:
 
-- a las 24 horas sin pago, le envía al comprador un recordatorio con los datos para transferir y la fecha límite
-  (una sola vez por pedido);
+- a la mitad del plazo sin pago, le envía al comprador un recordatorio con los datos para transferir y la fecha
+  límite (una sola vez por pedido);
 - vencido el plazo, cancela el pedido con el motivo "Pago no recibido a tiempo" y avisa al comprador por correo.
 
 ```bash
@@ -51,6 +74,18 @@ En desarrollo no hace falta programarlo: se puede correr a mano cuando se quiera
 Una orden cancelada no se puede volver a marcar como pagada desde el panel. Si un comprador transfiere después
 de la cancelación, el emprendedor lo verá en su cuenta bancaria y decide si devuelve el dinero o le arma un
 pedido nuevo.
+
+## Enlaces de los correos y reseñas
+
+- **`FRONTEND_URL` tiene que ser la dirección pública de la tienda.** Los correos llevan enlaces a ella: el
+  seguimiento del pedido y, si el emprendedor activó las reseñas (Configuración > Reseñas de Clientes), el botón
+  "Cuéntanos qué te pareció" del correo de pedido entregado. Con el valor de desarrollo, esos enlaces apuntan a
+  `localhost` y no le sirven al comprador.
+- **El enlace de la reseña va firmado con `SECRET_KEY`** y vence a los 60 días. Si la clave cambia, los enlaces
+  ya enviados dejan de funcionar; los compradores registrados pueden dejar su reseña igual desde Mis pedidos.
+- **Límites por IP:** el formulario de cotización (10 envíos por hora) y el de reseñas (20 por hora) cuentan los
+  envíos en la caché de Django. Sin `CACHES` configurada, cada proceso del servidor lleva su propia cuenta, así que
+  con varios procesos el límite se multiplica; no impide que la tienda funcione.
 
 ## Correo
 

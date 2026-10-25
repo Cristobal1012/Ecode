@@ -234,7 +234,8 @@ class GaleriaAPITests(APITestCase):
         self.assertEqual(public.status_code, 200)
         self.assertEqual(public.data['imagenes'], response.data['imagenes'])
         listado = self.client.get(reverse('lista_productos'))
-        self.assertEqual(listado.data[0]['imagenes'], public.data['imagenes'])
+        items = listado.data.get('results', listado.data) if isinstance(listado.data, dict) else listado.data
+        self.assertEqual(items[0]['imagenes'], public.data['imagenes'])
 
     def test_urls_del_storage_externo_y_round_trip(self):
         with override_settings(STORAGES={'default': {
@@ -254,6 +255,21 @@ class GaleriaAPITests(APITestCase):
         response = self.client.patch(self.detalle, {'imagenes': [referencia]}, format='json')
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['imagenes'], [referencia])
+
+    def test_edicion_variantes_actualiza_precio_minimo_vigente_en_mongo(self):
+        """SCRUM-179 / E01: La API de edición persiste precio_minimo_vigente en MongoDB."""
+        self.producto.actualizar_precio_minimo_vigente()
+        self.assertEqual(float(self.producto.precio_minimo_vigente), 10990.0)
+        nuevas_variantes = [{
+            'sku': 'POL-VERDE',
+            'precio': '10990.00',
+            'precio_oferta': '2990.00',
+            'stock': 7,
+        }]
+        response = self.client.patch(self.detalle, {'variantes': nuevas_variantes}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.producto.reload()
+        self.assertEqual(float(self.producto.precio_minimo_vigente), 2990.0)
 
     def test_lote_invalido_no_asocia_ni_guarda_archivos(self):
         response = self.subir(imagen_archivo(), SimpleUploadedFile('falsa.png', b'bad', content_type='image/png'))
@@ -641,7 +657,8 @@ class CatalogoPublicoTests(APITestCase):
     def listado(self):
         response = self.client.get(reverse('lista_productos'))
         self.assertEqual(response.status_code, 200)
-        return sorted(producto['nombre'] for producto in response.data)
+        items = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        return sorted(producto['nombre'] for producto in items)
 
     def detalle(self, nombre):
         return self.client.get(reverse('detalle_producto', args=[self.productos[nombre].id]))

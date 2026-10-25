@@ -14,7 +14,7 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal
+from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal, ProveedorEnvio
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 from .views import token_verificacion_valido
@@ -66,6 +66,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
+             'entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada',
+             'chilexpress_activo', 'cotizaciones_activas', 'blog_activo', 'blog_nombre', 'resenas_activas',
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
@@ -95,6 +97,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
             texto_boton_ingreso='Ver productos',
             banner_url='https://example.com/hero.jpg',
         )
+        # La migración 0022 copia a la base las llaves de Chilexpress que haya en el entorno
+        ProveedorEnvio.objects.all().delete()
 
     @override_settings(GOOGLE_CLIENT_ID='cliente-qa.apps.googleusercontent.com')
     def test_public_endpoint_matches_frontend_contract(self):
@@ -125,6 +129,14 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'numero_origen': '123',
             'dpto_casa_origen': None,
             'retiro_en_local_activo': True,
+            'entrega_coordinada_activa': False,
+            'costo_entrega_coordinada': 0,
+            'instrucciones_entrega_coordinada': '',
+            'chilexpress_activo': False,
+            'cotizaciones_activas': False,
+            'blog_activo': False,
+            'blog_nombre': 'Nosotros',
+            'resenas_activas': False,
             'google_analytics_id': None,
             'meta_pixel_id': None,
             'nombre_tienda': 'Tienda QA',
@@ -531,6 +543,132 @@ class SeguimientoEnvioTests(APITestCase):
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.data, esperado.data)
         consultar_estado.assert_not_called()
+
+    def orden_de_la_tienda(self, proveedor, estado):
+        return OrdenCompra.objects.create(
+            email_invitado='invitado@example.test', metodo_pago='TRANSBANK', estado=estado,
+            direccion_envio_snapshot={'comuna': 'PROVIDENCIA', 'calle': 'Los Olmos', 'numero': '123'},
+            subtotal=10000, costo_envio=0, total_final=10000, proveedor_logistico=proveedor,
+        )
+
+    def test_entrega_coordinada_sin_courier_ni_codigo_y_con_las_instrucciones(self, consultar_estado):
+        ConfiguracionGlobal.objects.update_or_create(pk=1, defaults={
+            'nombre_tienda': 'Tienda QA', 'instrucciones_entrega_coordinada': 'Te escribimos por WhatsApp.'})
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'ENVIADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['entrega_de_la_tienda'])
+        self.assertEqual(response.data['proveedor'], 'Entrega coordinada')
+        self.assertEqual(response.data['estado_actual'], 'La tienda coordinará la entrega contigo')
+        self.assertEqual(response.data['instrucciones'], 'Te escribimos por WhatsApp.')
+        self.assertIsNone(response.data['codigo_seguimiento'])
+        self.assertEqual(response.data['linea_tiempo_estandar'], [])
+        consultar_estado.assert_not_called()
+
+    def test_entrega_coordinada_sin_instrucciones_avisa_que_la_tienda_contactara(self, consultar_estado):
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'PAGADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.data['estado_actual'], 'Pago confirmado')
+        self.assertEqual(response.data['instrucciones'],
+                         'La tienda te contactará para acordar el día y la hora de la entrega.')
+
+    def test_retiro_en_local_dice_donde_retirar(self, consultar_estado):
+        ConfiguracionGlobal.objects.update_or_create(pk=1, defaults={
+            'nombre_tienda': 'Tienda QA', 'calle_origen': 'Av. Central', 'numero_origen': '50',
+            'comuna_origen': 'Providencia'})
+        orden = self.orden_de_la_tienda('RETIRO_LOCAL', 'ENVIADO')
+
+        response = self.consultar(orden.id)
+
+        self.assertEqual(response.data['proveedor'], 'Retiro en local')
+        self.assertEqual(response.data['estado_actual'], 'Listo para retirar')
+        self.assertEqual(response.data['instrucciones'],
+                         'Retíralo en Av. Central 50 Providencia presentando tu número de orden.')
+        consultar_estado.assert_not_called()
+
+    def test_entrega_de_la_tienda_con_otro_correo_recibe_la_respuesta_generica(self, consultar_estado):
+        orden = self.orden_de_la_tienda('ENTREGA_COORDINADA', 'ENVIADO')
+        esperado = self.consultar(999999)
+
+        response = self.consultar(orden.id, 'otro@example.test')
+
+        self.assertEqual((response.status_code, response.data), (404, esperado.data))
+
+
+    def test_sin_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(update_fields=['numero_seguimiento_tracking'])
+        response = self.consultar(self.orden.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['estado_actual'],
+            'Pendiente de despacho',
+        )
+        consultar_estado.assert_not_called()
+
+
+    def test_retiro_local_muestra_mensaje_propio(self, consultar_estado):
+        self.orden.proveedor_logistico = 'RETIRO_LOCAL'
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(
+            update_fields=[
+                'proveedor_logistico',
+                'numero_seguimiento_tracking',
+            ]
+        )
+        response = self.consultar(self.orden.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['estado_actual'],
+            'Esperando el pago',
+        )
+        consultar_estado.assert_not_called()
+
+
+    def test_none_en_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
+        self.orden.numero_seguimiento_tracking = None
+        self.orden.save(update_fields=['numero_seguimiento_tracking'])
+        response = self.consultar(self.orden.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['estado_actual'],
+            'Pendiente de despacho',
+        )
+        consultar_estado.assert_not_called()
+
+
+    def test_retiro_local_entregado_muestra_entregado(self, consultar_estado):
+        self.orden.proveedor_logistico = 'RETIRO_LOCAL'
+        self.orden.estado = 'ENTREGADO'
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(
+            update_fields=[
+                'proveedor_logistico',
+                'estado',
+                'numero_seguimiento_tracking',
+            ]
+        )
+        response = self.consultar(self.orden.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado_actual'], 'Retirado')
+        consultar_estado.assert_not_called()
+
+
+    def test_pedido_cancelado_sin_ot_muestra_cancelado(self, consultar_estado):
+        self.orden.estado = 'CANCELADO'
+        self.orden.numero_seguimiento_tracking = ''
+        self.orden.save(
+            update_fields=['estado', 'numero_seguimiento_tracking']
+        )
+        response = self.consultar(self.orden.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado_actual'], 'Cancelado')
+        consultar_estado.assert_not_called()
+
 
 
 class CambioEstadoAdminTests(APITestCase):

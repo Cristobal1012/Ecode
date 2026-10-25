@@ -22,6 +22,7 @@
   --color-surface: #FFFFFF;
   --color-text: #2A2622;
   --color-muted: #615A52;
+  --color-control-border: #76716A;
   --color-border: #E3DCD2;
   --color-footer: #2A2622;
 
@@ -96,6 +97,21 @@ textarea {
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
+}
+
+.saltar-contenido {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 8px 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transform: translateY(-200%);
+}
+
+.saltar-contenido:focus {
+  transform: none;
 }
 
 /* ---------- Piezas reutilizables ---------- */

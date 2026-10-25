@@ -1,7 +1,9 @@
-import { useId, useState, useEffect } from 'react';
+import { useId, useState, useEffect, useRef } from 'react';
 import './VariantSelector.css';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
+  const botonAgregar = useRef(null);
+  const aviso = useRef(null);
   const [atributosSeleccionados, setAtributosSeleccionados] = useState({});
   // { tipo: 'exito' | 'error', texto }
   const [mensaje, setMensaje] = useState(null);
@@ -180,6 +182,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
     // Ejecutamos la función que nos pasaron desde DetalleProducto; el servidor confirma el stock
     if (onAgregarAlCarrito) {
+      const devolverFoco = document.activeElement === botonAgregar.current;
       setAgregando(true);
       setMensaje(null);
       const resultado = await onAgregarAlCarrito(varianteSeleccionada, cantidad);
@@ -188,6 +191,11 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       if (resultado.ok) {
         setCantidad(1);
       }
+      if (devolverFoco) requestAnimationFrame(() => {
+        if (document.activeElement !== document.body) return;
+        const destino = botonAgregar.current?.disabled ? aviso.current : botonAgregar.current;
+        destino?.focus();
+      });
     }
   };
 
@@ -277,6 +285,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       )}
 
       <button
+        ref={botonAgregar}
         type="button"
         onClick={agregarAlCarrito}
         disabled={sinStock || agregando}
@@ -293,6 +302,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
       {mensaje && (
         <p
+          ref={aviso} tabIndex={-1}
           role={mensaje.tipo === 'error' ? 'alert' : 'status'}
           className={`selector-variantes-mensaje selector-variantes-mensaje--${mensaje.tipo}`}
         >

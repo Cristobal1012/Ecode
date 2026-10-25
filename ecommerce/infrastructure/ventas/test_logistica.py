@@ -9,6 +9,7 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.application.ventas import GenerarOrdenTransporte
 from ecommerce.domain.logistica import CredencialesChilexpress, Paquete, SolicitudCotizacion
 from ecommerce.domain.ventas import VarianteCatalogo
+from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .models import ConfiguracionGlobal, OrdenCompra
@@ -309,6 +310,16 @@ class OrdenTransporteTests(APITestCase):
     def generar_ot(self):
         return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte()).ejecutar(
             self.orden.id)
+
+    def test_sin_destinatario_la_ot_usa_el_nombre_de_la_cuenta(self):
+        # Pedidos anteriores a pedir el destinatario en el checkout (RF-02.3)
+        usuario = create_user('luis@example.test', nombre='Luis', apellido_paterno='Rojas')
+        OrdenCompra.objects.filter(id=self.orden.id).update(usuario=usuario, email_invitado='',
+                                                            nombre_destinatario='')
+        self.assertEqual(DjangoRepositorioOrdenes().obtener_envio(self.orden.id).destinatario, 'Luis Rojas')
+
+        OrdenCompra.objects.filter(id=self.orden.id).update(usuario=None, email_invitado='cliente@example.test')
+        self.assertEqual(DjangoRepositorioOrdenes().obtener_envio(self.orden.id).destinatario, 'Cliente')
 
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_ot_usa_el_paquete_cotizado_y_declara_el_valor_de_los_productos(self, post):

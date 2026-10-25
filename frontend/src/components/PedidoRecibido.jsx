@@ -18,7 +18,7 @@ export default function PedidoRecibido() {
     <>
       <Header />
 
-      <main className="resultado-main">
+      <main tabIndex={-1} id="contenido" className="resultado-main">
         <section className="resultado">
           <div className="resultado-icono resultado-icono--pendiente" aria-hidden="true">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

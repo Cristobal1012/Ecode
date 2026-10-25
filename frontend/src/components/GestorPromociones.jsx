@@ -108,12 +108,12 @@ export default function GestorPromociones() {
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <label htmlFor="promocion-codigo" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
-            <input required type="text" id="promocion-codigo" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)', textTransform: 'uppercase' }} />
+            <input required type="text" id="promocion-codigo" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)', textTransform: 'uppercase' }} />
           </div>
 
           <div>
             <label htmlFor="promocion-tipo" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Tipo de Descuento</label>
-            <select id="promocion-tipo" name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
+            <select id="promocion-tipo" name="tipo_descuento" value={formData.tipo_descuento} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }}>
               <option value="PORCENTAJE">Porcentaje (%)</option>
               <option value="MONTO_FIJO">Monto Fijo ($)</option>
             </select>
@@ -121,17 +121,17 @@ export default function GestorPromociones() {
 
           <div>
             <label htmlFor="promocion-valor" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
-            <input required type="number" id="promocion-valor" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <input required type="number" id="promocion-valor" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
           </div>
 
           <div>
             <label htmlFor="promocion-umbral-envio" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
-            <input type="number" id="promocion-umbral-envio" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <input type="number" id="promocion-umbral-envio" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
           </div>
 
           <div>
             <label htmlFor="promocion-fecha-expiracion" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Válido hasta (opcional)</label>
-            <input id="promocion-fecha-expiracion" type="date" name="fecha_expiracion" value={formData.fecha_expiracion} onChange={handleChange} aria-describedby="promocion-fecha-expiracion-ayuda" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <input id="promocion-fecha-expiracion" type="date" name="fecha_expiracion" value={formData.fecha_expiracion} onChange={handleChange} aria-describedby="promocion-fecha-expiracion-ayuda" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
             <p id="promocion-fecha-expiracion-ayuda" style={{ margin: '5px 0 0', fontSize: '13px', color: 'var(--color-muted)' }}>
               El código deja de funcionar al terminar ese día. Déjalo vacío para que no venza.
             </p>
@@ -148,7 +148,7 @@ export default function GestorPromociones() {
       {/* TABLA DE PROMOCIONES ACTIVAS */}
       <div style={{ backgroundColor: 'var(--color-surface)', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
         <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Códigos activos</h4>
-        <div style={{ overflowX: 'auto' }}>
+        <div tabIndex={0} role="region" aria-label="Promociones y acciones" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)', backgroundColor: 'var(--color-secondary)' }}>

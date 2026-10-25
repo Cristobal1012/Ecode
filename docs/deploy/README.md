@@ -75,6 +75,18 @@ Una orden cancelada no se puede volver a marcar como pagada desde el panel. Si u
 de la cancelación, el emprendedor lo verá en su cuenta bancaria y decide si devuelve el dinero o le arma un
 pedido nuevo.
 
+## Enlaces de los correos y reseñas
+
+- **`FRONTEND_URL` tiene que ser la dirección pública de la tienda.** Los correos llevan enlaces a ella: el
+  seguimiento del pedido y, si el emprendedor activó las reseñas (Configuración > Reseñas de Clientes), el botón
+  "Cuéntanos qué te pareció" del correo de pedido entregado. Con el valor de desarrollo, esos enlaces apuntan a
+  `localhost` y no le sirven al comprador.
+- **El enlace de la reseña va firmado con `SECRET_KEY`** y vence a los 60 días. Si la clave cambia, los enlaces
+  ya enviados dejan de funcionar; los compradores registrados pueden dejar su reseña igual desde Mis pedidos.
+- **Límites por IP:** el formulario de cotización (10 envíos por hora) y el de reseñas (20 por hora) cuentan los
+  envíos en la caché de Django. Sin `CACHES` configurada, cada proceso del servidor lleva su propia cuenta, así que
+  con varios procesos el límite se multiplica; no impide que la tienda funcione.
+
 ## Correo
 
 El backend elige cómo enviar según las variables de entorno: la API HTTPS de **Resend** si hay

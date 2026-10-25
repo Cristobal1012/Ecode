@@ -57,7 +57,7 @@ from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTranspor
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
-    ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada,
+    ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
@@ -103,7 +103,7 @@ from .serializers import (
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
-from .enlaces_resena import orden_del_token
+from .enlaces_resena import orden_del_token, token_resena
 from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioResenas
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
@@ -885,6 +885,10 @@ class HistorialPedidosAPIView(APIView):
 
     def get(self, request):
         ordenes = OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+        # "Dejar reseña": el mismo enlace firmado del correo, solo para el dueño del pedido
+        con_resenas = resenas_activas()
+        resenados = set(Resena.objects.filter(orden__usuario=request.user).values_list('orden_id', flat=True))
+        ahora = timezone.now()
         data = []
         for orden in ordenes:
             detalles = [{
@@ -907,7 +911,10 @@ class HistorialPedidosAPIView(APIView):
                 "detalles": detalles,
                 # --- AGREGAR ESTAS DOS LÍNEAS ---
                 "id_transaccion_pasarela": orden.id_transaccion_pasarela,
-                "proveedor_logistico": orden.proveedor_logistico
+                "proveedor_logistico": orden.proveedor_logistico,
+                "token_resena": token_resena(orden.id) if con_resenas and puede_resenarse(
+                    orden.estado, orden.fecha_entrega, orden.id in resenados, ahora) else None,
+                "resena_enviada": orden.id in resenados,
             })
             
         return Response(data, status=status.HTTP_200_OK)

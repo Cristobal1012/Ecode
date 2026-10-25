@@ -253,6 +253,43 @@ class CorreoEntregadoTests(ConResenasActivas):
         self.assertNotIn('/resena', self.enviar_correo().body)
 
 
+class MisPedidosResenaTests(ConResenasActivas):
+    def setUp(self):
+        super().setUp()
+        self.usuario = create_user(CORREO_COMPRADOR)
+        OrdenCompra.objects.filter(id=self.orden.id).update(usuario=self.usuario, email_invitado='')
+        self.client.force_authenticate(self.usuario)
+
+    def mis_pedidos(self):
+        return {p['id']: p for p in self.client.get(reverse('mis-pedidos')).data}
+
+    def test_un_pedido_entregado_trae_su_enlace_firmado(self):
+        pedido = self.mis_pedidos()[self.orden.id]
+        self.assertEqual(orden_del_token(pedido['token_resena']), self.orden.id)
+        self.assertFalse(pedido['resena_enviada'])
+
+    def test_sin_enlace_si_no_esta_entregado_fuera_de_plazo_o_ya_resenado(self):
+        en_camino = crear_pedido(estado='ENVIADO')
+        vencido = crear_pedido(entregado_hace=timedelta(days=61))
+        OrdenCompra.objects.filter(id__in=[en_camino.id, vencido.id]).update(usuario=self.usuario, email_invitado='')
+        self.enviar()
+
+        pedidos = self.mis_pedidos()
+
+        self.assertIsNone(pedidos[en_camino.id]['token_resena'])
+        self.assertIsNone(pedidos[vencido.id]['token_resena'])
+        self.assertIsNone(pedidos[self.orden.id]['token_resena'])
+        self.assertTrue(pedidos[self.orden.id]['resena_enviada'])
+
+    def test_con_las_resenas_apagadas_no_se_ofrece(self):
+        ConfiguracionGlobal.objects.filter(pk=1).update(resenas_activas=False)
+        self.assertIsNone(self.mis_pedidos()[self.orden.id]['token_resena'])
+
+    def test_no_se_ven_los_pedidos_de_otros(self):
+        self.client.force_authenticate(create_user('otra@example.test'))
+        self.assertEqual(self.mis_pedidos(), {})
+
+
 class ConfiguracionResenasTests(APITestCase):
     def test_el_admin_las_activa_y_la_tienda_lo_sabe(self):
         ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='Tienda QA')

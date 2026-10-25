@@ -4,8 +4,8 @@ from django.test import SimpleTestCase
 
 from ecommerce.domain.resenas import (
     CalificacionProducto, DatosResena, EstadoResena, ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido,
-    ProductoDelPedido, ResenaInvalida, ResenaYaEnviada, nombre_publico_sugerido, promedio, validar_moderacion,
-    validar_pedido_para_resena, validar_plazo_resena,
+    ProductoDelPedido, ResenaInvalida, ResenaYaEnviada, nombre_publico_sugerido, promedio, puede_resenarse,
+    validar_moderacion, validar_pedido_para_resena, validar_plazo_resena,
 )
 from ecommerce.domain.ventas import EstadoPedido
 
@@ -101,6 +101,14 @@ class PlazoResenaTests(SimpleTestCase):
     def test_sin_fecha_de_entrega_no_esta_en_plazo(self):
         with self.assertRaises(PlazoResenaVencido):
             validar_plazo_resena(None, self.ENTREGADO_EN)
+
+    def test_puede_resenarse_solo_entregado_sin_resena_y_en_plazo(self):
+        ahora = self.ENTREGADO_EN + timedelta(days=5)
+        self.assertTrue(puede_resenarse(EstadoPedido.ENTREGADO, self.ENTREGADO_EN, False, ahora))
+        self.assertFalse(puede_resenarse(EstadoPedido.ENVIADO, None, False, ahora))
+        self.assertFalse(puede_resenarse(EstadoPedido.ENTREGADO, self.ENTREGADO_EN, True, ahora))
+        self.assertFalse(puede_resenarse(EstadoPedido.ENTREGADO, self.ENTREGADO_EN, False,
+                                         self.ENTREGADO_EN + timedelta(days=61)))
 
 
 class ModeracionTests(SimpleTestCase):

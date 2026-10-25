@@ -179,6 +179,16 @@ def validar_plazo_resena(entregado_en: datetime | None, ahora: datetime) -> None
         raise PlazoResenaVencido()
 
 
+def puede_resenarse(estado, entregado_en: datetime | None, ya_tiene_resena: bool, ahora: datetime) -> bool:
+    """Para ofrecer "Dejar reseña" en Mis pedidos: entregado, sin reseña y dentro del plazo."""
+    try:
+        validar_pedido_para_resena(estado, ya_tiene_resena)
+        validar_plazo_resena(entregado_en, ahora)
+    except (PedidoNoEntregado, ResenaYaEnviada, PlazoResenaVencido):
+        return False
+    return True
+
+
 def validar_moderacion(actual, nuevo) -> EstadoResena:
     actual, nuevo = EstadoResena(actual), EstadoResena(nuevo)
     if nuevo not in TRANSICIONES_RESENA[actual]:

@@ -5,6 +5,7 @@ pedido (opcionales). Solo lo aprobado se muestra y cuenta en el promedio.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
@@ -54,6 +55,11 @@ class PedidoNoEntregado(Exception):
 class ResenaYaEnviada(Exception):
     def __init__(self):
         super().__init__('Ya dejaste una reseña para este pedido. ¡Gracias!')
+
+
+class PlazoResenaVencido(Exception):
+    def __init__(self):
+        super().__init__(f'El plazo para dejar la reseña de este pedido ({DIAS_VIGENCIA_ENLACE} días) ya venció.')
 
 
 class ModeracionNoPermitida(Exception):
@@ -165,6 +171,12 @@ def validar_pedido_para_resena(estado, ya_tiene_resena: bool) -> None:
         raise ResenaYaEnviada()
     if estado != EstadoPedido.ENTREGADO:
         raise PedidoNoEntregado()
+
+
+def validar_plazo_resena(entregado_en: datetime | None, ahora: datetime) -> None:
+    """Sin fecha de entrega (pedidos entregados antes de registrarla) no se puede saber si está en plazo."""
+    if entregado_en is None or ahora - entregado_en > timedelta(days=DIAS_VIGENCIA_ENLACE):
+        raise PlazoResenaVencido()
 
 
 def validar_moderacion(actual, nuevo) -> EstadoResena:

@@ -39,13 +39,19 @@
 		file_server
 	}
 
+	# Los archivos de /assets/ llevan un hash en el nombre y nunca cambian. Uno que no existe (lo pide un navegador
+	# con la versión anterior) da 404: si devolviera index.html, quedaría guardado un año en lugar del JavaScript
+	handle /assets/* {
+		root * /srv/tienda
+		@existe file
+		header @existe Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	handle {
 		root * /srv/tienda
-		# Los archivos de /assets/ llevan un hash en el nombre y nunca cambian; el resto se revalida en cada versión
-		@inmutables path /assets/*
-		header @inmutables Cache-Control "public, max-age=31536000, immutable"
-		@paginas not path /assets/*
-		header @paginas Cache-Control "no-cache"
+		# index.html se revalida en cada visita, para que una versión nueva se vea de inmediato
+		header Cache-Control "no-cache"
 		# Las rutas de React (/catalogo, /admin...) devuelven index.html: recargar no da 404
 		try_files {path} /index.html
 		file_server

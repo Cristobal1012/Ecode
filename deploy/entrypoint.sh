@@ -12,5 +12,6 @@ exec gunicorn backend_project.wsgi \
     --workers "${GUNICORN_WORKERS:-2}" \
     --threads "${GUNICORN_THREADS:-4}" \
     --timeout 60 \
+    --no-control-socket \
     --access-logfile - \
     --access-logformat '%(h)s %(t)s "%(m)s %(U)s" %(s)s %(b)s %(M)sms'

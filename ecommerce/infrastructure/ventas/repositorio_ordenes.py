@@ -64,6 +64,9 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             return None
         direccion = orden.direccion_envio_snapshot or {}
         paquete = orden.paquete
+        usuario = orden.usuario
+        # Usuario hereda de AbstractBaseUser: no tiene get_full_name
+        nombre_cuenta = ' '.join(filter(None, [usuario.nombre, usuario.apellido_paterno])) if usuario else ''
         return EnvioSolicitado(
             orden_id=orden.id,
             proveedor=orden.proveedor_logistico or '',
@@ -72,8 +75,7 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             numero=str(direccion.get('numero', '')),
             complemento=direccion.get('dpto_casa', ''),
             # Órdenes anteriores a pedir el destinatario en el checkout: el nombre de la cuenta
-            destinatario=orden.nombre_destinatario
-            or (orden.usuario.get_full_name() if orden.usuario else '') or 'Cliente',
+            destinatario=orden.nombre_destinatario or nombre_cuenta or 'Cliente',
             email=orden.email_invitado or (orden.usuario.email if orden.usuario else ''),
             # Se declara el valor de los productos, no el del envío
             valor_declarado=int(orden.subtotal),

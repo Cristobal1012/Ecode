@@ -7,6 +7,9 @@ from ecommerce.domain.blog import (
 )
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
+from ecommerce.domain.resenas import (
+    ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
+)
 
 class ConfiguracionGlobal(models.Model):
     MODOS_AUTENTICACION = [
@@ -47,6 +50,8 @@ class ConfiguracionGlobal(models.Model):
     # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
     blog_activo = models.BooleanField(default=False)
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
+    # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
+    resenas_activas = models.BooleanField(default=False)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -278,6 +283,9 @@ class OrdenCompra(models.Model):
     fecha_recordatorio_pago = models.DateTimeField(null=True, blank=True)
     # Transferencia: ya se le recordó al comprador el pago, a la mitad del plazo (se envía una sola vez)
     recordatorio_pago_enviado = models.BooleanField(default=False)
+    # Cuándo pasó a Entregado; desde ahí corre el plazo para dejar la reseña. Vacío en los entregados antes de
+    # que se registrara
+    fecha_entrega = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario
@@ -351,6 +359,60 @@ class FotoPublicacion(models.Model):
 
     def __str__(self):
         return f'Foto {self.orden} de {self.publicacion}'
+
+
+def _estrellas_validas(prefijo):
+    return models.CheckConstraint(
+        condition=models.Q(estrellas__gte=ESTRELLAS_MINIMAS, estrellas__lte=ESTRELLAS_MAXIMAS),
+        name=f'{prefijo}_estrellas_validas')
+
+
+class Resena(models.Model):
+    """Reseña de un pedido entregado, una por pedido (domain/resenas.py). Solo las aprobadas se publican.
+
+    No se registra en el admin de Django: el admin de la tienda solo aprueba u oculta desde el panel.
+    """
+
+    ESTADOS = [(estado.value, etiqueta) for estado, etiqueta in ETIQUETAS_ESTADO_RESENA.items()]
+
+    orden = models.OneToOneField(OrdenCompra, on_delete=models.CASCADE, related_name='resena')
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoResena.PENDIENTE.value)
+    # De la tienda (obligatorias)
+    estrellas = models.PositiveSmallIntegerField()
+    comentario = models.TextField(blank=True, default='')
+    nombre_publico = models.CharField(max_length=LARGO_NOMBRE_PUBLICO)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_creacion', '-id']
+        indexes = [models.Index(fields=['estado', '-fecha_creacion'], name='resena_estado_fecha')]
+        constraints = [_estrellas_validas('resena')]
+
+    def __str__(self):
+        return f'Reseña del pedido #{self.orden_id} ({self.estrellas} estrellas)'
+
+
+class ResenaProducto(models.Model):
+    """Calificación de un producto del pedido dentro de una reseña; se aprueba u oculta junto con ella."""
+
+    resena = models.ForeignKey(Resena, on_delete=models.CASCADE, related_name='productos')
+    # Id de MongoDB, como DetalleOrden: la reseña no escribe en el catálogo
+    producto_mongo_id = models.CharField(max_length=255)
+    # Copiado del pedido
+    producto_nombre = models.CharField(max_length=255)
+    estrellas = models.PositiveSmallIntegerField()
+    comentario = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['id']
+        indexes = [models.Index(fields=['producto_mongo_id'], name='resena_producto_id')]
+        constraints = [
+            _estrellas_validas('resena_producto'),
+            models.UniqueConstraint(fields=['resena', 'producto_mongo_id'], name='resena_producto_unico'),
+        ]
+
+    def __str__(self):
+        return f'{self.producto_nombre}: {self.estrellas} estrellas'
 
 class Carrito(models.Model):
     # Relación 1 a 1: Cada usuario tiene exactamente un carrito

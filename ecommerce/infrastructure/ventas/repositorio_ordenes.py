@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Concat
+from django.utils import timezone
 
 from ecommerce.application.ventas import RepositorioOrdenes
 from ecommerce.domain.logistica import EnvioSolicitado, Paquete
@@ -36,6 +37,9 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             cambios['motivo_cancelacion'] = motivo_cancelacion
         if motivo_revision:
             cambios.update(requiere_revision=True, motivo_revision=motivo_revision)
+        if hacia == EstadoPedido.ENTREGADO:
+            # Desde aquí corre el plazo para dejar la reseña (domain/resenas.py)
+            cambios['fecha_entrega'] = timezone.now()
         return OrdenCompra.objects.filter(
             id=orden_id, estado=EstadoPedido(desde).value).update(**cambios) == 1
 

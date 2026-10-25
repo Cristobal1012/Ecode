@@ -14,10 +14,11 @@ from ecommerce.application.cotizaciones import NotificadorCotizaciones
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.empresa import DatosEmpresa
 from ecommerce.domain.logistica import ENTREGA_COORDINADA, aviso_entrega_coordinada
-from ecommerce.domain.ventas import EventoPedido
+from ecommerce.domain.ventas import EstadoPedido, EventoPedido
 
+from ..enlaces_resena import url_resena
 from ..instrucciones_pago import fecha_limite_pago, instrucciones_transferencia
-from ..models import ConfiguracionGlobal, Cotizacion, OrdenCompra
+from ..models import ConfiguracionGlobal, Cotizacion, OrdenCompra, Resena
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,17 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
             'entrega': CorreoNotificadorPedidos._entrega(orden, config),
             # RF-02.4: el invitado consulta con su número de orden y su correo
             'url_seguimiento': f'{frontend_url}/seguimiento?orden={orden.id}',
+            'url_resena': CorreoNotificadorPedidos._url_resena(orden, config),
         }
+
+    @staticmethod
+    def _url_resena(orden, config):
+        """Solo en el correo de entrega y con las reseñas activas; vacío si el pedido ya tiene reseña."""
+        if not (config and config.resenas_activas) or orden.estado != EstadoPedido.ENTREGADO:
+            return ''
+        if Resena.objects.filter(orden_id=orden.id).exists():
+            return ''
+        return url_resena(orden.id)
 
     @staticmethod
     def _transferencia(orden):

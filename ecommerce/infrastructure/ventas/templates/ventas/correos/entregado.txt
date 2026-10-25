@@ -3,5 +3,7 @@
 Registramos que retiraste tu pedido #{{ orden.id }}.{% else %}¡Tu pedido fue entregado!
 
 Tu pedido #{{ orden.id }} fue entregado.{% endif %} Gracias por comprar en {{ tienda }}.
-
+{% if url_resena %}
+¿Qué te pareció? Califica a {{ tienda }} y los productos que compraste: {{ url_resena }}
+{% endif %}
 {% include "ventas/correos/_resumen.txt" %}{% endautoescape %}

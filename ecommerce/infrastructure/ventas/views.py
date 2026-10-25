@@ -47,17 +47,24 @@ from ecommerce.application.cotizaciones import (
     CambiarEstadoCotizacion, CotizacionNoEncontrada, FormularioCotizacionDesactivado, SolicitarCotizacion,
 )
 from ecommerce.application.medios_pago import ConfigurarMedioPago
+from ecommerce.application.resenas import (
+    EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
+    ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
+)
 from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
+from ecommerce.domain.resenas import (
+    ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada,
+)
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
 from .models import (
     ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal,
-    Promocion, Publicacion,
+    Promocion, Publicacion, Resena,
 )
 from .permissions import CanCheckout
 from .payment_services import (
@@ -75,6 +82,7 @@ from .serializers import (
     EmpresaCompradorSerializer,
     CotizacionSolicitudSerializer,
     AdminCotizacionSerializer,
+    AdminResenaSerializer,
     SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
@@ -95,6 +103,8 @@ from .serializers import (
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
+from .enlaces_resena import orden_del_token
+from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioResenas
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import tiene_texto
@@ -1019,6 +1029,123 @@ class AdminCotizacionEstadoView(APIView):
         except ValueError:
             return Response({'estado': ['Estado no válido.']}, status=status.HTTP_400_BAD_REQUEST)
         return Response(AdminCotizacionSerializer(Cotizacion.objects.get(pk=pk)).data)
+
+
+def resenas_activas():
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    return bool(config and config.resenas_activas)
+
+
+ENLACE_RESENA_INVALIDO = 'El enlace para dejar la reseña no es válido o ya venció.'
+MENSAJE_RESENA_RECIBIDA = '¡Gracias por tu reseña! La tienda la revisará antes de publicarla.'
+# El pedido existe y el enlace es válido, pero ya no se puede (o todavía no se puede) reseñar
+ERRORES_PEDIDO_RESENA = (PedidoNoEntregado, ResenaYaEnviada, PlazoResenaVencido)
+
+
+def error_resena(error):
+    if isinstance(error, PedidoNoEncontrado):
+        return Response({'detail': ENLACE_RESENA_INVALIDO}, status=status.HTTP_404_NOT_FOUND)
+    if isinstance(error, ResenasDesactivadas):
+        return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+    return Response({'detail': str(error)}, status=status.HTTP_409_CONFLICT)
+
+
+class ResenaThrottle(CotizacionThrottle):
+    """Contra el spam en el envío de reseñas, por IP (DEFAULT_THROTTLE_RATES['resenas'])."""
+    scope = 'resenas'
+
+
+class ResenaFormularioView(APIView):
+    """GET /api/ventas/resenas/formulario/?t=<token>: el pedido que se va a reseñar (enlace del correo de entrega)."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        orden_id = orden_del_token(request.query_params.get('t'))
+        if orden_id is None:
+            raise NotFound(ENLACE_RESENA_INVALIDO)
+        try:
+            formulario = PrepararFormularioResena(DjangoPedidosParaResenar()).ejecutar(
+                orden_id, resenas_activas(), timezone.now())
+        except (PedidoNoEncontrado, ResenasDesactivadas, *ERRORES_PEDIDO_RESENA) as error:
+            return error_resena(error)
+        return Response(asdict(formulario))
+
+
+class ResenaEnvioView(APIView):
+    """POST /api/ventas/resenas/ {token, estrellas, comentario, nombre_publico, acepta_publicacion, productos}.
+
+    La reseña queda pendiente hasta que el admin la apruebe.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    parser_classes = [JSONParser]
+    throttle_classes = [ResenaThrottle]
+
+    def post(self, request):
+        datos = request.data if isinstance(request.data, dict) else {}
+        orden_id = orden_del_token(datos.get('token'))
+        if orden_id is None:
+            raise NotFound(ENLACE_RESENA_INVALIDO)
+        try:
+            EnviarResena(DjangoPedidosParaResenar(), DjangoRepositorioResenas()).ejecutar(
+                orden_id, datos, resenas_activas(), timezone.now())
+        except (PedidoNoEncontrado, ResenasDesactivadas, *ERRORES_PEDIDO_RESENA) as error:
+            return error_resena(error)
+        except ResenaInvalida as error:
+            return Response(error.errores, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'mensaje': MENSAJE_RESENA_RECIBIDA}, status=status.HTTP_201_CREATED)
+
+
+class ResenasTiendaView(APIView):
+    """GET /api/ventas/resenas/tienda/: promedio y últimas reseñas aprobadas, para la landing."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response(asdict(ResenasDeLaTienda(DjangoRepositorioResenas()).ejecutar(resenas_activas())))
+
+
+class ResenasProductoView(APIView):
+    """GET /api/ventas/resenas/producto/<id>/: promedio y reseñas aprobadas del producto, para su ficha."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, producto_id):
+        resumen = ResenasDeProducto(DjangoRepositorioResenas()).ejecutar(producto_id, resenas_activas())
+        return Response(asdict(resumen))
+
+
+class PaginacionResenas(PaginacionCotizaciones):
+    """Igual que las cotizaciones: de a 20 con ?pagina=N."""
+
+
+class AdminResenaListView(generics.ListAPIView):
+    """GET ?estado=PENDIENTE|APROBADA|OCULTA&pagina=N: las reseñas para moderar, las más recientes primero."""
+    serializer_class = AdminResenaSerializer
+    permission_classes = [IsAdministrador]
+    pagination_class = PaginacionResenas
+
+    def get_queryset(self):
+        resenas = Resena.objects.prefetch_related('productos')
+        estado = self.request.query_params.get('estado')
+        return resenas.filter(estado=estado) if estado else resenas
+
+
+class AdminResenaEstadoView(APIView):
+    """PATCH {estado}: el admin aprueba u oculta la reseña. No hay forma de crearlas ni de editarlas."""
+    permission_classes = [IsAdministrador]
+
+    def patch(self, request, pk):
+        try:
+            ModerarResena(DjangoRepositorioResenas()).ejecutar(pk, request.data.get('estado'))
+        except ResenaNoEncontrada as error:
+            raise NotFound(str(error))
+        except ModeracionNoPermitida as error:
+            return Response({'estado': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({'estado': ['Estado no válido.']}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(AdminResenaSerializer(Resena.objects.prefetch_related('productos').get(pk=pk)).data)
 
 
 class SucursalesChilexpressAPIView(APIView):

@@ -93,6 +93,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Sirve /static/ (el admin de Django) sin depender del servidor web
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -184,6 +186,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+# `collectstatic` los junta aquí y whitenoise los sirve comprimidos
+STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles'))
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
+# En desarrollo y en los tests no se corre collectstatic: sin esto whitenoise avisa en cada arranque
+warnings.filterwarnings('ignore', message='No directory at', category=UserWarning)
 
 # Product images use Django's default storage. MEDIA_ROOT is separate from code
 # and static assets; production must serve MEDIA_URL through its media server.
@@ -217,6 +227,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Solo los endpoints que declaran su throttle (ej. el formulario público de cotización)
+    'DEFAULT_THROTTLE_RATES': {
+        'cotizaciones': '10/hour',
+        # Envío del formulario de reseña: deja corregir errores, pero no inundar la tienda
+        'resenas': '20/hour',
+    },
 }
 
 SIMPLE_JWT = {
@@ -242,6 +258,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', Fals
 # Detrás del proxy del hosting la petición llega por HTTP: sin esto, SECURE_SSL_REDIRECT entra en bucle
 if env_bool('CONFIAR_PROXY_HTTPS', not DEBUG):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# El chequeo de salud lo hace el propio servidor por HTTP, sin pasar por el proxy: no se redirige a HTTPS
+SECURE_REDIRECT_EXEMPT = [r'^api/salud/$']
 
 # En producción no se vende sin Términos y Privacidad publicados (RF-04.4); en desarrollo sí.
 # Variable propia porque el runner de tests fuerza DEBUG=False.
@@ -250,3 +268,13 @@ EXIGIR_PAGINAS_LEGALES = env_bool('EXIGIR_PAGINAS_LEGALES', not DEBUG)
 # RN-04: inicio de sesión con Google. ID de cliente OAuth (público, termina en .apps.googleusercontent.com).
 # Vacío = la tienda no ofrece Google: el botón no aparece y el endpoint responde 503.
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+
+# Registros a la consola (con Docker: `docker compose logs`). Nunca se registran credenciales (RNF-03)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'consola': {'class': 'logging.StreamHandler'}},
+    'root': {'handlers': ['consola'], 'level': os.environ.get('LOG_LEVEL', 'INFO')},
+    # Los errores de las peticiones (500) con su traza; los 4xx no llenan el registro
+    'loggers': {'django.request': {'handlers': ['consola'], 'level': 'ERROR', 'propagate': False}},
+}

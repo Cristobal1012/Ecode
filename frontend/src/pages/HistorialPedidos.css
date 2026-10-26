@@ -114,6 +114,11 @@
   color: var(--color-primary);
 }
 
+.historial-resena-enviada {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
 /* ---------- Detalle del envío (diálogo) ---------- */
 
 .historial-fondo {
@@ -134,7 +139,11 @@
   overflow-y: auto;
   padding: clamp(24px, 4vw, 36px);
   background: var(--color-surface);
+  border: 0;
+  color: var(--color-text);
 }
+
+.historial-dialogo::backdrop { background: rgb(0 0 0 / 45%); }
 
 .historial-dialogo h2 {
   font-size: 1.75rem;

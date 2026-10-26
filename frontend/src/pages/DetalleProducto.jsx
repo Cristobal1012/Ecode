@@ -2,19 +2,26 @@ import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import VariantSelector from '../components/VariantSelector';
+import ListaResenas, { PromedioResenas } from '../components/ListaResenas';
+import useResenas from '../hooks/useResenas';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import './DetalleProducto.css';
 
 export default function DetalleProducto() {
   const { id } = useParams();
+  const configuracion = useConfiguracionTienda();
   const [producto, setProducto] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
   // Índice de la imagen actualmente seleccionada
   const [imagenActual, setImagenActual] = useState(0);
+  // Reseñas aprobadas del producto (si la tienda las activó)
+  const resenas = useResenas(`ventas/resenas/producto/${encodeURIComponent(id)}/`,
+    configuracion ? Boolean(configuracion.resenas_activas) : undefined);
 
   useEffect(() => {
     clienteAxios.get(`catalogo/productos/${id}/`)
@@ -177,7 +184,7 @@ export default function DetalleProducto() {
     return (
       <div className="detalle-page">
         <Header />
-        <main className="contenedor detalle-estado" id="contenido">
+        <main tabIndex={-1} className="contenedor detalle-estado" id="contenido">
           {cargando ? (
             <p role="status">Cargando producto...</p>
           ) : (
@@ -198,7 +205,7 @@ export default function DetalleProducto() {
   return (
     <div className="detalle-page">
       <Header />
-      <main className="contenedor detalle" id="contenido">
+      <main tabIndex={-1} className="contenedor detalle" id="contenido">
         <nav className="detalle-migas" aria-label="Ruta de navegación">
           <ol className="lista-sin-estilo">
             <li><Link to="/catalogo">Catálogo</Link></li>
@@ -250,6 +257,11 @@ export default function DetalleProducto() {
           <div className="detalle-info">
             {producto.categoria && <span className="antetitulo">{producto.categoria}</span>}
             <h1 className="detalle-nombre">{producto.nombre}</h1>
+            {resenas?.total > 0 && (
+              <a href="#resenas" className="detalle-calificacion">
+                <PromedioResenas promedio={resenas.promedio} total={resenas.total} />
+              </a>
+            )}
 
             <p className="detalle-precio">
               {agotado ? (
@@ -286,8 +298,29 @@ export default function DetalleProducto() {
             <div className="detalle-compra">
               <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
             </div>
+
+            {configuracion?.cotizaciones_activas && (
+              <p className="detalle-cotizar texto-secundario">
+                ¿Lo necesitas personalizado o en cantidad?{' '}
+                <Link to={`/cotizar?producto=${encodeURIComponent(producto.id)}`}>Pide una cotización</Link>
+              </p>
+            )}
           </div>
         </div>
+
+        {resenas?.total > 0 && (
+          <section id="resenas" className="detalle-resenas" aria-labelledby="detalle-resenas-titulo">
+            <div className="detalle-resenas-encabezado">
+              <h2 id="detalle-resenas-titulo">Reseñas</h2>
+              <PromedioResenas promedio={resenas.promedio} total={resenas.total} />
+            </div>
+            {resenas.resenas.length > 0 ? (
+              <ListaResenas resenas={resenas.resenas} />
+            ) : (
+              <p className="texto-secundario">Quienes lo compraron lo calificaron, pero todavía no dejan comentarios.</p>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

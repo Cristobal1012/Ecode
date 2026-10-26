@@ -47,6 +47,90 @@ class ErrorOrdenTransporte(Exception):
 # Transportistas con los que se genera una orden de transporte (OT) al confirmarse el pago
 PROVEEDORES_CON_ORDEN_TRANSPORTE = frozenset({'CHILEXPRESS'})
 
+# Entregas que hace la propia tienda, sin transportista ni cotización (RF-02.3)
+RETIRO_LOCAL = 'RETIRO_LOCAL'
+# La tienda contacta al comprador para acordar el día y el lugar (ej. entregas en persona en su ciudad)
+ENTREGA_COORDINADA = 'ENTREGA_COORDINADA'
+ENTREGAS_DE_LA_TIENDA = frozenset({RETIRO_LOCAL, ENTREGA_COORDINADA})
+NOMBRES_ENTREGAS_DE_LA_TIENDA = {RETIRO_LOCAL: 'Retiro en local', ENTREGA_COORDINADA: 'Entrega coordinada'}
+# Lo que se le dice al comprador si el admin no escribió cómo coordina las entregas
+AVISO_ENTREGA_COORDINADA = 'La tienda te contactará para acordar el día y la hora de la entrega.'
+
+# Seguimiento de una entrega de la tienda: no hay courier, el avance es el estado del pedido (domain/ventas.py)
+_ESTADOS_ENTREGA_DE_LA_TIENDA = {
+    'PENDIENTE': 'Esperando el pago',
+    'PAGADO': 'Pago confirmado',
+    'EN_PREPARACION': 'En preparación',
+    'CANCELADO': 'Cancelado',
+}
+_ESTADOS_FINALES_ENTREGA_DE_LA_TIENDA = {
+    # ENVIADO es "Despachado" en el panel; para estas entregas significa que la tienda ya puede entregarlo
+    RETIRO_LOCAL: {'ENVIADO': 'Listo para retirar', 'ENTREGADO': 'Retirado'},
+    ENTREGA_COORDINADA: {'ENVIADO': 'La tienda coordinará la entrega contigo', 'ENTREGADO': 'Entregado'},
+}
+
+
+def aviso_entrega_coordinada(instrucciones: str) -> str:
+    """Las instrucciones que escribió el admin o, si no hay, el aviso de que la tienda contactará al comprador."""
+    return (instrucciones or '').strip() or AVISO_ENTREGA_COORDINADA
+
+
+# Lo que ven la tienda y el comprador cuando una entrega coordinada se pidió sin dirección
+DIRECCION_POR_ACORDAR = 'Dirección por acordar con la tienda'
+
+
+def error_direccion_entrega(proveedor: str, direccion) -> str | None:
+    """RF-02.3: la dirección que pide cada forma de entrega; None si la recibida sirve.
+
+    - Retiro en local: ninguna, se retira en la tienda.
+    - Entrega coordinada: opcional, porque la tienda puede acordarla con el comprador (decidido el 2026-10-25).
+      Si el comprador la escribe, tiene que traer al menos la calle y la comuna.
+    - Transportista: la comuna de destino, para cotizar y generar la orden de transporte.
+    """
+    direccion = direccion if isinstance(direccion, dict) else {}
+
+    def tiene(campo):
+        return bool(str(direccion.get(campo) or '').strip())
+
+    if proveedor == RETIRO_LOCAL:
+        return None
+    if proveedor == ENTREGA_COORDINADA:
+        if any(tiene(campo) for campo in ('calle', 'numero', 'comuna')) and not (tiene('calle') and tiene('comuna')):
+            return 'Completa la calle y la comuna, o deja la dirección vacía para acordarla con la tienda.'
+        return None
+    return None if tiene('comuna') else 'Se requiere la comuna de destino.'
+
+
+def estado_entrega_de_la_tienda(proveedor: str, estado_pedido: str) -> str:
+    """RF-02.4: estado que ve el comprador en el seguimiento de un retiro o una entrega coordinada."""
+    estado = str(estado_pedido)
+    return (_ESTADOS_FINALES_ENTREGA_DE_LA_TIENDA.get(proveedor, {}).get(estado)
+            or _ESTADOS_ENTREGA_DE_LA_TIENDA.get(estado, estado))
+
+
+class EntregaNoHabilitada(Exception):
+    """El comprador eligió una forma de entrega que la tienda no ofrece."""
+
+
+@dataclass(frozen=True)
+class EntregasDeLaTienda:
+    """Formas de entrega propias que el admin activa en el panel; el retiro es gratis y la coordinada tiene su costo."""
+
+    retiro_activo: bool = False
+    coordinada_activa: bool = False
+    costo_coordinada: Decimal = Decimal('0')
+
+    def costo(self, proveedor: str) -> Decimal:
+        if proveedor == RETIRO_LOCAL:
+            if not self.retiro_activo:
+                raise EntregaNoHabilitada('El retiro en local no está habilitado en esta tienda.')
+            return Decimal('0')
+        if proveedor == ENTREGA_COORDINADA:
+            if not self.coordinada_activa:
+                raise EntregaNoHabilitada('La entrega coordinada no está habilitada en esta tienda.')
+            return self.costo_coordinada
+        raise EntregaNoHabilitada('Esa forma de entrega no la hace la tienda.')
+
 
 @dataclass(frozen=True)
 class EnvioSolicitado:

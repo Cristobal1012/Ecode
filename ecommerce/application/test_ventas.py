@@ -9,14 +9,15 @@ from ecommerce.application.ventas import (
     OrdenNoEncontrada,
     GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
     RecordarPagosPorVencer, ResolverRevision,
-    ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes,
+    ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes, MOTIVO_PAGO_VENCIDO,
+    PagoFueraPlazoNoPermitido, RegistrarPagoFueraPlazo
 )
 from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
 from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, EventoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
     PedidoVacio, ProblemaLinea,
     StockInsuficiente, SubtotalDesactualizado, TransicionNoPermitida, VarianteCatalogo,
-    VarianteNoDisponible,
+    VarianteNoDisponible, plazo_pago,
 )
 
 
@@ -145,19 +146,26 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
         self.cambio_concurrente = None
 
     def agregar(self, orden_id, estado, items, stock_descontado=False, proveedor='RETIRO_LOCAL',
-                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0)):
+                metodo_pago='TRANSBANK', creada=datetime(2026, 10, 1, 12, 0), plazo=timedelta(hours=48),
+                motivo_cancelacion=''):
         self.ordenes[orden_id] = {
             'estado': EstadoPedido(estado), 'items': tuple(ItemSolicitado(*i) for i in items),
-            'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': '',
+            'stock_descontado': stock_descontado, 'motivo_revision': '', 'motivo_cancelacion': motivo_cancelacion,
             'requiere_revision': False, 'proveedor': proveedor, 'numero_ot': '', 'error_ot': '',
-            'metodo_pago': metodo_pago, 'creada': creada, 'recordatorio_pago': False,
+            'metodo_pago': metodo_pago, 'plazo': plazo_pago(creada, plazo), 'recordatorio_pago': False,
         }
         return self.ordenes[orden_id]
 
-    def pendientes_de_pago(self, metodo_pago, creadas_antes_de, sin_recordatorio=False):
-        return [orden_id for orden_id, datos in self.ordenes.items()
-                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago
-                and datos['creada'] < creadas_antes_de and not (sin_recordatorio and datos['recordatorio_pago'])]
+    def _pendientes(self, metodo_pago):
+        return [(orden_id, datos) for orden_id, datos in self.ordenes.items()
+                if datos['estado'] == EstadoPedido.PENDIENTE and datos['metodo_pago'] == metodo_pago]
+
+    def pagos_vencidos(self, metodo_pago, ahora):
+        return [orden_id for orden_id, datos in self._pendientes(metodo_pago) if datos['plazo'].vence < ahora]
+
+    def pagos_por_recordar(self, metodo_pago, ahora):
+        return [orden_id for orden_id, datos in self._pendientes(metodo_pago)
+                if datos['plazo'].recordar < ahora and not datos['recordatorio_pago']]
 
     def marcar_recordatorio_pago(self, orden_id):
         datos = self.ordenes[orden_id]
@@ -184,7 +192,8 @@ class RepositorioOrdenesFalso(RepositorioOrdenes):
     def obtener(self, orden_id):
         datos = self.ordenes.get(orden_id)
         return datos and OrdenRegistrada(orden_id, datos['estado'], datos['items'],
-                                         datos['stock_descontado'], datos['requiere_revision'])
+                                         datos['stock_descontado'], datos['requiere_revision'],
+                                         motivo_cancelacion=datos['motivo_cancelacion'])
 
     def cambiar_estado(self, orden_id, desde, hacia, motivo_cancelacion='', motivo_revision=''):
         datos = self.ordenes[orden_id]
@@ -549,9 +558,17 @@ class CancelarPagosVencidosTests(SimpleTestCase):
         self.notificador = NotificadorFalso()
         self.caso = CancelarPagosVencidos(self.ordenes, self.notificador)
 
-    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA', plazo=48):
         return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
-                                    creada=self.AHORA - timedelta(hours=horas))
+                                    creada=self.AHORA - timedelta(hours=horas), plazo=timedelta(hours=plazo))
+
+    def test_cada_orden_vence_con_el_plazo_que_tenia_la_tienda_al_crearla(self):
+        self.agregar(1, 13, plazo=12)
+        self.agregar(2, 13, plazo=24)
+        self.agregar(3, 71, plazo=72)
+        self.agregar(4, 73, plazo=72)
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1, 4])
 
     def test_cancela_y_avisa_solo_las_transferencias_pendientes_con_mas_de_48_horas(self):
         vencida = self.agregar(1, 49)
@@ -592,9 +609,17 @@ class RecordarPagosPorVencerTests(SimpleTestCase):
         self.notificador = NotificadorFalso()
         self.caso = RecordarPagosPorVencer(self.ordenes, self.notificador)
 
-    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA'):
+    def agregar(self, orden_id, horas, estado='PENDIENTE', metodo_pago='TRANSFERENCIA', plazo=48):
         return self.ordenes.agregar(orden_id, estado, [], metodo_pago=metodo_pago,
-                                    creada=self.AHORA - timedelta(hours=horas))
+                                    creada=self.AHORA - timedelta(hours=horas), plazo=timedelta(hours=plazo))
+
+    def test_recuerda_a_la_mitad_del_plazo_de_cada_orden(self):
+        self.agregar(1, 7, plazo=12)
+        self.agregar(2, 5, plazo=12)
+        self.agregar(3, 37, plazo=72)
+        self.agregar(4, 35, plazo=72)
+
+        self.assertEqual(self.caso.ejecutar(self.AHORA), [1, 3])
 
     def test_recuerda_solo_las_transferencias_pendientes_con_mas_de_24_horas(self):
         por_vencer = self.agregar(1, 25)
@@ -641,6 +666,58 @@ class ResolverRevisionTests(SimpleTestCase):
             self.caso.ejecutar(1)
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(99)
+
+class RegistrarPagoFueraPlazoTests(SimpleTestCase):
+    def setUp(self):
+        self.ordenes = RepositorioOrdenesFalso()
+        self.caso = RegistrarPagoFueraPlazo(self.ordenes)
+
+    def test_registra_pago_tardio_sin_cambiar_estado_ni_stock(self):
+        orden = self.ordenes.agregar(
+            1,
+            'CANCELADO',
+            [],
+            motivo_cancelacion=MOTIVO_PAGO_VENCIDO,
+        )
+
+        self.caso.ejecutar(1)
+
+        self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+        self.assertTrue(orden['requiere_revision'])
+        self.assertEqual(
+            orden['motivo_revision'],
+            RegistrarPagoFueraPlazo.MOTIVO_REVISION,
+        )
+        self.assertFalse(orden['stock_descontado'])
+
+    def test_rechaza_orden_cancelada_por_otro_motivo(self):
+        orden = self.ordenes.agregar(
+            1,
+            'CANCELADO',
+            [],
+            motivo_cancelacion='Cancelado por el administrador',
+        )
+
+        with self.assertRaises(PagoFueraPlazoNoPermitido):
+            self.caso.ejecutar(1)
+
+        self.assertFalse(orden['requiere_revision'])
+        self.assertEqual(orden['estado'], EstadoPedido.CANCELADO)
+
+    def test_rechaza_orden_que_no_esta_cancelada(self):
+        self.ordenes.agregar(
+            1,
+            'PENDIENTE',
+            [],
+            motivo_cancelacion=MOTIVO_PAGO_VENCIDO,
+        )
+
+        with self.assertRaises(PagoFueraPlazoNoPermitido):
+            self.caso.ejecutar(1)
+
+    def test_rechaza_orden_inexistente(self):
+        with self.assertRaises(OrdenNoEncontrada):
+            self.caso.ejecutar(999)
 
 class CalculoTotalesQATest(TestCase):
 

@@ -6,6 +6,10 @@
 <p style="margin:0 0 12px 0; font-size:15px; line-height:1.5;">
   Tu pedido #{{ orden.id }} ya está listo. Puedes retirarlo presentando tu número de orden.
 </p>
+{% elif es_entrega_coordinada %}
+<p style="margin:0 0 12px 0; font-size:15px; line-height:1.5;">
+  {{ tienda }} va en camino a entregar tu pedido #{{ orden.id }} en la dirección que indicaste.
+</p>
 {% else %}
 <p style="margin:0 0 12px 0; font-size:15px; line-height:1.5;">
   {{ tienda }} despachó tu pedido #{{ orden.id }}{% if transportista %} con {{ transportista }}{% endif %}.

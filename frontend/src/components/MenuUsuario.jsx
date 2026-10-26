@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
 
 const MenuUsuario = () => {
+    const botonRef = useRef(null);
     const [isOpen, setIsOpen] = useState(false);
     const [nombreUsuario, setNombreUsuario] = useState('Usuario');
     const menuRef = useRef(null);
@@ -54,11 +55,12 @@ const MenuUsuario = () => {
     }
 
     return (
-        <div className="menu-usuario" ref={menuRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
+        <div className="menu-usuario" ref={menuRef} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setIsOpen(false); botonRef.current?.focus(); } }}>
             <button
+                ref={botonRef}
                 type="button"
                 className="header-icono menu-usuario-boton"
-                aria-label="Menú de usuario"
+                aria-label={`Menú de usuario: Hola, ${nombreUsuario}`}
                 aria-expanded={isOpen}
                 onClick={() => setIsOpen(!isOpen)}
             >

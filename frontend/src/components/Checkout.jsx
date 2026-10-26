@@ -1,13 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
 import useCarrito from '../hooks/useCarrito';
+import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
 import './Checkout.css';
+import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
+import Dialogo from './Dialogo';
 
 const OPCION_RETIRO_LOCAL = {
     proveedor: 'RETIRO_LOCAL', nombre: 'Retiro en Tienda / Local', tipo: 'RETIRO', costo_envio: 0,
+};
+
+const NOMBRES_TIPO_DESPACHO = {
+    DOMICILIO: 'A Domicilio',
+    SUCURSAL: 'Sucursal Chilexpress',
+    RETIRO_LOCAL: 'Retiro en Local',
+    ENTREGA_COORDINADA: 'Entrega coordinada',
 };
 
 const calcularCajaDeEnvio = (items) => {
@@ -46,7 +56,7 @@ export default function Checkout() {
     return (
         <>
             <Header />
-            <main className="checkout-main">
+            <main tabIndex={-1} id="contenido" className="checkout-main">
                 <CheckoutContenido />
             </main>
         </>
@@ -59,6 +69,11 @@ function CheckoutContenido() {
     // RF-02.3: quién recibe o retira el pedido (Chilexpress y la tienda lo contactan)
     const [nombreDestinatario, setNombreDestinatario] = useState('');
     const [telefonoDestinatario, setTelefonoDestinatario] = useState('');
+    // Compra como empresa: la tienda emite la factura con estos datos
+    const [compraEmpresa, setCompraEmpresa] = useState(false);
+    const [datosEmpresa, setDatosEmpresa] = useState(EMPRESA_VACIA);
+    const [erroresEmpresa, setErroresEmpresa] = useState({});
+    const [guardarEmpresa, setGuardarEmpresa] = useState(true);
     const [mensaje, setMensaje] = useState('');
     const [errorReglas, setErrorReglas] = useState(false);
     const [opcionCompra, setOpcionCompra] = useState(null);
@@ -68,7 +83,18 @@ function CheckoutContenido() {
     const [configTienda, setConfigTienda] = useState(null);
 
     // --- ESTADOS DE TIPO DE DESPACHO ---
-    const [tipoDespacho, setTipoDespacho] = useState('DOMICILIO'); // 'DOMICILIO' | 'SUCURSAL' | 'RETIRO_LOCAL'
+    // 'DOMICILIO' | 'SUCURSAL' | 'RETIRO_LOCAL' | 'ENTREGA_COORDINADA'
+    const [tipoElegido, setTipoDespacho] = useState('DOMICILIO');
+    // RF-02.3: solo las entregas que ofrece la tienda; Chilexpress, si tiene sus llaves cargadas
+    const chilexpressActivo = Boolean(configTienda?.chilexpress_activo);
+    const tiposDisponibles = [
+        ...(chilexpressActivo ? ['DOMICILIO', 'SUCURSAL'] : []),
+        ...(configTienda?.retiro_en_local_activo ? ['RETIRO_LOCAL'] : []),
+        ...(configTienda?.entrega_coordinada_activa ? ['ENTREGA_COORDINADA'] : []),
+    ];
+    const tipoDespacho = tiposDisponibles.includes(tipoElegido) ? tipoElegido : (tiposDisponibles[0] ?? null);
+    // En la entrega coordinada la tienda puede acordar la dirección con el comprador (domain/logistica.py)
+    const direccionOpcional = tipoDespacho === 'ENTREGA_COORDINADA';
     const [comunaSucursal, setComunaSucursal] = useState('');
     const [resultadoSucursales, setResultadoSucursales] = useState({ comuna: null, items: [] });
     const [sucursalElegida, setSucursalElegida] = useState(null);
@@ -106,12 +132,22 @@ function CheckoutContenido() {
 
     const usuarioAutenticado = !!localStorage.getItem('access_token');
     const [esperandoPago, setEsperandoPago] = useState(null);
+    const [mostrarDialogoPago, setMostrarDialogoPago] = useState(false);
+    const consultaEnCurso = useRef(false);
+    const botonReabrirPago = useRef(null);
+    const cerrarAvisoPago = () => {
+        setMostrarDialogoPago(false);
+        // El disparador original queda deshabilitado mientras existe una orden pendiente.
+        // Esperamos a que aparezca la acción que permite reabrir el mismo aviso.
+        requestAnimationFrame(() => botonReabrirPago.current?.focus());
+    };
     const [verificando, setVerificando] = useState(false);
     const [procesandoPago, setProcesandoPago] = useState(false);
     const navigate = useNavigate();
 
     const verificarEstadoOrden = useCallback(async (idOrden) => {
-        if (!idOrden) return;
+        if (!idOrden || consultaEnCurso.current) return;
+        consultaEnCurso.current = true;
         setVerificando(true);
         try {
             const res = await consultarPagoPendiente(idOrden);
@@ -132,6 +168,7 @@ function CheckoutContenido() {
         } catch (err) {
             console.error('Error verificando pago:', err);
         } finally {
+            consultaEnCurso.current = false;
             setVerificando(false);
         }
     }, [usuarioAutenticado, navigate]);
@@ -174,12 +211,6 @@ function CheckoutContenido() {
             .catch(() => setMensaje('No se pudo cargar la configuración de la tienda.'))
             .finally(() => setCargandoPagos(false));
 
-        clienteAxios.get('ventas/logistica/comunas/')
-            .then(res => setListaComunas(res.data.comunas || []))
-            .catch(() => setMensaje('No se pudieron cargar las comunas de envío.'))
-            .finally(() => setCargandoComunas(false));
-
-
         clienteAxios.get('ventas/checkout/reglas/')
             .then(res => {
                 setModoAutenticacion(res.data.modo_autenticacion);
@@ -194,6 +225,15 @@ function CheckoutContenido() {
             .then(res => setPaginasLegales((res.data || []).map(p => p.tipo_pagina)))
             .catch(() => setPaginasLegales([]));
     }, []);
+
+    // Las comunas con cobertura vienen de Chilexpress: sin sus llaves, la comuna se escribe a mano
+    useEffect(() => {
+        if (!chilexpressActivo) return;
+        clienteAxios.get('ventas/logistica/comunas/')
+            .then(res => setListaComunas(res.data.comunas || []))
+            .catch(() => setMensaje('No se pudieron cargar las comunas de envío.'))
+            .finally(() => setCargandoComunas(false));
+    }, [chilexpressActivo]);
 
     const enlaceLegal = (tipo, texto) => paginasLegales.includes(tipo) ? (
         <a href={`/legal/${tipo.toLowerCase()}`} target="_blank" rel="noopener noreferrer" aria-label={`${texto} (se abre en otra pestaña)`}>
@@ -216,6 +256,21 @@ function CheckoutContenido() {
             })
             .catch(() => {});
     }, [usuarioAutenticado]);
+
+    // Con sesión, los datos de la empresa que el comprador guardó en una compra anterior (204 si no hay)
+    useEffect(() => {
+        if (!usuarioAutenticado) return;
+        clienteAxios.get('ventas/empresa/')
+            .then(({ data }) => {
+                if (data && typeof data === 'object') setDatosEmpresa(actual => ({ ...actual, ...data }));
+            })
+            .catch(() => {});
+    }, [usuarioAutenticado]);
+
+    const editarEmpresa = (campo, valor) => {
+        setDatosEmpresa(actual => ({ ...actual, [campo]: valor }));
+        setErroresEmpresa(actual => ({ ...actual, [campo]: undefined }));
+    };
 
     // 2. CARGA DE DIRECCIONES GUARDADAS
     // Las direcciones se cargan por sesión, sin reiniciar la elección al cambiar el carrito.
@@ -322,8 +377,14 @@ function CheckoutContenido() {
 
     const cotizacionVigente = claveCotizacion && resultadoCotizacion.clave === claveCotizacion ? resultadoCotizacion : null;
     const cotizando = !!claveCotizacion && !cotizacionVigente;
-    const opcionEntregaSeleccionada = tipoDespacho === 'RETIRO_LOCAL' && itemsCarrito.length > 0
-        ? OPCION_RETIRO_LOCAL : cotizacionVigente?.opcion || null;
+    // Retiro y entrega coordinada los hace la tienda: no se cotizan, su costo lo define el admin
+    const opcionEntregaPropia = tipoDespacho === 'RETIRO_LOCAL' ? OPCION_RETIRO_LOCAL
+        : tipoDespacho === 'ENTREGA_COORDINADA' ? {
+            proveedor: 'ENTREGA_COORDINADA', nombre: 'Entrega coordinada', tipo: 'COORDINADA',
+            costo_envio: Number(configTienda?.costo_entrega_coordinada) || 0,
+        } : null;
+    const opcionEntregaSeleccionada = opcionEntregaPropia && itemsCarrito.length > 0
+        ? opcionEntregaPropia : cotizacionVigente?.opcion || null;
     const opcionesEntrega = opcionEntregaSeleccionada ? [opcionEntregaSeleccionada] : [];
     const costoEnvio = Number(opcionEntregaSeleccionada?.costo_envio || 0);
     const medidasCaja = calcularCajaDeEnvio(itemsCarrito);
@@ -383,6 +444,13 @@ function CheckoutContenido() {
         if (!opcionEntregaSeleccionada) return setMensaje('Selecciona una opción de entrega.');
         if (!nombreDestinatario.trim() || !telefonoDestinatario.trim()) return setMensaje('Indica el nombre y el teléfono de quien recibe el pedido.');
         if (!aceptaTerminos) return setMensaje('Debes aceptar los Términos y Condiciones y la Política de Privacidad.');
+        if (compraEmpresa) {
+            const errores = validarDatosEmpresa(datosEmpresa);
+            if (Object.keys(errores).length > 0) {
+                setErroresEmpresa(errores);
+                return setMensaje('Revisa los datos de la empresa para la factura.');
+            }
+        }
 
         let dirSnapshot;
         
@@ -413,13 +481,20 @@ function CheckoutContenido() {
             if (direccionSeleccionadaId !== 'nueva') {
                 const dir = direccionesGuardadas.find(d => d.id === direccionSeleccionadaId);
                 dirSnapshot = { calle: dir.calle, numero: dir.calle_numero, dpto_casa: dir.dpto_casa, comuna: dir.comuna, ciudad: dir.ciudad, region: dir.region };
+            } else if (direccionOpcional && ![calle, numero, comuna].some(valor => valor.trim())) {
+                // RF-02.3: la entrega coordinada puede ir sin dirección; la tienda la acuerda con el comprador
+                dirSnapshot = {};
             } else {
-                if (!calle.trim() || !numero.trim() || !comuna.trim() || !ciudad.trim()) {
-                    return setMensaje('Completa todos los campos obligatorios de tu nueva dirección de envío.');
+                if (direccionOpcional ? !calle.trim() || !comuna.trim()
+                    : !calle.trim() || !numero.trim() || !comuna.trim() || !ciudad.trim()) {
+                    return setMensaje(direccionOpcional
+                        ? 'Completa la calle y la comuna, o deja la dirección vacía para acordarla con la tienda.'
+                        : 'Completa todos los campos obligatorios de tu nueva dirección de envío.');
                 }
                 dirSnapshot = { calle, numero, dpto_casa: dptoCasa, comuna, ciudad, region };
 
-                if (usuarioAutenticado && guardarNuevaDireccion) {
+                // Una dirección incompleta (sin número o ciudad) sirve para esta entrega, pero no se guarda
+                if (usuarioAutenticado && guardarNuevaDireccion && numero.trim() && ciudad.trim()) {
                     try {
                         await clienteAxios.post('ventas/direcciones/', { calle, calle_numero: numero, dpto_casa: dptoCasa, comuna, ciudad, region, es_predeterminado: true });
                     } catch (err) { console.error(err); }
@@ -439,12 +514,14 @@ function CheckoutContenido() {
             email_invitado: !usuarioAutenticado && compraComoInvitado ? emailInvitado : null,
             nombre_destinatario: nombreDestinatario.trim(),
             telefono_destinatario: telefonoDestinatario.trim(),
-            direccion_envio_snapshot: dirSnapshot, 
+            datos_empresa: compraEmpresa ? { ...datosEmpresa, rut: normalizarRut(datosEmpresa.rut) } : null,
+            guardar_datos_empresa: compraEmpresa && usuarioAutenticado && guardarEmpresa,
+            direccion_envio_snapshot: dirSnapshot,
             subtotal, 
             costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
             proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
-            paquete: tipoDespacho === 'RETIRO_LOCAL' ? undefined : cajaCalculada,
+            paquete: opcionEntregaPropia ? undefined : cajaCalculada,
             acepta_terminos: aceptaTerminos,
             codigo_promocion: codigoValidado,
             items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
@@ -457,6 +534,7 @@ function CheckoutContenido() {
                     localStorage.setItem('orden_pendiente_pago', respuesta.data.orden_id);
                     localStorage.setItem('orden_pendiente_token', respuesta.data.token_verificacion);
                     setEsperandoPago({ ordenId: respuesta.data.orden_id, urlPago: respuesta.data.url_pago });
+                    setMostrarDialogoPago(true);
                     const ventana = window.open(respuesta.data.url_pago, '_blank');
                     if (!ventana) {
                         window.location.assign(respuesta.data.url_pago);
@@ -493,8 +571,14 @@ function CheckoutContenido() {
                     await guardarCarrito(ajuste.items);
                 }
             }
+            // El backend también valida los datos de la empresa: sus errores van junto a cada campo
+            if (datos.datos_empresa && typeof datos.datos_empresa === 'object') {
+                setErroresEmpresa(Object.fromEntries(Object.entries(datos.datos_empresa)
+                    .map(([campo, mensajes]) => [campo, [].concat(mensajes).join(' ')])));
+            }
             const detalle = datos.subtotal || datos.items || datos.acepta_terminos || datos.metodo_pago
-                || datos.nombre_destinatario || datos.telefono_destinatario;
+                || datos.nombre_destinatario || datos.telefono_destinatario
+                || (datos.datos_empresa && 'Revisa los datos de la empresa para la factura.');
             setMensaje(detalle ? [].concat(detalle).join(' ') : 'Error al procesar la compra.');
             console.error(datos);
         } finally {
@@ -588,29 +672,60 @@ function CheckoutContenido() {
                         </div>
                     </fieldset>
 
+                    {/* Compra como empresa: la tienda emite la factura con estos datos */}
+                    <fieldset className="checkout-grupo checkout-seccion">
+                        <legend className="checkout-paso">Facturación</legend>
+                        <label className="checkout-casilla">
+                            <input type="checkbox" checked={compraEmpresa} onChange={(e) => { setCompraEmpresa(e.target.checked); setErroresEmpresa({}); }} aria-describedby="checkout-empresa-ayuda" />
+                            Compro como empresa y necesito factura
+                        </label>
+                        <p id="checkout-empresa-ayuda" className="checkout-ayuda">
+                            Te pediremos la razón social, el RUT, el giro y a qué correo enviar la factura.
+                        </p>
+                        {compraEmpresa && (
+                            <>
+                                <DatosEmpresa id="checkout-empresa" datos={datosEmpresa} errores={erroresEmpresa} onChange={editarEmpresa} />
+                                {usuarioAutenticado && (
+                                    <label className="checkout-casilla">
+                                        <input type="checkbox" checked={guardarEmpresa} onChange={(e) => setGuardarEmpresa(e.target.checked)} />
+                                        Guardar los datos de la empresa para mis próximas compras
+                                    </label>
+                                )}
+                            </>
+                        )}
+                    </fieldset>
+
                     {/* --- ¿CÓMO DESEAS RECIBIR TU PEDIDO? --- */}
                     <fieldset className="checkout-grupo checkout-seccion">
                         <legend className="checkout-paso">¿Cómo deseas recibir tu pedido?</legend>
-                        <div className="checkout-fila checkout-opciones">
-                            <label className={claseOpcion(tipoDespacho === 'DOMICILIO')}>
-                                <input type="radio" name="tipo-despacho" value="DOMICILIO" checked={tipoDespacho === 'DOMICILIO'} onChange={() => setTipoDespacho('DOMICILIO')} className="checkout-radio-oculto" />
-                                A Domicilio
-                            </label>
-                            <label className={claseOpcion(tipoDespacho === 'SUCURSAL')}>
-                                <input type="radio" name="tipo-despacho" value="SUCURSAL" checked={tipoDespacho === 'SUCURSAL'} onChange={() => setTipoDespacho('SUCURSAL')} className="checkout-radio-oculto" />
-                                Sucursal Chilexpress
-                            </label>
-                            {configTienda?.retiro_en_local_activo && (
-                                <label className={claseOpcion(tipoDespacho === 'RETIRO_LOCAL')}>
-                                    <input type="radio" name="tipo-despacho" value="RETIRO_LOCAL" checked={tipoDespacho === 'RETIRO_LOCAL'} onChange={() => setTipoDespacho('RETIRO_LOCAL')} className="checkout-radio-oculto" />
-                                    Retiro en Local
-                                </label>
-                            )}
-                        </div>
+                        {tiposDisponibles.length > 0 ? (
+                            <div className="checkout-fila checkout-opciones">
+                                {tiposDisponibles.map(tipo => (
+                                    <label key={tipo} className={claseOpcion(tipoDespacho === tipo)}>
+                                        <input type="radio" name="tipo-despacho" value={tipo} checked={tipoDespacho === tipo} onChange={() => setTipoDespacho(tipo)} className="checkout-radio-oculto" />
+                                        {NOMBRES_TIPO_DESPACHO[tipo]}
+                                    </label>
+                                ))}
+                            </div>
+                        ) : configTienda && (
+                            <p className="checkout-aviso checkout-aviso--error">
+                                Esta tienda todavía no tiene formas de entrega disponibles.
+                            </p>
+                        )}
 
                         {/* --- CONTENIDO SEGÚN LA FORMA DE ENTREGA --- */}
-                        {tipoDespacho === 'DOMICILIO' ? (
+                        {tipoDespacho === 'DOMICILIO' || tipoDespacho === 'ENTREGA_COORDINADA' ? (
                             <div className="checkout-entrega">
+                                {direccionOpcional && (
+                                    <>
+                                        <p className="checkout-ayuda checkout-entrega-coordinada">
+                                            {configTienda?.instrucciones_entrega_coordinada?.trim() || 'La tienda te contactará para acordar el día y la hora de la entrega.'}
+                                        </p>
+                                        <p className="checkout-ayuda">
+                                            La dirección es opcional: si prefieres, déjala en blanco y la acuerdas con la tienda.
+                                        </p>
+                                    </>
+                                )}
                                 {usuarioAutenticado && direccionesGuardadas.length > 0 && (
                                     <fieldset className="checkout-grupo checkout-direcciones">
                                         <legend className="checkout-solo-lector">Dirección de envío</legend>
@@ -635,11 +750,11 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo checkout-campo--ancho">
                                                 <label htmlFor="checkout-calle">Calle</label>
-                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required placeholder="Ej: Av. Providencia" />
+                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-numero">Número</label>
-                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required />
+                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         <div className="checkout-campo">
@@ -649,14 +764,18 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-comuna">Comuna</label>
-                                                <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required disabled={cargandoComunas}>
-                                                    <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
-                                                    {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                                {chilexpressActivo ? (
+                                                    <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required={!direccionOpcional} disabled={cargandoComunas}>
+                                                        <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
+                                                        {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
+                                                    </select>
+                                                ) : (
+                                                    <input id="checkout-comuna" type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
+                                                )}
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-ciudad">Ciudad</label>
-                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required />
+                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         {usuarioAutenticado && (
@@ -699,7 +818,7 @@ function CheckoutContenido() {
                                     </fieldset>
                                 )}
                             </div>
-                        ) : (
+                        ) : tipoDespacho === 'RETIRO_LOCAL' ? (
                             <div className="checkout-entrega checkout-retiro">
                                 <p className="checkout-etiqueta">Retiro gratuito en local</p>
                                 <p className="checkout-ayuda">Puedes retirar tu pedido sin costo en nuestra dirección:</p>
@@ -707,7 +826,7 @@ function CheckoutContenido() {
                                     {configTienda?.calle_origen || 'Av. Principal'} #{configTienda?.numero_origen || '123'} {configTienda?.dpto_casa_origen ? `- ${configTienda.dpto_casa_origen}` : ''}, {configTienda?.comuna_origen || 'Santiago'} ({configTienda?.region_origen || 'Metropolitana'})
                                 </p>
                             </div>
-                        )}
+                        ) : null}
 
                         {/* --- COSTO DE LA ENTREGA ELEGIDA --- */}
                         {opcionesEntrega.length > 0 && (
@@ -717,7 +836,8 @@ function CheckoutContenido() {
                                         <div>
                                             <strong>{opcion.nombre}</strong>
                                             <div className="checkout-ayuda">
-                                                {opcion.tipo === 'RETIRO' ? (tipoDespacho === 'RETIRO_LOCAL' ? 'Retiro en Local Propio' : 'Retiro en Sucursal') : 'Despacho a Domicilio'}
+                                                {opcion.tipo === 'COORDINADA' ? 'Acordamos contigo el día y el lugar'
+                                                    : opcion.tipo === 'RETIRO' ? (tipoDespacho === 'RETIRO_LOCAL' ? 'Retiro en Local Propio' : 'Retiro en Sucursal') : 'Despacho a Domicilio'}
                                             </div>
                                         </div>
                                         <strong>{Number(opcion.costo_envio).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}</strong>
@@ -794,11 +914,11 @@ function CheckoutContenido() {
                             <p className="checkout-aviso checkout-aviso--error">No hay métodos de pago configurados en la tienda.</p>
                         ) : (
                             pasarelas.map(pasarela => {
-                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
+                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || tipoDespacho === 'ENTREGA_COORDINADA' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
                                 const habilitado = validadoParaPagar && !procesandoPago;
                                 return (
                                     <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado}
+                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado || Boolean(esperandoPago)}
                                         className="boton boton-primario checkout-pagar"
                                     >
                                         {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
@@ -810,11 +930,16 @@ function CheckoutContenido() {
                 </aside>
             </div>
 
-            {esperandoPago && (
-                <div className="checkout-modal-fondo">
-                    <div className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-titulo">
+            {esperandoPago && !mostrarDialogoPago && (
+                <div className="checkout-aviso" role="status">
+                    El pago de la orden #{esperandoPago.ordenId} sigue pendiente. Cerrar el aviso no cancela el pedido.
+                    <button ref={botonReabrirPago} type="button" className="boton boton-contorno" onClick={() => setMostrarDialogoPago(true)}>Volver a ver el pago pendiente</button>
+                </div>
+            )}
+            {esperandoPago && mostrarDialogoPago && (
+                    <Dialogo className="checkout-modal" tituloId="checkout-modal-titulo" onCerrar={cerrarAvisoPago}>
                         <span className="antetitulo">Pago en curso</span>
-                        <h2 id="checkout-modal-titulo">Completando pago en Mercado Pago</h2>
+                        <h2 id="checkout-modal-titulo" tabIndex={-1} data-foco-inicial>Completando pago en Mercado Pago</h2>
                         <p className="texto-secundario">
                             Se abrió la ventana de Mercado Pago para la <strong>Orden #{esperandoPago.ordenId}</strong>.
                             Completa tu pago allá. Esta pantalla detectará tu pago automáticamente tan pronto como se acredite.
@@ -834,16 +959,12 @@ function CheckoutContenido() {
                             <button
                                 type="button"
                                 className="boton-texto"
-                                onClick={() => {
-                                    setEsperandoPago(null);
-                                    olvidarOrdenPendiente();
-                                }}
+                                onClick={cerrarAvisoPago}
                             >
-                                Cancelar y volver al checkout
+                                Cerrar y volver al checkout
                             </button>
                         </div>
-                    </div>
-                </div>
+                    </Dialogo>
             )}
         </div>
     );

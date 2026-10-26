@@ -2,7 +2,14 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.conf import settings
 
+from ecommerce.domain.blog import (
+    LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
+)
+from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
+from ecommerce.domain.resenas import (
+    ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
+)
 
 class ConfiguracionGlobal(models.Model):
     MODOS_AUTENTICACION = [
@@ -34,6 +41,17 @@ class ConfiguracionGlobal(models.Model):
     numero_origen = models.CharField(max_length=50, default='123', blank=True, null=True)
     dpto_casa_origen = models.CharField(max_length=100, blank=True, null=True, help_text="Ej: Piso 4, Oficina 405 o Bodega B")
     retiro_en_local_activo = models.BooleanField(default=True, help_text="Permite a los clientes seleccionar retiro gratuito en local")
+    # Entrega coordinada (RF-02.3): la tienda contacta al comprador para acordar la entrega, sin transportista
+    entrega_coordinada_activa = models.BooleanField(default=False)
+    costo_entrega_coordinada = models.PositiveIntegerField(default=0)
+    instrucciones_entrega_coordinada = models.CharField(max_length=300, blank=True, default='')
+    # Formulario de cotización y encargos (personalizados, a pedido o en cantidad): el admin lo activa
+    cotizaciones_activas = models.BooleanField(default=False)
+    # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
+    blog_activo = models.BooleanField(default=False)
+    blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
+    # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
+    resenas_activas = models.BooleanField(default=False)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -135,6 +153,47 @@ class DireccionEnvio(models.Model):
     def __str__(self):
         return f"{self.calle} {self.calle_numero}, {self.ciudad}"
 
+class EmpresaComprador(models.Model):
+    """Datos de facturación que un comprador registrado guardó para sus próximas compras como empresa."""
+
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='empresa')
+    razon_social = models.CharField(max_length=150)
+    rut = models.CharField(max_length=12)
+    giro = models.CharField(max_length=120)
+    direccion = models.CharField(max_length=255)
+    correo = models.EmailField()
+
+    def __str__(self):
+        return f'{self.razon_social} ({self.rut})'
+
+
+class Cotizacion(models.Model):
+    """Solicitud de cotización o encargo de una persona o empresa (domain/cotizaciones.py)."""
+
+    ESTADOS = [(estado.value, etiqueta) for estado, etiqueta in ETIQUETAS_ESTADO_COTIZACION.items()]
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoCotizacion.NUEVA.value)
+    nombre = models.CharField(max_length=120)
+    correo = models.EmailField()
+    telefono = models.CharField(max_length=15)
+    # Del catálogo (id de MongoDB y nombre al cotizar) o descrito por el cliente
+    producto_id = models.CharField(max_length=24, blank=True, default='')
+    producto_nombre = models.CharField(max_length=255, blank=True, default='')
+    descripcion = models.TextField(blank=True, default='')
+    cantidad = models.PositiveIntegerField()
+    personalizacion = models.TextField(blank=True, default='')
+    fecha_requerida = models.DateField(null=True, blank=True)
+    # Cotiza como empresa: los datos para la factura (null si es una persona)
+    datos_empresa = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_creacion', '-id']
+
+    def __str__(self):
+        return f'Cotización #{self.id} - {self.nombre}'
+
+
 class Promocion(models.Model):
     TIPOS_DESCUENTO = [
         ('PORCENTAJE', 'Porcentaje (%)'),
@@ -192,6 +251,9 @@ class OrdenCompra(models.Model):
     estado = models.CharField(max_length=50, choices=ESTADOS_PEDIDO, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=50, choices=METODOS_PAGO)
     direccion_envio_snapshot = models.JSONField()
+    # Compra como empresa: razón social, RUT, giro, dirección y correo para la factura, tal como venían al
+    # comprar (domain/empresa.py). Vacío si compra una persona
+    datos_empresa = models.JSONField(null=True, blank=True)
     # Quién recibe o retira el pedido (RF-02.3); la orden de transporte usa estos datos
     nombre_destinatario = models.CharField(max_length=120, blank=True, default='')
     # Normalizado como +56XXXXXXXXX (normalizar_telefono_chile)
@@ -215,8 +277,15 @@ class OrdenCompra(models.Model):
     motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
     # Al cancelar solo se repone el stock que realmente se descontó
     stock_descontado = models.BooleanField(default=False)
-    # Transferencia: ya se le recordó al comprador que le quedan 24 h para pagar (se envía una sola vez)
+    # Transferencia: plazo de pago que tenía la tienda al crear la orden (domain/ventas.py: plazo_pago); un
+    # cambio de plazo posterior no lo altera. Vacíos en los demás medios de pago
+    fecha_limite_pago = models.DateTimeField(null=True, blank=True)
+    fecha_recordatorio_pago = models.DateTimeField(null=True, blank=True)
+    # Transferencia: ya se le recordó al comprador el pago, a la mitad del plazo (se envía una sola vez)
     recordatorio_pago_enviado = models.BooleanField(default=False)
+    # Cuándo pasó a Entregado; desde ahí corre el plazo para dejar la reseña. Vacío en los entregados antes de
+    # que se registrara
+    fecha_entrega = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario
@@ -250,6 +319,100 @@ class PaginaLegal(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_pagina_display()} - {self.titulo}"
+
+
+class Publicacion(models.Model):
+    """Entrada del blog o portafolio de la tienda (domain/blog.py, application/blog.py)."""
+
+    ESTADOS = [(EstadoPublicacion.BORRADOR.value, 'Borrador'), (EstadoPublicacion.PUBLICADA.value, 'Publicada')]
+
+    titulo = models.CharField(max_length=LARGO_TITULO)
+    # Con espacio para el sufijo de los títulos repetidos (-2, -3...)
+    slug = models.SlugField(max_length=LARGO_SLUG + 10, unique=True)
+    resumen = models.CharField(max_length=LARGO_RESUMEN, blank=True, default='')
+    # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
+    contenido = models.TextField(blank=True, default='')
+    portada = models.ImageField(upload_to='blog/portadas/', blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoPublicacion.BORRADOR.value)
+    # Se fija la primera vez que se publica y ordena el blog; None si nunca salió de borrador
+    fecha_publicacion = models.DateTimeField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_publicacion', '-id']
+        indexes = [models.Index(fields=['estado', '-fecha_publicacion'], name='publicacion_estado_fecha')]
+
+    def __str__(self):
+        return self.titulo
+
+
+class FotoPublicacion(models.Model):
+    """Foto de la galería de una publicación (hasta MAX_FOTOS_PUBLICACION)."""
+
+    publicacion = models.ForeignKey(Publicacion, on_delete=models.CASCADE, related_name='fotos')
+    imagen = models.ImageField(upload_to='blog/fotos/')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f'Foto {self.orden} de {self.publicacion}'
+
+
+def _estrellas_validas(prefijo):
+    return models.CheckConstraint(
+        condition=models.Q(estrellas__gte=ESTRELLAS_MINIMAS, estrellas__lte=ESTRELLAS_MAXIMAS),
+        name=f'{prefijo}_estrellas_validas')
+
+
+class Resena(models.Model):
+    """Reseña de un pedido entregado, una por pedido (domain/resenas.py). Solo las aprobadas se publican.
+
+    No se registra en el admin de Django: el admin de la tienda solo aprueba u oculta desde el panel.
+    """
+
+    ESTADOS = [(estado.value, etiqueta) for estado, etiqueta in ETIQUETAS_ESTADO_RESENA.items()]
+
+    orden = models.OneToOneField(OrdenCompra, on_delete=models.CASCADE, related_name='resena')
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoResena.PENDIENTE.value)
+    # De la tienda (obligatorias)
+    estrellas = models.PositiveSmallIntegerField()
+    comentario = models.TextField(blank=True, default='')
+    nombre_publico = models.CharField(max_length=LARGO_NOMBRE_PUBLICO)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_creacion', '-id']
+        indexes = [models.Index(fields=['estado', '-fecha_creacion'], name='resena_estado_fecha')]
+        constraints = [_estrellas_validas('resena')]
+
+    def __str__(self):
+        return f'Reseña del pedido #{self.orden_id} ({self.estrellas} estrellas)'
+
+
+class ResenaProducto(models.Model):
+    """Calificación de un producto del pedido dentro de una reseña; se aprueba u oculta junto con ella."""
+
+    resena = models.ForeignKey(Resena, on_delete=models.CASCADE, related_name='productos')
+    # Id de MongoDB, como DetalleOrden: la reseña no escribe en el catálogo
+    producto_mongo_id = models.CharField(max_length=255)
+    # Copiado del pedido
+    producto_nombre = models.CharField(max_length=255)
+    estrellas = models.PositiveSmallIntegerField()
+    comentario = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['id']
+        indexes = [models.Index(fields=['producto_mongo_id'], name='resena_producto_id')]
+        constraints = [
+            _estrellas_validas('resena_producto'),
+            models.UniqueConstraint(fields=['resena', 'producto_mongo_id'], name='resena_producto_unico'),
+        ]
+
+    def __str__(self):
+        return f'{self.producto_nombre}: {self.estrellas} estrellas'
 
 class Carrito(models.Model):
     # Relación 1 a 1: Cada usuario tiene exactamente un carrito

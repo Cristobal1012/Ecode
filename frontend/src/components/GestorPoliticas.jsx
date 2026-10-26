@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from './auth/axiosConfig';
@@ -33,7 +33,7 @@ const estiloCampo = {
   width: '100%',
   maxWidth: '400px',
   borderRadius: '4px',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--color-control-border)',
   fontSize: '1rem'
 };
 
@@ -74,6 +74,25 @@ export default function GestorPoliticas() {
     cargarPaginas('TERMINOS');
   }, []);
 
+  const prepararEditor = useCallback(instancia => {
+    if (!instancia) return;
+    const editor = instancia.getEditor();
+    editor.root.setAttribute('role', 'textbox');
+    editor.root.setAttribute('aria-multiline', 'true');
+    editor.root.setAttribute('aria-labelledby', 'pagina-legal-contenido');
+    const barra = editor.getModule('toolbar').container;
+    barra.setAttribute('aria-label', 'Formato del contenido legal');
+    const nombres = { bold: 'Negrita', italic: 'Cursiva', underline: 'Subrayado', link: 'Insertar enlace', clean: 'Quitar formato', list: 'Lista', header: 'Nivel de encabezado' };
+    for (const control of barra.querySelectorAll('button, .ql-picker-label, .ql-picker-item')) {
+      const formato = [...control.classList].find(clase => clase.startsWith('ql-') && nombres[clase.slice(3)])?.slice(3);
+      if (formato) control.setAttribute('aria-label', nombres[formato] + (control.value ? `: ${control.value === 'ordered' ? 'numerada' : control.value === 'bullet' ? 'con viñetas' : control.value}` : ''));
+      if (control.classList.contains('ql-picker-label')) control.setAttribute('aria-label', 'Nivel de encabezado');
+      if (control.classList.contains('ql-picker-item')) control.setAttribute('aria-label', control.dataset.value ? `Encabezado de nivel ${control.dataset.value}` : 'Párrafo');
+    }
+    const enlace = editor.container.querySelector('.ql-tooltip input');
+    enlace?.setAttribute('aria-label', 'Dirección del enlace');
+  }, []);
+
   const handleCambioTipo = (nuevoTipo) => {
     if (modificado && !window.confirm('Hay cambios sin guardar en esta página. ¿Descartarlos?')) return;
     setTipo(nuevoTipo);
@@ -102,7 +121,7 @@ export default function GestorPoliticas() {
     }
   };
 
-  if (cargando) return <div style={{ padding: '20px' }}>Cargando páginas legales...</div>;
+  if (cargando) return <div role="status" style={{ padding: '20px' }}>Cargando páginas legales...</div>;
 
   const paginaActual = paginas.find(p => p.tipo_pagina === tipo);
   const faltantes = REQUERIDAS_PARA_VENDER.filter(t => !paginas.find(p => p.tipo_pagina === t)?.publicada);
@@ -164,9 +183,10 @@ export default function GestorPoliticas() {
         />
       </div>
 
-      <div style={{ marginBottom: '20px', height: '350px' }}>
-        <span style={estiloEtiqueta}>Contenido:</span>
+      <div className="editor-legal" style={{ marginBottom: '20px' }}>
+        <span id="pagina-legal-contenido" style={estiloEtiqueta}>Contenido:</span>
         <ReactQuill
+          ref={prepararEditor}
           theme="snow"
           // HTML interno de Quill: el semántico convierte los espacios en &nbsp; (el texto no se ajusta al ancho)
           // y quita el marcador de las listas que usa el CSS de la página pública (PaginaLegal.jsx)
@@ -176,11 +196,10 @@ export default function GestorPoliticas() {
             editar('contenido', valor);
             if (origen === 'user') setModificado(true);
           }}
-          style={{ height: '280px' }}
         />
       </div>
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '60px', cursor: 'pointer', color: 'var(--color-text)' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px', cursor: 'pointer', color: 'var(--color-text)' }}>
         <input
           type="checkbox"
           checked={formulario.publicada}

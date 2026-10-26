@@ -85,7 +85,7 @@ describe('GaleriaImagenes: eliminar imágenes de la galería (RF-03.2)', () => {
     return props;
   }
 
-  const eliminar = (posicion) => fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[posicion]);
+  const eliminar = (posicion) => fireEvent.click(screen.getAllByRole('button', { name: /^Eliminar imagen/ })[posicion]);
 
   it('una imagen cargada como enlace solo se quita de la galería', async () => {
     const { onImagenesChange } = renderConImagenes([ENLACE]);

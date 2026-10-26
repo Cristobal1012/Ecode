@@ -110,7 +110,7 @@ export default function Dashboard() {
           Dashboard
         </h2>
 
-        <p style={{ color: 'var(--color-muted)' }}>
+        <p role="status" style={{ color: 'var(--color-muted)' }}>
           Cargando información...
         </p>
       </div>
@@ -131,6 +131,7 @@ export default function Dashboard() {
         </h2>
 
         <div
+          role="alert"
           style={{
             marginTop: '20px',
             padding: '15px',
@@ -201,7 +202,7 @@ export default function Dashboard() {
             onChange={(e) => setFechaInicio(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid var(--color-border)',
+              border: '1px solid var(--color-control-border)',
               borderRadius: '8px',
               color: 'var(--color-text)',
               backgroundColor: 'var(--color-surface)',
@@ -230,7 +231,7 @@ export default function Dashboard() {
             onChange={(e) => setFechaFin(e.target.value)}
             style={{
               padding: '10px 12px',
-              border: '1px solid var(--color-border)',
+              border: '1px solid var(--color-control-border)',
               borderRadius: '8px',
               color: 'var(--color-text)',
               backgroundColor: 'var(--color-surface)',
@@ -357,7 +358,8 @@ export default function Dashboard() {
         </p>
 
         {historico.length > 0 ? (
-          <div style={{ width: '100%', height: '350px' }}>
+          <div style={{ width: '100%' }}>
+            <div style={{ height: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={historico}
@@ -413,6 +415,17 @@ export default function Dashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
+            </div>
+            <details>
+              <summary>Ver datos del histórico de ventas</summary>
+              <div tabIndex={0} role="region" aria-label="Datos del histórico de ventas" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%' }}>
+                  <caption>Ventas pagadas del período seleccionado</caption>
+                  <thead><tr><th scope="col">Fecha</th><th scope="col">Ventas</th></tr></thead>
+                  <tbody>{historico.map(registro => <tr key={registro.fecha}><th scope="row">{registro.fecha}</th><td>{formatearMonto(registro.ventas)}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </details>
           </div>
         ) : (
           <div

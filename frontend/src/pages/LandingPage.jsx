@@ -6,6 +6,8 @@ import Portada from "../components/landing/Portada";
 import SeccionProductos from "../components/landing/SeccionProductos";
 import SeccionNosotros from "../components/landing/SeccionNosotros";
 import SeccionInstagram from "../components/landing/SeccionInstagram";
+import SeccionResenas from "../components/landing/SeccionResenas";
+import useResenas from "../hooks/useResenas";
 import BarraEdicion from "../components/landing/BarraEdicion";
 import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
 import useEdicionLanding from "../hooks/useEdicionLanding";
@@ -15,11 +17,13 @@ const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados
 
 // RF-01.1: la raíz del dominio muestra la landing (nunca el catálogo directo). El admin la edita en su mismo
 // lugar (modo edición); los productos salen de la vitrina (más vendidos y últimos agregados).
-function LandingPage() {
+function LandingPage({ onNombreTiendaTemporal }) {
   const configuracion = useConfiguracionTienda();
   const edicion = useEdicionLanding(configuracion);
   // null mientras carga: así se sabe cuándo ya están dibujadas las secciones de productos
   const [vitrina, setVitrina] = useState(null);
+  const resenasActivas = configuracion ? Boolean(configuracion.resenas_activas) : undefined;
+  const resenas = useResenas("ventas/resenas/tienda/", resenasActivas);
   const { hash } = useLocation();
   const [parametros, setParametros] = useSearchParams();
   // El rol solo decide si se ofrece el botón; quien de verdad autoriza los cambios es el backend
@@ -35,11 +39,11 @@ function LandingPage() {
   }, []);
 
   // El enlace "Nosotros" del header lleva a /#nosotros. Se baja cuando ya está todo lo de arriba (portada y
-  // productos); si no, el contenido que llega después corre la sección
+  // productos y reseñas); si no, el contenido que llega después corre la sección
   useEffect(() => {
-    if (!hash || !configuracion || !vitrina) return;
+    if (!hash || !configuracion || !vitrina || !resenas) return;
     document.getElementById(hash.slice(1))?.scrollIntoView();
-  }, [hash, configuracion, vitrina]);
+  }, [hash, configuracion, vitrina, resenas]);
 
   // El panel abre la landing directo en modo edición con /?editar=1. Se abre una sola vez, en el render (no en
   // un efecto), apenas llega la configuración
@@ -77,11 +81,20 @@ function LandingPage() {
   }, [edicion.hayCambios]);
 
   const vista = edicion.vista;
+  useEffect(() => {
+    onNombreTiendaTemporal?.(
+      edicion.editando ? (vista?.nombre_tienda ?? '') : null
+    );
+  }, [edicion.editando, vista?.nombre_tienda, onNombreTiendaTemporal]);
+
+  useEffect(() => {
+    return () => onNombreTiendaTemporal?.(null);
+  }, [onNombreTiendaTemporal]);
 
   return (
     <>
       <Header vistaPrevia={edicion.editando ? { nombre_tienda: vista.nombre_tienda, logo: vista.logo } : undefined} />
-      <main id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
+      <main tabIndex={-1} id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
         {configuracion ? (
           <>
             {edicion.editando && (
@@ -95,6 +108,7 @@ function LandingPage() {
             <SeccionProductos id="recientes" antetitulo="Recién llegados" titulo="Últimos agregados"
               productos={vitrina?.recientes} etiqueta="Nuevo"
               nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+            <SeccionResenas resumen={resenas} activas={resenasActivas} edicion={edicion} />
             <SeccionNosotros configuracion={vista} edicion={edicion} />
             <SeccionInstagram configuracion={vista} edicion={edicion} />
           </>

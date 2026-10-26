@@ -4,6 +4,7 @@ import useCarrito from '../hooks/useCarrito';
 import { guardarCarrito, validarCarrito } from './carrito';
 
 const CarritoCompras = () => {
+    const botonRef = useRef(null);
     const [isOpen, setIsOpen] = useState(false);
     const carritoRef = useRef(null);
     const itemsCarrito = useCarrito();
@@ -110,8 +111,9 @@ const CarritoCompras = () => {
     const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
 
     return (
-        <div className="carrito-compras" ref={carritoRef} onKeyDown={event => { if (event.key === 'Escape') setIsOpen(false); }}>
+        <div className="carrito-compras" ref={carritoRef} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setIsOpen(false); botonRef.current?.focus(); } }}>
             <button
+                ref={botonRef}
                 type="button"
                 className="header-icono"
                 onClick={() => setIsOpen(!isOpen)}

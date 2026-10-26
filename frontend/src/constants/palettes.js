@@ -88,6 +88,25 @@ export const PALETTES = [
       border: '#F2D3D8',
       footer: '#003D2B'
     }
+  },
+  {
+    // Tema fresco: azul con fondos celeste y detalles durazno (agregado el 2026-10-26 a pedido de una clienta).
+    // El azul es más oscuro que #3173EE, que con texto blanco no alcanza AA
+    id: 6,
+    name: 'Cielo',
+    colors: {
+      primary: '#1F5BC9',
+      onPrimary: '#FFFFFF',
+      secondary: '#E3F6F7',
+      accent: '#FEC279',
+      background: '#F7FCFD',
+      surface: '#FFFFFF',
+      text: '#14213D',
+      muted: '#46536B',
+      controlBorder: '#6B778C',
+      border: '#C9E6E8',
+      footer: '#0F1E3D'
+    }
   }
 ];
 

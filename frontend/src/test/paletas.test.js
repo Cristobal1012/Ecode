@@ -22,8 +22,8 @@ const TEXTO_BARRA_PANEL = '#D9D2C8';
 const variable = (nombre) => document.documentElement.style.getPropertyValue(nombre);
 
 describe('Paletas de la tienda (RF-01.2)', () => {
-  it('ofrece 5 temas con los IDs 1 a 5 que guarda el backend, y el 1 es el predeterminado', () => {
-    expect(PALETTES.map(({ id }) => id)).toEqual([1, 2, 3, 4, 5]);
+  it('ofrece 6 temas con los IDs 1 a 6 que guarda el backend, y el 1 es el predeterminado', () => {
+    expect(PALETTES.map(({ id }) => id)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(TEMA_PREDETERMINADO).toBe(1);
   });
 

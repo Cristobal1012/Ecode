@@ -102,7 +102,7 @@ test('un enlace alterado no muestra el formulario', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Enviar reseña' })).toHaveCount(0);
 });
 
-for (const tema of [1, 2, 3, 4, 5]) {
+for (const tema of [1, 2, 3, 4, 5, 6]) {
   test(`el formulario cumple WCAG AA en la paleta ${tema}, en escritorio y celular`, async ({ page }) => {
     await simularResenas(page, { tema });
     for (const ancho of [1280, 375]) {

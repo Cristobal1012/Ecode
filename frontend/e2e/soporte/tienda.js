@@ -33,7 +33,7 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'configuracion/': configuracion,
       'configuracion/negocio/': configuracion,
       'ventas/dashboard/metricas/': { metricas: {}, historico: [], ultimas_ordenes: [] },
-      'ventas/admin/ordenes/': [],
+      'ventas/admin/ordenes/': { count: 0, next: null, previous: null, results: [] },
       'ventas/admin/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos QA', contenido: '<p>Texto legal QA.</p>', publicada: true }],
       'ventas/admin/medios-pago/': [],
       'ventas/admin/chilexpress/': { campos: [], datos: {}, faltantes: [], configurada: false },

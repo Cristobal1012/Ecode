@@ -5,7 +5,6 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
-from rest_framework import status
 
 from ecommerce.application.test_medios_pago import DATOS_BANCO
 from ecommerce.application.test_ventas import CatalogoFalso, InventarioFalso
@@ -788,7 +787,7 @@ class PanelPedidosAdminTests(APITestCase):
 
     def test_listado_incluye_revision_y_transiciones_permitidas(self):
         self.autenticar(self.admin_token)
-        orden, = self.client.get(reverse('admin-ordenes-list')).data
+        orden, = self.client.get(reverse('admin-ordenes-list')).data['results']
         self.assertEqual(orden['estado'], 'PAGADO')
         self.assertTrue(orden['requiere_revision'])
         self.assertEqual(orden['motivo_revision'], 'Pago confirmado sin stock para CAMISA-S')
@@ -897,7 +896,7 @@ class AdminOrdenTransporteTests(APITestCase):
         return self.client.post(reverse('admin-ordenes-orden-transporte', args=[orden_id or self.orden.id]))
 
     def listado(self):
-        orden, = self.client.get(reverse('admin-ordenes-list')).data
+        orden, = self.client.get(reverse('admin-ordenes-list')).data['results']
         return orden
 
     def test_panel_ofrece_reintentar_y_el_reintento_guarda_la_ot(self):

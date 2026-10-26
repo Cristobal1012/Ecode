@@ -6,7 +6,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
-from rest_framework.pagination import PageNumberPagination
 from django.core import signing
 from django.shortcuts import redirect
 from django.db.models import F, Q, Sum, Count
@@ -222,28 +221,26 @@ def cambiar_estado_pedido():
                                notificador_pedidos())
 
 
-class PedidosPagination(PageNumberPagination):
+class PaginacionPedidos(PageNumberPagination):
+    """De a 20 con ?pagina=N, como las cotizaciones y las reseñas: responde { count, next, previous, results }."""
     page_size = 20
+    page_query_param = 'pagina'
+
+
 class AdminOrdenCompraListView(generics.ListAPIView):
+    """GET ?estado=PAGADO&requiere_revision=true&pagina=N: los pedidos del panel, los más recientes primero."""
     serializer_class = AdminOrdenCompraSerializer
     permission_classes = [IsAdministrador]
-    pagination_class = PedidosPagination 
+    pagination_class = PaginacionPedidos
 
     def get_queryset(self):
-        
-        queryset = OrdenCompra.objects.all().order_by('-fecha_creacion')
-        
-        
+        ordenes = OrdenCompra.objects.order_by('-fecha_creacion')
         estado = self.request.query_params.get('estado')
-        if estado and estado != 'Todos':
-            queryset = queryset.filter(estado=estado)
-            
-        
-        requiere_revision = self.request.query_params.get('requiere_revision')
-        if requiere_revision == 'true':
-            queryset = queryset.filter(requiere_revision=True)
-            
-        return queryset
+        if estado:
+            ordenes = ordenes.filter(estado=estado)
+        if self.request.query_params.get('requiere_revision') == 'true':
+            ordenes = ordenes.filter(requiere_revision=True)
+        return ordenes
 
 
 class AdminSincronizarPagosView(APIView):

@@ -128,4 +128,24 @@ describe('GestorResenas', () => {
     expect(await screen.findByRole('heading', { name: 'Cliente 21 · Pedido #121' })).toBeInTheDocument();
     expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
   });
+
+  it('al moderar la única reseña de la última página vuelve a la anterior', async () => {
+    let total = 21;
+    clienteAxios.get.mockImplementation((_, { params }) => params.pagina > Math.ceil(total / 20)
+      // Como DRF: una página que no existe responde 404
+      ? Promise.reject({ response: { status: 404 } })
+      : Promise.resolve({ data: { count: total, results: [resena(params.pagina === 1 ? 1 : 21)] } }));
+    clienteAxios.patch.mockImplementation(() => {
+      total = 20;
+      return Promise.resolve({ data: { ...resena(21), estado: 'APROBADA' } });
+    });
+    render(<GestorResenas />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Siguientes/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Aprobar la reseña de Cliente 21' }));
+
+    expect(await screen.findByRole('heading', { name: 'Cliente 1 · Pedido #101' })).toBeInTheDocument();
+    expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/resenas/', { params: { estado: 'PENDIENTE', pagina: 1 } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

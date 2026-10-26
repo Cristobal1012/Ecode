@@ -254,6 +254,12 @@ class CorreosDelPanelTests(APITestCase):
         self.cambiar(orden, 'PAGADO')
         self.assertIn('La tienda te contactará para acordar el día y la hora de la entrega.', mail.outbox[0].body)
 
+    def test_entrega_coordinada_sin_direccion_dice_que_se_acuerda_con_la_tienda(self):
+        orden = self.crear_orden('ENTREGA_COORDINADA')
+        OrdenCompra.objects.filter(id=orden.id).update(direccion_envio_snapshot={})
+        self.cambiar(orden, 'PAGADO')
+        self.assertIn('Entrega coordinada: Dirección por acordar con la tienda', mail.outbox[0].body)
+
     def test_cancelacion_del_admin_avisa_devolucion_si_ya_habia_pagado(self):
         orden = self.crear_orden('RETIRO_LOCAL')
         self.cambiar(orden, 'CANCELADO')

@@ -1404,6 +1404,41 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
     expect(postMock).not.toHaveBeenCalledWith('ventas/logistica/cotizar/', expect.anything(), expect.anything());
   });
 
+  it('la dirección es opcional: sin ella se compra y la tienda la acuerda con el comprador', async () => {
+    prepararRespuestas({ chilexpress: false, retiroLocal: false, entregaCoordinada: { costo: 3000 } });
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    expect(screen.getByText(/la dirección es opcional/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Calle')).not.toBeRequired();
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('ventas/checkout/', expect.objectContaining({
+      proveedor_logistico: 'ENTREGA_COORDINADA',
+      direccion_envio_snapshot: {},
+    })));
+  });
+
+  it('si escribe una dirección a medias pide la calle y la comuna', async () => {
+    prepararRespuestas({ chilexpress: false, retiroLocal: false, entregaCoordinada: { costo: 3000 } });
+    renderCheckout();
+
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    fireEvent.change(screen.getByLabelText('Calle'), { target: { value: 'Los Aromos' } });
+    completarDestinatario();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    await waitFor(() => expect(botonPago).toBeEnabled());
+    fireEvent.click(botonPago);
+
+    expect(await screen.findByText(/completa la calle y la comuna/i)).toBeInTheDocument();
+    expect(postMock).not.toHaveBeenCalledWith('ventas/checkout/', expect.anything());
+  });
+
   it('con Chilexpress se ofrece junto al despacho, que sigue siendo la opción por defecto', async () => {
     prepararRespuestas({ entregaCoordinada: { costo: 0 } });
     renderCheckout();

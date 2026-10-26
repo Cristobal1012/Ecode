@@ -93,6 +93,8 @@ function CheckoutContenido() {
         ...(configTienda?.entrega_coordinada_activa ? ['ENTREGA_COORDINADA'] : []),
     ];
     const tipoDespacho = tiposDisponibles.includes(tipoElegido) ? tipoElegido : (tiposDisponibles[0] ?? null);
+    // En la entrega coordinada la tienda puede acordar la dirección con el comprador (domain/logistica.py)
+    const direccionOpcional = tipoDespacho === 'ENTREGA_COORDINADA';
     const [comunaSucursal, setComunaSucursal] = useState('');
     const [resultadoSucursales, setResultadoSucursales] = useState({ comuna: null, items: [] });
     const [sucursalElegida, setSucursalElegida] = useState(null);
@@ -479,13 +481,20 @@ function CheckoutContenido() {
             if (direccionSeleccionadaId !== 'nueva') {
                 const dir = direccionesGuardadas.find(d => d.id === direccionSeleccionadaId);
                 dirSnapshot = { calle: dir.calle, numero: dir.calle_numero, dpto_casa: dir.dpto_casa, comuna: dir.comuna, ciudad: dir.ciudad, region: dir.region };
+            } else if (direccionOpcional && ![calle, numero, comuna].some(valor => valor.trim())) {
+                // RF-02.3: la entrega coordinada puede ir sin dirección; la tienda la acuerda con el comprador
+                dirSnapshot = {};
             } else {
-                if (!calle.trim() || !numero.trim() || !comuna.trim() || !ciudad.trim()) {
-                    return setMensaje('Completa todos los campos obligatorios de tu nueva dirección de envío.');
+                if (direccionOpcional ? !calle.trim() || !comuna.trim()
+                    : !calle.trim() || !numero.trim() || !comuna.trim() || !ciudad.trim()) {
+                    return setMensaje(direccionOpcional
+                        ? 'Completa la calle y la comuna, o deja la dirección vacía para acordarla con la tienda.'
+                        : 'Completa todos los campos obligatorios de tu nueva dirección de envío.');
                 }
                 dirSnapshot = { calle, numero, dpto_casa: dptoCasa, comuna, ciudad, region };
 
-                if (usuarioAutenticado && guardarNuevaDireccion) {
+                // Una dirección incompleta (sin número o ciudad) sirve para esta entrega, pero no se guarda
+                if (usuarioAutenticado && guardarNuevaDireccion && numero.trim() && ciudad.trim()) {
                     try {
                         await clienteAxios.post('ventas/direcciones/', { calle, calle_numero: numero, dpto_casa: dptoCasa, comuna, ciudad, region, es_predeterminado: true });
                     } catch (err) { console.error(err); }
@@ -707,10 +716,15 @@ function CheckoutContenido() {
                         {/* --- CONTENIDO SEGÚN LA FORMA DE ENTREGA --- */}
                         {tipoDespacho === 'DOMICILIO' || tipoDespacho === 'ENTREGA_COORDINADA' ? (
                             <div className="checkout-entrega">
-                                {tipoDespacho === 'ENTREGA_COORDINADA' && (
-                                    <p className="checkout-ayuda checkout-entrega-coordinada">
-                                        {configTienda?.instrucciones_entrega_coordinada?.trim() || 'La tienda te contactará para acordar el día y la hora de la entrega.'}
-                                    </p>
+                                {direccionOpcional && (
+                                    <>
+                                        <p className="checkout-ayuda checkout-entrega-coordinada">
+                                            {configTienda?.instrucciones_entrega_coordinada?.trim() || 'La tienda te contactará para acordar el día y la hora de la entrega.'}
+                                        </p>
+                                        <p className="checkout-ayuda">
+                                            La dirección es opcional: si prefieres, déjala en blanco y la acuerdas con la tienda.
+                                        </p>
+                                    </>
                                 )}
                                 {usuarioAutenticado && direccionesGuardadas.length > 0 && (
                                     <fieldset className="checkout-grupo checkout-direcciones">
@@ -736,11 +750,11 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo checkout-campo--ancho">
                                                 <label htmlFor="checkout-calle">Calle</label>
-                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required placeholder="Ej: Av. Providencia" />
+                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-numero">Número</label>
-                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required />
+                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         <div className="checkout-campo">
@@ -751,17 +765,17 @@ function CheckoutContenido() {
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-comuna">Comuna</label>
                                                 {chilexpressActivo ? (
-                                                    <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required disabled={cargandoComunas}>
+                                                    <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required={!direccionOpcional} disabled={cargandoComunas}>
                                                         <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
                                                         {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
                                                     </select>
                                                 ) : (
-                                                    <input id="checkout-comuna" type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required placeholder="Ej: Ñuñoa" />
+                                                    <input id="checkout-comuna" type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
                                                 )}
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-ciudad">Ciudad</label>
-                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required />
+                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         {usuarioAutenticado && (

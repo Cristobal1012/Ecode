@@ -16,7 +16,7 @@ from ecommerce.application.logistica import ServicioCotizacion
 from ecommerce.domain.logistica import (
     ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, PROVEEDORES_CON_ORDEN_TRANSPORTE, RETIRO_LOCAL,
     ConfiguracionCotizacionInvalida, EntregaNoHabilitada, EntregasDeLaTienda, ErrorCotizacion, Paquete,
-    SolicitudCotizacion,
+    SolicitudCotizacion, error_direccion_entrega,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
@@ -507,18 +507,11 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             except EntregaNoHabilitada as error:
                 raise serializers.ValidationError({'proveedor_logistico': str(error)})
 
-        if proveedor != RETIRO_LOCAL:
-            direccion = data.get('direccion_envio_snapshot') or {}
-            if not isinstance(direccion, dict) or not direccion.get('comuna'):
-                raise serializers.ValidationError({
-                    'direccion_envio_snapshot': 'Se requiere la comuna de destino.'
-                })
-            if proveedor == ENTREGA_COORDINADA and not str(direccion.get('calle') or '').strip():
-                raise serializers.ValidationError({
-                    'direccion_envio_snapshot': 'Se requiere la dirección de entrega.'
-                })
-            if proveedor not in ENTREGAS_DE_LA_TIENDA and 'paquete' not in data:
-                raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
+        error_direccion = error_direccion_entrega(proveedor, data.get('direccion_envio_snapshot'))
+        if error_direccion:
+            raise serializers.ValidationError({'direccion_envio_snapshot': error_direccion})
+        if proveedor not in ENTREGAS_DE_LA_TIENDA and 'paquete' not in data:
+            raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])

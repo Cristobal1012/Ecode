@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-for (const tema of [1, 2, 3, 4]) {
+for (const tema of [1, 2, 3, 4, 5]) {
   test(`los campos se distinguen en la paleta ${tema}`, async ({ page }) => {
     const inesperadas = [];
     await page.route('**/api/**', async route => {

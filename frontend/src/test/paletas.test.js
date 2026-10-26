@@ -22,8 +22,8 @@ const TEXTO_BARRA_PANEL = '#D9D2C8';
 const variable = (nombre) => document.documentElement.style.getPropertyValue(nombre);
 
 describe('Paletas de la tienda (RF-01.2)', () => {
-  it('ofrece 4 temas con los IDs 1 a 4 que guarda el backend, y el 1 es el predeterminado', () => {
-    expect(PALETTES.map(({ id }) => id)).toEqual([1, 2, 3, 4]);
+  it('ofrece 5 temas con los IDs 1 a 5 que guarda el backend, y el 1 es el predeterminado', () => {
+    expect(PALETTES.map(({ id }) => id)).toEqual([1, 2, 3, 4, 5]);
     expect(TEMA_PREDETERMINADO).toBe(1);
   });
 
@@ -53,7 +53,7 @@ describe('Paletas de la tienda (RF-01.2)', () => {
   });
 });
 
-// RNF-01: contraste AA (>= 4,5:1) en los 4 temas para cada combinación de texto y fondo que usa la tienda
+// RNF-01: contraste AA (>= 4,5:1) en todos los temas para cada combinación de texto y fondo que usa la tienda
 describe.each(PALETTES)('Contraste AA del tema $name', ({ colors }) => {
   const combinaciones = [
     ['texto sobre el fondo', colors.text, colors.background],
@@ -72,6 +72,16 @@ describe.each(PALETTES)('Contraste AA del tema $name', ({ colors }) => {
 
   it.each(combinaciones)('%s', (_, texto, fondo) => {
     expect(contraste(texto, fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('el botón principal mantiene el contraste con la opacidad del hover', () => {
+    // index.css baja la opacidad de .boton-primario a 0.88: texto y fondo se mezclan con lo que hay detrás
+    const mezclar = (hex, detras) => '#' + [1, 3, 5].map((i) => Math.round(
+      parseInt(hex.slice(i, i + 2), 16) * 0.88 + parseInt(detras.slice(i, i + 2), 16) * 0.12,
+    ).toString(16).padStart(2, '0')).join('');
+    for (const detras of [colors.background, colors.surface, colors.secondary]) {
+      expect(contraste(mezclar(colors.onPrimary, detras), mezclar(colors.primary, detras))).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it('permite identificar los campos sobre cada fondo sin oscurecer bordes decorativos', () => {

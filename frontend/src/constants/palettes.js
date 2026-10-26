@@ -1,4 +1,4 @@
-// RF-01.2: los 4 temas de la tienda. Los IDs coinciden con ConfiguracionGlobal.tema_seleccionado, así que una
+// RF-01.2: los temas de la tienda (mínimo 4). Los IDs coinciden con ConfiguracionGlobal.tema_seleccionado, así que una
 // tienda que ya eligió un tema conserva su número. Estilo editorial (referencia: plantilla Maison de Lovable).
 // Contraste AA (>= 4.5:1) verificado el 2026-10-18 para texto, texto secundario, botones y footer.
 export const PALETTES = [
@@ -68,6 +68,25 @@ export const PALETTES = [
       controlBorder: '#76716A',
       border: '#DDD9D1',
       footer: '#1A1917'
+    }
+  },
+  {
+    // Tema alegre: verde intenso con fondos rosado y menta (agregado el 2026-10-26 a pedido de una clienta).
+    // El verde es un poco más oscuro que #007654 para que el botón mantenga AA con la opacidad del hover
+    id: 5,
+    name: 'Menta',
+    colors: {
+      primary: '#006B4C',
+      onPrimary: '#FFFFFF',
+      secondary: '#FFE5E8',
+      accent: '#BFEFB3',
+      background: '#FFFAFB',
+      surface: '#FFFFFF',
+      text: '#1E2B26',
+      muted: '#4D5A54',
+      controlBorder: '#6E7B75',
+      border: '#F2D3D8',
+      footer: '#003D2B'
     }
   }
 ];

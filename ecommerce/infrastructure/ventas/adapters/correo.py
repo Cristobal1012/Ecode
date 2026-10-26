@@ -13,7 +13,7 @@ from django.utils import timezone
 from ecommerce.application.cotizaciones import NotificadorCotizaciones
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.empresa import DatosEmpresa
-from ecommerce.domain.logistica import ENTREGA_COORDINADA, aviso_entrega_coordinada
+from ecommerce.domain.logistica import DIRECCION_POR_ACORDAR, ENTREGA_COORDINADA, aviso_entrega_coordinada
 from ecommerce.domain.ventas import EstadoPedido, EventoPedido
 
 from ..enlaces_resena import url_resena
@@ -148,7 +148,7 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
         if direccion.get('comuna'):
             texto += f", {direccion['comuna']}"
         if orden.proveedor_logistico == ENTREGA_COORDINADA:
-            return f'Entrega coordinada: {texto}'
+            return f'Entrega coordinada: {texto or DIRECCION_POR_ACORDAR}'
         tipo = 'Retiro en sucursal' if direccion.get('codigo_sucursal') else 'Despacho a domicilio'
         proveedor = (orden.proveedor_logistico or '').capitalize()
         return f'{tipo} ({proveedor}): {texto}' if proveedor else f'{tipo}: {texto}'

@@ -57,6 +57,19 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
     expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, estado: 'ENVIADO' } });
   });
 
+  it('una entrega coordinada sin dirección avisa que se acuerda con el comprador', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(2, [
+      { id: 1, estado: 'PAGADO', transiciones_permitidas: [], proveedor_logistico: 'ENTREGA_COORDINADA',
+        direccion_envio_snapshot: {} },
+      { id: 2, estado: 'PAGADO', transiciones_permitidas: [], proveedor_logistico: 'ENTREGA_COORDINADA',
+        direccion_envio_snapshot: { calle: 'Los Aromos', numero: '1550', comuna: 'Ñuñoa' } },
+    ]));
+    render(<GestorPedidos />);
+
+    expect(await screen.findByText('Dirección por acordar con el comprador')).toBeInTheDocument();
+    expect(screen.getByText('Los Aromos 1550, Ñuñoa')).toBeInTheDocument();
+  });
+
   it('si la página pedida ya no existe, vuelve a la anterior sin mostrar un error', async () => {
     clienteAxios.get
       .mockResolvedValueOnce(pagina(25))

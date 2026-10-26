@@ -75,6 +75,32 @@ def aviso_entrega_coordinada(instrucciones: str) -> str:
     return (instrucciones or '').strip() or AVISO_ENTREGA_COORDINADA
 
 
+# Lo que ven la tienda y el comprador cuando una entrega coordinada se pidió sin dirección
+DIRECCION_POR_ACORDAR = 'Dirección por acordar con la tienda'
+
+
+def error_direccion_entrega(proveedor: str, direccion) -> str | None:
+    """RF-02.3: la dirección que pide cada forma de entrega; None si la recibida sirve.
+
+    - Retiro en local: ninguna, se retira en la tienda.
+    - Entrega coordinada: opcional, porque la tienda puede acordarla con el comprador (decidido el 2026-10-25).
+      Si el comprador la escribe, tiene que traer al menos la calle y la comuna.
+    - Transportista: la comuna de destino, para cotizar y generar la orden de transporte.
+    """
+    direccion = direccion if isinstance(direccion, dict) else {}
+
+    def tiene(campo):
+        return bool(str(direccion.get(campo) or '').strip())
+
+    if proveedor == RETIRO_LOCAL:
+        return None
+    if proveedor == ENTREGA_COORDINADA:
+        if any(tiene(campo) for campo in ('calle', 'numero', 'comuna')) and not (tiene('calle') and tiene('comuna')):
+            return 'Completa la calle y la comuna, o deja la dirección vacía para acordarla con la tienda.'
+        return None
+    return None if tiene('comuna') else 'Se requiere la comuna de destino.'
+
+
 def estado_entrega_de_la_tienda(proveedor: str, estado_pedido: str) -> str:
     """RF-02.4: estado que ve el comprador en el seguimiento de un retiro o una entrega coordinada."""
     estado = str(estado_pedido)

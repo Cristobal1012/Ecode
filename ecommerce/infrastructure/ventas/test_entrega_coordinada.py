@@ -69,8 +69,15 @@ class CheckoutEntregaCoordinadaTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('proveedor_logistico', response.data)
 
-    def test_exige_la_comuna_y_la_calle(self):
-        for direccion in ({'calle': 'Los Aromos'}, {'comuna': 'Ñuñoa'}, {'comuna': 'Ñuñoa', 'calle': '  '}):
+    def test_la_direccion_es_opcional_y_la_tienda_la_acuerda_con_el_comprador(self):
+        response = self.comprar(direccion_envio_snapshot={})
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(OrdenCompra.objects.get().direccion_envio_snapshot, {})
+
+    def test_si_escribe_una_direccion_exige_la_calle_y_la_comuna(self):
+        for direccion in ({'calle': 'Los Aromos'}, {'comuna': 'Ñuñoa'}, {'comuna': 'Ñuñoa', 'calle': '  '},
+                          {'numero': '1550'}):
             with self.subTest(direccion=direccion):
                 response = self.comprar(direccion_envio_snapshot=direccion)
                 self.assertEqual(response.status_code, 400)

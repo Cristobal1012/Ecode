@@ -4,7 +4,7 @@ from django.test import SimpleTestCase
 
 from ecommerce.domain.logistica import (
     AVISO_ENTREGA_COORDINADA, ENTREGA_COORDINADA, RETIRO_LOCAL, EntregaNoHabilitada, EntregasDeLaTienda,
-    aviso_entrega_coordinada, estado_entrega_de_la_tienda,
+    aviso_entrega_coordinada, error_direccion_entrega, estado_entrega_de_la_tienda,
 )
 from ecommerce.domain.ventas import EstadoPedido
 
@@ -53,3 +53,27 @@ class EntregasDeLaTiendaTests(SimpleTestCase):
     def test_un_transportista_no_es_una_entrega_de_la_tienda(self):
         with self.assertRaises(EntregaNoHabilitada):
             EntregasDeLaTienda(retiro_activo=True, coordinada_activa=True).costo('CHILEXPRESS')
+
+
+class DireccionEntregaTests(SimpleTestCase):
+    """RF-02.3: la dirección que pide cada forma de entrega."""
+
+    def test_el_retiro_en_local_no_pide_direccion(self):
+        self.assertIsNone(error_direccion_entrega(RETIRO_LOCAL, {}))
+
+    def test_la_entrega_coordinada_puede_ir_sin_direccion(self):
+        for direccion in ({}, None, {'calle': ' ', 'comuna': ''}, {'dpto_casa': 'Casa 2'}):
+            with self.subTest(direccion=direccion):
+                self.assertIsNone(error_direccion_entrega(ENTREGA_COORDINADA, direccion))
+
+    def test_la_entrega_coordinada_con_direccion_exige_calle_y_comuna(self):
+        self.assertIsNone(error_direccion_entrega(ENTREGA_COORDINADA, {'calle': 'Los Aromos', 'comuna': 'Ñuñoa'}))
+        for direccion in ({'calle': 'Los Aromos'}, {'comuna': 'Ñuñoa'}, {'numero': '1550'}):
+            with self.subTest(direccion=direccion):
+                self.assertIn('calle y la comuna', error_direccion_entrega(ENTREGA_COORDINADA, direccion))
+
+    def test_un_transportista_exige_la_comuna(self):
+        self.assertIsNone(error_direccion_entrega('CHILEXPRESS', {'comuna': 'Ñuñoa'}))
+        for direccion in ({}, None, 'Ñuñoa', {'calle': 'Los Aromos'}):
+            with self.subTest(direccion=direccion):
+                self.assertEqual(error_direccion_entrega('CHILEXPRESS', direccion), 'Se requiere la comuna de destino.')

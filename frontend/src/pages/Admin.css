@@ -387,8 +387,11 @@
   outline-offset: 1px;
 }
 
+/* Cada tabla se desplaza de lado dentro de su contenedor (overflow-x: auto). Sin overflow-wrap: normal hereda el
+   anywhere de .admin-contenido y en celular se aprieta al ancho de la pantalla cortando las palabras letra por letra */
 .admin-contenido table {
   border-collapse: collapse;
+  overflow-wrap: normal;
 }
 
 /* Por defecto un fieldset no se encoge más que su contenido (min-width: min-content) y en celular empuja la

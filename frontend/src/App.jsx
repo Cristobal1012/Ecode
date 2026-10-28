@@ -32,6 +32,7 @@ import useConfiguracionTienda from './hooks/useConfiguracionTienda';
 import AuthLayout from './components/auth/AuthLayout';
 import RecuperarContrasena from './pages/RecuperarContrasena';
 import RestablecerContrasena from './pages/RestablecerContrasena';
+import CambiarContrasena from './pages/CambiarContrasena';
 
 const applyPaletteToRoot = aplicarPaleta;
 
@@ -153,6 +154,7 @@ function App() {
             {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
             <Route element={<ProtectedRoute />}>
               <Route path="/mis-pedidos" element={<HistorialPedidos />} />
+              <Route path="/cambiar-contrasena" element={<CambiarContrasena />} />
             </Route>
 
             {/* Ruta protegida para usuarios con rol ADMIN */}

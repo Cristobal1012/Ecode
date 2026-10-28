@@ -85,6 +85,8 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/orden-transporte/ (genera o reintenta la OT)
     path('admin/ordenes/<int:pk>/orden-transporte/', views.AdminOrdenTransporteView.as_view(),
          name='admin-ordenes-orden-transporte'),
+    # POST { folio }: el folio de la boleta, factura o nota de crédito que la tienda emitió por su cuenta
+    path('admin/ordenes/<int:pk>/documento/', views.AdminDocumentoOrdenView.as_view(), name='admin-ordenes-documento'),
     path('admin/ordenes/<int:pk>/pago-fuera-plazo/', views.AdminRegistrarPagoFueraPlazoView.as_view(),
         name='admin-ordenes-pago-fuera-plazo'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),

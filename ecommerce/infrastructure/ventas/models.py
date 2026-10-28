@@ -6,6 +6,7 @@ from ecommerce.domain.blog import (
     LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
 )
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
+from ecommerce.domain.documentos_tributarios import ModeloEmision
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
     ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
@@ -52,6 +53,10 @@ class ConfiguracionGlobal(models.Model):
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
+    # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago
+    # con tarjeta también pide boleta en el panel. Sin declarar, el SII asume VOUCHER
+    modelo_emision = models.CharField(max_length=20, choices=[(m.value, m.value) for m in ModeloEmision],
+                                      default=ModeloEmision.VOUCHER.value)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -286,6 +291,10 @@ class OrdenCompra(models.Model):
     # Cuándo pasó a Entregado; desde ahí corre el plazo para dejar la reseña. Vacío en los entregados antes de
     # que se registrara
     fecha_entrega = models.DateTimeField(null=True, blank=True)
+    # Folios que la tienda anota de los documentos que emitió por su cuenta (domain/documentos_tributarios.py):
+    # la boleta o factura del pedido y, si se canceló después, su nota de crédito
+    folio_documento = models.CharField(max_length=10, blank=True, default='')
+    folio_nota_credito = models.CharField(max_length=10, blank=True, default='')
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario

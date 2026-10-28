@@ -22,6 +22,7 @@ from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
+from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
@@ -210,6 +211,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'mostrar_direccion_pie',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
+            # Solo el panel: qué pedidos piden boleta (no se publica en /api/configuracion/)
+            'modelo_emision',
         ]
 
     def validate_instagram_usuario(self, valor):
@@ -754,6 +757,10 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
     puede_generar_orden_transporte = serializers.SerializerMethodField()
+    # Documentos tributarios (domain/documentos_tributarios.py): el que corresponde y lo que falta emitir. La vista
+    # pasa el modelo de emisión de la tienda en el contexto, para no leerlo por cada pedido
+    documento_requerido = serializers.SerializerMethodField()
+    documento_por_emitir = serializers.SerializerMethodField()
 
     get_email_cliente = OrdenCompraSerializer.get_email_cliente
 
@@ -769,8 +776,19 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',
+            'documento_requerido', 'documento_por_emitir', 'folio_documento', 'folio_nota_credito',
         ]
         read_only_fields = fields
+
+    def _modelo_emision(self):
+        return self.context.get('modelo_emision') or ModeloEmision.VOUCHER
+
+    def get_documento_requerido(self, obj):
+        return documento_requerido(obj.metodo_pago, bool(obj.datos_empresa), self._modelo_emision())
+
+    def get_documento_por_emitir(self, obj):
+        return documento_por_emitir(obj.estado, obj.metodo_pago, bool(obj.datos_empresa), self._modelo_emision(),
+                                    obj.folio_documento, obj.folio_nota_credito)
 
     def get_transiciones_permitidas(self, obj):
         return [estado.value for estado in transiciones_desde(obj.estado)]

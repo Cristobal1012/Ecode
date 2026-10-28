@@ -46,12 +46,16 @@ from ecommerce.application.chilexpress import ConfigurarChilexpress
 from ecommerce.application.cotizaciones import (
     CambiarEstadoCotizacion, CotizacionNoEncontrada, FormularioCotizacionDesactivado, SolicitarCotizacion,
 )
+from ecommerce.application.documentos_tributarios import (
+    PedidoNoEncontrado as PedidoParaDocumentarNoEncontrado, RegistrarFolio, SinDocumentoPorRegistrar,
+)
 from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.application.resenas import (
     EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
     ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
 )
 from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
+from ecommerce.domain.documentos_tributarios import FolioInvalido
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
@@ -103,6 +107,7 @@ from .serializers import (
 from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
+from .repositorio_documentos import DjangoPedidosDocumentos, filtro_documento_pendiente, modelo_emision_tienda
 from .enlaces_resena import orden_del_token, token_resena
 from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioResenas
 from .adapters.orden_transporte import ChilexpressOrdenTransporte
@@ -228,10 +233,18 @@ class PaginacionPedidos(PageNumberPagination):
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
-    """GET ?estado=PAGADO&requiere_revision=true&pagina=N: los pedidos del panel, los más recientes primero."""
+    """GET ?estado=PAGADO&requiere_revision=true&documento=pendiente&pagina=N: los pedidos del panel, los más
+    recientes primero. documento=pendiente deja los que tienen boleta, factura o nota de crédito por emitir."""
     serializer_class = AdminOrdenCompraSerializer
     permission_classes = [IsAdministrador]
     pagination_class = PaginacionPedidos
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        self.modelo_emision = modelo_emision_tienda()
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), 'modelo_emision': self.modelo_emision}
 
     def get_queryset(self):
         ordenes = OrdenCompra.objects.order_by('-fecha_creacion')
@@ -240,7 +253,26 @@ class AdminOrdenCompraListView(generics.ListAPIView):
             ordenes = ordenes.filter(estado=estado)
         if self.request.query_params.get('requiere_revision') == 'true':
             ordenes = ordenes.filter(requiere_revision=True)
+        if self.request.query_params.get('documento') == 'pendiente':
+            ordenes = ordenes.filter(filtro_documento_pendiente(self.modelo_emision))
         return ordenes
+
+
+class AdminDocumentoOrdenView(APIView):
+    """POST admin/ordenes/<pk>/documento/ { folio }: anota (o corrige) el folio de la boleta o factura que la
+    tienda emitió por su cuenta o, en un pedido cancelado, el de su nota de crédito. Responde el pedido."""
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pk):
+        modelo = modelo_emision_tienda()
+        try:
+            RegistrarFolio(DjangoPedidosDocumentos()).ejecutar(pk, request.data.get('folio'), modelo)
+        except PedidoParaDocumentarNoEncontrado as error:
+            return Response({'detail': str(error)}, status=status.HTTP_404_NOT_FOUND)
+        except (FolioInvalido, SinDocumentoPorRegistrar) as error:
+            return Response({'folio': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        orden = OrdenCompra.objects.get(id=pk)
+        return Response(AdminOrdenCompraSerializer(orden, context={'request': request, 'modelo_emision': modelo}).data)
 
 
 class AdminSincronizarPagosView(APIView):

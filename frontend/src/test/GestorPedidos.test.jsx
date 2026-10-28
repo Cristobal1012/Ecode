@@ -70,6 +70,17 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
     expect(screen.getByText('Los Aromos 1550, Ñuñoa')).toBeInTheDocument();
   });
 
+  it('el filtro de boleta o factura pendiente pide solo esos pedidos', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(25)).mockResolvedValueOnce(pagina(0, []));
+    render(<GestorPedidos />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Solo con boleta o factura pendiente' }));
+
+    expect(await screen.findByText('No hay boletas, facturas ni notas de crédito pendientes.')).toBeInTheDocument();
+    expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/ordenes/',
+      { params: { pagina: 1, documento: 'pendiente' } });
+  });
+
   it('si la página pedida ya no existe, vuelve a la anterior sin mostrar un error', async () => {
     clienteAxios.get
       .mockResolvedValueOnce(pagina(25))

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import DocumentoPedido from './DocumentoPedido';
 
 // Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
@@ -34,15 +35,17 @@ const PLURAL_ESTADO = {
   CANCELADO: 'cancelados'
 };
 
-const mensajeVacio = ({ estado, revision }) => {
+const mensajeVacio = ({ estado, revision, documento }) => {
   if (revision) return 'No hay pedidos que requieran revisión.';
+  if (documento) return 'No hay boletas, facturas ni notas de crédito pendientes.';
   if (estado) return `No hay pedidos ${PLURAL_ESTADO[estado]} en este momento.`;
   return 'No hay pedidos registrados en la tienda.';
 };
 
 export default function GestorPedidos() {
   // `estado` vacío muestra todos. `version` vuelve a pedir la misma página después de una acción
-  const [consulta, setConsulta] = useState({ estado: '', revision: false, pagina: 1, version: 0 });
+  // `documento`: solo los que tienen boleta, factura o nota de crédito por emitir
+  const [consulta, setConsulta] = useState({ estado: '', revision: false, documento: false, pagina: 1, version: 0 });
   // A qué consulta corresponde lo cargado: si no coincide con la pedida, aún está cargando
   const [cargada, setCargada] = useState({ consulta: null, pedidos: [], total: 0 });
   // { tipo: 'error' | 'exito', texto }
@@ -55,6 +58,7 @@ export default function GestorPedidos() {
     const params = { pagina: consulta.pagina };
     if (consulta.estado) params.estado = consulta.estado;
     if (consulta.revision) params.requiere_revision = 'true';
+    if (consulta.documento) params.documento = 'pendiente';
     clienteAxios.get('ventas/admin/ordenes/', { params })
       .then(({ data }) => {
         if (vigente) setCargada({ consulta, pedidos: data.results, total: data.count });
@@ -84,7 +88,8 @@ export default function GestorPedidos() {
   // Tras una acción (cambia solo `version`) la tabla sigue a la vista mientras se recarga, sin acciones
   const recargando = cargada.consulta !== consulta;
   const cargando = primeraCarga || cargada.consulta.estado !== consulta.estado
-    || cargada.consulta.revision !== consulta.revision || cargada.consulta.pagina !== consulta.pagina;
+    || cargada.consulta.revision !== consulta.revision || cargada.consulta.documento !== consulta.documento
+    || cargada.consulta.pagina !== consulta.pagina;
   const ocupado = (pedido) => recargando || enCurso === pedido.id;
   const paginas = Math.ceil(cargada.total / POR_PAGINA);
   const pedidos = cargada.pedidos;
@@ -267,6 +272,15 @@ export default function GestorPedidos() {
           Requiere revisión
         </label>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={consulta.documento}
+            onChange={(e) => filtrar({ documento: e.target.checked })}
+          />
+          Solo con boleta o factura pendiente
+        </label>
+
         {!cargando && (
           <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
             {cargada.total} pedido(s) encontrado(s)
@@ -287,6 +301,7 @@ export default function GestorPedidos() {
               <th style={{ padding: '12px' }}>Cliente</th>
               <th style={{ padding: '12px' }}>Total</th>
               <th style={{ padding: '12px' }}>Estado Actual</th>
+              <th style={{ padding: '12px' }}>Boleta o factura</th>
               <th style={{ padding: '12px' }}>Revisión</th>
               <th style={{ padding: '12px' }}>Envío</th>
             </tr>
@@ -345,6 +360,14 @@ export default function GestorPedidos() {
                     )}
                   </td>
                   <td style={{ padding: '12px' }}>
+                    {/* La tienda emite el documento por su cuenta y anota aquí el folio */}
+                    <DocumentoPedido
+                      pedido={pedido}
+                      deshabilitado={ocupado(pedido)}
+                      onGuardado={(texto) => { setAviso({ tipo: 'exito', texto }); recargar(); }}
+                    />
+                  </td>
+                  <td style={{ padding: '12px' }}>
                     {pedido.requiere_revision ? (
                       <div style={{ backgroundColor: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e', borderRadius: '6px', padding: '8px 10px', fontSize: '0.9rem' }}>
                         <strong>Requiere revisión:</strong> {pedido.motivo_revision}
@@ -390,7 +413,7 @@ export default function GestorPedidos() {
             })}
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-muted)' }}>
+                <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-muted)' }}>
                   {mensajeVacio(cargada.consulta)}
                 </td>
               </tr>

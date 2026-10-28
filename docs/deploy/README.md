@@ -173,17 +173,22 @@ Una orden cancelada no se puede volver a marcar como pagada desde el panel. Si u
 de la cancelación, el emprendedor lo verá en su cuenta bancaria y decide si devuelve el dinero o le arma un
 pedido nuevo.
 
-## Enlaces de los correos y reseñas
+## Enlaces de los correos, reseñas y contraseñas
 
 - **`FRONTEND_URL` tiene que ser la dirección pública de la tienda.** Los correos llevan enlaces a ella: el
-  seguimiento del pedido y, si el emprendedor activó las reseñas (Configuración > Reseñas de Clientes), el botón
-  "Cuéntanos qué te pareció" del correo de pedido entregado. Con el valor de desarrollo, esos enlaces apuntan a
-  `localhost` y no le sirven al comprador.
+  seguimiento del pedido; si el emprendedor activó las reseñas (Configuración > Reseñas de Clientes), el botón
+  "Cuéntanos qué te pareció" del correo de pedido entregado; y el enlace para elegir una nueva contraseña. Con el
+  valor de desarrollo, esos enlaces apuntan a `localhost` y no le sirven al comprador.
 - **El enlace de la reseña va firmado con `SECRET_KEY`** y vence a los 60 días. Si la clave cambia, los enlaces
   ya enviados dejan de funcionar; los compradores registrados pueden dejar su reseña igual desde Mis pedidos.
-- **Límites por IP:** el formulario de cotización (10 envíos por hora) y el de reseñas (20 por hora) cuentan los
-  envíos en la caché de Django. Sin `CACHES` configurada, cada proceso del servidor lleva su propia cuenta, así que
-  con varios procesos el límite se multiplica; no impide que la tienda funcione.
+- **Recuperar la contraseña** ("¿Olvidaste tu contraseña?" en el login) depende de que el correo funcione: sin
+  correo configurado, el enlace solo se imprime en la consola del backend. El enlace vence en 1 hora, sirve una
+  sola vez y también se invalida si cambia `SECRET_KEY`. Al cambiarse la contraseña llega un aviso a la cuenta. Las
+  sesiones abiertas en otros dispositivos no se cierran: vencen solas en máximo 1 día (`REFRESH_TOKEN_LIFETIME`).
+- **Límites por IP:** el formulario de cotización (10 envíos por hora), el de reseñas (20 por hora), el pedido del
+  enlace de contraseña (5 por hora) y elegir o cambiar la contraseña (10 por hora; con la sesión iniciada, por
+  cuenta) cuentan los envíos en la caché de Django. Sin `CACHES` configurada, cada proceso del servidor lleva su
+  propia cuenta, así que con varios procesos el límite se multiplica; no impide que la tienda funcione.
 
 ## Correo
 

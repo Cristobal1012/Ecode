@@ -14,7 +14,7 @@ documento.
 | `ALLOWED_HOSTS` | Dominios que atiende el backend (separados por coma). |
 | `CORS_ALLOWED_ORIGINS` | URLs del frontend autorizadas para consumir la API. |
 | `CSRF_TRUSTED_ORIGINS` | Orígenes HTTPS de confianza para formularios con CSRF. |
-| `FRONTEND_URL` | URL pública del frontend. La usan las redirecciones tras el pago (Webpay) y los enlaces de los correos (seguimiento y reseñas). |
+| `FRONTEND_URL` | URL pública del frontend. La usan las redirecciones tras el pago (Webpay) y los enlaces de los correos (seguimiento, reseñas y nueva contraseña). |
 | `EXIGIR_PAGINAS_LEGALES` | Exige Términos y Condiciones y Política de Privacidad publicadas para comprar (activo por defecto en producción). |
 
 ## 2. Bases de Datos (PostgreSQL y MongoDB)

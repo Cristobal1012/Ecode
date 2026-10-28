@@ -23,6 +23,7 @@ import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
 import GestorActivarResenas from '../components/GestorActivarResenas';
+import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import './Admin.css';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
@@ -36,6 +37,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
   { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
   { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
@@ -322,6 +324,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-medios-pago" />
                   <GestorMediosPago />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-documentos" />
+                  <GestorDocumentosTributarios />
                 </div>
 
                 <hr className="admin-separador" />

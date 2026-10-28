@@ -8,9 +8,9 @@ vi.mock('../components/header/header', () => ({ default: () => null }));
 
 import clienteAxios from '../components/auth/axiosConfig';
 import RestablecerContrasena from '../pages/RestablecerContrasena';
-import {
-  capturarEnlaceRestablecimiento, leerEnlaceRestablecimiento, olvidarEnlaceRestablecimiento,
-} from '../utils/enlaceRestablecimiento';
+import { capturarTokensDeEnlace, leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
+
+const RUTA = '/restablecer-contrasena';
 
 const NUEVA = 'Otra-Clave-Segura-2026';
 
@@ -21,7 +21,7 @@ function LoginFalso() {
 
 function abrirConEnlace(uid = 'MQ', token = 'abc-123') {
   window.history.replaceState(null, '', `/restablecer-contrasena?uid=${uid}&token=${token}`);
-  capturarEnlaceRestablecimiento();
+  capturarTokensDeEnlace();
   render(
     <MemoryRouter initialEntries={['/restablecer-contrasena']}>
       <Routes>
@@ -38,37 +38,11 @@ function escribir(password, password2 = password) {
   fireEvent.click(screen.getByRole('button', { name: 'Guardar contraseña' }));
 }
 
-describe('Enlace para elegir una nueva contraseña', () => {
-  afterEach(() => {
-    olvidarEnlaceRestablecimiento();
-    window.history.replaceState(null, '', '/');
-  });
-
-  it('se guarda y sale de la URL antes de montar la app, para que la analítica no lo reciba', () => {
-    window.history.replaceState({ previo: 1 }, '', '/restablecer-contrasena?uid=MQ&token=abc-123');
-    capturarEnlaceRestablecimiento();
-
-    expect(window.location.pathname + window.location.search).toBe('/restablecer-contrasena');
-    expect(window.history.state).toEqual({ previo: 1 });
-    expect(leerEnlaceRestablecimiento()).toEqual({ uid: 'MQ', token: 'abc-123' });
-  });
-
-  it('no toca otras páginas ni una URL sin token', () => {
-    window.history.replaceState(null, '', '/catalogo?uid=MQ&token=abc');
-    capturarEnlaceRestablecimiento();
-    window.history.replaceState(null, '', '/restablecer-contrasena?uid=MQ');
-    capturarEnlaceRestablecimiento();
-
-    expect(window.location.search).toBe('?uid=MQ');
-    expect(leerEnlaceRestablecimiento()).toBeNull();
-  });
-});
-
 describe('Nueva contraseña', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => {
     cleanup();
-    olvidarEnlaceRestablecimiento();
+    olvidarTokensDeEnlace(RUTA);
     window.history.replaceState(null, '', '/');
   });
 
@@ -80,7 +54,7 @@ describe('Nueva contraseña', () => {
     expect(await screen.findByText('Login: Tu contraseña se cambió. Ya puedes iniciar sesión.')).toBeInTheDocument();
     expect(clienteAxios.post).toHaveBeenCalledWith('usuarios/contrasena/restablecer/',
       { uid: 'MQ', token: 'abc-123', password: NUEVA, password2: NUEVA });
-    expect(leerEnlaceRestablecimiento()).toBeNull();
+    expect(leerTokensDeEnlace(RUTA)).toBeNull();
   });
 
   it('si las contraseñas no coinciden avisa en el campo sin llamar a la tienda', () => {
@@ -114,7 +88,7 @@ describe('Nueva contraseña', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('El enlace no es válido o ya venció');
     expect(screen.getByRole('link', { name: 'Pedir un enlace nuevo' })).toHaveAttribute('href', '/recuperar-contrasena');
-    expect(leerEnlaceRestablecimiento()).toBeNull();
+    expect(leerTokensDeEnlace(RUTA)).toBeNull();
   });
 
   it('sin enlace no muestra el formulario', () => {

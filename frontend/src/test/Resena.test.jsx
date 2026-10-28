@@ -8,6 +8,7 @@ vi.mock('../components/header/header', () => ({ default: () => null }));
 
 import clienteAxios from '../components/auth/axiosConfig';
 import Resena from '../pages/Resena';
+import { guardarTokensDeEnlace, leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
 
 const FORMULARIO = {
   orden_id: 12, nombre_sugerido: 'Ana P.',
@@ -31,7 +32,10 @@ describe('Formulario de reseña', () => {
     clienteAxios.post.mockResolvedValue({ data: { mensaje: '¡Gracias por tu reseña! La tienda la revisará.' } });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    olvidarTokensDeEnlace('/resena');
+  });
 
   it('abre el pedido del enlace con sus productos y el nombre sugerido', async () => {
     renderResena();
@@ -92,6 +96,21 @@ describe('Formulario de reseña', () => {
     });
     expect(screen.queryByRole('button', { name: 'Enviar reseña' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver a la tienda' })).toBeInTheDocument();
+  });
+
+  it('usa el token que se guardó fuera de la URL y lo olvida al enviar', async () => {
+    guardarTokensDeEnlace('/resena', { t: 'token-guardado' });
+    renderResena('/resena');
+
+    await screen.findByText('Pedido #12');
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/resenas/formulario/', { params: { t: 'token-guardado' } });
+    elegir('¿Cómo calificarías a Tienda QA?', 5);
+    aceptar();
+    enviar();
+
+    expect(await screen.findByRole('status')).toHaveTextContent('¡Gracias por tu reseña!');
+    expect(clienteAxios.post.mock.calls[0][1].token).toBe('token-guardado');
+    expect(leerTokensDeEnlace('/resena')).toBeNull();
   });
 
   it('muestra los errores del servidor en su campo y en su producto', async () => {

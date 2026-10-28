@@ -4,8 +4,11 @@ import clienteAxios from '../components/auth/axiosConfig';
 import EstrellasEntrada from '../components/EstrellasEntrada';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
+import { leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
 import '../components/Checkout.css';
 import './Resena.css';
+
+const RUTA = '/resena';
 
 // Igual que domain/resenas.py
 const LARGO_COMENTARIO = 1000;
@@ -19,7 +22,9 @@ const comoTexto = (mensajes) => [].concat(mensajes).join(' ');
 export default function Resena() {
   const configuracion = useConfiguracionTienda();
   const [parametros] = useSearchParams();
-  const token = parametros.get('t') || '';
+  // main.jsx ya sacó el token de la URL del correo, y Mis pedidos lo guarda antes de abrir esta página; el ?t= de
+  // la URL queda solo como respaldo
+  const [token] = useState(() => leerTokensDeEnlace(RUTA)?.t || parametros.get('t') || '');
   // { estado: 'cargando' | 'error' | 'formulario' | 'enviada', ... }
   const [vista, setVista] = useState(token ? { estado: 'cargando' } : {
     estado: 'error', texto: 'El enlace para dejar la reseña no es válido o ya venció.'
@@ -77,6 +82,7 @@ export default function Resena() {
           .filter(([, p]) => p.estrellas || p.comentario?.trim())
           .map(([producto_id, p]) => ({ producto_id, estrellas: p.estrellas ?? null, comentario: p.comentario || '' }))
       });
+      olvidarTokensDeEnlace(RUTA);
       setVista({ estado: 'enviada', texto: data.mensaje });
     } catch (error) {
       const datos = error.response?.data;

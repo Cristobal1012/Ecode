@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../components/auth/axiosConfig', () => ({ default: { get: vi.fn() } }));
@@ -7,6 +7,7 @@ vi.mock('../components/header/header', () => ({ default: () => null }));
 
 import clienteAxios from '../components/auth/axiosConfig';
 import HistorialPedidos from '../pages/HistorialPedidos';
+import { leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
 
 const pedido = (id, estado, extra = {}) => ({
   id, estado, fecha: '2026-10-20T12:00:00Z', total_final: 15000, detalles: [], token_resena: null,
@@ -25,11 +26,14 @@ describe('Mis pedidos: reseñas', () => {
 
   afterEach(() => cleanup());
 
-  it('un pedido que se puede reseñar lleva al formulario con su enlace firmado', async () => {
+  it('un pedido que se puede reseñar lleva al formulario con su enlace firmado, sin dejarlo en la URL', async () => {
     render(<MemoryRouter><HistorialPedidos /></MemoryRouter>);
 
     const enlace = await screen.findByRole('link', { name: 'Dejar reseña del pedido #12' });
-    expect(enlace).toHaveAttribute('href', `/resena?t=${encodeURIComponent('abc:def/123')}`);
+    expect(enlace).toHaveAttribute('href', '/resena');
+    fireEvent.click(enlace);
+    expect(leerTokensDeEnlace('/resena')).toEqual({ t: 'abc:def/123' });
+    olvidarTokensDeEnlace('/resena');
   });
 
   it('un pedido ya reseñado lo dice y uno en camino no ofrece nada', async () => {

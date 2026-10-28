@@ -4,12 +4,14 @@ import clienteAxios from '../components/auth/axiosConfig';
 import AuthLayout from '../components/auth/AuthLayout';
 import CamposContrasenaNueva from '../components/auth/CamposContrasenaNueva';
 import { leerErroresContrasena } from '../components/auth/erroresContrasena';
-import { leerEnlaceRestablecimiento, olvidarEnlaceRestablecimiento } from '../utils/enlaceRestablecimiento';
+import { leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
+
+const RUTA = '/restablecer-contrasena';
 
 // Elige la nueva contraseña con el enlace del correo (main.jsx ya sacó uid y token de la URL)
 export default function RestablecerContrasena() {
   const navigate = useNavigate();
-  const [enlace] = useState(leerEnlaceRestablecimiento);
+  const [enlace] = useState(() => leerTokensDeEnlace(RUTA));
   const [formData, setFormData] = useState({ password: '', password2: '' });
   const [errores, setErrores] = useState({ general: '', campos: {}, enlaceInvalido: !enlace });
   const [enviando, setEnviando] = useState(false);
@@ -24,12 +26,12 @@ export default function RestablecerContrasena() {
     setEnviando(true);
     try {
       await clienteAxios.post('usuarios/contrasena/restablecer/', { ...enlace, ...formData });
-      olvidarEnlaceRestablecimiento();
+      olvidarTokensDeEnlace(RUTA);
       navigate('/login', { state: { aviso: { texto: 'Tu contraseña se cambió. Ya puedes iniciar sesión.' } } });
     } catch (error) {
       const leidos = leerErroresContrasena(error, ['password', 'password2'],
         'No pudimos cambiar tu contraseña. Inténtalo de nuevo.');
-      if (leidos.enlaceInvalido) olvidarEnlaceRestablecimiento();
+      if (leidos.enlaceInvalido) olvidarTokensDeEnlace(RUTA);
       setErrores(leidos);
       setEnviando(false);
     }

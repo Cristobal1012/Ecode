@@ -4,6 +4,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 import Dialogo from '../components/Dialogo';
+import { guardarTokensDeEnlace } from '../utils/enlacesConToken';
 import './HistorialPedidos.css';
 
 const TEMA_PREDETERMINADO = 1;
@@ -170,10 +171,12 @@ const HistorialPedidos = () => {
                                                         </button>
                                                     )}
 
-                                                    {/* Reseña: entregado, sin reseña y dentro del plazo (lo decide el servidor) */}
+                                                    {/* Reseña: entregado, sin reseña y dentro del plazo (lo decide el servidor).
+                                                        El token se guarda en vez de ir en la URL, que lee la analítica */}
                                                     {orden.token_resena && (
                                                         <Link
-                                                            to={`/resena?t=${encodeURIComponent(orden.token_resena)}`}
+                                                            to="/resena"
+                                                            onClick={() => guardarTokensDeEnlace('/resena', { t: orden.token_resena })}
                                                             className="historial-enlace"
                                                             aria-label={`Dejar reseña del pedido #${orden.id}`}
                                                         >

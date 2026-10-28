@@ -169,6 +169,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# El enlace para elegir una nueva contraseña vence en 1 hora (y deja de servir apenas se usa)
+PASSWORD_RESET_TIMEOUT = 60 * 60
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
@@ -232,6 +235,10 @@ REST_FRAMEWORK = {
         'cotizaciones': '10/hour',
         # Envío del formulario de reseña: deja corregir errores, pero no inundar la tienda
         'resenas': '20/hour',
+        # Pedir el enlace por correo: pocos, para no llenar de correos a nadie
+        'contrasena_olvido': '5/hour',
+        # Elegir o cambiar la contraseña: sin adivinar la actual a fuerza de intentos
+        'contrasenas': '10/hour',
     },
 }
 

@@ -1,10 +1,20 @@
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import RegistroUsuarioSerializer, GoogleAuthSerializer
+
+from ecommerce.application.cuentas import (
+    CambiarContrasena, ContrasenaActualIncorrecta, ContrasenaInvalida, EnlaceInvalido, RestablecerContrasena,
+    SolicitarRestablecimiento,
+)
+from .cuentas import CorreoNotificadorCuentas, CuentasDjango, EnlacesDjango, ValidadorDjango
+from .serializers import (
+    CambiarContrasenaSerializer, GoogleAuthSerializer, OlvidoContrasenaSerializer, RegistroUsuarioSerializer,
+    RestablecerContrasenaSerializer,
+)
 from .services import GoogleAuthService
 
 User = get_user_model()
@@ -101,4 +111,80 @@ class UsuarioActualAPIView(APIView):
             # El checkout los usa para precargar quién recibe el pedido (RF-02.3)
             'apellido_paterno': request.user.apellido_paterno,
             'telefono': request.user.telefono or '',
+            # False en una cuenta creada con Google: al cambiarla no se pide la contraseña actual
+            'tiene_contrasena': request.user.has_usable_password(),
         })
+
+
+class OlvidoContrasenaThrottle(SimpleRateThrottle):
+    """Pocos pedidos de enlace por hora desde la misma IP (DEFAULT_THROTTLE_RATES['contrasena_olvido'])."""
+    scope = 'contrasena_olvido'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+class ContrasenaThrottle(SimpleRateThrottle):
+    """Intentos de elegir o cambiar la contraseña: por cuenta con la sesión iniciada, si no por IP."""
+    scope = 'contrasenas'
+
+    def get_cache_key(self, request, view):
+        ident = f'u{request.user.pk}' if request.user.is_authenticated else self.get_ident(request)
+        return self.cache_format % {'scope': self.scope, 'ident': ident}
+
+
+MENSAJE_ENLACE_ENVIADO = ('Si el correo tiene una cuenta en la tienda, te enviamos un enlace para elegir una nueva '
+                          'contraseña. Revisa también la carpeta de spam.')
+
+
+class OlvidoContrasenaView(APIView):
+    """POST /api/usuarios/contrasena/olvido/: siempre la misma respuesta, para no revelar qué correos tienen cuenta."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [OlvidoContrasenaThrottle]
+
+    def post(self, request):
+        serializer = OlvidoContrasenaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        SolicitarRestablecimiento(CuentasDjango(), EnlacesDjango(), CorreoNotificadorCuentas()).ejecutar(
+            serializer.validated_data['email'])
+        return Response({'detail': MENSAJE_ENLACE_ENVIADO})
+
+
+class RestablecerContrasenaView(APIView):
+    """POST /api/usuarios/contrasena/restablecer/: la nueva contraseña con el uid y el token del enlace."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ContrasenaThrottle]
+
+    def post(self, request):
+        serializer = RestablecerContrasenaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        try:
+            RestablecerContrasena(CuentasDjango(), EnlacesDjango(), ValidadorDjango(), CorreoNotificadorCuentas()
+                                  ).ejecutar(datos['uid'], datos['token'], datos['password'], datos['password2'])
+        except EnlaceInvalido as error:
+            return Response({'enlace': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        except ContrasenaInvalida as error:
+            return Response(error.errores, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Tu contraseña se cambió. Ya puedes iniciar sesión.'})
+
+
+class CambiarContrasenaView(APIView):
+    """POST /api/usuarios/contrasena/cambiar/: con la sesión iniciada."""
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ContrasenaThrottle]
+
+    def post(self, request):
+        serializer = CambiarContrasenaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        try:
+            CambiarContrasena(CuentasDjango(), ValidadorDjango(), CorreoNotificadorCuentas()).ejecutar(
+                request.user.id, datos['actual'], datos['password'], datos['password2'])
+        except ContrasenaActualIncorrecta as error:
+            return Response({'actual': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        except ContrasenaInvalida as error:
+            return Response(error.errores, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Tu contraseña se cambió.'})

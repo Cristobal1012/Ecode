@@ -89,6 +89,29 @@
   border-color: #B91C1C;
 }
 
+/* Texto de apoyo bajo el título y ayuda de un campo (aria-describedby) */
+.auth-texto {
+  margin: 0 0 24px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.auth-campo-ayuda {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* "¿Olvidaste tu contraseña?", bajo el campo de contraseña del login */
+.auth-olvido {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
 /* Error de un campo, debajo de él (aria-describedby) */
 .auth-campo-error {
   font-size: 0.85rem;

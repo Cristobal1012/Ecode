@@ -17,6 +17,7 @@ vi.mock('../components/auth/axiosConfig', () => ({
 
 vi.mock('react-router-dom', () => ({
     useNavigate: () => mocks.navigate,
+    Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 
 vi.mock('../components/carrito', () => ({
@@ -92,6 +93,13 @@ describe('Login', () => {
         expect(screen.getByLabelText(/correo electrónico/i)).toBeTruthy();
         expect(screen.getByLabelText(/contraseña/i)).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Entrar' })).toBeTruthy();
+    });
+
+    it('ofrece recuperar la contraseña olvidada', () => {
+        render(<Login />);
+
+        expect(screen.getByRole('link', { name: '¿Olvidaste tu contraseña?' }).getAttribute('href'))
+            .toBe('/recuperar-contrasena');
     });
 
     it('precarga el correo y muestra el aviso de registro cuando se reciben', () => {

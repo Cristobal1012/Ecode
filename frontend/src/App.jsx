@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
@@ -27,43 +27,34 @@ import PublicacionBlog from './pages/PublicacionBlog';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
-import Header from './components/header/header';
 import AccesibilidadNavegacion from './components/AccesibilidadNavegacion';
 import useConfiguracionTienda from './hooks/useConfiguracionTienda';
-import { PORTADA_POR_DEFECTO } from './components/landing/textosPorDefecto';
-import './components/auth/auth.css';
+import AuthLayout from './components/auth/AuthLayout';
+import RecuperarContrasena from './pages/RecuperarContrasena';
+import RestablecerContrasena from './pages/RestablecerContrasena';
 
 const applyPaletteToRoot = aplicarPaleta;
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
-  // Aviso que deja el registro para el login ("Tu cuenta quedó creada...", con el correo ya escrito)
-  const [avisoLogin, setAvisoLogin] = useState(null);
-  // La misma portada de la landing acompaña al formulario (decorativa: el nombre ya está en el header)
-  const configuracion = useConfiguracionTienda();
-  const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
+  // Aviso para el login: lo deja el registro ("Tu cuenta quedó creada...", con el correo ya escrito) o la página
+  // de nueva contraseña al navegar aquí ("Tu contraseña se cambió...")
+  const { state } = useLocation();
+  const [avisoLogin, setAvisoLogin] = useState(state?.aviso || null);
 
   return (
-    <>
-      <Header />
-      <main tabIndex={-1} id="contenido" className="auth-main">
-        <div className="auth-imagen" aria-hidden="true" style={{ backgroundImage: `url("${portada}")` }}>
-          {configuracion?.nombre_tienda && <span className="auth-imagen-nombre">{configuracion.nombre_tienda}</span>}
-        </div>
-        <div className="auth-contenido">
-          {showLogin ? (
-            <Login
-              onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
-              googleHabilitado={googleHabilitado}
-              aviso={avisoLogin}
-            />
-          ) : (
-            <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
-          )}
-        </div>
-      </main>
-    </>
+    <AuthLayout>
+      {showLogin ? (
+        <Login
+          onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
+          googleHabilitado={googleHabilitado}
+          aviso={avisoLogin}
+        />
+      ) : (
+        <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
+      )}
+    </AuthLayout>
   );
 }
 
@@ -152,6 +143,9 @@ function App() {
                 <AuthPage googleHabilitado />
               </GoogleOAuthProvider>
             ) : <AuthPage googleHabilitado={false} />} />
+            {/* Contraseña olvidada: pedir el enlace por correo y elegir la nueva con ese enlace */}
+            <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
+            <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
 
             {/* Vista pública para desplegar páginas legales individuales (RF-03.5) */}
             <Route path="/legal/:tipo" element={<PaginaLegal />} />

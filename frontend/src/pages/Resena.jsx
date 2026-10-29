@@ -7,6 +7,7 @@ import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
 import '../components/Checkout.css';
 import './Resena.css';
+import Spinner from '../components/carga/Spinner';
 
 const RUTA = '/resena';
 
@@ -214,7 +215,7 @@ export default function Resena() {
                 </fieldset>
 
                 <button type="submit" className="boton boton-primario resena-enviar" disabled={!acepta || enviando}>
-                  {enviando ? 'Enviando...' : 'Enviar reseña'}
+                  {enviando && <Spinner />}{enviando ? 'Enviando...' : 'Enviar reseña'}
                 </button>
               </form>
             </>

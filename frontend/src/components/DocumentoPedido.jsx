@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import Spinner from './carga/Spinner';
 
 // La boleta, factura o nota de crédito de un pedido: la tienda la emite por su cuenta y aquí anota su folio.
 // documento_requerido y documento_por_emitir los calcula el backend (domain/documentos_tributarios.py)
@@ -106,7 +107,7 @@ export default function DocumentoPedido({ pedido, deshabilitado, onGuardado }) {
             style={{ width: '9ch', padding: '6px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }}
           />
           <button type="submit" disabled={deshabilitado || guardando} style={estiloBoton}>
-            {guardando ? 'Guardando...' : 'Guardar'}
+            {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar'}
           </button>
           {corrigiendo && (
             <button type="button" onClick={() => setCorrigiendo(false)} style={estiloEnlace}>Cancelar</button>

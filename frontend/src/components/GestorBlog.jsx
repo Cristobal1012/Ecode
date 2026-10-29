@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
+import Spinner from './carga/Spinner';
 
 // Blog o portafolio de la tienda: activo, el enlace del menú lleva a /blog con el nombre que elija el admin
 const CAMPOS = ['blog_activo', 'blog_nombre'];
@@ -117,7 +118,7 @@ export default function GestorBlog() {
 
         <div>
           <button type="submit" disabled={guardando} className="boton boton-primario">
-            {guardando ? 'Guardando...' : 'Guardar blog'}
+            {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar blog'}
           </button>
         </div>
       </form>

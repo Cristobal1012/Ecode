@@ -25,6 +25,7 @@ import GestorResenas from '../components/GestorResenas';
 import GestorActivarResenas from '../components/GestorActivarResenas';
 import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import './Admin.css';
+import Spinner from '../components/carga/Spinner';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
@@ -292,7 +293,7 @@ export default function Admin() {
 
                     <div>
                       <button type="submit" disabled={guardandoLocal} className="boton boton-primario">
-                        {guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
+                        {guardandoLocal && <Spinner />}{guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
                       </button>
                     </div>
                   </form>

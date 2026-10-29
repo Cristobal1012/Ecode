@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
+import Spinner from './carga/Spinner';
 
 // Correo, horario e Instagram de la tienda: van en el pie de página y en la sección de Instagram de la landing
 const CAMPOS = ['correo_contacto', 'horario_atencion', 'instagram_usuario', 'mostrar_direccion_pie'];
@@ -148,7 +149,7 @@ export default function GestorContacto() {
 
         <div>
           <button type="submit" disabled={guardando} className="boton boton-primario">
-            {guardando ? 'Guardando...' : 'Guardar contacto y redes'}
+            {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar contacto y redes'}
           </button>
         </div>
       </form>

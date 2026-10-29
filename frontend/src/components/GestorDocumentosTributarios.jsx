@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 // La tienda emite sus boletas y facturas por su cuenta (el sistema gratuito del SII u otro): el panel solo le
 // indica qué pedidos necesitan documento. Las reglas viven en domain/documentos_tributarios.py
@@ -112,7 +113,7 @@ export default function GestorDocumentosTributarios() {
 
         <div>
           <button type="submit" disabled={guardando} className="boton boton-primario">
-            {guardando ? 'Guardando...' : 'Guardar modelo de emisión'}
+            {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar modelo de emisión'}
           </button>
         </div>
       </form>

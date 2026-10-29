@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 const ESTILOS_AVISO = {
   error: { backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b' },
@@ -123,7 +124,7 @@ export default function GestorChilexpress() {
           disabled={guardando}
           style={{ padding: '10px 18px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
         >
-          {guardando ? 'Guardando...' : 'Guardar credenciales de Chilexpress'}
+          {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar credenciales de Chilexpress'}
         </button>
       </div>
     </div>

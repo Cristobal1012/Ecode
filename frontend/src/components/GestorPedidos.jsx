@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import DocumentoPedido from './DocumentoPedido';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoTabla } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 // Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
@@ -400,6 +401,7 @@ export default function GestorPedidos() {
                           fontWeight: 'bold',
                         }}
                       >
+                        {enCurso === pedido.id && <Spinner />}
                         {enCurso === pedido.id
                           ? 'Registrando...'
                           : 'Registrar pago recibido fuera de plazo'}

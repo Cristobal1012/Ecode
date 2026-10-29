@@ -5,6 +5,7 @@ import AuthLayout from '../components/auth/AuthLayout';
 import CamposContrasenaNueva from '../components/auth/CamposContrasenaNueva';
 import { leerErroresContrasena } from '../components/auth/erroresContrasena';
 import { leerTokensDeEnlace, olvidarTokensDeEnlace } from '../utils/enlacesConToken';
+import Spinner from '../components/carga/Spinner';
 
 const RUTA = '/restablecer-contrasena';
 
@@ -67,7 +68,7 @@ export default function RestablecerContrasena() {
             onChange={(e) => setFormData({ ...formData, [e.target.name]: e.target.value })}
           />
           <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
-            {enviando ? 'Guardando...' : 'Guardar contraseña'}
+            {enviando && <Spinner />}{enviando ? 'Guardando...' : 'Guardar contraseña'}
           </button>
         </form>
       </div>

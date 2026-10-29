@@ -9,6 +9,7 @@ import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
 import Dialogo from './Dialogo';
 import { Bloque, Cargando } from './carga/Esqueleto';
+import Spinner from './carga/Spinner';
 
 const OPCION_RETIRO_LOCAL = {
     proveedor: 'RETIRO_LOCAL', nombre: 'Retiro en Tienda / Local', tipo: 'RETIRO', costo_envio: 0,
@@ -927,7 +928,7 @@ function CheckoutContenido() {
                                         key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado || Boolean(esperandoPago)}
                                         className="boton boton-primario checkout-pagar"
                                     >
-                                        {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
+                                        {procesandoPago && <Spinner />}{procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
                                 );
                             })
@@ -957,7 +958,7 @@ function CheckoutContenido() {
                                 onClick={() => verificarEstadoOrden(esperandoPago.ordenId)}
                                 disabled={verificando}
                             >
-                                {verificando ? 'Consultando a Mercado Pago...' : 'Ya pagué (Verificar mi pago)'}
+                                {verificando && <Spinner />}{verificando ? 'Consultando a Mercado Pago...' : 'Ya pagué (Verificar mi pago)'}
                             </button>
                             <a href={esperandoPago.urlPago} target="_blank" rel="noopener noreferrer" className="checkout-modal-enlace">
                                 ¿Se cerró la ventana? Abrir Mercado Pago de nuevo

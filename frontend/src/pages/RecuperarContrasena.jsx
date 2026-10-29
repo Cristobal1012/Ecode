@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import AuthLayout from '../components/auth/AuthLayout';
+import Spinner from '../components/carga/Spinner';
 
 const mensajeDeError = (error) => {
   if (!error.response) return 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.';
@@ -65,7 +66,7 @@ export default function RecuperarContrasena() {
                 />
               </div>
               <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
-                {enviando ? 'Enviando...' : 'Enviar enlace'}
+                {enviando && <Spinner />}{enviando ? 'Enviando...' : 'Enviar enlace'}
               </button>
             </form>
           </>

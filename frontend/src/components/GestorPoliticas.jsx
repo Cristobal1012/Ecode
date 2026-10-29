@@ -4,6 +4,7 @@ import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 const NOMBRES_PAGINA = {
   TERMINOS: 'Términos y Condiciones',
@@ -233,7 +234,7 @@ export default function GestorPoliticas() {
           transition: 'opacity 0.2s'
         }}
       >
-        {guardando ? 'Guardando...' : 'Guardar cambios'}
+        {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </div>
   );

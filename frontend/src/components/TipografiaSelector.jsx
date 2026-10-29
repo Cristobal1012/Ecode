@@ -4,6 +4,7 @@ import useConfiguracionTienda, { recargarConfiguracion } from '../hooks/useConfi
 import {
   CLAVE_TIPOGRAFIA, TIPOGRAFIAS, TIPOGRAFIA_PREDETERMINADA, aplicarTipografia, familiasDe
 } from '../constants/tipografias';
+import Spinner from './carga/Spinner';
 
 // RF-01.2: el admin elige una de las 5 combinaciones de fuentes. Al hacer clic se ve en toda la página (tienda y
 // panel); se publica al guardar, igual que la paleta.
@@ -81,7 +82,7 @@ export default function TipografiaSelector() {
       <div className="selector-paletas-acciones">
         <button type="button" onClick={guardar} disabled={guardando || seleccionada === guardada}
           className="boton boton-primario">
-          {guardando ? 'Guardando...' : 'Guardar tipografía'}
+          {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar tipografía'}
         </button>
       </div>
 

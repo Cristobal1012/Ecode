@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
+import Spinner from './carga/Spinner';
 
 // RF-02.3: entrega que acuerda la tienda con el comprador (ej. en persona), sin transportista ni dirección del local
 const CAMPOS = ['entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada'];
@@ -143,7 +144,7 @@ export default function GestorEntregaCoordinada() {
 
         <div>
           <button type="submit" disabled={guardando} className="boton boton-primario">
-            {guardando ? 'Guardando...' : 'Guardar entrega coordinada'}
+            {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar entrega coordinada'}
           </button>
         </div>
       </form>

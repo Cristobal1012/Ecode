@@ -7,6 +7,7 @@ import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
 import '../components/Checkout.css';
 import './Cotizacion.css';
+import Spinner from '../components/carga/Spinner';
 
 const FORMULARIO_VACIO = {
   nombre: '', correo: '', telefono: '', producto_id: '', descripcion: '', cantidad: '1',
@@ -246,7 +247,7 @@ export default function Cotizacion() {
 
                 <button type="submit" className="boton boton-primario cotizacion-enviar"
                   disabled={!aceptaPrivacidad || enviando}>
-                  {enviando ? 'Enviando...' : 'Enviar solicitud'}
+                  {enviando && <Spinner />}{enviando ? 'Enviando...' : 'Enviar solicitud'}
                 </button>
               </form>
             </>

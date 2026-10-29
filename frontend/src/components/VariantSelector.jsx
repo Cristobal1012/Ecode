@@ -1,5 +1,6 @@
 import { useId, useState, useEffect, useRef } from 'react';
 import './VariantSelector.css';
+import Spinner from './carga/Spinner';
 
 function VariantSelector({ producto, onAgregarAlCarrito }) {
   const botonAgregar = useRef(null);
@@ -291,6 +292,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         disabled={sinStock || agregando}
         className="boton boton-primario selector-variantes-agregar"
       >
+        {agregando && <Spinner />}
         {agregando
           ? 'Verificando stock...'
           : stockTotal === 0

@@ -4,6 +4,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import AuthLayout from '../components/auth/AuthLayout';
 import CamposContrasenaNueva from '../components/auth/CamposContrasenaNueva';
 import { leerErroresContrasena } from '../components/auth/erroresContrasena';
+import Spinner from '../components/carga/Spinner';
 
 const VACIO = { actual: '', password: '', password2: '' };
 
@@ -88,7 +89,7 @@ export default function CambiarContrasena() {
               )}
               <CamposContrasenaNueva valores={formData} errores={errores.campos} onChange={handleChange} />
               <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
-                {enviando ? 'Guardando...' : 'Guardar contraseña'}
+                {enviando && <Spinner />}{enviando ? 'Guardando...' : 'Guardar contraseña'}
               </button>
             </form>
 

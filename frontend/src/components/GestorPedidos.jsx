@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import DocumentoPedido from './DocumentoPedido';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoTabla } from './carga/EsqueletosPanel';
 
 // Nombres de la interfaz. Las transiciones permitidas las informa el backend
 const ETIQUETAS_ESTADO = {
@@ -234,7 +236,7 @@ export default function GestorPedidos() {
     );
   };
 
-  if (primeraCarga) return <div style={{ padding: '20px' }}>Cargando panel de pedidos...</div>;
+  if (primeraCarga) return <Cargando texto="Cargando panel de pedidos..."><EsqueletoTabla filas={6} columnas={7} /></Cargando>;
 
   return (
     <div>
@@ -289,7 +291,7 @@ export default function GestorPedidos() {
       </div>
 
       {cargando ? (
-        <p style={{ padding: '20px', color: 'var(--color-muted)' }}>Cargando pedidos...</p>
+        <Cargando texto="Cargando pedidos..."><EsqueletoTabla filas={6} columnas={7} /></Cargando>
       ) : (
       <>
       <div tabIndex={0} role="region" aria-label="Pedidos y operaciones de venta" style={{ backgroundColor: 'var(--color-surface)', borderRadius: '8px', overflowX: 'auto' }}>

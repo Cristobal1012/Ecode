@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 
 // Las solicitudes del formulario de cotización: la tienda las responde por correo o teléfono y aquí anota en qué
 // quedó cada una
@@ -58,7 +60,7 @@ export default function GestorCotizaciones() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando cotizaciones...</p>;
+  if (cargando) return <Cargando texto="Cargando cotizaciones..."><EsqueletoLista /></Cargando>;
 
   return (
     <>

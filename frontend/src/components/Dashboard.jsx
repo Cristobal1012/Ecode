@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import DashboardCard from './DashboardCard';
 import RecentOrders from './RecentOrders';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoDashboard } from './carga/EsqueletosPanel';
 import {
   ResponsiveContainer,
   LineChart,
@@ -99,20 +101,34 @@ export default function Dashboard() {
 
   if (cargando) {
     return (
-      <div style={{ padding: '20px 0' }}>
-        <h2
-          style={{
-            margin: 0,
-            color: 'var(--color-text)',
-            fontSize: '1.8rem',
-          }}
-        >
-          Dashboard
-        </h2>
+      <div>
+        {/* El mismo encabezado que con los datos, para que la página no salte al llegar */}
+        <div style={{ marginBottom: '25px' }}>
+          <h2
+            style={{
+              margin: 0,
+              color: 'var(--color-text)',
+              fontSize: '1.8rem',
+              fontWeight: '700',
+            }}
+          >
+            Dashboard
+          </h2>
 
-        <p role="status" style={{ color: 'var(--color-muted)' }}>
-          Cargando información...
-        </p>
+          <p
+            style={{
+              margin: '6px 0 0',
+              color: 'var(--color-muted)',
+              fontSize: '0.95rem',
+            }}
+          >
+            Resumen general del rendimiento de tu tienda.
+          </p>
+        </div>
+
+        <Cargando texto="Cargando información...">
+          <EsqueletoDashboard />
+        </Cargando>
       </div>
     );
   }

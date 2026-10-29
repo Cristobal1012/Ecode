@@ -5,6 +5,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
+import { EsqueletoPanel } from './components/carga/EsqueletosPanel';
 import VariantSelector from './components/VariantSelector';
 import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
@@ -158,7 +159,7 @@ function App() {
             </Route>
 
             {/* Ruta protegida para usuarios con rol ADMIN */}
-            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} esqueleto={<EsqueletoPanel />} />}>
               <Route path="/admin" element={<Admin />} />
             </Route>
           </Routes>

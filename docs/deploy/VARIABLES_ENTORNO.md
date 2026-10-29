@@ -10,7 +10,7 @@ documento.
 | :--- | :--- |
 | `DEBUG` | `True` para desarrollo. En producción omitir o usar `False` para activar ajustes de seguridad por defecto. |
 | `SECRET_KEY` | Llave criptográfica de Django. Obligatoria si `DEBUG=False`. Cambiarla cierra todas las sesiones e invalida los enlaces de reseña ya enviados. |
-| `CLAVE_CIFRADO_CREDENCIALES` | Cifra las credenciales de pago y de Chilexpress que el admin carga desde el panel. Obligatoria si `DEBUG=False`. Si cambia, hay que volver a cargar las credenciales. |
+| `CLAVE_CIFRADO_CREDENCIALES` | Cifra las credenciales de pago y de los couriers que el admin carga desde el panel. Obligatoria si `DEBUG=False`. Si cambia, hay que volver a cargar las credenciales. |
 | `ALLOWED_HOSTS` | Dominios que atiende el backend (separados por coma). |
 | `CORS_ALLOWED_ORIGINS` | URLs del frontend autorizadas para consumir la API. |
 | `CSRF_TRUSTED_ORIGINS` | Orígenes HTTPS de confianza para formularios con CSRF. |
@@ -80,9 +80,9 @@ Además de las anteriores, el archivo de cada tienda lleva las variables del sta
 | `GUNICORN_WORKERS`, `GUNICORN_THREADS` | Procesos e hilos del backend (por defecto `2` y `4`). |
 
 ## 9. Proveedores de Logística y Pago
-Las credenciales de los medios de pago (Transbank, Mercado Pago, transferencia) y de Chilexpress **no van en el
-`.env`**: el emprendedor las carga desde el panel (Configuración > Medios de pago y Configuración > Envíos con
-Chilexpress) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Nunca se escriben en archivos de configuración.
+Las credenciales de los medios de pago (Transbank, Mercado Pago, transferencia) y de los couriers (Chilexpress) **no
+van en el `.env`**: el emprendedor las carga desde el panel (Configuración > Medios de pago y Configuración > Envíos
+por courier) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Nunca se escriben en archivos de configuración.
 
 Las antiguas `TRANSBANK_ENVIRONMENT`, `TRANSBANK_WEBPAY_*` y `CHILEXPRESS_API_KEY_*` solo se leen una vez, al migrar,
 para conservar la configuración de instalaciones anteriores. En un despliegue nuevo no se usan.

@@ -27,10 +27,13 @@ from decimal import Decimal
 from math import ceil
 
 import requests
-from ecommerce.application.logistica import ServicioCotizacion
+from ecommerce.application.couriers import (
+    ComunasConCobertura, ConfigurarCourier, CotizarEnvio, CourierNoActivo, TransportistaSegunProveedor,
+)
 from ecommerce.domain.logistica import (
-    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, NOMBRES_ENTREGAS_DE_LA_TIENDA, ConfiguracionCotizacionInvalida,
-    ErrorOrdenTransporte, aviso_entrega_coordinada, estado_entrega_de_la_tienda,
+    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, ESTADO_NO_DISPONIBLE, NOMBRES_ENTREGAS_DE_LA_TIENDA, CourierNoDisponible,
+    CredencialesInvalidas, ErrorOrdenTransporte, Paquete, SinCobertura, aviso_entrega_coordinada,
+    es_entrega_con_courier, estado_entrega_de_la_tienda,
 )
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
@@ -42,7 +45,6 @@ from ecommerce.application.blog import (
     SIN_CAMBIO, AgregarFotos, BlogDesactivado, EliminarPublicacion, FotoNoEncontrada, GuardarPublicacion,
     PublicacionNoEncontrada, QuitarFoto, VerBlog, VerPublicacion,
 )
-from ecommerce.application.chilexpress import ConfigurarChilexpress
 from ecommerce.application.cotizaciones import (
     CambiarEstadoCotizacion, CotizacionNoEncontrada, FormularioCotizacionDesactivado, SolicitarCotizacion,
 )
@@ -54,7 +56,6 @@ from ecommerce.application.resenas import (
     EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
     ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
 )
-from ecommerce.domain.logistica import CredencialesChilexpressInvalidas
 from ecommerce.domain.documentos_tributarios import FolioInvalido
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
@@ -87,7 +88,6 @@ from .serializers import (
     CotizacionSolicitudSerializer,
     AdminCotizacionSerializer,
     AdminResenaSerializer,
-    SolicitudCotizacionSerializer,
     AdminOrdenCompraEstadoSerializer,
     AdminOrdenCompraSerializer,
     PaginaLegalSerializer,
@@ -99,23 +99,23 @@ from .serializers import (
     PublicacionEntradaSerializer,
     PublicacionResumenSerializer,
     MedioPagoAdminSerializer,
-    CredencialesChilexpressSerializer,
-    chilexpress_para_panel,
+    CredencialesCourierSerializer,
+    couriers,
+    courier_para_panel,
     medio_pago_para_panel,
     medios_pago,
 )
-from .adapters.logistica import ProveedorLogisticoAdapter
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .repositorio_documentos import DjangoPedidosDocumentos, filtro_documento_pendiente, modelo_emision_tienda
 from .enlaces_resena import orden_del_token, token_resena
 from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioResenas
-from .adapters.orden_transporte import ChilexpressOrdenTransporte
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_blog import DjangoRepositorioPublicaciones
-from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
+from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
+from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
 
@@ -124,8 +124,29 @@ def inventario_variantes():
     return MongoInventarioVariantes()
 
 
+def transportista_ordenes():
+    """RF-02.3: la OT la genera el courier que eligió el comprador (las pruebas lo reemplazan)."""
+    return TransportistaSegunProveedor(couriers())
+
+
 def generar_orden_transporte():
-    return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte())
+    return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), transportista_ordenes())
+
+
+# Firma de los primeros bytes de la etiqueta → su tipo y extensión
+FORMATOS_ETIQUETA = (
+    (b'%PDF', 'application/pdf', 'pdf'),
+    (b'\xff\xd8\xff', 'image/jpeg', 'jpg'),
+    (b'\x89PNG', 'image/png', 'png'),
+)
+
+
+def consultar_estado_envio(proveedor, codigo_seguimiento):
+    """RF-02.4: el estado del envío en la línea de tiempo estándar, según su courier."""
+    try:
+        return couriers().obtener(proveedor).consultar_estado(codigo_seguimiento)
+    except CourierNoActivo:
+        return ESTADO_NO_DISPONIBLE
 
 
 def notificador_pedidos():
@@ -764,24 +785,23 @@ class CotizacionEnvioView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Llamamos al adaptador usando Chilexpress
-        resultado = ProveedorLogisticoAdapter.cotizar_envio(
-            proveedor="chilexpress",
-            origen=origen,
-            destino=destino,
-            peso_kg=peso,
-            alto_cm=alto,
-            ancho_cm=ancho,
-            largo_cm=largo
-        )
+        paquete = Paquete(Decimal(str(peso)), Decimal(alto), Decimal(ancho), Decimal(largo))
+        # Con un proveedor cotiza ese; sin él, todos los couriers activos (el comprador elige)
+        proveedor = datos.get('proveedor') or None
 
-        # Comuna sin cobertura → 400; Chilexpress caído o tarifa inválida → 503
-        if "error" in resultado:
-            codigo = (status.HTTP_503_SERVICE_UNAVAILABLE if resultado.get("tipo") == "proveedor"
-                      else status.HTTP_400_BAD_REQUEST)
-            return Response({"error": resultado["error"]}, status=codigo)
+        # Comuna sin cobertura → 400; courier caído o tarifa inválida → 503
+        try:
+            opciones = CotizarEnvio(couriers()).ejecutar(origen, destino, paquete, proveedor)
+        except CourierNoActivo:
+            return Response({"error": "No hay envío por courier disponible en esta tienda."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except SinCobertura as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except CourierNoDisponible as error:
+            return Response({"error": str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        return Response(resultado, status=status.HTTP_200_OK)
+        return Response({"opciones": [{**asdict(opcion), "moneda": "CLP"} for opcion in opciones]},
+                        status=status.HTTP_200_OK)
 
 
 class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
@@ -895,7 +915,8 @@ class SeguimientoEnvioView(APIView):
                 "codigo_seguimiento": None,
             }, status=status.HTTP_200_OK)
 
-        proveedor = orden.proveedor_logistico if orden.proveedor_logistico else 'chilexpress'
+        # Los pedidos anteriores a guardar el courier se enviaban con Chilexpress
+        proveedor = orden.proveedor_logistico or ChilexpressCourier.codigo
         codigo = orden.numero_seguimiento_tracking
         # Los estados finales tienen prioridad sobre el tipo de entrega
         if orden.estado == 'CANCELADO':
@@ -905,10 +926,7 @@ class SeguimientoEnvioView(APIView):
         elif not codigo or not codigo.strip():
             estado_estandarizado = 'Pendiente de despacho'
         else:
-            estado_estandarizado = ProveedorLogisticoAdapter.consultar_estado(
-                proveedor,
-                codigo,
-            )
+            estado_estandarizado = consultar_estado_envio(proveedor, codigo)
 
         linea_tiempo = [
             'En origen',
@@ -970,13 +988,15 @@ class ComunasCoberturaAPIView(APIView):
     authentication_classes = []
 
     def get(self, request):
-        resultado = ProveedorLogisticoAdapter.obtener_comunas_chilexpress()
-        
-        if isinstance(resultado, dict) and "error" in resultado:
-            print("LOG DE ERROR DE CHILEXPRESS:", resultado["error"])
-            return Response(resultado, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            
-        return Response({"comunas": resultado}, status=status.HTTP_200_OK)
+        # Las comunas que atiende al menos un courier activo
+        try:
+            comunas = ComunasConCobertura(couriers()).ejecutar()
+        except CourierNoActivo:
+            return Response({"error": "No hay envío por courier disponible en esta tienda."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except CourierNoDisponible as error:
+            return Response({"error": str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"comunas": comunas}, status=status.HTTP_200_OK)
 
 class DireccionEnvioListCreateView(generics.ListCreateAPIView):
     """
@@ -1201,10 +1221,10 @@ class AdminResenaEstadoView(APIView):
         return Response(AdminResenaSerializer(Resena.objects.prefetch_related('productos').get(pk=pk)).data)
 
 
-class SucursalesChilexpressAPIView(APIView):
+class SucursalesCourierAPIView(APIView):
     """
-    GET /api/ventas/logistica/sucursales/?comuna=MAIPU
-    Devuelve las sucursales disponibles en una comuna específica.
+    GET /api/ventas/logistica/sucursales/?comuna=MAIPU&proveedor=CHILEXPRESS
+    Las oficinas del courier en una comuna; sin proveedor, las del primer courier activo que tiene oficinas.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -1214,12 +1234,24 @@ class SucursalesChilexpressAPIView(APIView):
         if not comuna:
             return Response({"error": "Debe especificar una comuna."}, status=status.HTTP_400_BAD_REQUEST)
 
-        resultado = ProveedorLogisticoAdapter.obtener_sucursales_por_comuna(comuna)
-        
-        if isinstance(resultado, dict) and "error" in resultado:
-            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
-            
-        return Response({"sucursales": resultado}, status=status.HTTP_200_OK)
+        try:
+            proveedor = request.query_params.get('proveedor')
+            if proveedor:
+                courier = couriers().obtener(proveedor)
+            else:
+                courier = next((c for c in couriers().activos() if c.con_sucursales), None)
+                if courier is None:
+                    raise CourierNoActivo()
+            if not courier.con_sucursales:
+                raise CourierNoActivo()
+            sucursales = courier.sucursales(comuna)
+        except CourierNoActivo:
+            return Response({"error": "No hay retiro en sucursal disponible en esta tienda."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except (SinCobertura, CourierNoDisponible) as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"sucursales": [asdict(sucursal) for sucursal in sucursales]}, status=status.HTTP_200_OK)
 
 class DescargarEtiquetaView(APIView):
     permission_classes = [IsEmprendedor]
@@ -1230,8 +1262,8 @@ class DescargarEtiquetaView(APIView):
         except OrdenCompra.DoesNotExist:
             return Response({"error": "Orden no encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
-        if orden.proveedor_logistico != 'CHILEXPRESS' or not orden.id_transaccion_pasarela:
-            return Response({"error": "Esta orden no tiene una etiqueta de Chilexpress válida."}, status=status.HTTP_400_BAD_REQUEST)
+        if not es_entrega_con_courier(orden.proveedor_logistico) or not orden.id_transaccion_pasarela:
+            return Response({"error": "Esta orden no tiene una etiqueta de courier válida."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Extraemos el número de OT de la cadena "TOKEN | OT: 123456789"
         try:
@@ -1243,22 +1275,26 @@ class DescargarEtiquetaView(APIView):
         except Exception:
             return Response({"error": "Formato de OT inválido."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Llamamos a nuestro adaptador
-        resultado = ProveedorLogisticoAdapter.obtener_etiqueta_chilexpress(numero_ot)
+        # La etiqueta la entrega el courier del pedido
+        try:
+            etiqueta_base64 = couriers().obtener(orden.proveedor_logistico).etiqueta(numero_ot)
+        except CourierNoActivo:
+            return Response({"error": "El courier de este pedido no tiene sus llaves cargadas en el panel."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except CourierNoDisponible as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if resultado.get('exito') and resultado.get('base64'):
-            try:
-                # Decodificamos el string Base64 a bytes binarios
-                pdf_bytes = base64.b64decode(resultado['base64'])
-                
-                # Preparamos la respuesta HTTP como un archivo PDF
-                response = HttpResponse(pdf_bytes, content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="Etiqueta_OT_{numero_ot}.pdf"'
-                return response
-            except Exception as e:
-                return Response({"error": "Error al procesar el archivo PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            return Response({"error": resultado.get('error', 'Fallo al obtener la etiqueta desde Chilexpress')}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            archivo = base64.b64decode(etiqueta_base64)
+        except Exception:
+            return Response({"error": "Error al procesar la etiqueta."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # El courier puede entregarla como PDF o como imagen (Chilexpress manda un JPEG): se descarga con su formato
+        tipo, extension = next(((tipo, ext) for firma, tipo, ext in FORMATOS_ETIQUETA if archivo.startswith(firma)),
+                               ('application/octet-stream', 'bin'))
+        response = HttpResponse(archivo, content_type=tipo)
+        response['Content-Disposition'] = f'attachment; filename="Etiqueta_OT_{numero_ot}.{extension}"'
+        return response
 
 class DashboardMetricasView(APIView):
     """
@@ -1604,22 +1640,32 @@ class AdminMedioPagoView(APIView):
         return Response(medio_pago_para_panel(medio))
 
 
-class AdminChilexpressView(APIView):
-    """RNF-03: el admin carga las llaves de Chilexpress desde el panel; solo se devuelven enmascaradas."""
+class AdminCouriersView(APIView):
+    """RNF-03: cada courier que la tienda puede usar, con sus llaves enmascaradas, para cargarlas en el panel."""
     permission_classes = [IsAdministrador]
 
     def get(self, request):
-        return Response(chilexpress_para_panel(DjangoRepositorioCredencialesChilexpress().obtener()))
+        registro = couriers()
+        return Response([courier_para_panel(registro.obtener(codigo, solo_activos=False))
+                         for codigo in CODIGOS_COURIERS])
 
-    def put(self, request):
-        serializer = CredencialesChilexpressSerializer(data=request.data)
+
+class AdminCourierView(APIView):
+    """RNF-03: el admin carga o reemplaza las llaves de un courier; solo se devuelven enmascaradas."""
+    permission_classes = [IsAdministrador]
+
+    def put(self, request, codigo):
+        serializer = CredencialesCourierSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        registro = couriers()
         try:
-            credenciales = ConfigurarChilexpress(DjangoRepositorioCredencialesChilexpress()).ejecutar(
-                serializer.validated_data['datos'])
-        except CredencialesChilexpressInvalidas as error:
+            ConfigurarCourier(DjangoRepositorioCredencialesCourier(), registro).ejecutar(
+                codigo, serializer.validated_data['datos'])
+        except CourierNoActivo:
+            return Response({'detail': 'Courier no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        except CredencialesInvalidas as error:
             return Response({'datos': error.errores}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(chilexpress_para_panel(credenciales))
+        return Response(courier_para_panel(registro.obtener(codigo, solo_activos=False)))
 
 class ValidarPromocionAPIView(APIView):
     permission_classes = [AllowAny]

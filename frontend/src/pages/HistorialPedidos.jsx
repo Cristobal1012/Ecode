@@ -17,6 +17,9 @@ const NOMBRES_ENTREGA = {
     ENTREGA_COORDINADA: 'Entrega coordinada'
 };
 
+// El nombre de un courier sale de la configuración; si ya no está activo, del código (CHILEXPRESS → Chilexpress)
+const nombreDelCodigo = (codigo) => codigo ? codigo.charAt(0) + codigo.slice(1).toLowerCase() : 'Courier';
+
 const diccionarioEstados = {
     'PENDIENTE': 'Pendiente',
     'PAGADO': 'Pagado',
@@ -60,6 +63,7 @@ const HistorialPedidos = () => {
     const [pedidos, setPedidos] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null); // Para el diálogo de detalles de envío
+    const [nombresCouriers, setNombresCouriers] = useState({});
     const [temaConfigurado, setTemaConfigurado] = useState(() => {
         const savedPaletteId = Number(localStorage.getItem('ecommerce_palette'));
         return savedPaletteId || TEMA_PREDETERMINADO;
@@ -85,6 +89,7 @@ const HistorialPedidos = () => {
                         localStorage.setItem('ecommerce_palette', idBackend.toString());
                     }
                 }
+                setNombresCouriers(Object.fromEntries((configDb?.couriers || []).map(c => [c.codigo, c.nombre])));
             })
             .catch((error) => console.error('Error cargando configuración:', error));
 
@@ -162,7 +167,7 @@ const HistorialPedidos = () => {
                                                         Seguimiento
                                                     </button>
 
-                                                    {/* Opción para ver detalle de la etiqueta/envío si está pagado y usa Chilexpress */}
+                                                    {/* Opción para ver el detalle del envío si está pagado */}
                                                     {orden.estado?.toUpperCase() === 'PAGADO' && (
                                                         <button
                                                             type="button"
@@ -217,7 +222,7 @@ const HistorialPedidos = () => {
 
                         <dl className="historial-detalle">
                             <dt>Proveedor logístico</dt>
-                            <dd className="historial-proveedor">{NOMBRES_ENTREGA[pedidoSeleccionado.proveedor_logistico] || pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</dd>
+                            <dd className="historial-proveedor">{NOMBRES_ENTREGA[pedidoSeleccionado.proveedor_logistico] || nombresCouriers[pedidoSeleccionado.proveedor_logistico] || nombreDelCodigo(pedidoSeleccionado.proveedor_logistico)}</dd>
                             <dt>Estado del pago</dt>
                             <dd>{diccionarioEstados[pedidoSeleccionado.estado] || pedidoSeleccionado.estado}</dd>
                             <dt>Información pasarela / OT</dt>

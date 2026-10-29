@@ -7,7 +7,7 @@ Students u Oracle Cloud) está en [`prueba-servidor.md`](prueba-servidor.md), y 
 
 Toda la configuración va por variables de entorno, documentadas en `.env.example`. Las credenciales de los
 proveedores **no** van en el entorno: el emprendedor las carga desde el panel (Configuración > Medios de pago y
-Configuración > Envíos con Chilexpress) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Si esa clave
+Configuración > Envíos por courier) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Si esa clave
 cambia, hay que volver a cargarlas.
 
 ## Publicar con Docker

@@ -175,7 +175,7 @@ export default function GestorPedidos() {
     }
   };
 
-  // RF-02.3: si Chilexpress falló al confirmarse el pago, el admin reintenta la orden de transporte
+  // RF-02.3: si el courier falló al confirmarse el pago, el admin reintenta la orden de transporte
   const handleGenerarOT = async (pedido) => {
     setEnCurso(pedido.id);
     setAviso(null);
@@ -209,8 +209,9 @@ export default function GestorPedidos() {
         </div>
       );
     }
-    if (pedido.proveedor_logistico !== 'CHILEXPRESS') {
-      return <span style={{ color: 'var(--color-muted)' }}>{pedido.proveedor_logistico || '—'}</span>;
+    // Lo que queda es un courier: muestra su OT, el error al generarla o el botón para reintentarla
+    if (!pedido.proveedor_logistico) {
+      return <span style={{ color: 'var(--color-muted)' }}>—</span>;
     }
     return (
       <div style={{ fontSize: '0.9rem' }}>

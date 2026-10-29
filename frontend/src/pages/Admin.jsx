@@ -12,7 +12,7 @@ import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
 import GestorMediosPago from '../components/GestorMediosPago';
-import GestorChilexpress from '../components/GestorChilexpress';
+import GestorCouriers from '../components/GestorCouriers';
 import GestorPromociones from '../components/GestorPromociones';
 import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
@@ -36,7 +36,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
-  { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
+  { id: 'config-couriers', titulo: 'Envíos por courier' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
   { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
@@ -316,8 +316,8 @@ export default function Admin() {
                 <hr className="admin-separador" />
 
                 <div>
-                  <TituloSeccion id="config-chilexpress" />
-                  <GestorChilexpress />
+                  <TituloSeccion id="config-couriers" />
+                  <GestorCouriers />
                 </div>
 
                 <hr className="admin-separador" />

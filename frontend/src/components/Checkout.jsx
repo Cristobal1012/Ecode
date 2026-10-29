@@ -15,9 +15,11 @@ const OPCION_RETIRO_LOCAL = {
     proveedor: 'RETIRO_LOCAL', nombre: 'Retiro en Tienda / Local', tipo: 'RETIRO', costo_envio: 0,
 };
 
+const formatoPesos = (monto) => Number(monto).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+
 const NOMBRES_TIPO_DESPACHO = {
     DOMICILIO: 'A Domicilio',
-    SUCURSAL: 'Sucursal Chilexpress',
+    SUCURSAL: 'Retiro en sucursal',
     RETIRO_LOCAL: 'Retiro en Local',
     ENTREGA_COORDINADA: 'Entrega coordinada',
 };
@@ -87,10 +89,13 @@ function CheckoutContenido() {
     // --- ESTADOS DE TIPO DE DESPACHO ---
     // 'DOMICILIO' | 'SUCURSAL' | 'RETIRO_LOCAL' | 'ENTREGA_COORDINADA'
     const [tipoElegido, setTipoDespacho] = useState('DOMICILIO');
-    // RF-02.3: solo las entregas que ofrece la tienda; Chilexpress, si tiene sus llaves cargadas
-    const chilexpressActivo = Boolean(configTienda?.chilexpress_activo);
+    // RF-02.3: solo las entregas que ofrece la tienda; los couriers, si tienen sus llaves cargadas
+    const couriers = configTienda?.couriers || [];
+    const hayCouriers = couriers.length > 0;
+    const couriersConSucursal = couriers.filter(courier => courier.sucursales);
     const tiposDisponibles = [
-        ...(chilexpressActivo ? ['DOMICILIO', 'SUCURSAL'] : []),
+        ...(hayCouriers ? ['DOMICILIO'] : []),
+        ...(couriersConSucursal.length > 0 ? ['SUCURSAL'] : []),
         ...(configTienda?.retiro_en_local_activo ? ['RETIRO_LOCAL'] : []),
         ...(configTienda?.entrega_coordinada_activa ? ['ENTREGA_COORDINADA'] : []),
     ];
@@ -98,7 +103,13 @@ function CheckoutContenido() {
     // En la entrega coordinada la tienda puede acordar la dirección con el comprador (domain/logistica.py)
     const direccionOpcional = tipoDespacho === 'ENTREGA_COORDINADA';
     const [comunaSucursal, setComunaSucursal] = useState('');
-    const [resultadoSucursales, setResultadoSucursales] = useState({ comuna: null, items: [] });
+    // Con más de un courier con oficinas, el comprador elige de cuál; si no, el único
+    const [codigoCourierSucursal, setCodigoCourierSucursal] = useState(null);
+    const courierSucursal = couriersConSucursal.find(courier => courier.codigo === codigoCourierSucursal)
+        || couriersConSucursal[0] || null;
+    // A domicilio, cada courier cotiza y el comprador elige (sin elegir, el primero)
+    const [proveedorElegido, setProveedorElegido] = useState(null);
+    const [resultadoSucursales, setResultadoSucursales] = useState({ clave: null, items: [] });
     const [sucursalElegida, setSucursalElegida] = useState(null);
 
     // --- ESTADOS DE DIRECCIÓN DOMICILIO ---
@@ -123,7 +134,7 @@ function CheckoutContenido() {
     const [codigoValidado, setCodigoValidado] = useState(null);
     const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
     const [codigoInput, setCodigoInput] = useState('');
-    const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opcion: null, error: '' });
+    const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opciones: [], error: '' });
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
     // Tipos de página legal publicados (ej. 'TERMINOS'), para enlazarlos junto al consentimiento
@@ -232,14 +243,14 @@ function CheckoutContenido() {
             .catch(() => setPaginasLegales([]));
     }, []);
 
-    // Las comunas con cobertura vienen de Chilexpress: sin sus llaves, la comuna se escribe a mano
+    // Las comunas con cobertura vienen de los couriers activos: sin ellos, la comuna se escribe a mano
     useEffect(() => {
-        if (!chilexpressActivo) return;
+        if (!hayCouriers) return;
         clienteAxios.get('ventas/logistica/comunas/')
             .then(res => setListaComunas(res.data.comunas || []))
             .catch(() => setMensaje('No se pudieron cargar las comunas de envío.'))
             .finally(() => setCargandoComunas(false));
-    }, [chilexpressActivo]);
+    }, [hayCouriers]);
 
     const enlaceLegal = (tipo, texto) => paginasLegales.includes(tipo) ? (
         <a href={`/legal/${tipo.toLowerCase()}`} target="_blank" rel="noopener noreferrer" aria-label={`${texto} (se abre en otra pestaña)`}>
@@ -327,54 +338,61 @@ function CheckoutContenido() {
         return () => { vigente = false; };
     }, [itemsCarrito, revisarCarrito]);
 
-    // Las sucursales y su selección pertenecen a una comuna concreta.
+    // Las sucursales y su selección pertenecen a un courier y una comuna concretos.
+    const claveSucursales = tipoDespacho === 'SUCURSAL' && comunaSucursal && courierSucursal
+        ? `${courierSucursal.codigo}|${comunaSucursal}` : null;
     useEffect(() => {
-        if (tipoDespacho !== 'SUCURSAL' || !comunaSucursal) return;
+        if (!claveSucursales) return;
+        const [proveedor, comunaBuscada] = claveSucursales.split('|');
         let vigente = true;
         const controller = new AbortController();
-        clienteAxios.get(`ventas/logistica/sucursales/?comuna=${encodeURIComponent(comunaSucursal)}`, { signal: controller.signal })
+        clienteAxios.get(`ventas/logistica/sucursales/?comuna=${encodeURIComponent(comunaBuscada)}&proveedor=${proveedor}`, { signal: controller.signal })
             .then(res => {
-                if (vigente) setResultadoSucursales({ comuna: comunaSucursal, items: res.data.sucursales || [] });
+                if (vigente) setResultadoSucursales({ clave: claveSucursales, items: res.data.sucursales || [] });
             })
             .catch(() => {
-                if (vigente) setResultadoSucursales({ comuna: comunaSucursal, items: [] });
+                if (vigente) setResultadoSucursales({ clave: claveSucursales, items: [] });
             });
         return () => { vigente = false; controller.abort(); };
-    }, [comunaSucursal, tipoDespacho]);
+    }, [claveSucursales]);
 
-    const sucursalesDisponibles = resultadoSucursales.comuna === comunaSucursal ? resultadoSucursales.items : [];
-    const cargandoSucursales = tipoDespacho === 'SUCURSAL' && !!comunaSucursal && resultadoSucursales.comuna !== comunaSucursal;
-    const sucursalSeleccionada = sucursalElegida?.comuna === comunaSucursal ? sucursalElegida : null;
+    const sucursalesDisponibles = claveSucursales && resultadoSucursales.clave === claveSucursales ? resultadoSucursales.items : [];
+    const cargandoSucursales = !!claveSucursales && resultadoSucursales.clave !== claveSucursales;
+    const sucursalSeleccionada = sucursalElegida?.clave === claveSucursales ? sucursalElegida : null;
     const direccionGuardada = direccionesGuardadas.find(dir => dir.id === direccionSeleccionadaId);
     const destinoEnvio = tipoDespacho === 'SUCURSAL' ? comunaSucursal
         : tipoDespacho === 'DOMICILIO' ? (direccionSeleccionadaId === 'nueva' ? comuna : direccionGuardada?.comuna || '') : '';
+    // En sucursal cotiza solo el courier de la oficina; a domicilio, todos los activos
+    const proveedorCotizado = tipoDespacho === 'SUCURSAL' ? courierSucursal?.codigo || null : null;
     const claveCotizacion = destinoEnvio.trim() && itemsCarrito.length > 0
-        ? JSON.stringify([tipoDespacho, destinoEnvio.trim().toUpperCase(), itemsCarrito]) : null;
+        ? JSON.stringify([tipoDespacho, destinoEnvio.trim().toUpperCase(), itemsCarrito, proveedorCotizado]) : null;
 
     // El estado de carga se deriva de la clave: nunca se ofrece la cotización de otro carrito.
     useEffect(() => {
         if (!claveCotizacion) return;
-        const [tipo, destino, items] = JSON.parse(claveCotizacion);
+        const [tipo, destino, items, proveedor] = JSON.parse(claveCotizacion);
         const medidas = calcularCajaDeEnvio(items);
         let vigente = true;
         const controller = new AbortController();
         clienteAxios.post('ventas/logistica/cotizar/', {
             destino, peso: medidas.peso, alto: medidas.lado, ancho: medidas.lado, largo: medidas.lado,
+            ...(proveedor ? { proveedor } : {}),
         }, { signal: controller.signal })
             .then(({ data }) => {
                 if (!vigente) return;
                 setResultadoCotizacion({
                     clave: claveCotizacion,
-                    opcion: {
-                        proveedor: data.proveedor.toUpperCase(), nombre: `Chilexpress - ${data.tiempo_estimado}`,
-                        tipo: tipo === 'SUCURSAL' ? 'RETIRO' : 'DOMICILIO', costo_envio: Number(data.precio),
-                    },
+                    opciones: (data.opciones || []).map(opcion => ({
+                        proveedor: opcion.proveedor,
+                        nombre: opcion.tiempo_estimado ? `${opcion.nombre} - ${opcion.tiempo_estimado}` : opcion.nombre,
+                        tipo: tipo === 'SUCURSAL' ? 'RETIRO' : 'DOMICILIO', costo_envio: Number(opcion.precio),
+                    })),
                     error: '',
                 });
             })
             .catch(error => {
                 if (vigente) setResultadoCotizacion({
-                    clave: claveCotizacion, opcion: null,
+                    clave: claveCotizacion, opciones: [],
                     error: error.response?.data?.error || 'No se pudo calcular el costo de envío.',
                 });
             });
@@ -389,9 +407,12 @@ function CheckoutContenido() {
             proveedor: 'ENTREGA_COORDINADA', nombre: 'Entrega coordinada', tipo: 'COORDINADA',
             costo_envio: Number(configTienda?.costo_entrega_coordinada) || 0,
         } : null;
-    const opcionEntregaSeleccionada = opcionEntregaPropia && itemsCarrito.length > 0
-        ? opcionEntregaPropia : cotizacionVigente?.opcion || null;
-    const opcionesEntrega = opcionEntregaSeleccionada ? [opcionEntregaSeleccionada] : [];
+    const opcionesCourier = cotizacionVigente?.opciones || [];
+    const opcionEntregaSeleccionada = opcionEntregaPropia && itemsCarrito.length > 0 ? opcionEntregaPropia
+        : opcionesCourier.find(opcion => opcion.proveedor === proveedorElegido) || opcionesCourier[0] || null;
+    // Con varios couriers cotizados el comprador elige; con uno solo (o una entrega de la tienda) solo se informa
+    const opcionesEntrega = opcionEntregaPropia ? (opcionEntregaSeleccionada ? [opcionEntregaSeleccionada] : [])
+        : opcionesCourier;
     const costoEnvio = Number(opcionEntregaSeleccionada?.costo_envio || 0);
     const medidasCaja = calcularCajaDeEnvio(itemsCarrito);
     const cajaCalculada = { peso_kg: String(medidasCaja.peso), alto_cm: String(medidasCaja.lado), ancho_cm: String(medidasCaja.lado), largo_cm: String(medidasCaja.lado) };
@@ -474,10 +495,10 @@ function CheckoutContenido() {
                 return setMensaje('Debes elegir una sucursal para el retiro.');
             }
             dirSnapshot = {
-                calle: `Agencia Chilexpress: ${sucursalSeleccionada.nombre}`,
+                calle: `Agencia ${courierSucursal.nombre}: ${sucursalSeleccionada.nombre}`,
                 numero: 'S/N',
                 dpto_casa: `Código Oficial: ${sucursalSeleccionada.codigo}`,
-                // La orden de transporte se entrega en esta oficina de Chilexpress
+                // La orden de transporte se entrega en esta oficina del courier
                 codigo_sucursal: sucursalSeleccionada.codigo,
                 comuna: comunaSucursal,
                 ciudad: comunaSucursal,
@@ -709,7 +730,8 @@ function CheckoutContenido() {
                                 {tiposDisponibles.map(tipo => (
                                     <label key={tipo} className={claseOpcion(tipoDespacho === tipo)}>
                                         <input type="radio" name="tipo-despacho" value={tipo} checked={tipoDespacho === tipo} onChange={() => setTipoDespacho(tipo)} className="checkout-radio-oculto" />
-                                        {NOMBRES_TIPO_DESPACHO[tipo]}
+                                        {tipo === 'SUCURSAL' && couriersConSucursal.length === 1
+                                            ? `Sucursal ${couriersConSucursal[0].nombre}` : NOMBRES_TIPO_DESPACHO[tipo]}
                                     </label>
                                 ))}
                             </div>
@@ -770,7 +792,7 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-comuna">Comuna</label>
-                                                {chilexpressActivo ? (
+                                                {hayCouriers ? (
                                                     <select id="checkout-comuna" value={comuna} onChange={(e) => { setComuna(e.target.value); setMensaje(''); }} required={!direccionOpcional} disabled={cargandoComunas}>
                                                         <option value="">{cargandoComunas ? "Cargando..." : "-- Selecciona --"}</option>
                                                         {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
@@ -795,6 +817,14 @@ function CheckoutContenido() {
                             </div>
                         ) : tipoDespacho === 'SUCURSAL' ? (
                             <div className="checkout-entrega">
+                                {couriersConSucursal.length > 1 && (
+                                    <div className="checkout-campo">
+                                        <label htmlFor="checkout-courier-sucursal">¿En qué courier retiras?</label>
+                                        <select id="checkout-courier-sucursal" value={courierSucursal?.codigo || ''} onChange={(e) => { setCodigoCourierSucursal(e.target.value); setSucursalElegida(null); setMensaje(''); }}>
+                                            {couriersConSucursal.map(courier => <option key={courier.codigo} value={courier.codigo}>{courier.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                                 <div className="checkout-campo">
                                     <label htmlFor="checkout-comuna-sucursal">¿En qué comuna te encuentras?</label>
                                     <select id="checkout-comuna-sucursal" value={comunaSucursal} onChange={(e) => { setComunaSucursal(e.target.value); setSucursalElegida(null); setMensaje(''); }} required disabled={cargandoComunas}>
@@ -807,14 +837,14 @@ function CheckoutContenido() {
                                     <p className="checkout-ayuda" role="status">Buscando oficinas disponibles...</p>
                                 ) : comunaSucursal && sucursalesDisponibles.length === 0 ? (
                                     <div className="checkout-aviso checkout-aviso--error">
-                                        Lo sentimos, Chilexpress no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
+                                        Lo sentimos, {courierSucursal?.nombre} no tiene oficinas disponibles en <strong>{comunaSucursal}</strong>.
                                     </div>
                                 ) : sucursalesDisponibles.length > 0 && (
                                     <fieldset className="checkout-grupo checkout-direcciones">
                                         <legend className="checkout-etiqueta">Oficinas disponibles</legend>
                                         {sucursalesDisponibles.map(suc => (
                                             <label key={suc.codigo} className={claseOpcion(sucursalSeleccionada?.codigo === suc.codigo) + ' checkout-opcion--fila'}>
-                                                <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalElegida({ ...suc, comuna: comunaSucursal })} />
+                                                <input type="radio" name="sucursal" value={suc.codigo} checked={sucursalSeleccionada?.codigo === suc.codigo} onChange={() => setSucursalElegida({ ...suc, clave: claveSucursales })} />
                                                 <span>
                                                     <strong>{suc.nombre}</strong>
                                                     <span className="checkout-ayuda">{suc.direccion}</span>
@@ -834,8 +864,22 @@ function CheckoutContenido() {
                             </div>
                         ) : null}
 
-                        {/* --- COSTO DE LA ENTREGA ELEGIDA --- */}
-                        {opcionesEntrega.length > 0 && (
+                        {/* --- COSTO DE LA ENTREGA ELEGIDA (con varios couriers, el comprador elige) --- */}
+                        {opcionesEntrega.length > 1 ? (
+                            <fieldset className="checkout-grupo checkout-logistica">
+                                <legend className="checkout-etiqueta">Elige con quién enviarlo</legend>
+                                {opcionesEntrega.map((opcion) => (
+                                    <label key={opcion.proveedor} className={claseOpcion(opcionEntregaSeleccionada?.proveedor === opcion.proveedor) + ' checkout-opcion--fila'}>
+                                        <input type="radio" name="courier" value={opcion.proveedor} checked={opcionEntregaSeleccionada?.proveedor === opcion.proveedor} onChange={() => setProveedorElegido(opcion.proveedor)} />
+                                        <span>
+                                            <strong>{opcion.nombre}</strong>
+                                            <span className="checkout-ayuda">{opcion.tipo === 'RETIRO' ? 'Retiro en Sucursal' : 'Despacho a Domicilio'}</span>
+                                        </span>
+                                        <strong className="checkout-opcion-precio">{formatoPesos(opcion.costo_envio)}</strong>
+                                    </label>
+                                ))}
+                            </fieldset>
+                        ) : opcionesEntrega.length > 0 && (
                             <div className="checkout-logistica">
                                 {opcionesEntrega.map((opcion) => (
                                     <div key={opcion.proveedor} className="checkout-logistica-opcion">
@@ -846,7 +890,7 @@ function CheckoutContenido() {
                                                     : opcion.tipo === 'RETIRO' ? (tipoDespacho === 'RETIRO_LOCAL' ? 'Retiro en Local Propio' : 'Retiro en Sucursal') : 'Despacho a Domicilio'}
                                             </div>
                                         </div>
-                                        <strong>{Number(opcion.costo_envio).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })}</strong>
+                                        <strong>{formatoPesos(opcion.costo_envio)}</strong>
                                     </div>
                                 ))}
                             </div>

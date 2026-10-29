@@ -21,6 +21,7 @@ from ecommerce.domain.ventas import EventoPedido
 from .adapters.correo import CorreoNotificadorPedidos
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra
 from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
+from .test_chilexpress import guardar_credenciales
 
 CORREO = 'ecommerce.infrastructure.ventas.adapters.correo'
 
@@ -35,8 +36,9 @@ class CorreoPedidoRecibidoTests(APITestCase):
         usar_catalogo_falso(self, {
             ('camisa', 'CAMISA-S'): VarianteCatalogo('Camisa <b>azul</b> - CAMISA-S', Decimal('10000.00'), 5, True),
         })
-        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.ProveedorLogisticoAdapter.cotizar_envio',
-                           return_value={'precio': 1000})
+        # Chilexpress activo (sus llaves en la base) y su tarifa simulada, sin red
+        guardar_credenciales(cotizador='llave-de-prueba')
+        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.precio_envio', return_value=1000)
         cotizacion.start()
         self.addCleanup(cotizacion.stop)
         self.payload = {
@@ -185,7 +187,7 @@ class CorreosDelPanelTests(APITestCase):
                            return_value=InventarioFalso({('camisa', 'CAMISA-S'): 5}))
         inventario.start()
         self.addCleanup(inventario.stop)
-        transportista = patch('ecommerce.infrastructure.ventas.views.ChilexpressOrdenTransporte')
+        transportista = patch('ecommerce.infrastructure.ventas.views.transportista_ordenes')
         transportista.start().return_value.generar_orden_transporte.return_value = '712678904136'
         self.addCleanup(transportista.stop)
 

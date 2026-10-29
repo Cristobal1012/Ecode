@@ -1,104 +1,27 @@
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
-from django.test import SimpleTestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from ecommerce.application.logistica import ServicioCotizacion
+from ecommerce.application.couriers import TransportistaSegunProveedor
+from ecommerce.application.test_couriers import CourierFalso, CouriersFalsos
 from ecommerce.application.ventas import GenerarOrdenTransporte
-from ecommerce.domain.logistica import CredencialesChilexpress, Paquete, SolicitudCotizacion
+from ecommerce.domain.logistica import CourierNoDisponible
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .adapters.orden_transporte import ChilexpressOrdenTransporte
-from .models import ConfiguracionGlobal, OrdenCompra
-from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
+from .cifrado import cifrar_json
+from .couriers import DjangoCouriers
+from .couriers.chilexpress import ChilexpressCourier
+from .models import ConfiguracionGlobal, OrdenCompra, ProveedorEnvio
 from .repositorio_ordenes import DjangoRepositorioOrdenes
+from .test_chilexpress import guardar_credenciales
 from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 
 PAQUETE = {'peso_kg': '1.50', 'alto_cm': '10', 'ancho_cm': '20', 'largo_cm': '30'}
-CHILEXPRESS = {
-    'subscription_key': 'secreto-chilexpress', 'ambiente': 'test',
-    'codigo_origen': 'PUDA', 'comunas': {'Santiago': 'STGO'},
-    'ruta_precio': 'data.0.serviceValue',
-}
-STARKEN = {
-    'api_key': 'secreto-starken',
-    'url_cotizacion': 'https://api.starken.example/quote',
-    'codigo_origen': 1, 'comunas': {'Valparaíso': 19},
-    'ruta_precio': 'precio',
-}
-
-
-def respuesta(data, status=200):
-    result = Mock()
-    result.json.return_value = data
-    result.raise_for_status.return_value = None
-    if status != 200:
-        from requests import HTTPError
-        result.raise_for_status.side_effect = HTTPError('provider error')
-    return result
-
-
-class AdaptadoresTests(SimpleTestCase):
-    def test_chilexpress_usa_clave_codigos_y_paquete(self):
-        session = Mock()
-        session.post.return_value = respuesta({'data': [{'serviceValue': 3590}]})
-        service = ServicioCotizacion(
-            {'proveedor_activo': 'CHILEXPRESS', 'CHILEXPRESS': CHILEXPRESS}, session=session,
-        )
-        solicitud = SolicitudCotizacion('SÁNTIAGO', Decimal('25000'), Paquete(
-            Decimal('1.5'), Decimal('10'), Decimal('20'), Decimal('30'),
-        ))
-
-        quote = service.cotizar(solicitud)
-
-        self.assertEqual(quote.costo_envio, Decimal('3590'))
-        self.assertEqual(quote.total_final, Decimal('28590'))
-        url, = session.post.call_args.args
-        self.assertIn('testservices.wschilexpress.com', url)
-        kwargs = session.post.call_args.kwargs
-        self.assertEqual(kwargs['headers']['Ocp-Apim-Subscription-Key'], 'secreto-chilexpress')
-        self.assertEqual(kwargs['json']['destinationCountyCode'], 'STGO')
-        self.assertEqual(kwargs['json']['package']['weight'], 1.5)
-        self.assertEqual(kwargs['timeout'], 5)
-
-    def test_starken_normaliza_tarifa_y_manda_medidas(self):
-        session = Mock()
-        session.post.return_value = respuesta({'precio': '2990.5'})
-        service = ServicioCotizacion(
-            {'proveedor_activo': 'STARKEN', 'STARKEN': STARKEN}, session=session,
-        )
-        solicitud = SolicitudCotizacion('valparaiso', Decimal('10000'), Paquete(
-            Decimal('2'), Decimal('15'), Decimal('25'), Decimal('35'),
-        ))
-
-        quote = service.cotizar(solicitud)
-
-        self.assertEqual(quote.costo_envio, Decimal('2991'))
-        kwargs = session.post.call_args.kwargs
-        self.assertEqual(kwargs['headers']['Authorization'], 'Bearer secreto-starken')
-        self.assertEqual(kwargs['json']['destino'], 19)
-        self.assertEqual(kwargs['json']['kilos'], 2.0)
-
-    def test_error_del_proveedor_preserva_retiro_sin_inventar_tarifa(self):
-        session = Mock()
-        session.post.return_value = respuesta({}, status=500)
-        service = ServicioCotizacion({
-            'proveedor_activo': 'CHILEXPRESS', 'CHILEXPRESS': CHILEXPRESS,
-            'retiro_en_local': {'activo': True, 'nombre': 'Tienda Centro'},
-        }, session=session)
-        opciones, errores = service.opciones(SolicitudCotizacion('Santiago', Decimal('10000'),
-            Paquete(Decimal('1'), Decimal('1'), Decimal('1'), Decimal('1'))))
-
-        self.assertEqual([opcion.proveedor for opcion in opciones], ['RETIRO_LOCAL'])
-        self.assertEqual(opciones[0].total_final, Decimal('10000'))
-        self.assertEqual(errores[0]['proveedor'], 'CHILEXPRESS')
-
-
-ADAPTADOR_CHILEXPRESS = 'ecommerce.infrastructure.ventas.adapters.logistica'
+ADAPTADOR_CHILEXPRESS = 'ecommerce.infrastructure.ventas.couriers.chilexpress'
 
 
 def respuesta_chilexpress(servicios, status=200):
@@ -115,7 +38,7 @@ ITEMS = [{'producto_mongo_id': 'polera', 'variante_sku': 'POLERA-M', 'cantidad':
 class CotizacionesAPITests(APITestCase):
     def setUp(self):
         # La llave la carga el admin en el panel (cifrada en la base), no el .env
-        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(cotizador='secreto-chilexpress'))
+        guardar_credenciales(cotizador='secreto-chilexpress')
         habilitar_medios_pago('TRANSFERENCIA', 'TRANSBANK')
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
@@ -125,7 +48,7 @@ class CotizacionesAPITests(APITestCase):
             ('polera', 'POLERA-M'): VarianteCatalogo('Polera - POLERA-M', Decimal('25000'), 5, True),
         })
         # El catálogo de comunas se descarga por red: en pruebas se fija uno conocido
-        catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ProveedorLogisticoAdapter._obtener_catalogo_dinamico',
+        catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._obtener_catalogo_dinamico',
                          return_value={'SANTIAGO': 'STGO'})
         catalogo.start()
         self.addCleanup(catalogo.stop)
@@ -137,8 +60,9 @@ class CotizacionesAPITests(APITestCase):
         response = self.client.post(reverse('cotizar-envio'), self.payload, format='json')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['precio'], 3500)
-        self.assertEqual(response.data['proveedor'], 'Chilexpress')
+        opcion, = response.data['opciones']
+        self.assertEqual((opcion['proveedor'], opcion['nombre'], opcion['precio']), ('CHILEXPRESS', 'Chilexpress', 3500))
+        self.assertEqual(opcion['tiempo_estimado'], 'EXPRESS')
         self.assertEqual(post.call_args.kwargs['json']['destinationCountyCode'], 'STGO')
         self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'],
                          'secreto-chilexpress')
@@ -272,8 +196,7 @@ class CotizacionesAPITests(APITestCase):
 
 class OrdenTransporteTests(APITestCase):
     def setUp(self):
-        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(
-            cotizador='llave-cotizador', envios='secreto-chilexpress'))
+        guardar_credenciales(cotizador='llave-cotizador', envios='secreto-chilexpress')
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', comuna_origen='Santiago')
         self.orden = OrdenCompra.objects.create(
             email_invitado='cliente@example.test', metodo_pago='TRANSBANK',
@@ -282,7 +205,7 @@ class OrdenTransporteTests(APITestCase):
             proveedor_logistico='CHILEXPRESS', id_transaccion_pasarela='token-tbk',
             nombre_destinatario='Ana Pérez', telefono_destinatario='+56912345678',
         )
-        catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ProveedorLogisticoAdapter._obtener_catalogo_dinamico',
+        catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._obtener_catalogo_dinamico',
                          return_value={'SANTIAGO': 'STGO'})
         catalogo.start()
         self.addCleanup(catalogo.stop)
@@ -308,8 +231,8 @@ class OrdenTransporteTests(APITestCase):
         self.assertEqual(self.orden.id_transaccion_pasarela, 'token-tbk | OT: 712678903156')
 
     def generar_ot(self):
-        return GenerarOrdenTransporte(DjangoRepositorioOrdenes(), ChilexpressOrdenTransporte()).ejecutar(
-            self.orden.id)
+        return GenerarOrdenTransporte(DjangoRepositorioOrdenes(),
+                                      TransportistaSegunProveedor(DjangoCouriers())).ejecutar(self.orden.id)
 
     def test_sin_destinatario_la_ot_usa_el_nombre_de_la_cuenta(self):
         # Pedidos anteriores a pedir el destinatario en el checkout (RF-02.3)
@@ -389,3 +312,104 @@ class OrdenTransporteTests(APITestCase):
         post.assert_not_called()
         self.orden.refresh_from_db()
         self.assertIn('Isla de Pascua', self.orden.error_orden_transporte)
+
+
+class CouriersAPITests(APITestCase):
+    """RF-02.3: la API ofrece los couriers activos, sin nombrar a ninguno en particular."""
+
+    def setUp(self):
+        habilitar_medios_pago('TRANSFERENCIA')
+        ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', comuna_origen='Santiago')
+        self.payload = {'destino': 'MAIPU', 'peso': 1.5, 'alto': 10, 'ancho': 20, 'largo': 30}
+        usar_catalogo_falso(self, {
+            ('polera', 'POLERA-M'): VarianteCatalogo('Polera - POLERA-M', Decimal('25000'), 5, True),
+        })
+
+    def con_couriers(self, *couriers):
+        for modulo in ('views', 'serializers'):
+            parche = patch(f'ecommerce.infrastructure.ventas.{modulo}.couriers', return_value=CouriersFalsos(*couriers))
+            parche.start()
+            self.addCleanup(parche.stop)
+
+    def checkout(self, proveedor):
+        return self.client.post(reverse('checkout'), {
+            'email_invitado': 'cliente@example.test', 'metodo_pago': 'TRANSFERENCIA',
+            'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
+            'direccion_envio_snapshot': {'comuna': 'Maipú', 'calle': 'Uno 123'},
+            'subtotal': 25000, 'costo_envio': 0, 'total_final': 1,
+            'proveedor_logistico': proveedor, 'paquete': PAQUETE,
+        }, format='json')
+
+    def test_cotiza_con_cada_courier_activo_y_uno_caido_no_tapa_al_otro(self):
+        self.con_couriers(CourierFalso('CHILEXPRESS', 3990), CourierFalso('STARKEN', 3500),
+                          CourierFalso('OTRO', falla=CourierNoDisponible()))
+        response = self.client.post(reverse('cotizar-envio'), self.payload, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([(o['proveedor'], o['precio']) for o in response.data['opciones']],
+                         [('CHILEXPRESS', 3990), ('STARKEN', 3500)])
+
+        response = self.client.post(reverse('cotizar-envio'), {**self.payload, 'proveedor': 'STARKEN'}, format='json')
+        self.assertEqual([o['proveedor'] for o in response.data['opciones']], ['STARKEN'])
+
+    def test_sin_couriers_activos_no_hay_cotizacion_ni_comunas(self):
+        self.con_couriers()
+        self.assertEqual(self.client.post(reverse('cotizar-envio'), self.payload, format='json').status_code, 400)
+        self.assertEqual(self.client.get(reverse('comunas-cobertura')).status_code, 503)
+
+    def test_las_comunas_son_las_de_todos_los_couriers_activos(self):
+        self.con_couriers(CourierFalso('CHILEXPRESS', comunas=['MAIPU', 'SANTIAGO']),
+                          CourierFalso('STARKEN', comunas=['ARICA', 'SANTIAGO']))
+        response = self.client.get(reverse('comunas-cobertura'))
+        self.assertEqual(response.data['comunas'], ['ARICA', 'MAIPU', 'SANTIAGO'])
+
+    def test_el_checkout_cobra_el_envio_del_courier_elegido(self):
+        self.con_couriers(CourierFalso('CHILEXPRESS', 3990), CourierFalso('STARKEN', 3500))
+        response = self.checkout('STARKEN')
+        self.assertEqual(response.status_code, 201, response.data)
+        orden = OrdenCompra.objects.get()
+        self.assertEqual((orden.proveedor_logistico, orden.costo_envio, orden.total_final), ('STARKEN', 3500, 28500))
+
+    def test_el_checkout_rechaza_un_courier_inactivo(self):
+        self.con_couriers()
+        response = self.checkout('CHILEXPRESS')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('proveedor_logistico', response.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+
+class SucursalesAPITests(APITestCase):
+    def setUp(self):
+        ChilexpressCourier._CACHE_COBERTURAS = {}
+        ProveedorEnvio.objects.all().delete()
+
+    def test_sin_courier_con_oficinas_no_hay_retiro_en_sucursal(self):
+        response = self.client.get(reverse('sucursales-courier'), {'comuna': 'MAIPU'})
+        self.assertEqual(response.status_code, 400)
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.get')
+    def test_las_oficinas_de_chilexpress_en_la_comuna(self, get):
+        guardar_credenciales(cotizador='llave-cotizador', coberturas='llave-coberturas')
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {'offices': [
+            {'officeCode': 'OF-1', 'officeName': 'Maipú Centro', 'streetName': 'Pajaritos', 'streetNumber': '100'}]}
+
+        response = self.client.get(reverse('sucursales-courier'), {'comuna': 'Maipu', 'proveedor': 'CHILEXPRESS'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['sucursales'],
+                         [{'codigo': 'OF-1', 'nombre': 'Maipú Centro', 'direccion': 'Pajaritos 100'}])
+        self.assertIn('CountyName=MAIPU', get.call_args.args[0])
+        self.assertEqual(get.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'], 'llave-coberturas')
+
+
+class CredencialesGuardadasTests(APITestCase):
+    def test_las_llaves_que_ya_cargo_la_tienda_se_siguen_leyendo(self):
+        # Mismo formato que guardaba el panel antes de ordenar los couriers (y la migración 0022)
+        ProveedorEnvio.objects.all().delete()
+        ProveedorEnvio.objects.create(codigo='CHILEXPRESS', credenciales_cifradas=cifrar_json(
+            {'cotizador': 'llave-cotizador', 'envios': 'llave-envios'}))
+
+        chilexpress, = DjangoCouriers().activos()
+
+        self.assertEqual(chilexpress.credenciales.como_dict(),
+                         {'cotizador': 'llave-cotizador', 'coberturas': '', 'envios': 'llave-envios'})

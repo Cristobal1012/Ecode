@@ -40,15 +40,17 @@ const producto = {
 };
 
 // entregaCoordinada: null (desactivada) o { costo, instrucciones }
+const CHILEXPRESS = { codigo: 'CHILEXPRESS', nombre: 'Chilexpress', sucursales: true };
+
 function prepararRespuestas({ pasarelas = ['TRANSFERENCIA'], retiroLocal = true, chilexpress = true,
-                              entregaCoordinada = null } = {}) {
+                              entregaCoordinada = null, couriers = chilexpress ? [CHILEXPRESS] : [] } = {}) {
   getMock.mockImplementation((url) => {
     if (url === 'configuracion/') {
       return Promise.resolve({
         data: {
           pasarelas_activas: pasarelas,
           retiro_en_local_activo: retiroLocal,
-          chilexpress_activo: chilexpress,
+          couriers,
           entrega_coordinada_activa: Boolean(entregaCoordinada),
           costo_entrega_coordinada: entregaCoordinada?.costo ?? 0,
           instrucciones_entrega_coordinada: entregaCoordinada?.instrucciones ?? '',
@@ -532,9 +534,7 @@ describe('Checkout', () => {
         if (url === 'ventas/logistica/cotizar/') {
             return Promise.resolve({
                 data: {
-                    proveedor: 'CHILEXPRESS',
-                    tiempo_estimado: '2 días',
-                    precio: 3500,
+                    opciones: [{ proveedor: 'CHILEXPRESS', nombre: 'Chilexpress', tiempo_estimado: '2 días', precio: 3500 }],
                 },
             });
         }
@@ -1437,6 +1437,40 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
 
     expect(await screen.findByText(/completa la calle y la comuna/i)).toBeInTheDocument();
     expect(postMock).not.toHaveBeenCalledWith('ventas/checkout/', expect.anything());
+  });
+
+  it('con varios couriers el comprador elige con cuál enviar y se cobra ese', async () => {
+    prepararRespuestas({ couriers: [CHILEXPRESS, { codigo: 'STARKEN', nombre: 'Starken', sucursales: false }] });
+    postMock.mockImplementation((url) => Promise.resolve({ data: url === 'ventas/logistica/cotizar/' ? {
+      opciones: [
+        { proveedor: 'CHILEXPRESS', nombre: 'Chilexpress', tiempo_estimado: 'EXPRESS', precio: 3990 },
+        { proveedor: 'STARKEN', nombre: 'Starken', tiempo_estimado: '', precio: 3500 },
+      ],
+    } : { orden_id: 7, instrucciones_pago: {} } }));
+    renderCheckout();
+
+    await screen.findByRole('option', { name: 'Santiago' });
+    // Con un solo courier con oficinas, el retiro lleva su nombre
+    expect(screen.getByRole('radio', { name: 'Sucursal Chilexpress' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
+    fireEvent.change(screen.getByLabelText('Calle'), { target: { value: 'Uno' } });
+    fireEvent.change(screen.getByLabelText('Número'), { target: { value: '123' } });
+    fireEvent.change(screen.getByLabelText('Comuna'), { target: { value: 'Santiago' } });
+    fireEvent.change(screen.getByLabelText('Ciudad'), { target: { value: 'Santiago' } });
+
+    const chilexpress = await screen.findByRole('radio', { name: /Chilexpress - EXPRESS/ });
+    expect(chilexpress).toBeChecked();
+    expect(postMock).toHaveBeenCalledWith('ventas/logistica/cotizar/', expect.not.objectContaining({ proveedor: expect.anything() }),
+      expect.anything());
+    fireEvent.click(screen.getByRole('radio', { name: /Starken/ }));
+    expect(screen.getByRole('radio', { name: /Starken/ })).toBeChecked();
+
+    completarDestinatario();
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('ventas/checkout/',
+      expect.objectContaining({ proveedor_logistico: 'STARKEN' })));
   });
 
   it('con Chilexpress se ofrece junto al despacho, que sigue siendo la opción por defecto', async () => {

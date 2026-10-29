@@ -17,9 +17,10 @@ from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal,
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .serializers import ConfiguracionGlobalSerializer
 from .views import token_verificacion_valido
+from .test_chilexpress import guardar_credenciales
 
 
-ADAPTADOR_ORDEN_TRANSPORTE = 'ecommerce.infrastructure.ventas.adapters.orden_transporte'
+TRANSPORTISTA = 'ecommerce.infrastructure.ventas.views.transportista_ordenes'
 
 
 def usar_catalogo_falso(test, variantes):
@@ -66,7 +67,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
              'entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada',
-             'chilexpress_activo', 'cotizaciones_activas', 'blog_activo', 'blog_nombre', 'resenas_activas',
+             'couriers', 'cotizaciones_activas', 'blog_activo', 'blog_nombre', 'resenas_activas',
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
@@ -131,7 +132,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'entrega_coordinada_activa': False,
             'costo_entrega_coordinada': 0,
             'instrucciones_entrega_coordinada': '',
-            'chilexpress_activo': False,
+            'couriers': [],
             'cotizaciones_activas': False,
             'blog_activo': False,
             'blog_nombre': 'Nosotros',
@@ -276,8 +277,9 @@ class CheckoutAccessTests(APITestCase):
                 'Camisa - CAMISA-S', Decimal('10000.00'), 3, True),
         })
         # Estas pruebas validan acceso: la cotización del courier se simula sin red
-        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.ProveedorLogisticoAdapter.cotizar_envio',
-                           return_value={'precio': 1000})
+        # Chilexpress activo (sus llaves en la base) y su tarifa simulada, sin red
+        guardar_credenciales(cotizador='llave-de-prueba')
+        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.precio_envio', return_value=Decimal('1000'))
         cotizacion.start()
         self.addCleanup(cotizacion.stop)
         # Mismo formato que arma Checkout.jsx
@@ -508,8 +510,7 @@ class ValidarCarritoTests(APITestCase):
         self.assertEqual(self.client.post(reverse('carrito-validar'), {}, format='json').status_code, 400)
 
 
-@patch('ecommerce.infrastructure.ventas.views.ProveedorLogisticoAdapter.consultar_estado',
-       return_value='En tránsito')
+@patch('ecommerce.infrastructure.ventas.views.consultar_estado_envio', return_value='En tránsito')
 class SeguimientoEnvioTests(APITestCase):
     @classmethod
     def setUpTestData(cls):
@@ -887,7 +888,7 @@ class AdminOrdenTransporteTests(APITestCase):
             total_final=10000, estado='PAGADO', proveedor_logistico='CHILEXPRESS',
             error_orden_transporte='Chilexpress no respondió',
         )
-        parche = patch('ecommerce.infrastructure.ventas.views.ChilexpressOrdenTransporte')
+        parche = patch(TRANSPORTISTA)
         self.transportista = parche.start().return_value
         self.addCleanup(parche.stop)
         self.transportista.generar_orden_transporte.return_value = '712678904136'
@@ -1027,9 +1028,9 @@ class PagoAprobadoTransbankTests(APITestCase):
         OrdenCompra.objects.filter(id=self.orden.id).update(
             proveedor_logistico='CHILEXPRESS', direccion_envio_snapshot={'comuna': 'Santiago'},
             telefono_destinatario='+56912345678')
-        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica:
-            logistica._obtener_catalogo_dinamico.return_value = {'SANTIAGO': 'STGO'}
-            logistica.generar_orden_transporte.return_value = {'exito': True, 'numero_ot': '1'}
+        with patch(TRANSPORTISTA) as transportista:
+            logistica = transportista.return_value
+            logistica.generar_orden_transporte.return_value = '1'
             self.confirmar_pago()
             response = self.confirmar_pago()
 
@@ -1044,8 +1045,9 @@ class PagoAprobadoTransbankTests(APITestCase):
     def test_pago_confirmado_sin_stock_queda_pagado_y_en_revision_sin_ot(self):
         self.inventario.stock[('camisa', 'CAMISA-S')] = 1
         OrdenCompra.objects.filter(id=self.orden.id).update(proveedor_logistico='CHILEXPRESS')
-        with patch(f'{ADAPTADOR_ORDEN_TRANSPORTE}.ProveedorLogisticoAdapter') as logistica, \
+        with patch(TRANSPORTISTA) as transportista, \
                 self.assertLogs('ecommerce.infrastructure.ventas.views', level='ERROR') as logs:
+            logistica = transportista.return_value
             response = self.confirmar_pago()
 
         # El comprador ve que su pago llegó y que la tienda revisará el pedido

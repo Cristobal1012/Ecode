@@ -218,6 +218,11 @@
   accent-color: var(--color-primary);
 }
 
+/* La tarifa de cada courier, al borde derecho de su opción */
+.checkout-opcion-precio {
+  margin-left: auto;
+}
+
 /* Oculto a la vista pero accesible: con display: none el radio no se puede elegir con teclado */
 .checkout-radio-oculto {
   position: absolute;

@@ -1,0 +1,40 @@
+/* Esqueletos de carga: bloques con la forma de lo que viene y una franja de brillo que los recorre.
+   Los colores salen del tema (texto sobre superficie), así que sirven para todas las paletas */
+.esqueleto {
+  --esqueleto-base: color-mix(in srgb, var(--color-text) 9%, var(--color-surface));
+  --esqueleto-brillo: color-mix(in srgb, var(--color-text) 3%, var(--color-surface));
+  display: block;
+  max-width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--esqueleto-base) 40%, var(--esqueleto-brillo) 50%, var(--esqueleto-base) 60%);
+  background-size: 300% 100%;
+  animation: esqueleto-brillo 1.5s ease-in-out infinite;
+}
+
+.esqueleto--circulo {
+  border-radius: 50%;
+}
+
+.esqueleto--boton {
+  border-radius: var(--radio, 4px);
+}
+
+/* La franja entra por la izquierda y sale por la derecha */
+@keyframes esqueleto-brillo {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+/* La regla global de index.css solo acorta la animación, y en una infinita eso parpadea: aquí se apaga */
+@media (prefers-reduced-motion: reduce) {
+  .esqueleto {
+    animation: none;
+  }
+}
+
+/* En alto contraste el fondo desaparece: el contorno mantiene la forma */
+@media (forced-colors: active) {
+  .esqueleto {
+    border: 1px solid GrayText;
+  }
+}

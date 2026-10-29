@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
 
 // Blog o portafolio de la tienda: activo, el enlace del menú lleva a /blog con el nombre que elija el admin
@@ -63,7 +65,7 @@ export default function GestorBlog() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando blog...</p>;
+  if (cargando) return <Cargando texto="Cargando blog..."><EsqueletoFormulario campos={2} /></Cargando>;
 
   // Asocia el error del backend con su campo (aria-describedby)
   const describir = (campo, ayuda) => {

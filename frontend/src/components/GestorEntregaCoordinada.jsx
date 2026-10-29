@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
 
 // RF-02.3: entrega que acuerda la tienda con el comprador (ej. en persona), sin transportista ni dirección del local
@@ -68,7 +70,7 @@ export default function GestorEntregaCoordinada() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando entrega coordinada...</p>;
+  if (cargando) return <Cargando texto="Cargando entrega coordinada..."><EsqueletoFormulario campos={3} /></Cargando>;
 
   // Asocia el error del backend con su campo (aria-describedby)
   const describir = (campo, ayuda) => {

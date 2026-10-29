@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 
 const ESTILOS_AVISO = {
   error: { backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b' },
@@ -52,7 +54,7 @@ export default function GestorChilexpress() {
   };
 
   if (errorCarga) return <p role="alert" style={{ ...ESTILOS_AVISO.error, padding: '10px 12px', borderRadius: '6px' }}>{errorCarga}</p>;
-  if (!config) return <p>Cargando credenciales de Chilexpress...</p>;
+  if (!config) return <Cargando texto="Cargando credenciales de Chilexpress..."><EsqueletoFormulario campos={3} /></Cargando>;
 
   const etiquetas = Object.fromEntries(config.campos.map(c => [c.nombre, c.etiqueta]));
   const errores = aviso?.errores || {};

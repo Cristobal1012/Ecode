@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
 
 // Activa el formulario de cotización y encargos: con él aparece "Cotizar" en el menú, el pie y cada producto
@@ -34,7 +36,7 @@ export default function GestorFormularioCotizacion() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando cotizaciones...</p>;
+  if (cargando) return <Cargando texto="Cargando cotizaciones..."><EsqueletoFormulario campos={1} /></Cargando>;
 
   return (
     <>

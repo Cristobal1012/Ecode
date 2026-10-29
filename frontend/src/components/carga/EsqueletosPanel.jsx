@@ -42,6 +42,22 @@ export function EsqueletoLista({ elementos = 3 }) {
   );
 }
 
+// Un formulario de Configuración: cada campo con su etiqueta, el editor de texto si lo tiene y el botón de guardar
+export function EsqueletoFormulario({ campos = 2, editor = false }) {
+  return (
+    <div className="admin-formulario">
+      {lista(campos).map((campo) => (
+        <div key={campo} className="esqueleto-campo">
+          <Bloque ancho={ANCHOS_SECCIONES[campo % ANCHOS_SECCIONES.length]} alto="0.85em" />
+          <Bloque alto="2.5rem" />
+        </div>
+      ))}
+      {editor && <Bloque alto="320px" />}
+      <Bloque ancho="9rem" alto="2.75rem" forma="boton" />
+    </div>
+  );
+}
+
 // El dashboard bajo su título: filtro de fechas, indicadores, gráfico y últimos pedidos
 export function EsqueletoDashboard() {
   return (

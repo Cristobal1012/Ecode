@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 
 // Textos de la interfaz para los valores que guarda el backend
 const ETIQUETAS_OPCION = {
@@ -111,7 +113,7 @@ export default function GestorMediosPago() {
     }
   };
 
-  if (cargando) return <p>Cargando medios de pago...</p>;
+  if (cargando) return <Cargando texto="Cargando medios de pago..."><EsqueletoLista /></Cargando>;
   if (errorCarga) return <p role="alert" style={{ ...ESTILOS_AVISO.error, padding: '10px 12px', borderRadius: '6px' }}>{errorCarga}</p>;
 
   return (

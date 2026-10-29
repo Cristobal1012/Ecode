@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
 
 // Correo, horario e Instagram de la tienda: van en el pie de página y en la sección de Instagram de la landing
@@ -63,7 +65,7 @@ export default function GestorContacto() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando datos de contacto...</p>;
+  if (cargando) return <Cargando texto="Cargando datos de contacto..."><EsqueletoFormulario campos={4} /></Cargando>;
 
   // Asocia el error del backend con su campo (aria-describedby)
   const describir = (campo, ayuda) => {

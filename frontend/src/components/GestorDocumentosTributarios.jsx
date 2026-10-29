@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 
 // La tienda emite sus boletas y facturas por su cuenta (el sistema gratuito del SII u otro): el panel solo le
 // indica qué pedidos necesitan documento. Las reglas viven en domain/documentos_tributarios.py
@@ -53,7 +55,7 @@ export default function GestorDocumentosTributarios() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando boletas y facturas...</p>;
+  if (cargando) return <Cargando texto="Cargando boletas y facturas..."><EsqueletoFormulario campos={2} /></Cargando>;
 
   return (
     <>

@@ -136,6 +136,9 @@ function CheckoutContenido() {
     const [esperandoPago, setEsperandoPago] = useState(null);
     const [mostrarDialogoPago, setMostrarDialogoPago] = useState(false);
     const consultaEnCurso = useRef(false);
+    // Con el pago confirmado no se consulta más: el cambio de ruta es una transición y el checkout sigue montado un
+    // instante, en el que el intervalo podía volver a preguntar
+    const pagoConfirmado = useRef(false);
     const botonReabrirPago = useRef(null);
     const cerrarAvisoPago = () => {
         setMostrarDialogoPago(false);
@@ -148,12 +151,13 @@ function CheckoutContenido() {
     const navigate = useNavigate();
 
     const verificarEstadoOrden = useCallback(async (idOrden) => {
-        if (!idOrden || consultaEnCurso.current) return;
+        if (!idOrden || consultaEnCurso.current || pagoConfirmado.current) return;
         consultaEnCurso.current = true;
         setVerificando(true);
         try {
             const res = await consultarPagoPendiente(idOrden);
             if (res.data.pagado) {
+                pagoConfirmado.current = true;
                 localStorage.removeItem('carrito_local');
                 olvidarOrdenPendiente();
                 window.dispatchEvent(new Event('carritoActualizado'));

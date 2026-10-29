@@ -10,6 +10,8 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
   const [mensaje, setMensaje] = useState(null);
   const [cantidad, setCantidad] = useState(1);
   const [agregando, setAgregando] = useState(false);
+  // Si el foco estaba en "Agregar al carrito", vuelve a él (o al aviso) cuando termina la validación del stock
+  const devolverFoco = useRef(false);
   // Prefijo único para los ids de los títulos de cada grupo de atributos
   const idBase = useId();
 
@@ -37,6 +39,17 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       window.removeEventListener('storage', sincronizarCarrito);
     };
   }, []);
+
+  // Mientras valida, el botón está deshabilitado y el navegador puede sacarle el foco. Se devuelve aquí, después
+  // de que React lo vuelve a habilitar: un requestAnimationFrame podía correr antes y el foco se perdía
+  useEffect(() => {
+    if (agregando || !devolverFoco.current) return;
+    devolverFoco.current = false;
+    // Si el comprador ya movió el foco a otra parte, no se le quita
+    if (document.activeElement !== document.body && document.activeElement !== botonAgregar.current) return;
+    const destino = botonAgregar.current?.disabled ? aviso.current : botonAgregar.current;
+    destino?.focus();
+  }, [agregando]);
 
   const obtenerCantidadEnCarrito = (sku) => {
     if (!sku) return 0;
@@ -183,7 +196,7 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
 
     // Ejecutamos la función que nos pasaron desde DetalleProducto; el servidor confirma el stock
     if (onAgregarAlCarrito) {
-      const devolverFoco = document.activeElement === botonAgregar.current;
+      devolverFoco.current = document.activeElement === botonAgregar.current;
       setAgregando(true);
       setMensaje(null);
       const resultado = await onAgregarAlCarrito(varianteSeleccionada, cantidad);
@@ -192,11 +205,6 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
       if (resultado.ok) {
         setCantidad(1);
       }
-      if (devolverFoco) requestAnimationFrame(() => {
-        if (document.activeElement !== document.body) return;
-        const destino = botonAgregar.current?.disabled ? aviso.current : botonAgregar.current;
-        destino?.focus();
-      });
     }
   };
 

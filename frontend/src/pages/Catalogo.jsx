@@ -6,6 +6,7 @@ import Header from '../components/header/header';
 import ProductCardGrid from '../components/ProductCardGrid';
 import ProductCardList from '../components/ProductCardList';
 import { precioMinimoVigente } from '../utils/precios';
+import { EsqueletoTarjetas } from '../components/carga/EsqueletosTienda';
 import '../components/TarjetaProducto.css';
 import './Catalogo.css';
 
@@ -45,6 +46,9 @@ function mostrarValor(valor) {
     : String(valor);
 }
 
+// Identifica una consulta al servidor: si la cargada no es la pedida, el catálogo aún está cargando
+const claveConsulta = (pagina, categoria, filtros, orden) => JSON.stringify([pagina, categoria, filtros, orden]);
+
 function calcularRangoPaginacion(paginaActual, total) {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);
@@ -74,6 +78,8 @@ export default function Catalogo() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalProductos, setTotalProductos] = useState(0);
   const [filtrosServidor, setFiltrosServidor] = useState({ categorias: [], atributos: {} });
+  const [consultaCargada, setConsultaCargada] = useState(null);
+  const cargando = consultaCargada !== claveConsulta(pagina, categoriaSeleccionada, filtrosActivos, orden);
 
   // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
@@ -84,6 +90,7 @@ export default function Catalogo() {
   // FETCH DE PRODUCTOS PAGINADOS Y FILTRADOS DESDE EL SERVIDOR (SCRUM-179)
   useEffect(() => {
     const controller = new AbortController();
+    const clave = claveConsulta(pagina, categoriaSeleccionada, filtrosActivos, orden);
 
     const params = {
       page: pagina,
@@ -118,10 +125,12 @@ export default function Catalogo() {
           setTotalPaginas(1);
           setTotalProductos(productosPublicados.length);
         }
+        setConsultaCargada(clave);
       })
       .catch((error) => {
         if (error.name !== 'CanceledError' && error.code !== 'ERR_CANCELED') {
           console.error('No se pudo cargar el catálogo:', error);
+          setConsultaCargada(clave);
         }
       });
 
@@ -265,10 +274,15 @@ export default function Catalogo() {
 
         <div className="contenedor catalogo__contenido">
           <p className="catalogo-cantidad texto-secundario" role="status">
-            {totalProductos === 1 ? '1 producto' : `${totalProductos} productos`}
+            {cargando ? 'Cargando productos...' : totalProductos === 1 ? '1 producto' : `${totalProductos} productos`}
           </p>
 
-          {productosOrdenados.length === 0 ? (
+          {cargando ? (
+            <div aria-hidden="true">
+              <EsqueletoTarjetas cantidad={{ LISTA: 4, GRID_4: 8 }[layoutCatalogo] || 6} lista={esLista}
+                className={CLASES_LAYOUT[layoutCatalogo] || CLASES_LAYOUT.GRID_3} />
+            </div>
+          ) : productosOrdenados.length === 0 ? (
             <p className="catalogo__vacio">No hay productos para mostrar.</p>
           ) : (
             <>

@@ -4,6 +4,8 @@ import clienteAxios from './auth/axiosConfig';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from './header/header';
 import './MisDirecciones.css';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 
 const TEMA_PREDETERMINADO = 1;
 
@@ -226,7 +228,7 @@ const MisDirecciones = () => {
 
                     {/* LISTADO DE DIRECCIONES */}
                     {cargando ? (
-                        <p className="direcciones-estado" role="status">Cargando tus direcciones...</p>
+                        <Cargando texto="Cargando tus direcciones..."><EsqueletoLista elementos={2} /></Cargando>
                     ) : direcciones.length > 0 ? (
                         <ul className="lista-sin-estilo direcciones-lista">
                             {direcciones.map(dir => (

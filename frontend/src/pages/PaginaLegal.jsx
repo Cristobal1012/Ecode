@@ -5,6 +5,8 @@ import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
 import './PaginaLegal.css';
+import { Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
 
 // RF-03.5: página pública de Términos, Privacidad o Reembolsos (solo si está publicada)
 export default function PaginaLegal() {
@@ -36,7 +38,7 @@ export default function PaginaLegal() {
       <main tabIndex={-1} id="contenido" className="legal-main">
         <div className="legal">
           {cargando ? (
-            <p className="legal-estado" role="status">Cargando...</p>
+            <Cargando texto="Cargando la página..."><EsqueletoTexto lineas={14} /></Cargando>
           ) : pagina ? (
             <article>
               <span className="antetitulo">Información legal</span>

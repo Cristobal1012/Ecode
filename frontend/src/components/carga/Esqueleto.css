@@ -99,6 +99,25 @@
   border-radius: 12px;
 }
 
+/* ---------- Tienda (EsqueletosTienda.jsx) ---------- */
+
+/* La portada de la landing es oscura, como la barra del panel */
+.portada .esqueleto {
+  --esqueleto-base: rgb(255 255 255 / 14%);
+  --esqueleto-brillo: rgb(255 255 255 / 26%);
+}
+
+.esqueleto-columna {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.esqueleto-pagos {
+  display: grid;
+  gap: 12px;
+}
+
 /* La franja entra por la izquierda y sale por la derecha */
 @keyframes esqueleto-brillo {
   from { background-position: 100% 0; }

@@ -6,6 +6,8 @@ import Header from '../components/header/header';
 import Dialogo from '../components/Dialogo';
 import { guardarTokensDeEnlace } from '../utils/enlacesConToken';
 import './HistorialPedidos.css';
+import { Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoTabla } from '../components/carga/EsqueletosPanel';
 
 const TEMA_PREDETERMINADO = 1;
 
@@ -122,7 +124,7 @@ const HistorialPedidos = () => {
                     <h1 className="historial-titulo">Mi historial de pedidos</h1>
 
                     {cargando ? (
-                        <p className="historial-estado" role="status">Cargando tus pedidos...</p>
+                        <Cargando texto="Cargando tus pedidos..."><EsqueletoTabla filas={4} columnas={5} /></Cargando>
                     ) : (
                         <table className="historial-tabla">
                             <thead>

@@ -8,6 +8,7 @@ import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
 import Dialogo from './Dialogo';
+import { Bloque, Cargando } from './carga/Esqueleto';
 
 const OPCION_RETIRO_LOCAL = {
     proveedor: 'RETIRO_LOCAL', nombre: 'Retiro en Tienda / Local', tipo: 'RETIRO', costo_envio: 0,
@@ -909,7 +910,12 @@ function CheckoutContenido() {
 
                     <div className="checkout-pagos">
                         {cargandoPagos ? (
-                            <p className="checkout-ayuda" role="status">Cargando métodos de pago...</p>
+                            <Cargando texto="Cargando métodos de pago...">
+                                <div className="esqueleto-pagos">
+                                    <Bloque alto="3.2rem" forma="boton" />
+                                    <Bloque alto="3.2rem" forma="boton" />
+                                </div>
+                            </Cargando>
                         ) : pasarelas.length === 0 ? (
                             <p className="checkout-aviso checkout-aviso--error">No hay métodos de pago configurados en la tienda.</p>
                         ) : (

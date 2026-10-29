@@ -9,6 +9,8 @@ import useResenas from '../hooks/useResenas';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import './DetalleProducto.css';
+import { Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoDetalle } from '../components/carga/EsqueletosTienda';
 
 export default function DetalleProducto() {
   const { id } = useParams();
@@ -180,19 +182,24 @@ export default function DetalleProducto() {
     setImagenActual(index);
   };
 
-  if (cargando || error || !producto) {
+  if (cargando) {
+    return (
+      <div className="detalle-page">
+        <Header />
+        <main tabIndex={-1} className="contenedor detalle" id="contenido">
+          <Cargando texto="Cargando producto..."><EsqueletoDetalle /></Cargando>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !producto) {
     return (
       <div className="detalle-page">
         <Header />
         <main tabIndex={-1} className="contenedor detalle-estado" id="contenido">
-          {cargando ? (
-            <p role="status">Cargando producto...</p>
-          ) : (
-            <>
-              <p role="alert">{error || 'Producto no disponible'}</p>
-              <Link to="/catalogo" className="enlace-flecha">Volver al catálogo <span aria-hidden="true">→</span></Link>
-            </>
-          )}
+          <p role="alert">{error || 'Producto no disponible'}</p>
+          <Link to="/catalogo" className="enlace-flecha">Volver al catálogo <span aria-hidden="true">→</span></Link>
         </main>
       </div>
     );

@@ -17,27 +17,32 @@ Para la tienda real de un cliente, la lista completa de pasos está en
 
 Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambian.
 
-| Qué | ¿Se paga? | Costo aproximado | Lo gestiona |
-|---|---|---|---|
-| Software de la tienda (Django, React, PostgreSQL, MongoDB, Caddy, Docker) | No | Código abierto | — |
-| **Servidor** (VPS con Ubuntu y Docker) | **Sí** | US$8 a US$20 al mes: 2 GB de RAM para una tienda, 4 GB para dos | Quien publica la tienda |
-| **Dominio** (ej. `mitienda.cl`) | **Sí** | Unos $9.940 + IVA al año en NIC Chile | El cliente, a su nombre |
-| Certificado HTTPS | No | Caddy lo obtiene y renueva solo con Let's Encrypt | — |
-| Correo con Gmail (pruebas y demos) | No | Hasta ~500 correos al día | — |
-| Correo con Resend (tienda real) | No, hasta su límite | Gratis hasta 3.000 al mes y 100 al día; el plan Pro cuesta US$20 al mes | El cliente |
-| Inicio de sesión con Google | No | — | — |
-| Transbank Webpay Plus | Sin mensualidad | Una comisión por venta, que fija el contrato con Transbank | El cliente |
-| Mercado Pago | Sin mensualidad | Una comisión por venta, según el plazo en que libera el dinero | El cliente |
-| Transferencia bancaria | No | Solo lo que cobre el banco del cliente | El cliente |
-| Linkify (verificar transferencias, opcional) | Según su plan | — | El cliente |
-| Chilexpress | Cada envío | La tarifa de cada envío, que el checkout le cobra al comprador. Pide una cuenta de empresa | El cliente |
-| Retiro en local y entrega coordinada | No | — | — |
-| Monitoreo (ej. UptimeRobot) | No | Plan gratis | Quien publica la tienda |
-| Respaldos | No | Se guardan en el servidor y se descarga una copia una vez por semana | Quien publica la tienda |
-| Boletas y facturas | No | El sistema gratuito del SII, u otro que elija la tienda | El cliente |
+**Lo único que hay que pagar sí o sí** es el servidor y el dominio:
 
-**Lo mínimo para una tienda real:** el servidor y el dominio. Lo demás es gratis o se cobra por venta, y lo paga
-el cliente a cada proveedor.
+- **Servidor:** una VPS con Ubuntu y Docker, de unos US$8 a US$20 al mes según el proveedor. Con 2 GB de RAM
+  cabe una tienda y con 4 GB, dos. Lo paga quien publica la tienda.
+- **Dominio** (ej. `mitienda.cl`): unos $9.940 + IVA al año en NIC Chile. Lo compra el cliente, a su nombre.
+
+**Lo que cobra por venta o por envío**, sin mensualidad. Lo contrata y lo paga el cliente con cada proveedor:
+
+- **Transbank Webpay Plus:** una comisión por venta, que fija su contrato con Transbank.
+- **Mercado Pago:** una comisión por venta, que depende del plazo en que libera el dinero.
+- **Chilexpress:** la tarifa de cada envío, que el checkout le cobra al comprador. Pide una cuenta de empresa.
+- **Linkify** (opcional, verifica las transferencias solo): según el plan que contrate.
+
+**Lo que es gratis:**
+
+- El software de la tienda: Django, React, PostgreSQL, MongoDB, Caddy y Docker son de código abierto.
+- El certificado HTTPS: Caddy lo obtiene y lo renueva solo, con Let's Encrypt.
+- El correo con Gmail, para pruebas y demos (unos 500 correos al día).
+- El correo con Resend en la tienda real, hasta 3.000 correos al mes y 100 al día. Si la tienda los supera, el
+  plan Pro cuesta US$20 al mes.
+- El inicio de sesión con Google.
+- La transferencia bancaria (solo lo que cobre el banco del cliente), el retiro en local y la entrega
+  coordinada.
+- El monitoreo, con un plan gratis como el de UptimeRobot.
+- Los respaldos: se guardan en el servidor y una vez por semana se descarga una copia.
+- Las boletas y facturas, con el sistema gratuito del SII u otro que elija la tienda.
 
 ## Publicar con Docker
 

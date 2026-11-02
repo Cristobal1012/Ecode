@@ -20,7 +20,7 @@ Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambia
 **Lo único que hay que pagar sí o sí** es el servidor y el dominio:
 
 - **Servidor:** una VPS con Ubuntu y Docker, de unos US$8 a US$20 al mes según el proveedor. Con 2 GB de RAM
-  cabe una tienda y con 4 GB, dos. Lo paga quien publica la tienda.
+  cabe una tienda. Lo paga quien publica la tienda.
 - **Dominio** (ej. `mitienda.cl`): unos $9.940 + IVA al año en NIC Chile. Lo compra el cliente, a su nombre.
 
 **Lo que cobra por venta o por envío**, sin mensualidad. Lo contrata y lo paga el cliente con cada proveedor:

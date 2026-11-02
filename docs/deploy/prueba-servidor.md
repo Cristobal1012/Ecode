@@ -78,6 +78,28 @@ Entra con `ssh -i <archivo .pem> azureuser@<IP pública>` y sigue en el paso 2.
 - Oracle puede detener una máquina gratuita con muy poco uso durante 7 días, y avisa por correo antes. Si pasa, se
   vuelve a encender desde la consola sin perder datos.
 
+### Alternativa: cualquier VPS con Ubuntu
+
+Sirve cualquier proveedor que entregue una máquina con **Ubuntu 24.04**, acceso root por SSH y una IP pública fija:
+4 GB de RAM para dos tiendas, o 2 GB para una. Antes de pagar:
+
+- **Confirma por escrito que los puertos 22, 80 y 443 llegan abiertos desde internet.** Hay proveedores que
+  responden al ping, pero bloquean todo TCP en su red: la máquina queda inalcanzable aunque esté encendida.
+- Prefiere uno que cobre **por hora** o tenga **devolución** (ej. 30 días). Así, si la red falla, se borra la
+  máquina sin perder el dinero.
+- Elige una región en **Chile o Brasil**: desde Chile responde en unos 10 a 70 ms, contra 130 ms o más en Estados
+  Unidos.
+
+Apenas la entreguen, desde tu computador, comprueba que el SSH responde. Después de levantar Caddy (paso 4),
+haz lo mismo con el 80 y el 443:
+
+```bash
+ssh -o ConnectTimeout=10 root@<IP pública> true && echo "SSH OK"
+curl -sI --max-time 10 http://<IP pública>/ | head -1
+```
+
+Si el proveedor tiene un firewall en su panel, abre ahí los mismos tres puertos. Sigue en el paso 2.
+
 ## 2. Preparar el servidor
 
 ```bash

@@ -168,7 +168,7 @@ class CheckoutPlazoPagoTests(APITestCase):
 
     def test_los_demas_medios_de_pago_no_tienen_plazo(self):
         habilitar_medios_pago('TRANSBANK')
-        with patch('ecommerce.infrastructure.ventas.serializers.TransbankWebpayAdapter.iniciar_transaccion',
+        with patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.TransbankWebpayAdapter.iniciar_transaccion',
                    return_value={'exito': True, 'url_pago': 'https://webpay.test', 'token': 'tok'}):
             self.assertEqual(self.comprar('TRANSBANK').status_code, 201)
         orden = OrdenCompra.objects.get()

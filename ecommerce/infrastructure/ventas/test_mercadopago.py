@@ -14,15 +14,17 @@ from ecommerce.application.ventas import (
 )
 from ecommerce.domain.logistica import EnvioSolicitado
 from ecommerce.domain.ventas import EstadoPedido, EventoPedido, ItemSolicitado, OrdenRegistrada
-from ecommerce.infrastructure.ventas.payment_services import (
+from ecommerce.application.pagos import (
+    AplicarResultadoPago,
     ErrorPasarelaPago,
-    FirmaWebhookInvalida,
-    MercadoPagoAdapter,
+    FirmaAvisoInvalida,
     PagoConsultado,
-    PaymentGateway,
-    PreferenciaPagoCreada,
-    ProcesarWebhookMercadoPago,
+    PagoIniciado,
+    PasarelaConAvisos,
+    ProcesarAvisoPago,
 )
+from ecommerce.domain.medios_pago import EstadoPago
+from ecommerce.infrastructure.ventas.adapters.mercadopago import MercadoPagoAdapter
 from ecommerce.infrastructure.ventas.views import token_verificacion_pago
 
 
@@ -37,22 +39,22 @@ def generar_firma_hmac(secret: str, data_id: str, request_id: str, ts: str = "17
     return f"ts={ts},v1={v1}"
 
 
-class FakePaymentGateway(PaymentGateway):
+class FakePaymentGateway(PasarelaConAvisos):
     def __init__(self, secret: str = "mi_secreto_webhook", pago: PagoConsultado | None = None):
         self.secret = secret
         self.pago = pago
         self.adapter_validador = MercadoPagoAdapter(access_token="TEST-TOKEN", webhook_secret=secret)
 
-    def crear_preferencia(self, orden_id: str, monto: float, back_urls: dict[str, str], notification_url: str = ''):
-        return PreferenciaPagoCreada(
-            preference_id=f"PREF-{orden_id}",
+    def iniciar(self, orden_id, monto, url_retorno, url_aviso=''):
+        return PagoIniciado(
+            referencia=f"PREF-{orden_id}",
             url_pago=f"https://www.mercadopago.cl/checkout/v1/redirect?pref_id=PREF-{orden_id}",
         )
 
-    def validar_firma_webhook(self, x_signature: str, x_request_id: str, data_id: str) -> bool:
-        return self.adapter_validador.validar_firma_webhook(x_signature, x_request_id, data_id)
+    def aviso_autentico(self, firma: str, id_peticion: str, referencia: str) -> bool:
+        return self.adapter_validador.aviso_autentico(firma, id_peticion, referencia)
 
-    def consultar_pago(self, payment_id: str) -> PagoConsultado:
+    def resultado(self, referencia: str) -> PagoConsultado:
         return self.pago
 
 
@@ -179,12 +181,12 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         )
 
     def test_pago_aprobado_pasa_a_pagado_descuenta_stock_y_envia_correo(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(resultado, ResultadoPago.PAGADO)
@@ -195,12 +197,12 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(self.notificador.eventos, [(42, EventoPedido.PAGO_APROBADO)])
 
     def test_pago_rechazado_cancela_orden_y_envia_correo(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="rejected", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.RECHAZADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(resultado, "RECHAZADO")
@@ -210,12 +212,12 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(self.notificador.eventos, [(42, EventoPedido.PAGO_RECHAZADO)])
 
     def test_pago_pendiente_deja_orden_en_pendiente_sin_descontar_stock(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="in_process", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.PENDIENTE, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(resultado, "PENDIENTE")
@@ -224,15 +226,15 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(self.notificador.eventos, [])
 
     def test_aviso_repetido_es_idempotente_no_descuenta_dos_veces_ni_reenvia_correo(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         primero = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
         segundo = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(primero, ResultadoPago.PAGADO)
@@ -242,15 +244,15 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(len(self.notificador.eventos), 1)
 
     def test_firma_invalida_lanza_error_y_no_cambia_la_orden(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
-        with self.assertRaises(FirmaWebhookInvalida):
+        with self.assertRaises(FirmaAvisoInvalida):
             caso.ejecutar(
-                x_signature="ts=1700000000,v1=firma_falsa_123",
-                x_request_id=self.request_id,
-                data_id=self.payment_id,
+                firma="ts=1700000000,v1=firma_falsa_123",
+                id_peticion=self.request_id,
+                referencia=self.payment_id,
             )
 
         self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
@@ -258,12 +260,12 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(self.notificador.eventos, [])
 
     def test_monto_distinto_marca_orden_para_revision_del_admin(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("350000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("350000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(resultado, ResultadoPago.EN_REVISION)
@@ -272,7 +274,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         self.assertEqual(self.notificador.eventos, [(42, EventoPedido.PAGO_EN_REVISION)])
 
     def test_vista_webhook_responde_401_con_firma_invalida(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
 
         with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
@@ -296,27 +298,27 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             total_final=Decimal("400000"),
             stock_descontado=True,
         )
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="refunded", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.REEMBOLSADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id
         )
 
         self.assertEqual(resultado, ResultadoPago.EN_REVISION)
         self.assertTrue(self.repo_ordenes.orden.requiere_revision)
-        self.assertIn("refunded", self.repo_ordenes.motivo_revision)
+        self.assertIn(self.payment_id, self.repo_ordenes.motivo_revision)
         self.assertEqual(self.notificador.eventos, [(42, EventoPedido.PAGO_EN_REVISION)])
 
     def test_webhook_topic_no_relevante_es_ignorado(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
-        caso = ProcesarWebhookMercadoPago(pasarela, self.confirmar_pago)
+        caso = ProcesarAvisoPago(pasarela, AplicarResultadoPago(self.confirmar_pago))
 
         resultado = caso.ejecutar(
-            x_signature=self.firma_valida, x_request_id=self.request_id, data_id=self.payment_id,
-            topic="merchant_order"
+            firma=self.firma_valida, id_peticion=self.request_id, referencia=self.payment_id,
+            es_pago=False
         )
 
         self.assertEqual(resultado, "IGNORADO")
@@ -338,7 +340,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_vista_retorno_seguridad_no_aprueba_si_consulta_falla(self):
         pasarela = MagicMock()
-        pasarela.consultar_pago.side_effect = ErrorPasarelaPago("API timeout")
+        pasarela.resultado.side_effect = ErrorPasarelaPago("API timeout")
 
         mock_instancia = MagicMock()
         mock_instancia.id = 42
@@ -357,7 +359,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
 
     def test_vista_retorno_discrepancia_orden_id_redirige_a_cancelado(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="99", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="99", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
 
         mock_instancia = MagicMock()
@@ -377,7 +379,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
 
     def test_vista_retorno_aprueba_orden_con_pago_valido(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
 
         mock_instancia = MagicMock()
@@ -399,7 +401,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertEqual(self.inventario.stock, 3)
 
     def test_vista_retorno_pago_pendiente_redirige_a_pedido_recibido(self):
-        pago = PagoConsultado(payment_id=self.payment_id, orden_id="42", estado="in_process", monto=Decimal("400000"))
+        pago = PagoConsultado(referencia=self.payment_id, orden_id="42", estado=EstadoPago.PENDIENTE, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago)
 
         mock_instancia = MagicMock()
@@ -461,7 +463,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_e01_retorno_status_cancelled_con_pago_aprobado_en_mp_consulta_y_aprueba(self):
         """E01: Si la URL trae status=cancelled pero payment_id=801 aprobado en MP, se consulta MP y se aprueba."""
-        pago_aprobado = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago_aprobado = PagoConsultado(referencia="801", orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago_aprobado)
 
         mock_instancia = MagicMock()
@@ -502,21 +504,15 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_e02_sincronizar_varios_intentos_prioriza_aprobado_sobre_rechazado(self):
         """E02: Si la búsqueda devuelve [802 aprobado, 801 rechazado], se concilia 802 y se descuenta stock."""
-        pago_802 = PagoConsultado(payment_id="802", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago_802 = PagoConsultado(referencia="802", orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = MagicMock()
         pasarela.access_token = "TEST-123"
-        pasarela.API_BASE_URL = "https://api.mercadopago.com"
-        pasarela._headers.return_value = {}
-        pasarela.consultar_pago.return_value = pago_802
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "results": [
-                {"id": 802, "status": "approved", "date_created": "2026-10-16T12:01:00Z"},
-                {"id": 801, "status": "rejected", "date_created": "2026-10-16T12:00:00Z"},
-            ]
-        }
+        pasarela.resultado.return_value = pago_802
+        # Lo que devuelve la búsqueda de Mercado Pago, ya traducido por el adaptador
+        pasarela.pagos_de_orden.return_value = [
+            PagoConsultado(referencia="802", orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000")),
+            PagoConsultado(referencia="801", orden_id="42", estado=EstadoPago.RECHAZADO, monto=Decimal("400000")),
+        ]
 
         mock_instancia = MagicMock()
         mock_instancia.id = 42
@@ -525,29 +521,22 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
         from ecommerce.infrastructure.ventas.views import sincronizar_orden_con_mercadopago
         with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
-             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
-             patch("requests.get", return_value=mock_resp):
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago):
             sincronizar_orden_con_mercadopago(mock_instancia)
 
         self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PAGADO)
         self.assertEqual(self.inventario.stock, 3)
-        pasarela.consultar_pago.assert_called_with("802")
+        pasarela.pagos_de_orden.assert_called_with("42")
+        pasarela.resultado.assert_called_with("802")
 
     def test_e02_sincronizar_intento_pendiente_mantiene_orden_pendiente(self):
         """E02: Si hay un intento pendiente y otro rechazado, la orden no se cancela y se mantiene pendiente."""
         pasarela = MagicMock()
         pasarela.access_token = "TEST-123"
-        pasarela.API_BASE_URL = "https://api.mercadopago.com"
-        pasarela._headers.return_value = {}
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "results": [
-                {"id": 803, "status": "in_process", "date_created": "2026-10-16T12:01:00Z"},
-                {"id": 801, "status": "rejected", "date_created": "2026-10-16T12:00:00Z"},
-            ]
-        }
+        pasarela.pagos_de_orden.return_value = [
+            PagoConsultado(referencia="803", orden_id="42", estado=EstadoPago.PENDIENTE, monto=Decimal("400000")),
+            PagoConsultado(referencia="801", orden_id="42", estado=EstadoPago.RECHAZADO, monto=Decimal("400000")),
+        ]
 
         mock_instancia = MagicMock()
         mock_instancia.id = 42
@@ -556,12 +545,12 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
         from ecommerce.infrastructure.ventas.views import sincronizar_orden_con_mercadopago
         with patch("ecommerce.infrastructure.ventas.views.pasarela_mercado_pago", return_value=pasarela), \
-             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago), \
-             patch("requests.get", return_value=mock_resp):
+             patch("ecommerce.infrastructure.ventas.views.confirmar_pago", return_value=self.confirmar_pago):
             sincronizar_orden_con_mercadopago(mock_instancia)
 
         self.assertEqual(self.repo_ordenes.orden.estado, EstadoPedido.PENDIENTE)
         self.assertEqual(self.inventario.stock, 5)
+        pasarela.resultado.assert_not_called()
 
     def test_e03_verificar_pago_incluye_requiere_revision(self):
         """E03: verificar-pago devuelve la bandera requiere_revision adecuadamente."""
@@ -580,7 +569,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_retorno_pago_con_referencia_vacia_no_aprueba_ni_altera_orden(self):
         """Un pago aprobado con external_reference vacía NO debe aprobar, rechazar ni alterar la orden 42."""
-        pago_sin_ref = PagoConsultado(payment_id="801", orden_id="", estado="approved", monto=Decimal("10000"))
+        pago_sin_ref = PagoConsultado(referencia="801", orden_id="", estado=EstadoPago.APROBADO, monto=Decimal("10000"))
         pasarela = FakePaymentGateway(self.secret, pago_sin_ref)
 
         mock_orden = MagicMock()
@@ -602,7 +591,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_retorno_pago_con_referencia_nula_no_aprueba_ni_altera_orden(self):
         """Un pago con external_reference None NO debe aprobar ni alterar la orden 42."""
-        pago_ref_nula = PagoConsultado(payment_id="801", orden_id=None, estado="approved", monto=Decimal("10000"))
+        pago_ref_nula = PagoConsultado(referencia="801", orden_id=None, estado=EstadoPago.APROBADO, monto=Decimal("10000"))
         pasarela = FakePaymentGateway(self.secret, pago_ref_nula)
 
         mock_orden = MagicMock()
@@ -623,7 +612,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_retorno_pago_con_referencia_diferente_no_aprueba_ni_altera_orden(self):
         """Un pago con external_reference='99' NO debe asociarse a la orden 42."""
-        pago_otra_orden = PagoConsultado(payment_id="801", orden_id="99", estado="approved", monto=Decimal("10000"))
+        pago_otra_orden = PagoConsultado(referencia="801", orden_id="99", estado=EstadoPago.APROBADO, monto=Decimal("10000"))
         pasarela = FakePaymentGateway(self.secret, pago_otra_orden)
 
         mock_orden = MagicMock()
@@ -644,7 +633,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_retorno_pago_con_referencia_coincidente_aprueba_orden(self):
         """Un pago con external_reference='42' coincidente aprueba la orden y descuenta stock."""
-        pago_correcto = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago_correcto = PagoConsultado(referencia="801", orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago_correcto)
 
         mock_orden = MagicMock()
@@ -665,7 +654,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
 
     def test_retorno_referencia_coincidente_para_invitado_y_registrado(self):
         """Verifica que el retorno seguro funciona tanto para invitado como para usuario registrado."""
-        pago_correcto = PagoConsultado(payment_id="801", orden_id="42", estado="approved", monto=Decimal("400000"))
+        pago_correcto = PagoConsultado(referencia="801", orden_id="42", estado=EstadoPago.APROBADO, monto=Decimal("400000"))
         pasarela = FakePaymentGateway(self.secret, pago_correcto)
 
         # 1. Comprador Invitado
@@ -708,8 +697,7 @@ class MercadoPagoWebhookTests(SimpleTestCase):
             self.assertEqual(self.inventario.stock, 3)
 
     def test_crear_preferencia_prioriza_init_point_sobre_sandbox_init_point(self):
-        """Verifica que crear_preferencia entrega init_point para evitar el error /fatal/ de sandbox_init_point."""
-        from ecommerce.infrastructure.ventas.payment_services import MercadoPagoAdapter
+        """Verifica que la preferencia entrega init_point para evitar el error /fatal/ de sandbox_init_point."""
         adapter = MercadoPagoAdapter(access_token="TEST-12345678-abcd", webhook_secret="test_secret")
 
         mock_resp = MagicMock()
@@ -721,13 +709,52 @@ class MercadoPagoWebhookTests(SimpleTestCase):
         }
 
         with patch("requests.post", return_value=mock_resp):
-            pref = adapter.crear_preferencia(
+            pref = adapter.iniciar(
                 orden_id="42",
                 monto=10000,
-                back_urls={"success": "http://localhost:8000/api/ventas/mercadopago/retorno/?orden=42"},
+                url_retorno="http://localhost:8000/api/ventas/mercadopago/retorno/",
             )
             # Debe entregar la URL unificada de init_point (no la de sandbox que falla en /fatal/)
             self.assertEqual(pref.url_pago, "https://www.mercadopago.cl/checkout/v1/redirect?pref_id=pref-123")
-            self.assertEqual(pref.preference_id, "pref-123")
+            self.assertEqual(pref.referencia, "pref-123")
+
+    def test_preferencia_lleva_las_urls_de_retorno_y_el_aviso_solo_si_es_publico(self):
+        adapter = MercadoPagoAdapter(access_token="TEST-12345678-abcd", webhook_secret="test_secret")
+        respuesta = MagicMock()
+        respuesta.json.return_value = {"id": "pref-1", "init_point": "https://mp.test/pagar"}
+        retorno = "https://tienda.test/api/ventas/mercadopago/retorno/"
+
+        for aviso, enviado in (("https://tienda.test/api/ventas/mercadopago/webhook/", True),
+                               ("http://localhost:8000/api/ventas/mercadopago/webhook/", False)):
+            with self.subTest(aviso=aviso), patch("requests.post", return_value=respuesta) as post:
+                adapter.iniciar(orden_id="42", monto=Decimal("10000"), url_retorno=retorno, url_aviso=aviso)
+                payload = post.call_args.kwargs["json"]
+                self.assertEqual(payload["back_urls"]["success"], f"{retorno}?resultado=success&orden=42")
+                self.assertEqual(payload["back_urls"]["failure"], f"{retorno}?resultado=failure&orden=42")
+                self.assertEqual(payload["auto_return"], "approved")
+                self.assertEqual(payload.get("notification_url"), aviso if enviado else None)
+
+    def test_resultado_traduce_los_estados_de_mercado_pago(self):
+        adapter = MercadoPagoAdapter(access_token="TEST-12345678-abcd", webhook_secret="test_secret")
+        casos = {
+            "approved": EstadoPago.APROBADO, "in_process": EstadoPago.PENDIENTE, "rejected": EstadoPago.RECHAZADO,
+            "cancelled": EstadoPago.ANULADO, "refunded": EstadoPago.REEMBOLSADO,
+            "charged_back": EstadoPago.REEMBOLSADO, "in_mediation": EstadoPago.PENDIENTE,
+        }
+        for estado_mp, esperado in casos.items():
+            respuesta = MagicMock()
+            respuesta.json.return_value = {"id": 801, "status": estado_mp, "external_reference": "ORD-42",
+                                           "transaction_amount": 10000}
+            with self.subTest(estado=estado_mp), patch("requests.get", return_value=respuesta):
+                pago = adapter.resultado("801")
+                self.assertEqual(pago, PagoConsultado(referencia="801", orden_id="42", estado=esperado,
+                                                      monto=Decimal("10000")))
+
+    def test_busqueda_fallida_lanza_error_de_pasarela(self):
+        adapter = MercadoPagoAdapter(access_token="TEST-12345678-abcd", webhook_secret="test_secret")
+        respuesta = MagicMock()
+        respuesta.raise_for_status.side_effect = Exception("500")
+        with patch("requests.get", return_value=respuesta), self.assertRaises(ErrorPasarelaPago):
+            adapter.pagos_recientes(30)
 
 

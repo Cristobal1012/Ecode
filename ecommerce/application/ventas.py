@@ -226,6 +226,12 @@ class ResultadoPago(StrEnum):
     # La orden ya estaba pagada: confirmación repetida, sin efectos
     REPETIDO = 'REPETIDO'
     NO_ENCONTRADA = 'NO_ENCONTRADA'
+    # La pasarela no aprobó el pago: rechazado, anulado (la orden pendiente se cancela) o aún en proceso
+    RECHAZADO = 'RECHAZADO'
+    CANCELADO = 'CANCELADO'
+    PENDIENTE = 'PENDIENTE'
+    # El aviso de la pasarela no era sobre un pago
+    IGNORADO = 'IGNORADO'
 
 
 MOTIVO_PAGO_RECHAZADO = 'Pago rechazado'
@@ -340,6 +346,16 @@ class ConfirmarPago:
         self._notificar(orden.id, EventoPedido.CANCELADO if motivo == MOTIVO_PAGO_ANULADO
                         else EventoPedido.PAGO_RECHAZADO)
         return True
+
+    def reembolsado(self, orden_id, motivo_revision: str) -> ResultadoPago:
+        """La pasarela devolvió el pago: una orden ya pagada va a revisión del admin; una pendiente se cancela."""
+        orden = self.ordenes.obtener(orden_id)
+        if orden is not None and orden.estado in ESTADOS_PAGADOS:
+            self.ordenes.marcar_revision(orden.id, motivo_revision)
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
+            return ResultadoPago.EN_REVISION
+        self.rechazar(orden_id, MOTIVO_PAGO_ANULADO)
+        return ResultadoPago.CANCELADO
 
 
 def reponer_stock(inventario: InventarioVariantes, items):

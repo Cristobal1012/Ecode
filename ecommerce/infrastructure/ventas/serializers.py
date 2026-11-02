@@ -17,6 +17,7 @@ from ecommerce.domain.logistica import (
     EntregasDeLaTienda, Paquete, SinCobertura, error_direccion_entrega, es_entrega_con_courier,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
+from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
@@ -34,11 +35,10 @@ from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnv
 from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
 from .models import FotoPublicacion, Publicacion, Resena, ResenaProducto
 from .adapters.correo import CorreoNotificadorPedidos
-from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
 from .couriers import DjangoCouriers
+from .pasarelas import PASARELAS, pasarela, urls_pasarela
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
-from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
 
 def couriers():
     """RF-02.3: los couriers que la tienda tiene activos (las pruebas pueden reemplazarlo)."""
@@ -630,71 +630,19 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         metodo_pago = validated_data.get('metodo_pago')
         url_pago = None
 
-        if metodo_pago == 'TRANSBANK':
-            if request:
-                host = request.get_host()
-                scheme = request.scheme
-                return_url = f"{scheme}://{host}/api/ventas/transbank/retorno/"
-            else:
-                return_url = "http://localhost:8000/api/ventas/transbank/retorno/"
-
-            session_id = str(uuid.uuid4())
-
-            respuesta_tbk = TransbankWebpayAdapter.iniciar_transaccion(
-                orden_id=str(orden.id),
-                monto=orden.total_final,
-                return_url=return_url,
-                session_id=session_id
-            )
-
-            if respuesta_tbk.get('exito'):
-                url_pago = f"{respuesta_tbk['url_pago']}?token_ws={respuesta_tbk['token']}"
-                orden.id_transaccion_pasarela = respuesta_tbk['token']
-                orden.save()
-            else:
-                orden.delete()
-                raise serializers.ValidationError({
-                    "metodo_pago": f"No se pudo iniciar el pago con Transbank: {respuesta_tbk.get('error')}"
-                })
-
-        elif metodo_pago == 'MERCADO_PAGO':
-            if request:
-                host = request.get_host()
-                scheme = request.scheme
-                base_retorno = f"{scheme}://{host}/api/ventas/mercadopago/retorno/"
-                webhook_url = f"{scheme}://{host}/api/ventas/mercadopago/webhook/"
-            else:
-                base_retorno = "http://localhost:8000/api/ventas/mercadopago/retorno/"
-                webhook_url = "http://localhost:8000/api/ventas/mercadopago/webhook/"
-
-            # Mercado Pago rechaza notification_url si es localhost; solo la enviamos si es una URL pública
-            notification_url = (
-                webhook_url
-                if "localhost" not in webhook_url and "127.0.0.1" not in webhook_url
-                else ""
-            )
-
-            back_urls = {
-                "success": f"{base_retorno}?resultado=success&orden={orden.id}",
-                "failure": f"{base_retorno}?resultado=failure&orden={orden.id}",
-                "pending": f"{base_retorno}?resultado=pending&orden={orden.id}",
-            }
-
+        if metodo_pago in PASARELAS:
+            url_retorno, url_aviso = urls_pasarela(metodo_pago, request)
+            medio = pasarela(metodo_pago)
             try:
-                preferencia = MercadoPagoAdapter().crear_preferencia(
-                    orden_id=str(orden.id),
-                    monto=orden.total_final,
-                    back_urls=back_urls,
-                    notification_url=notification_url,
-                )
-                url_pago = preferencia.url_pago
-                orden.id_transaccion_pasarela = preferencia.preference_id
-                orden.save()
+                pago = medio.iniciar(str(orden.id), orden.total_final, url_retorno, url_aviso)
             except ErrorPasarelaPago as exc:
                 orden.delete()
                 raise serializers.ValidationError({
-                    "metodo_pago": f"No se pudo iniciar el pago con Mercado Pago: {exc}"
+                    "metodo_pago": f"No se pudo iniciar el pago con {medio.nombre}: {exc}"
                 })
+            url_pago = pago.url_pago
+            orden.id_transaccion_pasarela = pago.referencia
+            orden.save()
 
         # Desactivamos el cupón solo después de que la orden y la pasarela se iniciaron exitosamente
         if promo_aplicada:

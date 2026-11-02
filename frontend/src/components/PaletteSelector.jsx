@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from "./auth/axiosConfig";
 import { PALETTES, aplicarPaleta } from '../constants/palettes';
+import Spinner from './carga/Spinner';
 
 
 export default function PaletteSelector() {
@@ -115,7 +116,7 @@ export default function PaletteSelector() {
 
       <div className="selector-paletas-acciones">
         <button type="button" onClick={handleSave} disabled={loading} className="boton boton-primario">
-          {loading ? 'Guardando...' : 'Guardar Preferencia'}
+          {loading && <Spinner />}{loading ? 'Guardando...' : 'Guardar Preferencia'}
         </button>
       </div>
 

@@ -82,6 +82,7 @@ const MenuUsuario = () => {
                     <ul className="menu-usuario-enlaces lista-sin-estilo">
                         <li><Link to="/mis-pedidos" onClick={() => setIsOpen(false)}>Mis pedidos</Link></li>
                         <li><Link to="/mis-direcciones" onClick={() => setIsOpen(false)}>Mis direcciones de envío</Link></li>
+                        <li><Link to="/cambiar-contrasena" onClick={() => setIsOpen(false)}>Cambiar contraseña</Link></li>
                     </ul>
 
                     <div className="menu-usuario-pie">

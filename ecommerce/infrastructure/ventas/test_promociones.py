@@ -96,8 +96,10 @@ class CheckoutPromocionTests(APITestCase):
         usar_catalogo_falso(self, {
             ('prod1', 'SKU-1'): VarianteCatalogo('Producto 1 - SKU-1', Decimal('20000.00'), 5, True),
         })
-        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.ProveedorLogisticoAdapter.cotizar_envio',
-                           return_value={'precio': 3000})
+        # Chilexpress activo (sus llaves en la base) y su tarifa simulada, sin red
+        from .test_chilexpress import guardar_credenciales
+        guardar_credenciales(cotizador='llave-de-prueba')
+        cotizacion = patch('ecommerce.infrastructure.ventas.serializers.precio_envio', return_value=3000)
         cotizacion.start()
         self.addCleanup(cotizacion.stop)
 

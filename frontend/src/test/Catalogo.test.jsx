@@ -183,6 +183,17 @@ describe('Catalogo', () => {
     });
   });
 
+  it('mientras carga muestra tarjetas vacías, no "0 productos" ni "No hay productos"', async () => {
+    renderCatalogo();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando productos...');
+    expect(screen.queryByText('No hay productos para mostrar.')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.tarjeta-producto .esqueleto').length).toBeGreaterThan(0);
+
+    expect(await screen.findByText('Teclado mecánico')).toBeInTheDocument();
+    expect(document.querySelector('.esqueleto')).toBeNull();
+  });
+
   it('muestra el mensaje cuando no hay productos publicados', async () => {
     configurarRespuestas({ productos: [] });
 

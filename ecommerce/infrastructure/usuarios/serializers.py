@@ -55,3 +55,22 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
     
 class GoogleAuthSerializer(serializers.Serializer):
     id_token = serializers.CharField(required=True)
+
+
+# Las reglas de la contraseña nueva están en application/cuentas.py: aquí solo se recibe el formulario
+class OlvidoContrasenaSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=255)
+
+
+class RestablecerContrasenaSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=64)
+    token = serializers.CharField(max_length=128)
+    password = serializers.CharField(max_length=128, trim_whitespace=False)
+    password2 = serializers.CharField(max_length=128, trim_whitespace=False)
+
+
+class CambiarContrasenaSerializer(serializers.Serializer):
+    # Vacía en una cuenta de Google que todavía no tiene contraseña
+    actual = serializers.CharField(max_length=128, required=False, allow_blank=True, default='', trim_whitespace=False)
+    password = serializers.CharField(max_length=128, trim_whitespace=False)
+    password2 = serializers.CharField(max_length=128, trim_whitespace=False)

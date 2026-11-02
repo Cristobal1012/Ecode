@@ -1,6 +1,9 @@
 
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 const ESTILOS_AVISO = {
   error: {
@@ -98,7 +101,7 @@ export default function GestorAnalitica() {
     }
   };
 
-  if (cargando) return <p>Cargando configuración de analítica...</p>;
+  if (cargando) return <Cargando texto="Cargando configuración de analítica..."><EsqueletoFormulario campos={2} /></Cargando>;
 
   return (
     <form
@@ -202,7 +205,7 @@ export default function GestorAnalitica() {
             fontWeight: 'bold'
           }}
         >
-          {guardando ? 'Guardando...' : 'Guardar configuración'}
+          {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar configuración'}
         </button>
       </div>
     </form>

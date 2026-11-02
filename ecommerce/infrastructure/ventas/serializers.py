@@ -11,17 +11,16 @@ from ecommerce.infrastructure.catalogo.documents import Producto
 from ecommerce.infrastructure.catalogo.images import ArchivoImagenField
 from .models import Promocion
 import re
-# Mantenemos las importaciones por si se usan en otra parte, pero ya no usamos ServicioCotizacion aquí
-from ecommerce.application.logistica import ServicioCotizacion
+from ecommerce.application.couriers import CotizarEnvio, CourierNoActivo
 from ecommerce.domain.logistica import (
-    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, PROVEEDORES_CON_ORDEN_TRANSPORTE, RETIRO_LOCAL,
-    ConfiguracionCotizacionInvalida, EntregaNoHabilitada, EntregasDeLaTienda, ErrorCotizacion, Paquete,
-    SolicitudCotizacion, error_direccion_entrega,
+    ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, RETIRO_LOCAL, CourierNoDisponible, EntregaNoHabilitada,
+    EntregasDeLaTienda, Paquete, SinCobertura, error_direccion_entrega, es_entrega_con_courier,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
+from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
@@ -37,11 +36,19 @@ from .models import FotoPublicacion, Publicacion, Resena, ResenaProducto
 from .adapters.correo import CorreoNotificadorPedidos
 from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import limpiar_html, tiene_texto
-from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
+from .couriers import DjangoCouriers
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
-# NUEVO IMPORT: Nuestro adaptador real de logística para Chilexpress
-from .adapters.logistica import ProveedorLogisticoAdapter
 from .payment_services import ErrorPasarelaPago, MercadoPagoAdapter
+
+def couriers():
+    """RF-02.3: los couriers que la tienda tiene activos (las pruebas pueden reemplazarlo)."""
+    return DjangoCouriers()
+
+
+def precio_envio(proveedor, origen, destino, paquete):
+    """El costo de envío que se cobra: lo cotiza el servidor con el courier elegido, nunca lo envía el navegador."""
+    return CotizarEnvio(couriers()).precio(origen, destino, paquete, proveedor)
+
 
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
@@ -70,8 +77,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     pasarelas_activas = serializers.SerializerMethodField()
     # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
     google_client_id = serializers.SerializerMethodField()
-    # Sin llaves de Chilexpress el checkout no ofrece despacho ni sucursales (solo dice si hay, nunca cuáles)
-    chilexpress_activo = serializers.SerializerMethodField()
+    # Couriers con sus llaves cargadas: el checkout ofrece despacho y sucursales con ellos (nunca sus llaves)
+    couriers = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionGlobal
@@ -96,7 +103,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'entrega_coordinada_activa',
             'costo_entrega_coordinada',
             'instrucciones_entrega_coordinada',
-            'chilexpress_activo',
+            'couriers',
             'cotizaciones_activas',
             # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
             'blog_activo',
@@ -132,8 +139,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     def get_google_client_id(self, obj):
         return settings.GOOGLE_CLIENT_ID
 
-    def get_chilexpress_activo(self, obj):
-        return DjangoRepositorioCredencialesChilexpress().obtener().configuradas
+    def get_couriers(self, obj):
+        return [{'codigo': c.codigo, 'nombre': c.nombre, 'sucursales': c.con_sucursales} for c in couriers().activos()]
 
     def get_pasarelas_activas(self, obj):
         # RN-02: solo los medios habilitados y con sus datos completos; nunca sus credenciales
@@ -210,6 +217,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'mostrar_direccion_pie',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
+            # Solo el panel: qué pedidos piden boleta (no se publica en /api/configuracion/)
+            'modelo_emision',
         ]
 
     def validate_instagram_usuario(self, valor):
@@ -268,19 +277,6 @@ class PaqueteSerializer(serializers.Serializer):
 class ProveedorLogisticoNoDisponible(APIException):
     status_code = 503
     default_detail = 'El proveedor logístico no está disponible. Intente nuevamente.'
-
-
-class SolicitudCotizacionSerializer(serializers.Serializer):
-    comuna = serializers.CharField(max_length=100, allow_blank=True, required=False, default='')
-    subtotal = serializers.DecimalField(max_digits=12, decimal_places=0, min_value=Decimal('0'))
-    paquete = PaqueteSerializer(required=False)
-
-    def to_domain(self):
-        data = self.validated_data
-        return SolicitudCotizacion(
-            comuna=data['comuna'], subtotal=data['subtotal'],
-            paquete=Paquete(**data['paquete']) if 'paquete' in data else None,
-        )
 
 
 def catalogo_variantes():
@@ -405,16 +401,15 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     # Los calcula el servidor (cotización + subtotal del catálogo); lo que envíe el navegador se ignora
     costo_envio = serializers.FloatField(read_only=True)
     total_final = serializers.FloatField(read_only=True)
-    proveedor_logistico = serializers.ChoiceField(
-        choices=['STARKEN', 'CHILEXPRESS', RETIRO_LOCAL, ENTREGA_COORDINADA], required=False,
-    )
+    # Una entrega de la tienda o el código de un courier activo (se valida en validate)
+    proveedor_logistico = serializers.CharField(max_length=30, required=False)
     paquete = PaqueteSerializer(write_only=True, required=False)
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
     acepta_terminos = serializers.BooleanField(write_only=True)
     items = ItemPedidoSerializer(many=True, write_only=True)
     codigo_promocion = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
-    # RF-02.3: quién recibe o retira; Chilexpress y la tienda lo necesitan para entregar
+    # RF-02.3: quién recibe o retira; el courier y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
     telefono_destinatario = serializers.CharField(max_length=30)
     # Compra como empresa: la tienda emite la factura con estos datos (null si compra una persona)
@@ -506,6 +501,12 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 self._costo_entrega_propia = entregas_de_la_tienda().costo(proveedor)
             except EntregaNoHabilitada as error:
                 raise serializers.ValidationError({'proveedor_logistico': str(error)})
+        else:
+            # Un courier: solo uno que la tienda tenga activo (con sus llaves cargadas)
+            try:
+                couriers().obtener(proveedor)
+            except CourierNoActivo:
+                raise serializers.ValidationError({'proveedor_logistico': 'Esa forma de entrega no está disponible.'})
 
         error_direccion = error_direccion_entrega(proveedor, data.get('direccion_envio_snapshot'))
         if error_direccion:
@@ -550,22 +551,15 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
             destino = validated_data['direccion_envio_snapshot']['comuna']
 
-            # REEMPLAZO: Usamos la API de Chilexpress real a través de nuestro Adapter
-            resultado = ProveedorLogisticoAdapter.cotizar_envio(
-                proveedor=proveedor.lower(),
-                origen=origen,
-                destino=destino,
-                peso_kg=float(paquete.peso_kg),
-                alto_cm=int(paquete.alto_cm),
-                ancho_cm=int(paquete.ancho_cm),
-                largo_cm=int(paquete.largo_cm)
-            )
-
-            if "error" in resultado:
-                if resultado.get("tipo") == "proveedor":
-                    raise ProveedorLogisticoNoDisponible()
-                raise serializers.ValidationError({'proveedor_logistico': resultado["error"]})
-            costo_envio = float(resultado['precio'])
+            # El costo lo cotiza el servidor con el courier elegido; el que envía el navegador se ignora
+            try:
+                costo_envio = float(precio_envio(proveedor, origen, destino, paquete))
+            except CourierNoActivo:
+                raise serializers.ValidationError({'proveedor_logistico': 'Esa forma de entrega no está disponible.'})
+            except SinCobertura as error:
+                raise serializers.ValidationError({'proveedor_logistico': str(error)})
+            except CourierNoDisponible:
+                raise ProveedorLogisticoNoDisponible()
 
         # APLICAR PROMOCION Y VALIDAR EL CUPON
         subtotal_num = float(validated_data['subtotal'])
@@ -754,6 +748,10 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
     email_cliente = serializers.SerializerMethodField()
     transiciones_permitidas = serializers.SerializerMethodField()
     puede_generar_orden_transporte = serializers.SerializerMethodField()
+    # Documentos tributarios (domain/documentos_tributarios.py): el que corresponde y lo que falta emitir. La vista
+    # pasa el modelo de emisión de la tienda en el contexto, para no leerlo por cada pedido
+    documento_requerido = serializers.SerializerMethodField()
+    documento_por_emitir = serializers.SerializerMethodField()
 
     get_email_cliente = OrdenCompraSerializer.get_email_cliente
 
@@ -769,15 +767,26 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
             'total_final', 'proveedor_logistico', 'requiere_revision', 'motivo_revision',
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',
+            'documento_requerido', 'documento_por_emitir', 'folio_documento', 'folio_nota_credito',
         ]
         read_only_fields = fields
+
+    def _modelo_emision(self):
+        return self.context.get('modelo_emision') or ModeloEmision.VOUCHER
+
+    def get_documento_requerido(self, obj):
+        return documento_requerido(obj.metodo_pago, bool(obj.datos_empresa), self._modelo_emision())
+
+    def get_documento_por_emitir(self, obj):
+        return documento_por_emitir(obj.estado, obj.metodo_pago, bool(obj.datos_empresa), self._modelo_emision(),
+                                    obj.folio_documento, obj.folio_nota_credito)
 
     def get_transiciones_permitidas(self, obj):
         return [estado.value for estado in transiciones_desde(obj.estado)]
 
     def get_puede_generar_orden_transporte(self, obj):
         """Muestra el botón del panel solo si el backend aceptaría generar la OT."""
-        if obj.proveedor_logistico not in PROVEEDORES_CON_ORDEN_TRANSPORTE or obj.numero_seguimiento_tracking:
+        if not es_entrega_con_courier(obj.proveedor_logistico) or obj.numero_seguimiento_tracking:
             return False
         try:
             validar_generacion_orden_transporte(obj.estado, obj.requiere_revision)
@@ -919,19 +928,23 @@ def medio_pago_para_panel(medio):
     }
 
 
-class CredencialesChilexpressSerializer(serializers.Serializer):
+class CredencialesCourierSerializer(serializers.Serializer):
     """Entrada del panel: una llave que vuelve enmascarada se conserva y una vacía se borra."""
 
     datos = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=500))
 
 
-def chilexpress_para_panel(credenciales):
-    """Lo que ve el admin de las llaves de Chilexpress: nunca una llave completa."""
+def courier_para_panel(courier):
+    """Lo que ve el admin de las llaves de un courier: nunca una llave completa."""
+    credenciales = courier.credenciales
     return {
+        'codigo': courier.codigo,
+        'nombre': courier.nombre,
+        'ayuda': courier.ayuda,
         'configuradas': credenciales.configuradas,
         'faltantes': credenciales.faltantes,
-        'campos': [{'nombre': nombre, 'etiqueta': etiqueta, 'obligatorio': obligatorio}
-                   for nombre, etiqueta, obligatorio in credenciales.CAMPOS],
+        'campos': [{'nombre': campo.nombre, 'etiqueta': campo.etiqueta, 'obligatorio': campo.obligatorio}
+                   for campo in credenciales.campos],
         'datos': credenciales.visibles(),
     }
 

@@ -36,7 +36,7 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'ventas/admin/ordenes/': { count: 0, next: null, previous: null, results: [] },
       'ventas/admin/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos QA', contenido: '<p>Texto legal QA.</p>', publicada: true }],
       'ventas/admin/medios-pago/': [],
-      'ventas/admin/chilexpress/': { campos: [], datos: {}, faltantes: [], configurada: false },
+      'ventas/admin/couriers/': [{ codigo: 'CHILEXPRESS', nombre: 'Chilexpress', ayuda: '', campos: [], datos: {}, faltantes: [], configuradas: false }],
       'ventas/promociones/': [],
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
       'ventas/checkout/reglas/': { modo_autenticacion: 'INVITADO' },

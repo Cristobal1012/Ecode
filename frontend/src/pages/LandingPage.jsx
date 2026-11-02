@@ -12,6 +12,7 @@ import BarraEdicion from "../components/landing/BarraEdicion";
 import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
 import useEdicionLanding from "../hooks/useEdicionLanding";
 import "../components/landing/landing.css";
+import { EsqueletoPortada } from "../components/carga/EsqueletosTienda";
 
 const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados.";
 
@@ -104,9 +105,9 @@ function LandingPage({ onNombreTiendaTemporal }) {
             )}
             <Portada configuracion={vista} edicion={edicion} />
             <SeccionProductos id="mas-vendidos" antetitulo="Lo más elegido" titulo="Más vendidos"
-              productos={vitrina?.mas_vendidos} alterna nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+              productos={vitrina?.mas_vendidos} cargando={!vitrina} alterna nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
             <SeccionProductos id="recientes" antetitulo="Recién llegados" titulo="Últimos agregados"
-              productos={vitrina?.recientes} etiqueta="Nuevo"
+              productos={vitrina?.recientes} cargando={!vitrina} etiqueta="Nuevo"
               nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
             <SeccionResenas resumen={resenas} activas={resenasActivas} edicion={edicion} />
             <SeccionNosotros configuracion={vista} edicion={edicion} />
@@ -116,6 +117,7 @@ function LandingPage({ onNombreTiendaTemporal }) {
           // Mientras llega la configuración se reserva el espacio de la portada (sin textos de ejemplo)
           <div className="portada" aria-busy="true">
             <p className="visualmente-oculto">Cargando la tienda...</p>
+            <EsqueletoPortada />
           </div>
         )}
       </main>

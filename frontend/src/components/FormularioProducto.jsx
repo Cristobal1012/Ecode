@@ -2,6 +2,7 @@ import { useId, useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
+import Spinner from './carga/Spinner';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -1641,6 +1642,7 @@ export default function FormularioProducto({
             marginTop: '20px'
           }}
         >
+          {cargando && <Spinner />}
           {cargando
             ? 'Guardando producto...'
             : 'Crear Producto'}
@@ -1666,6 +1668,7 @@ export default function FormularioProducto({
               marginTop: '20px'
             }}
           >
+            {cargando && <Spinner />}
             {cargando
               ? 'Guardando cambios...'
               : 'Guardar cambios del producto'}

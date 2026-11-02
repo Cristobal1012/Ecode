@@ -12,7 +12,7 @@ import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
 import GestorMediosPago from '../components/GestorMediosPago';
-import GestorChilexpress from '../components/GestorChilexpress';
+import GestorCouriers from '../components/GestorCouriers';
 import GestorPromociones from '../components/GestorPromociones';
 import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
@@ -23,7 +23,9 @@ import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
 import GestorActivarResenas from '../components/GestorActivarResenas';
+import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import './Admin.css';
+import Spinner from '../components/carga/Spinner';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
@@ -34,8 +36,9 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
-  { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
+  { id: 'config-couriers', titulo: 'Envíos por courier' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
   { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
@@ -290,7 +293,7 @@ export default function Admin() {
 
                     <div>
                       <button type="submit" disabled={guardandoLocal} className="boton boton-primario">
-                        {guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
+                        {guardandoLocal && <Spinner />}{guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
                       </button>
                     </div>
                   </form>
@@ -313,8 +316,8 @@ export default function Admin() {
                 <hr className="admin-separador" />
 
                 <div>
-                  <TituloSeccion id="config-chilexpress" />
-                  <GestorChilexpress />
+                  <TituloSeccion id="config-couriers" />
+                  <GestorCouriers />
                 </div>
 
                 <hr className="admin-separador" />
@@ -322,6 +325,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-medios-pago" />
                   <GestorMediosPago />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-documentos" />
+                  <GestorDocumentosTributarios />
                 </div>
 
                 <hr className="admin-separador" />

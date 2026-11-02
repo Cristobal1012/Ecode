@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoTabla } from './carga/EsqueletosPanel';
 
 const obtenerStockTotal = (variantes) => {
   if (!variantes || variantes.length === 0) return 0;
@@ -93,7 +95,7 @@ export default function TablaInventario({ onEditarProducto }) {
     return resultado;
   }, [productos, categoriaFiltro, ordenFiltro]);
 
-  if (cargando) return <p role="status" style={{ color: 'var(--color-text)' }}>Cargando inventario...</p>;
+  if (cargando) return <Cargando texto="Cargando inventario..."><EsqueletoTabla filas={6} columnas={6} /></Cargando>;
   if (error) return <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>;
 
   const selectStyle = {

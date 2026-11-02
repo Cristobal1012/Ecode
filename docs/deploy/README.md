@@ -10,6 +10,35 @@ proveedores **no** van en el entorno: el emprendedor las carga desde el panel (C
 Configuración > Envíos por courier) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Si esa clave
 cambia, hay que volver a cargarlas.
 
+Para la tienda real de un cliente, la lista completa de pasos está en
+[Poner en producción la tienda del cliente](#poner-en-producción-la-tienda-del-cliente).
+
+## Qué se paga y qué no
+
+Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambian.
+
+| Qué | ¿Se paga? | Costo aproximado | Lo gestiona |
+|---|---|---|---|
+| Software de la tienda (Django, React, PostgreSQL, MongoDB, Caddy, Docker) | No | Código abierto | — |
+| **Servidor** (VPS con Ubuntu y Docker) | **Sí** | US$8 a US$20 al mes: 2 GB de RAM para una tienda, 4 GB para dos | Quien publica la tienda |
+| **Dominio** (ej. `mitienda.cl`) | **Sí** | Unos $9.940 + IVA al año en NIC Chile | El cliente, a su nombre |
+| Certificado HTTPS | No | Caddy lo obtiene y renueva solo con Let's Encrypt | — |
+| Correo con Gmail (pruebas y demos) | No | Hasta ~500 correos al día | — |
+| Correo con Resend (tienda real) | No, hasta su límite | Gratis hasta 3.000 al mes y 100 al día; el plan Pro cuesta US$20 al mes | El cliente |
+| Inicio de sesión con Google | No | — | — |
+| Transbank Webpay Plus | Sin mensualidad | Una comisión por venta, que fija el contrato con Transbank | El cliente |
+| Mercado Pago | Sin mensualidad | Una comisión por venta, según el plazo en que libera el dinero | El cliente |
+| Transferencia bancaria | No | Solo lo que cobre el banco del cliente | El cliente |
+| Linkify (verificar transferencias, opcional) | Según su plan | — | El cliente |
+| Chilexpress | Cada envío | La tarifa de cada envío, que el checkout le cobra al comprador. Pide una cuenta de empresa | El cliente |
+| Retiro en local y entrega coordinada | No | — | — |
+| Monitoreo (ej. UptimeRobot) | No | Plan gratis | Quien publica la tienda |
+| Respaldos | No | Se guardan en el servidor y se descarga una copia una vez por semana | Quien publica la tienda |
+| Boletas y facturas | No | El sistema gratuito del SII, u otro que elija la tienda | El cliente |
+
+**Lo mínimo para una tienda real:** el servidor y el dominio. Lo demás es gratis o se cobra por venta, y lo paga
+el cliente a cada proveedor.
+
 ## Publicar con Docker
 
 `deploy/docker-compose.yml` levanta una tienda completa: `web` (Caddy con el frontend compilado y las fotos),
@@ -244,4 +273,92 @@ Cuando el cliente tenga su dominio (lo compra y lo paga él), los correos salen 
    - Una compra completa con un correo de comprador distinto, que debe recibir el pedido recibido, el pago y
      el despacho, sin caer en spam. En **Emails**, Resend muestra el estado de cada envío.
 
-El plan gratuito de Resend permite un dominio y 3.000 correos al mes (100 al día).
+El plan gratuito de Resend permite 3 dominios y 3.000 correos al mes (100 al día). Un pedido envía unos 4 o 5
+correos, así que alcanza para unos 20 pedidos al día; pasado el límite diario, los correos siguientes no salen
+hasta el día siguiente.
+
+## Poner en producción la tienda del cliente
+
+Lista en orden para pasar de la tienda de prueba a la real. Los costos de cada paso están en
+[Qué se paga y qué no](#qué-se-paga-y-qué-no).
+
+### 1. Dominio y servidor
+
+1. El cliente compra el dominio a su nombre (NIC Chile u otro registrador).
+2. Un servidor con Ubuntu y Docker: 2 GB de RAM para una tienda, 4 GB para dos. Antes de pagar, confirma que el
+   proveedor deja abiertos los puertos 22, 80 y 443, y prefiere uno que cobre por hora o tenga devolución: así,
+   si la red falla, se cancela sin perder el dinero. Un servidor en Chile o Brasil responde más rápido que uno
+   en Estados Unidos o Europa. La preparación del servidor es la misma de [la guía](prueba-servidor.md#2-preparar-el-servidor).
+3. En el DNS del dominio, un registro **A** de `mitienda.cl` hacia la IP del servidor.
+
+### 2. La tienda con su dominio
+
+Con una sola tienda en el servidor no hace falta el Caddy de borde: el Caddy de la tienda atiende el HTTPS. En su
+archivo de variables:
+
+- `DIRECCION_SITIO=mitienda.cl`, `IP_WEB=0.0.0.0`, `PUERTO_WEB=80` y `PUERTO_WEB_HTTPS=443`.
+- `ALLOWED_HOSTS=mitienda.cl`, y `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` con
+  `https://mitienda.cl`.
+- `SECRET_KEY`, `CLAVE_CIFRADO_CREDENCIALES` y las contraseñas de las bases **nuevas**, nunca las de la tienda de
+  prueba.
+
+Levántala como en [Primer arranque](#primer-arranque) y comprueba `https://mitienda.cl/api/salud/`. Cuando todo
+funcione, sube `SECURE_HSTS_SECONDS` a `31536000` y vuelve a levantar la tienda.
+
+Si la tienda de prueba ya tiene productos y pedidos que el cliente quiere conservar, en vez de partir de cero
+respáldala y restaura ese respaldo en el servidor nuevo ([Respaldos](#respaldos)). Las credenciales de pago se
+vuelven a cargar desde el panel, porque la clave de cifrado es otra.
+
+### 3. Correo
+
+Resend con el dominio del cliente, como explica [En la tienda del cliente](#en-la-tienda-del-cliente-resend-con-dominio-propio).
+La cuenta de Gmail de las pruebas no se usa en la tienda real.
+
+### 4. Inicio de sesión con Google
+
+En el cliente OAuth de Google Cloud Console, agrega `https://mitienda.cl` en los orígenes de JavaScript
+autorizados. Lo ideal es un proyecto de Google a nombre del cliente; con el del equipo también funciona.
+
+### 5. Medios de pago reales
+
+El cliente contrata cada medio directamente con el proveedor. El equipo no hace esos trámites. Después carga las
+credenciales en Configuración > Medios de pago:
+
+- **Transbank Webpay Plus:** el cliente se afilia a Transbank y pasa su proceso de validación, que le entrega
+  el código de comercio y la llave secreta de producción. En el panel elige el ambiente "PRODUCCION" y carga
+  los dos datos.
+- **Mercado Pago:** en su panel de desarrolladores, las credenciales **de producción** (el access token de
+  prueba no cobra de verdad) y la clave secreta de las notificaciones (webhooks), con la dirección
+  `https://mitienda.cl/api/ventas/mercadopago/webhook/`.
+- **Transferencia:** los datos de la cuenta del cliente y el plazo para pagar. Si usa Linkify, su llave secreta
+  y la dirección de notificaciones `https://mitienda.cl/api/ventas/webhooks/linkify/`.
+
+Haz una compra real de monto bajo con cada medio y anúlala o devuélvela desde el panel del proveedor.
+
+### 6. Envíos
+
+- **Retiro en local y entrega coordinada:** funcionan sin nada más; se activan en Configuración.
+- **Chilexpress:** `[PENDIENTE]` el adaptador (`ecommerce/infrastructure/ventas/couriers/chilexpress.py`) está
+  conectado al ambiente de pruebas de Chilexpress: la dirección del API (`URL_BASE`) y el RUT con que se generan
+  las órdenes de transporte (`RUT_MARKETPLACE`) son los del sandbox. Para envíos reales falta pasar a la
+  dirección de producción y usar el RUT de la tienda, su TCC y su remitente, con las llaves de producción que
+  Chilexpress entrega después de revisar la documentación de la empresa. Hasta entonces, en la tienda real **no
+  cargues llaves de Chilexpress**: cotizaría con tarifas de prueba y no generaría envíos de verdad.
+
+### 7. Contenido y datos de la tienda
+
+- El cliente revisa y publica Términos y Condiciones, Políticas de Privacidad y Políticas de Reembolso: sin las
+  dos primeras no se puede comprar.
+- Borra los productos, pedidos y cuentas de prueba, o parte de una base nueva.
+- En Configuración, el modelo de boletas y facturas que usará la tienda.
+- La cuenta del emprendedor (`createsuperuser`) con su correo y una contraseña temporal, que él cambia desde el
+  menú de su cuenta al primer ingreso.
+
+### 8. Operación
+
+- Las [tareas programadas](#tareas-programadas) (cada hora) y los [respaldos](#respaldos) diarios en el cron del
+  servidor, como en [la guía](prueba-servidor.md#7-tareas-programadas-y-respaldos).
+- Una restauración de prueba completa antes de entregar la tienda.
+- El monitor de `https://mitienda.cl/api/salud/` cada 5 minutos.
+- Una compra completa de punta a punta con un correo que no sea del equipo: pedido recibido, pago, despacho y
+  entregado, revisando que los correos no lleguen a spam.

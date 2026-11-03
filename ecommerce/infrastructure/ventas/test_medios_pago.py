@@ -17,7 +17,7 @@ from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .adapters.transbank_adapter import TransbankWebpayAdapter
-from .payment_services import PreferenciaPagoCreada
+from ecommerce.application.pagos import PagoIniciado
 from .cifrado import CredencialesIlegibles, cifrar_json, descifrar_json
 from .models import ConfiguracionGlobal, MedioPago, OrdenCompra
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -160,8 +160,8 @@ class CheckoutRN02Tests(APITestCase):
             with self.subTest(metodo=metodo):
                 self.assertEqual(self.checkout(metodo).status_code, 400)
 
-    @patch('ecommerce.infrastructure.ventas.serializers.MercadoPagoAdapter.crear_preferencia',
-           return_value=PreferenciaPagoCreada(preference_id='pref-123', url_pago='https://mp.test/pago'))
+    @patch('ecommerce.infrastructure.ventas.adapters.mercadopago.MercadoPagoAdapter.iniciar',
+           return_value=PagoIniciado(referencia='pref-123', url_pago='https://mp.test/pago'))
     def test_mercado_pago_configurado_se_acepta_al_estar_su_integracion_lista(self, _crear):
         habilitar_medios_pago('MERCADO_PAGO')
         self.assertIn('MERCADO_PAGO', self.client.get(reverse('configuracion-global')).data['pasarelas_activas'])
@@ -198,7 +198,7 @@ class CheckoutRN02Tests(APITestCase):
         self.assertIn(f"Tienes hasta el {timezone.localtime(vence).strftime('%d-%m-%Y a las %H:%M')} para transferir",
                       correo.body)
 
-    @patch('ecommerce.infrastructure.ventas.serializers.TransbankWebpayAdapter.iniciar_transaccion',
+    @patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.TransbankWebpayAdapter.iniciar_transaccion',
            return_value={'exito': True, 'url_pago': 'https://webpay.test/pago', 'token': 'tbk-token'})
     def test_otros_medios_no_reciben_datos_bancarios(self, _iniciar):
         with self.captureOnCommitCallbacks(execute=True):

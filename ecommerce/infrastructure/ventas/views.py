@@ -26,7 +26,6 @@ from dataclasses import asdict
 from decimal import Decimal
 from math import ceil
 
-import requests
 from ecommerce.application.couriers import (
     ComunasConCobertura, ConfigurarCourier, CotizarEnvio, CourierNoActivo, TransportistaSegunProveedor,
 )
@@ -37,7 +36,7 @@ from ecommerce.domain.logistica import (
 )
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
 from ecommerce.application.ventas import (
-    MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_RECHAZADO, CambiarEstadoPedido, ConfirmarPago,
+    MOTIVO_PAGO_ANULADO, CambiarEstadoPedido, ConfirmarPago,
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
@@ -52,12 +51,15 @@ from ecommerce.application.documentos_tributarios import (
     PedidoNoEncontrado as PedidoParaDocumentarNoEncontrado, RegistrarFolio, SinDocumentoPorRegistrar,
 )
 from ecommerce.application.medios_pago import ConfigurarMedioPago
+from ecommerce.application.pagos import (
+    AplicarResultadoPago, ConciliarPagoOrden, ErrorPasarelaPago, FirmaAvisoInvalida, ProcesarAvisoPago,
+)
 from ecommerce.application.resenas import (
     EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
     ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
 )
 from ecommerce.domain.documentos_tributarios import FolioInvalido
-from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos
+from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos, EstadoPago
 from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
@@ -72,12 +74,7 @@ from .models import (
     Promocion, Publicacion, Resena,
 )
 from .permissions import CanCheckout
-from .payment_services import (
-    ErrorPasarelaPago,
-    FirmaWebhookInvalida,
-    MercadoPagoAdapter,
-    ProcesarWebhookMercadoPago,
-)
+from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
@@ -110,7 +107,6 @@ from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .repositorio_documentos import DjangoPedidosDocumentos, filtro_documento_pendiente, modelo_emision_tienda
 from .enlaces_resena import orden_del_token, token_resena
 from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioResenas
-from .adapters.transbank_adapter import TransbankWebpayAdapter
 from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_blog import DjangoRepositorioPublicaciones
@@ -162,18 +158,19 @@ def confirmar_pago():
                          notificador_pedidos())
 
 def pasarela_mercado_pago():
-    return MercadoPagoAdapter()
+    return pasarela(CodigoMedioPago.MERCADO_PAGO)
+
+
+def pasarela_transbank():
+    return pasarela(CodigoMedioPago.TRANSBANK)
+
+
+def aplicar_resultado_pago():
+    return AplicarResultadoPago(confirmar_pago())
 
 
 def sincronizar_orden_con_mercadopago(orden):
-    """
-    Sincroniza una orden PENDIENTE con la API de Mercado Pago buscando pagos acreditados.
-    Aplica el criterio de conciliación para múltiples intentos bajo una misma referencia (RF-02.2):
-    1. Si existe al menos un intento aprobado (approved), se concilia la aprobación y descuenta stock.
-    2. Si no hay aprobado pero existe un intento pendiente o en proceso, la orden permanece PENDIENTE.
-    3. Solo si TODOS los intentos fueron rechazados o cancelados (sin ningún aprobado ni pendiente),
-       se procesa el rechazo o anulación.
-    """
+    """Pone al día una orden PENDIENTE de Mercado Pago con sus intentos de pago (ver ConciliarPagoOrden)."""
     if not orden or orden.estado != EstadoPedido.PENDIENTE or (orden.metodo_pago or '').upper() != 'MERCADO_PAGO':
         return getattr(orden, 'estado', None)
 
@@ -182,60 +179,9 @@ def sincronizar_orden_con_mercadopago(orden):
         return orden.estado
 
     try:
-        url = f"{adapter.API_BASE_URL}/v1/payments/search?external_reference={orden.id}&sort=date_created&criteria=desc"
-        resp = requests.get(url, headers=adapter._headers(), timeout=10)
-        if resp.status_code == 200:
-            results = resp.json().get('results', [])
-            if results:
-                pago_aprobado = None
-                pago_pendiente = None
-                pago_rechazado = None
-
-                for item in results:
-                    st = str(item.get('status') or '').lower()
-                    if st == 'approved':
-                        if not pago_aprobado:
-                            pago_aprobado = item
-                    elif st in ('pending', 'in_process', 'authorized'):
-                        if not pago_pendiente:
-                            pago_pendiente = item
-                    elif st in ('rejected', 'failure', 'cancelled', 'refunded', 'charged_back'):
-                        if not pago_rechazado:
-                            pago_rechazado = item
-
-                # 1. Prioridad: Conciliar pago aprobado si existe alguno en el historial
-                if pago_aprobado:
-                    pago_id = str(pago_aprobado.get('id') or '')
-                    if pago_id:
-                        pago = adapter.consultar_pago(pago_id)
-                        pago_orden_id = str(pago.orden_id or "").strip()
-                        if pago_orden_id == str(orden.id) and pago.estado == 'approved':
-                            caso = confirmar_pago()
-                            caso.aprobar(orden.id, monto_pagado=pago.monto)
-                            orden.refresh_from_db()
-                            return orden.estado
-
-                # 2. Prioridad: Si hay pago pendiente/en proceso, la orden permanece PENDIENTE
-                if pago_pendiente:
-                    return orden.estado
-
-                # 3. Prioridad: Solo si TODOS los intentos fueron rechazados/cancelados
-                if pago_rechazado:
-                    pago_id = str(pago_rechazado.get('id') or '')
-                    if pago_id:
-                        pago = adapter.consultar_pago(pago_id)
-                        pago_orden_id = str(pago.orden_id or "").strip()
-                        if pago_orden_id == str(orden.id):
-                            caso = confirmar_pago()
-                            if pago.estado in ('rejected', 'failure'):
-                                caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                                orden.refresh_from_db()
-                            elif pago.estado in ('cancelled', 'refunded', 'charged_back'):
-                                caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-                                orden.refresh_from_db()
-                            elif pago.estado == 'approved':
-                                caso.aprobar(orden.id, monto_pagado=pago.monto)
-                                orden.refresh_from_db()
+        resultado = ConciliarPagoOrden(adapter, aplicar_resultado_pago()).ejecutar(orden.id)
+        if resultado != ResultadoPago.PENDIENTE:
+            orden.refresh_from_db()
     except Exception as exc:
         logger.warning(f"Error sincronizando orden {orden.id} con Mercado Pago: {exc}")
 
@@ -310,28 +256,22 @@ class AdminSincronizarPagosView(APIView):
             return Response({"error": "Mercado Pago no está configurado."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            url = f"{adapter.API_BASE_URL}/v1/payments/search?sort=date_created&criteria=desc&limit=30"
-            resp = requests.get(url, headers=adapter._headers(), timeout=10)
-            if resp.status_code != 200:
-                return Response({"error": "Error al consultar la API de Mercado Pago."}, status=status.HTTP_502_BAD_GATEWAY)
+            try:
+                pagos = adapter.pagos_recientes(30)
+            except ErrorPasarelaPago as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-            pagos = resp.json().get('results', [])
-            caso = confirmar_pago()
+            caso = aplicar_resultado_pago()
             actualizadas = 0
 
-            for p in pagos:
-                ref = str(p.get('external_reference') or '').strip()
-                pago_status = p.get('status')
-                if ref.isdigit():
-                    orden = OrdenCompra.objects.filter(id=int(ref), estado=EstadoPedido.PENDIENTE).first()
-                    if orden and orden.metodo_pago == 'MERCADO_PAGO':
-                        monto = Decimal(str(p.get('transaction_amount') or '0'))
-                        if pago_status == 'approved':
-                            caso.aprobar(orden.id, monto_pagado=monto)
-                            actualizadas += 1
-                        elif pago_status in ('rejected', 'failure'):
-                            caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                            actualizadas += 1
+            # Solo los resultados definitivos de órdenes pendientes de Mercado Pago
+            for pago in pagos:
+                if pago.estado not in (EstadoPago.APROBADO, EstadoPago.RECHAZADO) or not pago.orden_id.isdigit():
+                    continue
+                orden = OrdenCompra.objects.filter(id=int(pago.orden_id), estado=EstadoPedido.PENDIENTE).first()
+                if orden and orden.metodo_pago == 'MERCADO_PAGO':
+                    caso.ejecutar(pago)
+                    actualizadas += 1
 
             return Response({
                 "mensaje": f"Sincronización completada. Se revisaron {len(pagos)} pagos recientes y se actualizaron {actualizadas} órdenes.",
@@ -516,28 +456,24 @@ class TransbankRetornoView(APIView):
             return Response({"error": "Token no proporcionado"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Confirmar transacción con Transbank
-        resultado_tbk = TransbankWebpayAdapter.confirmar_transaccion(token)
-        
-        if not resultado_tbk.get('exito'):
+        try:
+            pago = pasarela_transbank().resultado(token)
+        except ErrorPasarelaPago:
             return Response({"error": "Error al comunicar con Transbank"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        buy_order = resultado_tbk['data_completa'].get('buy_order', '')
-        # Extraer el ID real de la orden (quitando el prefijo 'ORD-')
-        orden_id = buy_order.replace('ORD-', '')
-
         try:
-            orden = OrdenCompra.objects.get(id=orden_id)
+            orden = OrdenCompra.objects.get(id=pago.orden_id)
         except (OrdenCompra.DoesNotExist, ValueError):
             return Response({"error": "Orden no encontrada"}, status=status.HTTP_404_NOT_FOUND)
 
-        caso = confirmar_pago()
-        if not resultado_tbk.get('aprobado'):
-            caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
+        caso = aplicar_resultado_pago()
+        if pago.estado != EstadoPago.APROBADO:
+            caso.ejecutar(pago)
             return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
 
         # 2. Estado y stock de la orden (idempotente, stock todo o nada)
         try:
-            resultado = caso.aprobar(orden.id)
+            resultado = caso.ejecutar(pago)
         except Exception:
             # El pago ya está aprobado: la orden quedó marcada para revisión del admin
             logger.exception(f"Error al descontar stock de la orden {orden.id}")
@@ -580,15 +516,15 @@ class MercadoPagoWebhookView(APIView):
             or 'payment'
         )
 
-        caso = ProcesarWebhookMercadoPago(pasarela_mercado_pago(), confirmar_pago())
+        caso = ProcesarAvisoPago(pasarela_mercado_pago(), aplicar_resultado_pago())
         try:
             resultado = caso.ejecutar(
-                x_signature=x_signature,
-                x_request_id=x_request_id,
-                data_id=str(data_id),
-                topic=str(topic),
+                firma=x_signature,
+                id_peticion=x_request_id,
+                referencia=str(data_id),
+                es_pago=str(topic) in ('payment', 'payment.created', 'payment.updated'),
             )
-        except FirmaWebhookInvalida:
+        except FirmaAvisoInvalida:
             return Response({"detail": "Firma inválida."}, status=status.HTTP_401_UNAUTHORIZED)
         except ErrorPasarelaPago as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -625,7 +561,7 @@ class MercadoPagoRetornoView(APIView):
         # 2. Si viene payment_id: SIEMPRE consultar a Mercado Pago (nunca confiar en query params de la URL)
         if payment_id:
             try:
-                pago = pasarela_mercado_pago().consultar_pago(payment_id)
+                pago = pasarela_mercado_pago().resultado(payment_id)
             except Exception as exc:
                 logger.error("Error consultando pago %s de Mercado Pago en retorno: %s", payment_id, exc)
                 if orden:
@@ -663,33 +599,23 @@ class MercadoPagoRetornoView(APIView):
                 logger.warning("Orden %s asociada al pago %s no existe", orden_id, payment_id)
                 return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
 
-            caso = confirmar_pago()
-            if pago.estado == 'approved':
-                if orden:
-                    try:
-                        caso.aprobar(orden.id, monto_pagado=pago.monto)
-                    except Exception:
-                        logger.exception("Error al descontar stock de la orden %s", orden.id)
-                    orden.refresh_from_db()
-                    revision = '&revision=1' if orden.requiere_revision else ''
-                    return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
-                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso")
+            caso = aplicar_resultado_pago()
+            if pago.estado == EstadoPago.APROBADO:
+                try:
+                    caso.ejecutar(pago)
+                except Exception:
+                    logger.exception("Error al descontar stock de la orden %s", orden.id)
+                orden.refresh_from_db()
+                revision = '&revision=1' if orden.requiere_revision else ''
+                return HttpResponseRedirect(f"{frontend_url}/pago-exitoso?orden={orden.id}{revision}")
 
-            if pago.estado in ('rejected', 'failure'):
-                if orden:
-                    caso.rechazar(orden.id, MOTIVO_PAGO_RECHAZADO)
-                    return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
-                return HttpResponseRedirect(f"{frontend_url}/pago-rechazado")
-
-            if pago.estado in ('cancelled', 'refunded', 'charged_back'):
-                if orden:
-                    caso.rechazar(orden.id, MOTIVO_PAGO_ANULADO)
-                    return HttpResponseRedirect(f"{frontend_url}/pago-cancelado?orden={orden.id}")
-                return HttpResponseRedirect(f"{frontend_url}/pago-cancelado")
-
-            if pago.estado in ('in_process', 'pending', 'authorized'):
-                sufijo = f"?orden={orden_id}" if orden_id else ""
-                return HttpResponseRedirect(f"{frontend_url}/pedido-recibido{sufijo}")
+            resultado = caso.ejecutar(pago)
+            if resultado == ResultadoPago.RECHAZADO:
+                return HttpResponseRedirect(f"{frontend_url}/pago-rechazado?orden={orden.id}")
+            if resultado == ResultadoPago.PENDIENTE:
+                return HttpResponseRedirect(f"{frontend_url}/pedido-recibido?orden={orden_id}")
+            # Anulado o devuelto antes de que la orden se pagara
+            return HttpResponseRedirect(f"{frontend_url}/pago-cancelado?orden={orden.id}")
 
         # 3. Si NO hay payment_id (ej. el comprador abandonó el flujo en la pasarela o canceló):
         # Los parámetros de retorno de la URL por sí solos NUNCA deben cancelar la orden en la BD.

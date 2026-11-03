@@ -980,7 +980,7 @@ class PagoAprobadoTransbankTests(APITestCase):
         self.inventario = InventarioFalso({('camisa', 'CAMISA-S'): 3})
         for objetivo, opciones in (
             ('views.inventario_variantes', {'return_value': self.inventario}),
-            ('views.TransbankWebpayAdapter.confirmar_transaccion',
+            ('adapters.transbank_adapter.TransbankWebpayAdapter.confirmar_transaccion',
              {'return_value': {'exito': True, 'aprobado': True,
                                'data_completa': {'buy_order': f'ORD-{self.orden.id}'}}}),
         ):

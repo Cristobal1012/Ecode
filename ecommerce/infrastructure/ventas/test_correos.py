@@ -126,7 +126,7 @@ class CorreosDelPagoTests(APITestCase):
                            return_value=self.inventario)
         inventario.start()
         self.addCleanup(inventario.stop)
-        transbank = patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion')
+        transbank = patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.TransbankWebpayAdapter.confirmar_transaccion')
         self.transbank = transbank.start()
         self.addCleanup(transbank.stop)
         self.transbank.return_value = {'exito': True, 'aprobado': True,

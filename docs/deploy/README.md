@@ -19,8 +19,8 @@ Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambia
 
 **Lo único que hay que pagar sí o sí** es el servidor y el dominio:
 
-- **Servidor:** una VPS con Ubuntu y Docker, de unos US$8 a US$20 al mes según el proveedor. Con 2 GB de RAM
-  cabe una tienda. Lo paga quien publica la tienda.
+- **Servidor:** una VPS con Ubuntu y Docker, de 4 GB de RAM (ver la [memoria](#publicar-con-docker)): unos US$15
+  a US$20 al mes según el proveedor. Lo paga quien publica la tienda.
 - **Dominio** (ej. `mitienda.cl`): unos $9.940 + IVA al año en NIC Chile. Lo compra el cliente, a su nombre.
 
 **Lo que cobra por venta o por envío**, sin mensualidad. Lo contrata y lo paga el cliente con cada proveedor:
@@ -49,8 +49,21 @@ Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambia
 `deploy/docker-compose.yml` levanta una tienda completa: `web` (Caddy con el frontend compilado y las fotos),
 `backend` (Django con gunicorn), `postgres` (PostgreSQL 15) y `mongo` (MongoDB 8.0). Los datos quedan en volúmenes
 de Docker, las bases no publican puertos y el backend corre sin permisos de root. Requiere Docker Engine con el
-plugin `docker compose`, y funciona en servidores x86 y ARM. Cada tienda usa unos 650 MB de RAM en reposo (la
-mayor parte es la caché de MongoDB); calcula 1 GB por tienda.
+plugin `docker compose`, y funciona en servidores x86 y ARM.
+
+**Memoria:** cada tienda usa unos 650 MB de RAM en reposo (medido), la mayor parte en MongoDB. En un pico puede
+acercarse a 1,5 GB (estimado a partir del código, sin medir):
+
+- MongoDB crece hasta su caché (`MONGO_CACHE_GB`, 0,5 GB) más su propio consumo.
+- El backend procesa completa en memoria cada foto que se sube: unos 200 MB por proceso con una foto de 20
+  megapíxeles, y son 2 procesos (`GUNICORN_WORKERS`).
+
+A eso se suman 300 a 400 MB de Ubuntu y Docker, más la memoria que pide compilar las imágenes en el servidor. Si
+falta memoria, Linux cierra un proceso (casi siempre MongoDB) y la tienda se cae hasta que se reinicia. Por eso:
+
+- **Tienda de un cliente:** 4 GB de RAM.
+- **Prueba con pocas visitas:** 2 GB, con 2 GB de swap ([cómo crearlo](prueba-servidor.md#2-preparar-el-servidor)).
+  El swap absorbe los picos: la tienda se pone lenta unos segundos en vez de caerse.
 
 ### Variables de la tienda
 
@@ -290,7 +303,8 @@ Lista en orden para pasar de la tienda de prueba a la real. Los costos de cada p
 ### 1. Dominio y servidor
 
 1. El cliente compra el dominio a su nombre (NIC Chile u otro registrador).
-2. Un servidor con Ubuntu y Docker: 2 GB de RAM para una tienda, 4 GB para dos. Antes de pagar, confirma que el
+2. Un servidor con Ubuntu y Docker, de 4 GB de RAM (con 2 GB no queda margen para los picos: ver la
+   [memoria](#publicar-con-docker)). Antes de pagar, confirma que el
    proveedor deja abiertos los puertos 22, 80 y 443, y prefiere uno que cobre por hora o tenga devolución: así,
    si la red falla, se cancela sin perder el dinero. Un servidor en Chile o Brasil responde más rápido que uno
    en Estados Unidos o Europa. La preparación del servidor es la misma de [la guía](prueba-servidor.md#2-preparar-el-servidor).

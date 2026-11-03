@@ -14,7 +14,9 @@ Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443, certific
                      └─ daniela.<ip>.sslip.io ──> tienda "daniela" (127.0.0.1:8082)
 ```
 
-Cada tienda usa alrededor de 1 GB de RAM: dos tiendas caben en una máquina de 4 GB.
+Cada tienda usa unos 650 MB de RAM en reposo y hasta 1,5 GB en un pico ([detalle](README.md#publicar-con-docker)):
+dos tiendas de prueba caben en una máquina de 4 GB con el swap del [paso 2](#2-preparar-el-servidor). La tienda
+real de un cliente va sola, en un servidor de 4 GB.
 
 ## 1. La máquina
 
@@ -81,7 +83,8 @@ Entra con `ssh -i <archivo .pem> azureuser@<IP pública>` y sigue en el paso 2.
 ### Alternativa: cualquier VPS con Ubuntu
 
 Sirve cualquier proveedor que entregue una máquina con **Ubuntu 24.04**, acceso root por SSH y una IP pública fija:
-4 GB de RAM para dos tiendas, o 2 GB para una. Antes de pagar:
+4 GB de RAM para dos tiendas de prueba, o 2 GB para una, siempre con el swap del [paso 2](#2-preparar-el-servidor).
+Antes de pagar:
 
 - **Confirma por escrito que los puertos 22, 80 y 443 llegan abiertos desde internet.** Hay proveedores que
   responden al ping, pero bloquean todo TCP en su red: la máquina queda inalcanzable aunque esté encendida.
@@ -108,6 +111,21 @@ sudo timedatectl set-timezone America/Santiago
 # Parches de seguridad automáticos (en Ubuntu vienen activos; esto lo confirma)
 sudo dpkg-reconfigure -plow unattended-upgrades
 ```
+
+Un swap de 2 GB, para que un pico de memoria ponga lenta la tienda en vez de cerrar MongoDB (si `swapon --show` ya
+muestra uno, sáltate esto):
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+# Usar el swap solo cuando falte memoria
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swap.conf && sudo sysctl --system
+```
+
+Compruébalo con `free -h`: la línea `Swap` debe decir `2.0Gi`.
 
 Docker Engine y el plugin `docker compose`, desde el repositorio oficial de Docker:
 

@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from ecommerce.application.couriers import TransportistaSegunProveedor
 from ecommerce.application.test_couriers import CourierFalso, CouriersFalsos
 from ecommerce.application.ventas import GenerarOrdenTransporte
-from ecommerce.domain.logistica import CourierNoDisponible
+from ecommerce.domain.logistica import CourierNoDisponible, MedidasEnvio
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
@@ -21,6 +21,8 @@ from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
 
 PAQUETE = {'peso_kg': '1.50', 'alto_cm': '10', 'ancho_cm': '20', 'largo_cm': '30'}
+# Lo que podría mandar un navegador alterado para pagar menos envío: el servidor lo ignora
+PAQUETE_MANIPULADO = {'peso_kg': '0.01', 'alto_cm': '1', 'ancho_cm': '1', 'largo_cm': '1'}
 ADAPTADOR_CHILEXPRESS = 'ecommerce.infrastructure.ventas.couriers.chilexpress'
 
 
@@ -43,9 +45,12 @@ class CotizacionesAPITests(APITestCase):
         self.config = ConfiguracionGlobal.objects.create(
             id=1, nombre_tienda='QA', comuna_origen='Santiago', retiro_en_local_activo=True,
         )
-        self.payload = {'destino': 'SANTIAGO', 'peso': 1.5, 'alto': 10, 'ancho': 20, 'largo': 30}
+        self.payload = {'destino': 'SANTIAGO', 'items': ITEMS}
+        # 1,5 kg y 10 x 20 x 30 cm: el paquete es de 1,5 kg y un cubo de 30 cm (el lado más largo)
         usar_catalogo_falso(self, {
-            ('polera', 'POLERA-M'): VarianteCatalogo('Polera - POLERA-M', Decimal('25000'), 5, True),
+            ('polera', 'POLERA-M'): VarianteCatalogo(
+                'Polera - POLERA-M', Decimal('25000'), 5, True,
+                MedidasEnvio(Decimal('1.5'), Decimal('10'), Decimal('20'), Decimal('30'))),
         })
         # El catálogo de comunas se descarga por red: en pruebas se fija uno conocido
         catalogo = patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._obtener_catalogo_dinamico',
@@ -64,13 +69,60 @@ class CotizacionesAPITests(APITestCase):
         self.assertEqual((opcion['proveedor'], opcion['nombre'], opcion['precio']), ('CHILEXPRESS', 'Chilexpress', 3500))
         self.assertEqual(opcion['tiempo_estimado'], 'EXPRESS')
         self.assertEqual(post.call_args.kwargs['json']['destinationCountyCode'], 'STGO')
+        # El paquete sale del catálogo, aunque el navegador mande otro
+        self.assertEqual(post.call_args.kwargs['json']['package'],
+                         {'weight': '1.5', 'height': '30', 'width': '30', 'length': '30'})
         self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'],
                          'secreto-chilexpress')
         self.assertNotIn('secreto-chilexpress', str(response.data))
 
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_el_peso_y_el_origen_del_navegador_se_ignoran(self, post):
+        """Un navegador alterado no puede cotizar menos peso ni desde otra comuna (RF-02.3)."""
+        post.return_value = respuesta_chilexpress(TARIFA_OK)
+        self.config.comuna_origen = 'Puente Alto'
+        self.config.save(update_fields=['comuna_origen'])
+        payload = {**self.payload, 'peso': 0.01, 'alto': 1, 'ancho': 1, 'largo': 1, 'origen': 'SANTIAGO'}
+
+        with patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._obtener_catalogo_dinamico',
+                   return_value={'SANTIAGO': 'STGO', 'PUENTE ALTO': 'PALT'}):
+            response = self.client.post(reverse('cotizar-envio'), payload, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        enviado = post.call_args.kwargs['json']
+        self.assertEqual(enviado['originCountyCode'], 'PALT')
+        self.assertEqual(enviado['package']['weight'], '1.5')
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_las_comunas_se_encuentran_aunque_lleven_tildes_o_ene(self, post):
+        # Chilexpress las escribe sin tildes y con N: 'Ñuñoa' es NUNOA
+        post.return_value = respuesta_chilexpress(TARIFA_OK)
+        self.config.comuna_origen = 'Ñuñoa'
+        self.config.save(update_fields=['comuna_origen'])
+        with patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._obtener_catalogo_dinamico',
+                   return_value={'NUNOA': 'NUNO', 'MAIPU': 'MIPU'}):
+            response = self.client.post(reverse('cotizar-envio'), {**self.payload, 'destino': 'Maipú'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        enviado = post.call_args.kwargs['json']
+        self.assertEqual((enviado['originCountyCode'], enviado['destinationCountyCode']), ('NUNO', 'MIPU'))
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
+    def test_un_origen_sin_cobertura_no_se_cotiza_desde_santiago(self, post):
+        """Antes se usaba Santiago sin avisar y el comprador pagaba el envío desde otra comuna."""
+        self.config.comuna_origen = 'Atlántida'
+        self.config.save(update_fields=['comuna_origen'])
+
+        response = self.client.post(reverse('cotizar-envio'), self.payload, format='json')
+
+        self.assertEqual(response.status_code, 503)
+        post.assert_not_called()
+
+    @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_rechaza_datos_invalidos_sin_consultar_proveedor(self, post):
-        for payload in ({**self.payload, 'peso': -1}, {**self.payload, 'alto': 'abc'},
+        sin_items = {k: v for k, v in self.payload.items() if k != 'items'}
+        for payload in (sin_items, {**self.payload, 'items': [{'producto_mongo_id': 'polera'}]},
+                        {**self.payload, 'items': [{**ITEMS[0], 'variante_sku': 'NO-EXISTE'}]},
                         {k: v for k, v in self.payload.items() if k != 'destino'}):
             with self.subTest(payload=payload):
                 response = self.client.post(reverse('cotizar-envio'), payload, format='json')
@@ -100,7 +152,7 @@ class CotizacionesAPITests(APITestCase):
             'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Santiago', 'calle': 'Uno 123'},
             'subtotal': 25000, 'costo_envio': 1, 'total_final': 1,
-            'proveedor_logistico': 'CHILEXPRESS', 'paquete': PAQUETE,
+            'proveedor_logistico': 'CHILEXPRESS', 'paquete': PAQUETE_MANIPULADO,
         }
         response = self.client.post(reverse('checkout'), payload, format='json')
         self.assertEqual(response.status_code, 201, response.data)
@@ -108,9 +160,9 @@ class CotizacionesAPITests(APITestCase):
         self.assertEqual(orden.costo_envio, 3500)
         self.assertEqual(orden.total_final, 28500)
         self.assertEqual(orden.proveedor_logistico, 'CHILEXPRESS')
-        # La orden de transporte usará el mismo paquete que se cotizó
-        self.assertEqual(orden.paquete,
-                         {'peso_kg': '1.50', 'alto_cm': '10.00', 'ancho_cm': '20.00', 'largo_cm': '30.00'})
+        # Se cotiza y se despacha el paquete del catálogo, no el que mandó el navegador
+        self.assertEqual(post.call_args.kwargs['json']['package']['weight'], '1.5')
+        self.assertEqual(orden.paquete, {'peso_kg': '1.50', 'alto_cm': '30', 'ancho_cm': '30', 'largo_cm': '30'})
 
     def test_checkout_no_permite_retiro_desactivado(self):
         payload = {
@@ -160,19 +212,12 @@ class CotizacionesAPITests(APITestCase):
         self.assertIn('proveedor_logistico', response.data)
         self.assertFalse(OrdenCompra.objects.exists())
 
-    def test_courier_sin_paquete_se_rechaza_en_vez_de_usar_el_total_del_navegador(self):
-        self.sin_logistica_configurada()
-        response = self.checkout_con_totales_manipulados(proveedor_logistico='CHILEXPRESS')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('paquete', response.data)
-        self.assertFalse(OrdenCompra.objects.exists())
-
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     def test_sin_logistica_activa_el_courier_igual_se_cotiza_en_el_servidor(self, post):
+        # Sin paquete en la petición: lo arma el servidor
         post.return_value = respuesta_chilexpress(TARIFA_OK)
         self.sin_logistica_configurada()
-        response = self.checkout_con_totales_manipulados(
-            proveedor_logistico='CHILEXPRESS', paquete=PAQUETE)
+        response = self.checkout_con_totales_manipulados(proveedor_logistico='CHILEXPRESS')
         self.assertEqual(response.status_code, 201, response.data)
         orden = OrdenCompra.objects.get()
         self.assertEqual((orden.costo_envio, orden.total_final), (3500, 28500))
@@ -187,7 +232,6 @@ class CotizacionesAPITests(APITestCase):
             'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Santiago'},
             'subtotal': '25000', 'proveedor_logistico': 'CHILEXPRESS',
-            'paquete': PAQUETE,
         }
         response = self.client.post(reverse('checkout'), payload, format='json')
         self.assertEqual(response.status_code, 503)
@@ -320,7 +364,7 @@ class CouriersAPITests(APITestCase):
     def setUp(self):
         habilitar_medios_pago('TRANSFERENCIA')
         ConfiguracionGlobal.objects.create(id=1, nombre_tienda='QA', comuna_origen='Santiago')
-        self.payload = {'destino': 'MAIPU', 'peso': 1.5, 'alto': 10, 'ancho': 20, 'largo': 30}
+        self.payload = {'destino': 'MAIPU', 'items': ITEMS}
         usar_catalogo_falso(self, {
             ('polera', 'POLERA-M'): VarianteCatalogo('Polera - POLERA-M', Decimal('25000'), 5, True),
         })
@@ -337,7 +381,7 @@ class CouriersAPITests(APITestCase):
             'acepta_terminos': True, 'items': ITEMS, **DESTINATARIO,
             'direccion_envio_snapshot': {'comuna': 'Maipú', 'calle': 'Uno 123'},
             'subtotal': 25000, 'costo_envio': 0, 'total_final': 1,
-            'proveedor_logistico': proveedor, 'paquete': PAQUETE,
+            'proveedor_logistico': proveedor,
         }, format='json')
 
     def test_cotiza_con_cada_courier_activo_y_uno_caido_no_tapa_al_otro(self):

@@ -119,7 +119,6 @@ class CheckoutPromocionTests(APITestCase):
             'direccion_envio_snapshot': {'calle': 'Calle 1', 'ciudad': 'Santiago', 'comuna': 'Santiago'},
             'subtotal': 20000,
             'proveedor_logistico': 'CHILEXPRESS',
-            'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
             **DESTINATARIO,
         }
@@ -214,3 +213,50 @@ class GestionPromocionesPermisosTests(APITestCase):
         self.client.patch(self.detalle, {'fecha_expiracion': None}, format='json')
         self.promo.refresh_from_db()
         self.assertTrue(self.promo.esta_vigente)
+
+    def test_rechaza_cupones_que_regalarian_la_compra_o_el_envio(self):
+        """RF-04.1: un 250 % o un umbral negativo (envío gratis en toda compra) no se pueden guardar."""
+        self.client.force_authenticate(create_user('admin-reglas@example.test', rol='ADMIN'))
+        for cambios, campo in (
+            ({'valor_descuento': 250}, 'valor_descuento'),
+            ({'valor_descuento': -50}, 'valor_descuento'),
+            ({'valor_descuento': 0}, 'valor_descuento'),
+            ({'tipo_descuento': 'MONTO_FIJO', 'valor_descuento': 990.5}, 'valor_descuento'),
+            ({'umbral_envio_gratis': -1}, 'umbral_envio_gratis'),
+            ({'codigo': 'VERANO 20'}, 'codigo'),
+            ({'codigo': 'base10'}, 'codigo'),
+        ):
+            with self.subTest(cambios=cambios):
+                response = self.client.post(self.lista, {**self.nueva, **cambios}, format='json')
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(campo, response.data)
+        self.assertEqual(Promocion.objects.count(), 1)
+
+    def test_el_codigo_se_guarda_en_mayusculas_y_editar_otro_campo_no_lo_exige(self):
+        self.client.force_authenticate(create_user('admin-mayus@example.test', rol='ADMIN'))
+        response = self.client.post(self.lista, {**self.nueva, 'codigo': ' navidad-25 '}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['codigo'], 'NAVIDAD-25')
+
+        respuesta = self.client.patch(self.detalle, {'valor_descuento': 15}, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK, respuesta.data)
+        respuesta = self.client.patch(self.detalle, {'valor_descuento': 150}, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ValidarPromocionEntradasRarasTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('validar-promocion')
+
+    def test_codigos_antiguos_que_solo_difieren_en_mayusculas_no_dan_error_500(self):
+        Promocion.objects.create(codigo='verano20', tipo_descuento='PORCENTAJE', valor_descuento=10)
+        Promocion.objects.create(codigo='VERANO20', tipo_descuento='PORCENTAJE', valor_descuento=20)
+        response = self.client.post(self.url, {'codigo': 'Verano20', 'subtotal': 10000})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_subtotal_que_no_es_numero_responde_400(self):
+        Promocion.objects.create(codigo='DIEZ', tipo_descuento='PORCENTAJE', valor_descuento=10)
+        for subtotal in ('abc', 'nan', 'inf', -5):
+            with self.subTest(subtotal=subtotal):
+                response = self.client.post(self.url, {'codigo': 'DIEZ', 'subtotal': subtotal})
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

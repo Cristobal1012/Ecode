@@ -2,10 +2,29 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 
 class UsuarioManager(BaseUserManager):
+    def por_correo(self, email):
+        """La cuenta de un correo, sin distinguir mayúsculas: `Ana@Gmail.com` y `ana@gmail.com` son la misma.
+
+        Si quedaron cuentas antiguas que solo difieren en eso, se usa la que coincide exacto (o ninguna).
+        """
+        email = str(email or '').strip()
+        candidatas = list(self.filter(email__iexact=email)) if email else []
+        if len(candidatas) == 1:
+            return candidatas[0]
+        return next((usuario for usuario in candidatas if usuario.email == email), None)
+
+    def get_by_natural_key(self, email):
+        # Lo usa el inicio de sesión: el correo se puede escribir con cualquier combinación de mayúsculas
+        usuario = self.por_correo(email)
+        if usuario is None:
+            raise self.model.DoesNotExist
+        return usuario
+
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError('El email es obligatorio')
-        email = self.normalize_email(email)
+        # En minúsculas: así no se crean dos cuentas que solo difieren en mayúsculas
+        email = self.normalize_email(email).strip().lower()
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)

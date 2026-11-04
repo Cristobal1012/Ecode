@@ -7,6 +7,7 @@ from mongoengine.errors import ValidationError as MongoValidationError
 
 from ecommerce.application.cotizaciones import NombresProductos
 from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
+from ecommerce.domain.logistica import MedidasEnvio
 from ecommerce.domain.ventas import VarianteCatalogo
 
 from .documents import Producto
@@ -40,6 +41,8 @@ class MongoCatalogoVariantes(CatalogoVariantes):
             precio=Decimal(precio_vigente),
             stock=int(variante.stock),
             disponible=bool(producto.activo and producto.publicado),
+            medidas=MedidasEnvio(*(Decimal(str(getattr(variante, campo) or 0))
+                                   for campo in ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm'))),
         )
 
 

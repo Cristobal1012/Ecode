@@ -37,6 +37,7 @@ class SolicitudCotizacionTests(SimpleTestCase):
     def test_contacto_obligatorio_y_telefono_chileno(self):
         self.assertEqual(set(self.errores({**DATOS, 'nombre': '', 'correo': ''})), {'nombre', 'correo'})
         self.assertIn('telefono', self.errores({**DATOS, 'telefono': '123'}))
+        self.assertIn('nombre', self.errores({**DATOS, 'nombre': '12345'}))
 
     def test_cantidad_entre_1_y_100000(self):
         for cantidad in (0, -3, 100_001, None, '5', True):

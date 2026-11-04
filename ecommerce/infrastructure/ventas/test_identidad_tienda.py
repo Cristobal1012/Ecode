@@ -100,7 +100,7 @@ class IdentidadTiendaTests(APITestCase):
         self.assertEqual({campo: publica[campo] for campo in datos}, datos)
 
     def test_los_textos_largos_de_la_landing_tienen_un_maximo(self):
-        for campo, maximo in (('texto_landing', 1000), ('nosotros_texto', 2000)):
+        for campo, maximo in (('texto_bienvenida', 300), ('texto_landing', 1000), ('nosotros_texto', 2000)):
             with self.subTest(campo=campo):
                 response = self.client.patch(self.url, {campo: 'x' * (maximo + 1)}, format='json')
                 self.assertEqual(response.status_code, 400)

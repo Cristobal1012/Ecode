@@ -16,6 +16,7 @@ from rest_framework.permissions import AllowAny
 
 from django.utils import timezone
 import logging
+import math
 import os
 import hmac
 import hashlib
@@ -31,7 +32,7 @@ from ecommerce.application.couriers import (
 )
 from ecommerce.domain.logistica import (
     ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, ESTADO_NO_DISPONIBLE, NOMBRES_ENTREGAS_DE_LA_TIENDA, CourierNoDisponible,
-    CredencialesInvalidas, ErrorOrdenTransporte, Paquete, SinCobertura, aviso_entrega_coordinada,
+    CredencialesInvalidas, ErrorOrdenTransporte, SinCobertura, aviso_entrega_coordinada,
     es_entrega_con_courier, estado_entrega_de_la_tienda,
 )
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
@@ -60,7 +61,9 @@ from ecommerce.application.resenas import (
 )
 from ecommerce.domain.documentos_tributarios import FolioInvalido
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos, EstadoPago
-from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
+from ecommerce.domain.ventas import (
+    ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida,
+)
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
@@ -97,10 +100,12 @@ from .serializers import (
     PublicacionResumenSerializer,
     MedioPagoAdminSerializer,
     CredencialesCourierSerializer,
+    comuna_origen_tienda,
     couriers,
     courier_para_panel,
     medio_pago_para_panel,
     medios_pago,
+    paquete_del_pedido,
 )
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
@@ -675,49 +680,36 @@ class VerificarEstadoPagoView(APIView):
 
 
 class CotizacionEnvioView(APIView):
-    """
-    Endpoint para cotizar despachos desde el frontend en React.
-    Espera un POST con los detalles del paquete y destino.
+    """POST {destino, items, proveedor?}: el costo del envío por courier que ve el comprador (RF-02.3).
+
+    Es la misma cotización que cobra el checkout: el paquete lo arma el servidor con las medidas del catálogo y el
+    origen es la comuna de la tienda. Peso, medidas u origen enviados por el navegador se ignoran.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        datos = request.data
-        
-        # Validamos que venga al menos el destino
-        destino = datos.get('destino')
+        destino = request.data.get('destino')
         if not destino:
             return Response(
-                {"error": "El código de comuna de destino es obligatorio."}, 
+                {"error": "El código de comuna de destino es obligatorio."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-        # Extraemos los datos enviados por React y forzamos el tipo de dato numérico
-        origen = datos.get('origen', 'SANTIAGO') 
+        # Los mismos productos que el carrito: hasta 100 líneas con su cantidad
+        entrada = RevisionCarritoSerializer(data=request.data)
+        if not entrada.is_valid():
+            return Response({"error": "Indica los productos del carrito que se van a enviar."},
+                            status=status.HTTP_400_BAD_REQUEST)
         try:
-            peso = float(datos.get('peso', 1.0))
-            alto = int(datos.get('alto', 15))
-            ancho = int(datos.get('ancho', 15))
-            largo = int(datos.get('largo', 15))
-        except (ValueError, TypeError):
-            return Response(
-                {"error": "Las dimensiones y el peso deben ser valores numéricos válidos."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if min(peso, alto, ancho, largo) <= 0:
-            return Response(
-                {"error": "Las dimensiones y el peso deben ser mayores a cero."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        paquete = Paquete(Decimal(str(peso)), Decimal(alto), Decimal(ancho), Decimal(largo))
+            paquete = paquete_del_pedido(entrada.validated_data['items'])
+        except ErrorPedido as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         # Con un proveedor cotiza ese; sin él, todos los couriers activos (el comprador elige)
-        proveedor = datos.get('proveedor') or None
+        proveedor = request.data.get('proveedor') or None
 
         # Comuna sin cobertura → 400; courier caído o tarifa inválida → 503
         try:
-            opciones = CotizarEnvio(couriers()).ejecutar(origen, destino, paquete, proveedor)
+            opciones = CotizarEnvio(couriers()).ejecutar(comuna_origen_tienda(), destino, paquete, proveedor)
         except CourierNoActivo:
             return Response({"error": "No hay envío por courier disponible en esta tienda."},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -810,7 +802,7 @@ class SeguimientoEnvioView(APIView):
 
     def post(self, request):
         numero_orden = request.data.get('numero_orden')
-        email = request.data.get('email')
+        email = str(request.data.get('email') or '').strip()
 
         if not numero_orden or not email:
             return Response(
@@ -820,7 +812,8 @@ class SeguimientoEnvioView(APIView):
 
         try:
             orden = OrdenCompra.objects.get(
-                Q(id=numero_orden) & (Q(email_invitado=email) | Q(usuario__email=email))
+                # El correo sin distinguir mayúsculas: el comprador no recuerda cómo lo escribió
+                Q(id=numero_orden) & (Q(email_invitado__iexact=email) | Q(usuario__email__iexact=email))
             )
         # Un número de orden no numérico recibe la misma respuesta genérica (RF-02.4)
         except (OrdenCompra.DoesNotExist, ValueError):
@@ -1598,15 +1591,21 @@ class ValidarPromocionAPIView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        codigo = request.data.get('codigo', '').strip().upper()
-        subtotal = float(request.data.get('subtotal', 0))
+        codigo = str(request.data.get('codigo') or '').strip().upper()
+        try:
+            subtotal = float(request.data.get('subtotal', 0))
+        except (TypeError, ValueError):
+            subtotal = -1.0
+        # "nan" o "inf" también se convierten a float
+        if not math.isfinite(subtotal) or subtotal < 0:
+            return Response({"error": "El subtotal no es válido."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not codigo:
             return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            promo = Promocion.objects.get(codigo__iexact=codigo, is_active=True)
-        except Promocion.DoesNotExist:
+        # first(): si quedaron códigos antiguos que solo difieren en mayúsculas, get() fallaba con un error 500
+        promo = Promocion.objects.filter(codigo__iexact=codigo, is_active=True).order_by('id').first()
+        if promo is None:
             return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
 
         if not promo.esta_vigente:

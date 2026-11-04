@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
 import useCarrito from '../hooks/useCarrito';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
+import { soloCaracteresDeTelefono } from '../utils/telefono';
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
 import Header from './header/header';
@@ -24,19 +25,10 @@ const NOMBRES_TIPO_DESPACHO = {
     ENTREGA_COORDINADA: 'Entrega coordinada',
 };
 
-const calcularCajaDeEnvio = (items) => {
-    let pesoTotal = 0, volumenTotal = 0, ladoMasLargo = 0;
-    items.forEach(item => {
-        const peso = parseFloat(item.peso_kg) || 0.1;
-        const alto = parseInt(item.alto_cm, 10) || 10;
-        const ancho = parseInt(item.ancho_cm, 10) || 10;
-        const largo = parseInt(item.largo_cm, 10) || 10;
-        pesoTotal += peso * item.cantidad;
-        volumenTotal += alto * ancho * largo * item.cantidad;
-        ladoMasLargo = Math.max(ladoMasLargo, alto, ancho, largo);
-    });
-    return { peso: Number(pesoTotal.toFixed(2)), lado: Math.max(10, ladoMasLargo, Math.ceil(Math.cbrt(volumenTotal))) };
-};
+// Lo que el servidor necesita de cada producto: el peso y las medidas del paquete los toma del catálogo
+const itemsParaElServidor = (items) => items.map(item => ({
+    producto_mongo_id: item.id, variante_sku: item.sku, cantidad: item.cantidad,
+}));
 
 // Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
 const NOMBRES_MEDIO_PAGO = {
@@ -371,11 +363,10 @@ function CheckoutContenido() {
     useEffect(() => {
         if (!claveCotizacion) return;
         const [tipo, destino, items, proveedor] = JSON.parse(claveCotizacion);
-        const medidas = calcularCajaDeEnvio(items);
         let vigente = true;
         const controller = new AbortController();
         clienteAxios.post('ventas/logistica/cotizar/', {
-            destino, peso: medidas.peso, alto: medidas.lado, ancho: medidas.lado, largo: medidas.lado,
+            destino, items: itemsParaElServidor(items),
             ...(proveedor ? { proveedor } : {}),
         }, { signal: controller.signal })
             .then(({ data }) => {
@@ -414,8 +405,6 @@ function CheckoutContenido() {
     const opcionesEntrega = opcionEntregaPropia ? (opcionEntregaSeleccionada ? [opcionEntregaSeleccionada] : [])
         : opcionesCourier;
     const costoEnvio = Number(opcionEntregaSeleccionada?.costo_envio || 0);
-    const medidasCaja = calcularCajaDeEnvio(itemsCarrito);
-    const cajaCalculada = { peso_kg: String(medidasCaja.peso), alto_cm: String(medidasCaja.lado), ancho_cm: String(medidasCaja.lado), largo_cm: String(medidasCaja.lado) };
     const mensajeVisible = mensaje || cotizacionVigente?.error || '';
 
 
@@ -547,11 +536,10 @@ function CheckoutContenido() {
             subtotal, 
             costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
-            proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
-            paquete: opcionEntregaPropia ? undefined : cajaCalculada,
+            proveedor_logistico: opcionEntregaSeleccionada.proveedor,
             acepta_terminos: aceptaTerminos,
             codigo_promocion: codigoValidado,
-            items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
+            items: itemsParaElServidor(itemsCarrito)
         };
         try {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
@@ -692,7 +680,7 @@ function CheckoutContenido() {
                         </div>
                         <div className="checkout-campo">
                             <label htmlFor="checkout-telefono">Teléfono de contacto</label>
-                            <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" />
+                            <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(soloCaracteresDeTelefono(e.target.value))} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" />
                             <p id="checkout-telefono-ayuda" className="checkout-ayuda">
                                 Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
                             </p>
@@ -778,16 +766,16 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo checkout-campo--ancho">
                                                 <label htmlFor="checkout-calle">Calle</label>
-                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
+                                                <input id="checkout-calle" maxLength={255} type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-numero">Número</label>
-                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
+                                                <input id="checkout-numero" maxLength={50} type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         <div className="checkout-campo">
                                             <label htmlFor="checkout-dpto">Dpto, Casa o Referencia (Opcional)</label>
-                                            <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} placeholder="Ej: Depto 505" />
+                                            <input id="checkout-dpto" maxLength={100} type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} placeholder="Ej: Depto 505" />
                                         </div>
                                         <div className="checkout-fila">
                                             <div className="checkout-campo">
@@ -798,12 +786,12 @@ function CheckoutContenido() {
                                                         {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
                                                     </select>
                                                 ) : (
-                                                    <input id="checkout-comuna" type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
+                                                    <input id="checkout-comuna" maxLength={100} type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
                                                 )}
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-ciudad">Ciudad</label>
-                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
+                                                <input id="checkout-ciudad" maxLength={100} type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         {usuarioAutenticado && (

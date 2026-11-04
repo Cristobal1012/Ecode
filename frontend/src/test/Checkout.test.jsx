@@ -555,12 +555,10 @@ describe('Checkout', () => {
     await waitFor(() => {
         expect(postMock).toHaveBeenCalledWith(
             'ventas/logistica/cotizar/',
+            // RF-02.3: los productos, no el peso ni las medidas; el paquete lo arma el servidor con el catálogo
             {
                 destino: 'SANTIAGO',
-                peso: 1,
-                alto: 10,
-                ancho: 10,
-                largo: 10,
+                items: [{ producto_mongo_id: 'producto-1', variante_sku: 'SKU-001', cantidad: 1 }],
             },
             expect.objectContaining({ signal: expect.any(AbortSignal) })
         );
@@ -865,6 +863,17 @@ describe('Checkout', () => {
     abrirVentana.mockRestore();
   });
 
+
+  it('el teléfono de contacto no acepta letras', async () => {
+    prepararRespuestas();
+    renderCheckoutConRuta();
+    await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+
+    const telefono = screen.getByLabelText(/teléfono de contacto/i);
+    fireEvent.change(telefono, { target: { value: '+56 9 abc1234 5678' } });
+
+    expect(telefono).toHaveValue('+56 9 1234 5678');
+  });
 
   it('no procesa la compra cuando falta el nombre del destinatario', async () => {
     prepararRespuestas();
@@ -1398,9 +1407,11 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
 
     await waitFor(() => expect(postMock).toHaveBeenCalledWith('ventas/checkout/', expect.objectContaining({
       proveedor_logistico: 'ENTREGA_COORDINADA',
-      paquete: undefined,
       direccion_envio_snapshot: expect.objectContaining({ calle: 'Los Aromos', numero: '1550', comuna: 'Ñuñoa' }),
     })));
+    // El navegador nunca manda el paquete: lo arma el servidor (RF-02.3)
+    const [, cuerpo] = postMock.mock.calls.find(([url]) => url === 'ventas/checkout/');
+    expect(cuerpo).not.toHaveProperty('paquete');
     expect(postMock).not.toHaveBeenCalledWith('ventas/logistica/cotizar/', expect.anything(), expect.anything());
   });
 

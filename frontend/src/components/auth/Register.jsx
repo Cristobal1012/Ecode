@@ -100,6 +100,8 @@ export default function Register({ onSwitchToLogin }) {
                                 type={campo.tipo}
                                 name={campo.nombre}
                                 autoComplete={campo.autocompletar}
+                                // El mismo largo que acepta el servidor (nombre, apellido, correo y contraseña)
+                                maxLength={campo.tipo === 'password' ? 128 : 255}
                                 value={formData[campo.nombre]}
                                 onChange={handleChange}
                                 required

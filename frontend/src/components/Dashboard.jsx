@@ -214,6 +214,8 @@ export default function Dashboard() {
           <input
             type="date"
             id="dashboard-fecha-inicio"
+            // El rango no se puede invertir: el inicio no pasa del término y el término no queda antes del inicio
+            max={fechaFin || undefined}
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
             style={{
@@ -243,6 +245,7 @@ export default function Dashboard() {
           <input
             type="date"
             id="dashboard-fecha-fin"
+            min={fechaInicio || undefined}
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
             style={{

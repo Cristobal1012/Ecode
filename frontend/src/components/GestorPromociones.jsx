@@ -30,7 +30,8 @@ export default function GestorPromociones() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      // El código se guarda en mayúsculas y sin espacios (domain/promociones.py): así se ve desde que se escribe
+      [name]: name === 'codigo' ? value.toUpperCase().replace(/\s/g, '') : value
     }));
   };
 
@@ -73,7 +74,9 @@ export default function GestorPromociones() {
         setEditId(null); 
     } catch (error) {
         console.error("Error al guardar promoción:", error);
-        alert("Hubo un error al guardar el código.");
+        // El backend responde { campo: [mensajes] }: se muestran para que el admin sepa qué corregir
+        const mensajes = Object.values(error.response?.data || {}).flat().filter(m => typeof m === 'string');
+        alert(mensajes.length ? `No se pudo guardar el código:\n${mensajes.join('\n')}` : "Hubo un error al guardar el código.");
     }
   };
 
@@ -108,7 +111,7 @@ export default function GestorPromociones() {
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <label htmlFor="promocion-codigo" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Código de Descuento</label>
-            <input required type="text" id="promocion-codigo" name="codigo" value={formData.codigo} onChange={handleChange} placeholder="Ej. VERANO20" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)', textTransform: 'uppercase' }} />
+            <input required type="text" id="promocion-codigo" name="codigo" value={formData.codigo} onChange={handleChange} maxLength={50} pattern="[A-Za-zÑñ0-9_\-]+" title="Solo letras, números, guiones o guiones bajos, sin espacios" placeholder="Ej. VERANO20"style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)', textTransform: 'uppercase' }} />
           </div>
 
           <div>
@@ -121,12 +124,12 @@ export default function GestorPromociones() {
 
           <div>
             <label htmlFor="promocion-valor" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Valor del Descuento</label>
-            <input required type="number" id="promocion-valor" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
+            <input required type="number" id="promocion-valor" name="valor_descuento" value={formData.valor_descuento} onChange={handleChange} min={formData.tipo_descuento === 'PORCENTAJE' ? 0.01 : 1} max={formData.tipo_descuento === 'PORCENTAJE' ? 100 : undefined} step={formData.tipo_descuento === 'PORCENTAJE' ? 0.01 : 1}placeholder={formData.tipo_descuento === 'PORCENTAJE' ? 'Ej. 15' : 'Ej. 5000'} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
           </div>
 
           <div>
             <label htmlFor="promocion-umbral-envio" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>Umbral Envío Gratis ($)</label>
-            <input type="number" id="promocion-umbral-envio" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
+            <input type="number" id="promocion-umbral-envio" name="umbral_envio_gratis" value={formData.umbral_envio_gratis} onChange={handleChange} min={1} step={1}placeholder="Ej. 30000 (Opcional)" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid var(--color-control-border)' }} />
           </div>
 
           <div>

@@ -5,6 +5,7 @@ import DatosEmpresa from '../components/DatosEmpresa';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
+import { soloCaracteresDeTelefono } from '../utils/telefono';
 import '../components/Checkout.css';
 import './Cotizacion.css';
 import Spinner from '../components/carga/Spinner';
@@ -211,7 +212,7 @@ export default function Cotizacion() {
                       <label htmlFor="cotizacion-telefono">Teléfono</label>
                       <input id="cotizacion-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} required
                         placeholder="+56 9 1234 5678" value={formulario.telefono}
-                        onChange={(e) => editar('telefono', e.target.value)} {...describir('telefono')} />
+                        onChange={(e) => editar('telefono', soloCaracteresDeTelefono(e.target.value))} {...describir('telefono')} />
                       {errorCampo('telefono')}
                     </div>
                   </div>

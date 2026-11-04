@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
+from ecommerce.domain.ventas import NombreInvalido, TelefonoInvalido, normalizar_nombre_persona, normalizar_telefono_chile
+
 User = get_user_model()
 
 class RegistroUsuarioSerializer(serializers.ModelSerializer):
@@ -38,6 +40,38 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
             'telefono': {'required': False},
             'acepta_cookies': {'required': False},
         }
+
+    def _nombre(self, valor):
+        try:
+            return normalizar_nombre_persona(valor)
+        except NombreInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_nombre(self, valor):
+        return self._nombre(valor)
+
+    def validate_apellido_paterno(self, valor):
+        return self._nombre(valor)
+
+    def validate_apellido_materno(self, valor):
+        # Opcional
+        return self._nombre(valor) if valor and valor.strip() else valor
+
+    def validate_telefono(self, valor):
+        # Opcional; si viene, el mismo formato que el checkout (el teléfono se usa para coordinar entregas)
+        if not valor:
+            return valor
+        try:
+            return normalizar_telefono_chile(valor)
+        except TelefonoInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_email(self, valor):
+        # Sin distinguir mayúsculas: Ana@Gmail.com y ana@gmail.com son la misma cuenta
+        valor = valor.strip().lower()
+        if User.objects.filter(email__iexact=valor).exists():
+            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+        return valor
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:

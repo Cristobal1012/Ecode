@@ -9,7 +9,7 @@ from datetime import date
 from enum import StrEnum
 
 from .empresa import DatosEmpresa, DatosEmpresaInvalidos
-from .ventas import TelefonoInvalido, normalizar_telefono_chile
+from .ventas import NombreInvalido, TelefonoInvalido, normalizar_nombre_persona, normalizar_telefono_chile
 
 CANTIDAD_MAXIMA = 100_000
 
@@ -61,6 +61,11 @@ class SolicitudCotizacion:
         for campo in ('nombre', 'correo', 'telefono'):
             if not texto[campo]:
                 errores[campo] = 'Este dato es obligatorio.'
+        if texto['nombre']:
+            try:
+                texto['nombre'] = normalizar_nombre_persona(texto['nombre'])
+            except NombreInvalido as error:
+                errores['nombre'] = str(error)
         if texto['telefono']:
             try:
                 texto['telefono'] = normalizar_telefono_chile(texto['telefono'])

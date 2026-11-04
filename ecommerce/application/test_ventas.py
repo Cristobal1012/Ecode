@@ -7,12 +7,12 @@ from django.utils import timezone
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CancelarPagosVencidos, CatalogoVariantes, ConfirmarPago, InventarioVariantes,
     OrdenNoEncontrada,
-    GenerarOrdenTransporte, NotificadorPedidos, PedidoModificado, PrepararPedido, RepositorioOrdenes,
+    GenerarOrdenTransporte, NotificadorPedidos, PaqueteDelPedido, PedidoModificado, PrepararPedido, RepositorioOrdenes,
     RecordarPagosPorVencer, ResolverRevision,
     ResultadoPago, RevisarCarrito, SinRevisionPendiente, TransportistaOrdenes, MOTIVO_PAGO_VENCIDO,
     PagoFueraPlazoNoPermitido, RegistrarPagoFueraPlazo
 )
-from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
+from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte, MedidasEnvio
 from ecommerce.domain.ventas import (
     CantidadInvalida, EstadoPedido, EventoPedido, ItemSolicitado, OrdenRegistrada, OrdenTransporteNoPermitida,
     PedidoVacio, ProblemaLinea,
@@ -84,6 +84,26 @@ class PrepararPedidoTests(SimpleTestCase):
 
 def revisar(items):
     return RevisarCarrito(CATALOGO).ejecutar([ItemSolicitado(*item) for item in items])
+
+
+class PaqueteDelPedidoTests(SimpleTestCase):
+    """RF-02.3: el paquete del envío sale de las medidas del catálogo, no del navegador."""
+
+    def test_usa_las_medidas_de_cada_variante_y_junta_las_lineas_del_mismo_sku(self):
+        catalogo = CatalogoFalso({
+            ('camisa', 'CAMISA-S'): VarianteCatalogo(
+                'Camisa S', Decimal('20990'), 5, True, MedidasEnvio(Decimal('0.4'), Decimal('3'), Decimal('30'), Decimal('40'))),
+        })
+        paquete = PaqueteDelPedido(catalogo).ejecutar(
+            [ItemSolicitado('camisa', 'CAMISA-S', 1), ItemSolicitado('camisa', 'CAMISA-S', 2)])
+        self.assertEqual((paquete.peso_kg, paquete.alto_cm), (Decimal('1.20'), Decimal('40')))
+
+    def test_rechaza_un_carrito_vacio_o_una_variante_que_no_esta_disponible(self):
+        with self.assertRaises(PedidoVacio):
+            PaqueteDelPedido(CATALOGO).ejecutar([])
+        for producto, sku in (('gorro', 'GORRO-U'), ('camisa', 'NO-EXISTE')):
+            with self.subTest(sku=sku), self.assertRaises(VarianteNoDisponible):
+                PaqueteDelPedido(CATALOGO).ejecutar([ItemSolicitado(producto, sku, 1)])
 
 
 class RevisarCarritoTests(SimpleTestCase):

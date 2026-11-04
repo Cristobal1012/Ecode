@@ -3,6 +3,31 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import StrEnum
+import re
+
+from .empresa import normalizar_rut
+
+# Datos de la transferencia que el comprador copia para pagar: uno mal escrito hace rebotar el pago
+FORMATO_RUT = 'rut'
+FORMATO_CORREO = 'correo'
+FORMATO_NUMERO_CUENTA = 'numero_cuenta'
+_CORREO = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+_NUMERO_CUENTA = re.compile(r'^\d[\d -]{2,28}\d$')
+
+
+def normalizar_formato(formato: str, valor: str) -> str:
+    """El valor listo para guardar; ValueError con el mensaje para el admin si no tiene el formato."""
+    if formato == FORMATO_RUT:
+        return normalizar_rut(valor)
+    if formato == FORMATO_CORREO:
+        if not _CORREO.match(valor):
+            raise ValueError('Escribe un correo válido, por ejemplo pagos@mitienda.cl.')
+        return valor.lower()
+    if formato == FORMATO_NUMERO_CUENTA:
+        if not _NUMERO_CUENTA.match(valor):
+            raise ValueError('Usa solo los números de la cuenta (pueden ir separados por guiones o espacios).')
+        return ' '.join(valor.split())
+    return valor
 
 
 class CodigoMedioPago(StrEnum):
@@ -50,6 +75,8 @@ class CampoMedioPago:
     obligatorio: bool = True
     # False para la configuración interna del medio (ej. activar Linkify): el admin la ve, el comprador no
     para_comprador: bool = True
+    # Cómo se valida el texto (FORMATO_*); vacío = texto libre
+    formato: str = ''
 
     def es_obligatorio(self, datos: dict) -> bool:
         if not self.obligatorio:
@@ -99,10 +126,10 @@ MEDIOS_PAGO = (
         CampoMedioPago('banco', 'Banco'),
         CampoMedioPago('tipo_cuenta', 'Tipo de cuenta',
                        opciones=('Cuenta corriente', 'Cuenta vista', 'Cuenta de ahorro')),
-        CampoMedioPago('numero_cuenta', 'Número de cuenta'),
-        CampoMedioPago('rut_titular', 'RUT del titular'),
+        CampoMedioPago('numero_cuenta', 'Número de cuenta', formato=FORMATO_NUMERO_CUENTA),
+        CampoMedioPago('rut_titular', 'RUT del titular', formato=FORMATO_RUT),
         CampoMedioPago('nombre_titular', 'Nombre del titular'),
-        CampoMedioPago('email', 'Correo para el comprobante'),
+        CampoMedioPago('email', 'Correo para el comprobante', formato=FORMATO_CORREO),
         # Opcional para no dejar incompletas las tiendas que ya tenían la transferencia configurada
         CampoMedioPago('plazo_pago_horas', 'Plazo para pagar (si no eliges, 48 horas)',
                        opciones=PLAZOS_PAGO_TRANSFERENCIA, obligatorio=False, para_comprador=False),
@@ -190,6 +217,12 @@ def aplicar_cambios(actual: MedioPagoConfigurado, habilitado: bool,
         if valor and campo.opciones and valor not in campo.opciones:
             errores[campo.nombre] = f"Debe ser una de: {', '.join(campo.opciones)}."
             continue
+        if valor and campo.formato:
+            try:
+                valor = normalizar_formato(campo.formato, valor)
+            except ValueError as error:
+                errores[campo.nombre] = str(error)
+                continue
         if valor:
             datos[campo.nombre] = valor
         else:

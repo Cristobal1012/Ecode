@@ -36,6 +36,14 @@ class GoogleLoginTests(APITestCase):
         self.assertEqual((usuario.rol, usuario.google_sso_id), ('COMPRADOR', 'google-123'))
         self.assertFalse(usuario.has_usable_password())
 
+    def test_reconoce_la_cuenta_aunque_se_haya_registrado_con_otras_mayusculas(self, verificar):
+        # Una cuenta antigua, de antes de guardar los correos en minúsculas
+        existente = User.objects.create(email='Nueva@Example.test', nombre='Nueva', apellido_paterno='Persona')
+        verificar.return_value = payload_google()
+
+        self.assertEqual(self.login().status_code, 200)
+        self.assertEqual(list(User.objects.values_list('id', flat=True)), [existente.id])
+
     def test_verifica_que_el_token_sea_para_esta_tienda(self, verificar):
         verificar.return_value = payload_google()
         self.login()

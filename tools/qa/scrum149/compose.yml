@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:15
+    init: true
     environment:
       POSTGRES_DB: ecode_qa_scrum149
       POSTGRES_USER: qa149
@@ -9,8 +10,9 @@ services:
     volumes: ["postgres149:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U qa149 -d ecode_qa_scrum149"]
-      interval: 2s
-      timeout: 2s
+      interval: 5s
+      timeout: 5s
+      start_period: 300s
       retries: 30
   mongo:
     image: mongo:6

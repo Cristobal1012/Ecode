@@ -140,6 +140,44 @@ $C start backend web
 
 Prueba una restauración completa antes de entregar una tienda: un respaldo que nunca se restauró no está probado.
 
+### Mover una tienda a otro servidor
+
+La misma tienda, con sus claves, en otro servidor: por ejemplo, uno con más memoria o de otro proveedor. Para pasar
+de la tienda de prueba a la real del cliente las claves son nuevas ([paso 2](#2-la-tienda-con-su-dominio) de
+Poner en producción): se siguen los pasos 4 y 5 de esta lista y las llaves del panel se vuelven a cargar. El
+servidor nuevo se prepara igual que en [la guía](prueba-servidor.md#2-preparar-el-servidor).
+
+1. **Respalda en el servidor de origen** con `respaldar.sh` (arriba). Avísale al emprendedor que no haga cambios
+   desde ese momento: lo que cambie después del respaldo no pasa al servidor nuevo.
+2. **Copia el archivo de la tienda sin cambiar sus claves** (`scp`, y `chmod 600` en el servidor nuevo). Con otra
+   `CLAVE_CIFRADO_CREDENCIALES`, las llaves de pagos y envíos cargadas en el panel quedan ilegibles. Con otra
+   `SECRET_KEY`, dejan de funcionar las sesiones abiertas y los enlaces de reseña y de contraseña de los correos ya
+   enviados. Cambia solo lo que depende del servidor: `ARCHIVO_TIENDA` si cambia la ruta, y la dirección
+   (`DIRECCION_SITIO`, `IP_WEB`, los puertos, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y
+   `FRONTEND_URL`).
+3. **Clona el código en el servidor nuevo**, como en [la guía](prueba-servidor.md#3-código-y-variables-de-cada-tienda),
+   y copia la carpeta del respaldo. Las imágenes se compilan ahí mismo en el paso siguiente.
+4. **Restaura sobre la tienda vacía.** Con `C` y `D` como en [Restaurar un respaldo](#restaurar-un-respaldo),
+   primero solo las bases, y la tienda completa al final:
+
+   ```bash
+   $C build
+   $C up -d --wait postgres mongo
+   $C exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < $D/postgres.dump
+   $C exec -T mongo sh -c 'mongorestore --archive --gzip --drop -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' < $D/mongo.archive.gz
+   $C run --rm -T --no-deps backend sh -c 'tar xzf - -C /app/media' < $D/media.tar.gz
+   $C up -d --wait
+   ```
+
+   `mongorestore` debe terminar con `N document(s) restored successfully. 0 document(s) failed to restore`. Si
+   el servidor nuevo tiene una versión más reciente, el backend aplica sus migraciones al arrancar.
+5. **Comprueba** que `/api/salud/` responde `ok`, que el catálogo y las fotos cargan, y que los couriers con llave
+   aparecen en `/api/configuracion/` (`couriers`). Si no aparecen, la `CLAVE_CIFRADO_CREDENCIALES` no es la misma.
+6. **Fuera del servidor:** si cambia la IP, apunta el registro **A** del dominio a la nueva. Si cambia la dirección
+   de la tienda, agrégala en Google (inicio de sesión) y avísale al emprendedor.
+7. **Apaga la tienda de origen** con `$C down` cuando la nueva funcione. Sus datos se borran con `$C down -v`:
+   hazlo solo cuando estés seguro, y conserva el respaldo.
+
 ## Pasos después de cada versión nueva (sin Docker)
 
 ```bash
@@ -325,7 +363,8 @@ Levántala como en [Primer arranque](#primer-arranque) y comprueba `https://miti
 funcione, sube `SECURE_HSTS_SECONDS` a `31536000` y vuelve a levantar la tienda.
 
 Si la tienda de prueba ya tiene productos y pedidos que el cliente quiere conservar, en vez de partir de cero
-respáldala y restaura ese respaldo en el servidor nuevo ([Respaldos](#respaldos)). Las credenciales de pago se
+respáldala y restaura ese respaldo sobre la tienda vacía, como en los pasos 4 y 5 de
+[Mover una tienda a otro servidor](#mover-una-tienda-a-otro-servidor). Las credenciales de pago y de envíos se
 vuelven a cargar desde el panel, porque la clave de cifrado es otra.
 
 ### 3. Correo

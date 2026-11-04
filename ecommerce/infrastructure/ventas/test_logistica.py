@@ -211,7 +211,7 @@ class OrdenTransporteTests(APITestCase):
         self.addCleanup(catalogo.stop)
 
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
-    @patch('ecommerce.infrastructure.ventas.views.TransbankWebpayAdapter.confirmar_transaccion')
+    @patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.TransbankWebpayAdapter.confirmar_transaccion')
     def test_pago_aprobado_guarda_ot_como_codigo_de_seguimiento(self, confirmar, post):
         confirmar.return_value = {
             'exito': True, 'aprobado': True,

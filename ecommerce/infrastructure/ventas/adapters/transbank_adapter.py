@@ -1,18 +1,44 @@
 import logging
+import uuid
 from transbank.webpay.webpay_plus.transaction import Transaction
 from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
 
-from ecommerce.domain.medios_pago import AMBIENTE_PRODUCCION, CodigoMedioPago
+from ecommerce.application.pagos import ErrorPasarelaPago, PagoConsultado, PagoIniciado, PasarelaPago
+from ecommerce.domain.medios_pago import AMBIENTE_PRODUCCION, CodigoMedioPago, EstadoPago
 
 from ..repositorio_medios_pago import DjangoRepositorioMediosPago
 
 logger = logging.getLogger(__name__)
 
-class TransbankWebpayAdapter:
+class TransbankWebpayAdapter(PasarelaPago):
     """
     Adaptador para manejar pagos mediante Transbank Webpay Plus.
     """
+    nombre = 'Transbank'
+
+    def iniciar(self, orden_id, monto, url_retorno, url_aviso=''):
+        # Webpay Plus no avisa por webhook: el resultado llega cuando el comprador vuelve a url_retorno
+        respuesta = self.iniciar_transaccion(
+            orden_id=str(orden_id), monto=monto, return_url=url_retorno, session_id=str(uuid.uuid4()))
+        if not respuesta.get('exito'):
+            raise ErrorPasarelaPago(respuesta.get('error'))
+        return PagoIniciado(referencia=respuesta['token'],
+                            url_pago=f"{respuesta['url_pago']}?token_ws={respuesta['token']}")
+
+    def resultado(self, referencia):
+        """Confirma (commit) la transacción del token con que volvió el comprador."""
+        respuesta = self.confirmar_transaccion(referencia)
+        if not respuesta.get('exito'):
+            raise ErrorPasarelaPago(respuesta.get('error') or 'Error al comunicar con Transbank')
+        buy_order = respuesta['data_completa'].get('buy_order', '')
+        # Sin monto: Webpay cobra exactamente el que se le pidió al crear la transacción
+        return PagoConsultado(
+            referencia=referencia,
+            orden_id=buy_order.replace('ORD-', ''),
+            estado=EstadoPago.APROBADO if respuesta.get('aprobado') else EstadoPago.RECHAZADO,
+        )
+
     @classmethod
     def _obtener_instancia(cls) -> Transaction:
         # El ambiente y las credenciales los carga el admin en el panel, no el .env.
@@ -74,7 +100,8 @@ class TransbankWebpayAdapter:
         """
         try:
             tx = cls._obtener_instancia()
-            logger.info(f"Confirmando transacción Transbank con token {token}")
+            # Solo el final: los tokens de pago no se escriben completos en los registros
+            logger.info(f"Confirmando transacción Transbank con token ••••{token[-4:]}")
             
             respuesta = tx.commit(token)
             

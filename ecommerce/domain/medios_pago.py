@@ -11,6 +11,18 @@ class CodigoMedioPago(StrEnum):
     TRANSFERENCIA = 'TRANSFERENCIA'
 
 
+class EstadoPago(StrEnum):
+    """Resultado de un pago en línea, igual para toda pasarela: cada adaptador traduce los estados de la suya."""
+
+    APROBADO = 'APROBADO'
+    PENDIENTE = 'PENDIENTE'
+    RECHAZADO = 'RECHAZADO'
+    # El comprador lo anuló o la pasarela lo canceló antes de cobrar
+    ANULADO = 'ANULADO'
+    # Ya cobrado y después devuelto (reembolso o contracargo)
+    REEMBOLSADO = 'REEMBOLSADO'
+
+
 class MedioPagoNoDisponible(Exception):
     """RN-02: el comprador eligió un medio que la tienda no tiene habilitado y configurado."""
 

@@ -49,6 +49,8 @@ ventas_urlpatterns = [
     path('carrito/validar/', views.ValidarCarritoView.as_view(), name='carrito-validar'),
     #para validar promociones
     path('promociones/validar/', views.ValidarPromocionAPIView.as_view(), name='validar-promocion'),
+    # Descuentos automáticos vigentes, sin sus códigos: GET /api/ventas/promociones/automaticas/
+    path('promociones/automaticas/', views.PromocionesAutomaticasAPIView.as_view(), name='promociones-automaticas'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
 # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
@@ -62,6 +64,9 @@ ventas_urlpatterns = [
     path('cotizaciones/', views.CotizacionCreateView.as_view(), name='cotizaciones'),
     path('admin/cotizaciones/', views.AdminCotizacionListView.as_view(), name='admin-cotizaciones'),
     path('admin/cotizaciones/<int:pk>/', views.AdminCotizacionEstadoView.as_view(), name='admin-cotizacion-estado'),
+    # Una foto que adjuntó el cliente: solo el admin (no está en /media/)
+    path('admin/cotizaciones/<int:pk>/fotos/<int:foto_id>/', views.AdminFotoCotizacionView.as_view(),
+         name='admin-foto-cotizacion'),
     # Reseñas (si el admin las activó): formulario con el enlace firmado del correo, envío y lo aprobado
     path('resenas/', views.ResenaEnvioView.as_view(), name='resenas'),
     path('resenas/formulario/', views.ResenaFormularioView.as_view(), name='resena-formulario'),

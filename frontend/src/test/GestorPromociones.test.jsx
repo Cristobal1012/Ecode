@@ -34,6 +34,22 @@ describe('GestorPromociones', () => {
     expect(screen.getByLabelText('Valor del Descuento')).not.toHaveAttribute('max');
   });
 
+  it('un código automático con compra mínima se envía con sus campos y sin límite de usos', async () => {
+    clienteAxios.post.mockImplementation((_, datos) => Promise.resolve({ data: { id: 1, usos: 0, ...datos } }));
+    render(<GestorPromociones />);
+
+    fireEvent.change(screen.getByLabelText('Código de Descuento'), { target: { value: 'sobre30' } });
+    fireEvent.change(screen.getByLabelText('Valor del Descuento'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Aplicar automáticamente' }));
+    expect(screen.getByLabelText('Compra mínima ($)')).toBeRequired();
+    fireEvent.change(screen.getByLabelText('Compra mínima ($)'), { target: { value: '30000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar Promoción' }));
+
+    await waitFor(() => expect(clienteAxios.post).toHaveBeenCalledWith('ventas/promociones/', expect.objectContaining({
+      codigo: 'SOBRE30', automatica: true, monto_minimo: '30000', usos_maximos: null })));
+    expect(await screen.findByText('0 (sin límite)')).toBeInTheDocument();
+  });
+
   it('si el servidor rechaza el código, dice por qué', async () => {
     clienteAxios.post.mockRejectedValue({ response: { status: 400, data: {
       valor_descuento: ['Un descuento en porcentaje puede ser de hasta 100.'] } } });

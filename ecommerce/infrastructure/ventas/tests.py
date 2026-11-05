@@ -632,14 +632,14 @@ class SeguimientoEnvioTests(APITestCase):
 
 
     def test_sin_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
-        self.orden.numero_seguimiento_tracking = ''
-        self.orden.save(update_fields=['numero_seguimiento_tracking'])
-        response = self.consultar(self.orden.id)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data['estado_actual'],
-            'Pendiente de despacho',
-        )
+        # Vacío o nulo (el campo admite los dos): todavía no hay orden de transporte que consultar
+        for numero in ('', None):
+            with self.subTest(numero=numero):
+                self.orden.numero_seguimiento_tracking = numero
+                self.orden.save(update_fields=['numero_seguimiento_tracking'])
+                response = self.consultar(self.orden.id)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data['estado_actual'], 'Pendiente de despacho')
         consultar_estado.assert_not_called()
 
 
@@ -657,18 +657,6 @@ class SeguimientoEnvioTests(APITestCase):
         self.assertEqual(
             response.data['estado_actual'],
             'Esperando el pago',
-        )
-        consultar_estado.assert_not_called()
-
-
-    def test_none_en_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
-        self.orden.numero_seguimiento_tracking = None
-        self.orden.save(update_fields=['numero_seguimiento_tracking'])
-        response = self.consultar(self.orden.id)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data['estado_actual'],
-            'Pendiente de despacho',
         )
         consultar_estado.assert_not_called()
 

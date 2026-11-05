@@ -196,6 +196,19 @@ class OrdenCompraAdminTests(TestCase):
         self.assertEqual(edicion.status_code, 200)
         self.assertFalse(edicion.context['adminform'].form.fields['nombre_tienda'].disabled)
 
+    def test_el_admin_de_django_aplica_las_reglas_de_los_cupones_y_no_edita_los_usos(self):
+        alta = reverse('admin:ventas_promocion_add')
+        self.assertNotIn('name="usos"', self.client.get(alta).content.decode())
+        datos = {
+            'codigo': 'REGALO', 'tipo_descuento': 'PORCENTAJE', 'valor_descuento': '250', 'usos': '5',
+            'is_active': 'on', 'csrfmiddlewaretoken': self.client.cookies['csrftoken'].value,
+        }
+        self.assertEqual(self.client.post(alta, datos).status_code, 200)
+        self.assertFalse(Promocion.objects.exists())
+
+        self.assertEqual(self.client.post(alta, {**datos, 'valor_descuento': '25'}).status_code, 302)
+        self.assertEqual(Promocion.objects.get().usos, 0)
+
     def test_comprador_no_accede_y_post_sin_csrf_se_rechaza(self):
         self.assertEqual(self.client.post(self.url, {'estado': 'PAGADO'}).status_code, 403)
         comprador = create_user('comprador-admin@example.test')

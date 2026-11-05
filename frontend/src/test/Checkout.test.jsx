@@ -43,8 +43,12 @@ const producto = {
 const CHILEXPRESS = { codigo: 'CHILEXPRESS', nombre: 'Chilexpress', sucursales: true };
 
 function prepararRespuestas({ pasarelas = ['TRANSFERENCIA'], retiroLocal = true, chilexpress = true,
-                              entregaCoordinada = null, couriers = chilexpress ? [CHILEXPRESS] : [] } = {}) {
+                              entregaCoordinada = null, couriers = chilexpress ? [CHILEXPRESS] : [],
+                              automaticos = [] } = {}) {
   getMock.mockImplementation((url) => {
+    if (url === 'ventas/promociones/automaticas/') {
+      return Promise.resolve({ data: automaticos });
+    }
     if (url === 'configuracion/') {
       return Promise.resolve({
         data: {
@@ -863,6 +867,38 @@ describe('Checkout', () => {
     abrirVentana.mockRestore();
   });
 
+
+  it('un descuento automático se aplica solo y avisa cuánto falta para el siguiente', async () => {
+    // El carrito es de $15.000: el 10 % desde $10.000 se aplica; el de $5.000 desde $20.000 todavía no
+    prepararRespuestas({ automaticos: [
+      { tipo_descuento: 'PORCENTAJE', valor_descuento: 10, monto_minimo: 10000, umbral_envio_gratis: null },
+      { tipo_descuento: 'MONTO_FIJO', valor_descuento: 5000, monto_minimo: 20000, umbral_envio_gratis: null },
+    ] });
+    renderCheckoutConRuta();
+    await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+
+    expect(await screen.findByText('Descuento (automático):')).toBeInTheDocument();
+    expect(screen.getByText('-$1.500')).toBeInTheDocument();
+    expect(screen.getByText(/Agrega \$5\.000 más y obtén \$5\.000 de descuento/)).toBeInTheDocument();
+  });
+
+  it('con un código menor que el automático se queda el automático y se avisa', async () => {
+    prepararRespuestas({ automaticos: [
+      { tipo_descuento: 'PORCENTAJE', valor_descuento: 20, monto_minimo: 10000, umbral_envio_gratis: null },
+    ] });
+    postMock.mockImplementation((url) => url === 'ventas/promociones/validar/'
+      ? Promise.resolve({ data: { codigo: 'CINCO', tipo_descuento: 'PORCENTAJE', valor_descuento: 5,
+        monto_minimo: null, umbral_envio_gratis: null } })
+      : Promise.resolve({ data: {} }));
+    renderCheckoutConRuta();
+    await screen.findByText('Descuento (automático):');
+
+    fireEvent.change(screen.getByLabelText('Cupón de descuento'), { target: { value: 'cinco' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+
+    expect(await screen.findByText(/ya tiene un descuento mayor/)).toBeInTheDocument();
+    expect(screen.getByText('-$3.000')).toBeInTheDocument();
+  });
 
   it('el teléfono de contacto no acepta letras', async () => {
     prepararRespuestas();

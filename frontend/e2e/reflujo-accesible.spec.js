@@ -23,24 +23,24 @@ for (const ancho of [1440, 390, 768, 320]) {
   });
 }
 
-for (const tema of [1, 2, 3, 4]) {
-  for (const tipografia of [1, 2, 3, 4, 5]) {
-    test(`paleta ${tema}, tipografía ${tipografia}: 320 píxeles`, async ({ page }) => {
-      const { inesperadas } = await prepararTienda(page, { tema, tipografia, sesion: true });
-      await page.setViewportSize({ width: 320, height: 844 });
-      for (const ruta of ['/', '/catalogo', '/login', '/checkout', '/admin']) {
-        await page.goto(ruta);
-        await medirVista(page);
-      }
-      await page.getByRole('button', { name: 'Inventario', exact: true }).click();
-      await page.getByRole('button', { name: '+ Agregar producto', exact: true }).click();
+// El reflujo depende de la tipografía (el ancho del texto), no de la paleta: los colores no cambian las medidas, y
+// el contraste de cada paleta lo revisan paletas.test.js y accesibilidad.spec.js
+for (const tipografia of [1, 2, 3, 4, 5]) {
+  test(`tipografía ${tipografia}: 320 píxeles`, async ({ page }) => {
+    const { inesperadas } = await prepararTienda(page, { tipografia, sesion: true });
+    await page.setViewportSize({ width: 320, height: 844 });
+    for (const ruta of ['/', '/catalogo', '/login', '/checkout', '/admin']) {
+      await page.goto(ruta);
       await medirVista(page);
-      await expect(page.getByRole('button', { name: 'Crear Producto', exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
-      await medirVista(page);
-      expect(inesperadas).toEqual([]);
-    });
-  }
+    }
+    await page.getByRole('button', { name: 'Inventario', exact: true }).click();
+    await page.getByRole('button', { name: '+ Agregar producto', exact: true }).click();
+    await medirVista(page);
+    await expect(page.getByRole('button', { name: 'Crear Producto', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+    await medirVista(page);
+    expect(inesperadas).toEqual([]);
+  });
 }
 
 for (const ajuste of ['texto al 200 %', 'espaciado personalizado']) {

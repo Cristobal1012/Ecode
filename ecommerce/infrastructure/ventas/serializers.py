@@ -5,6 +5,8 @@ import uuid
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import F, Q
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
@@ -21,10 +23,14 @@ from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
+from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
-from ecommerce.domain.promociones import PromocionInvalida, validar_promocion
+from ecommerce.domain.promociones import (
+    PromocionInvalida, ReglaDescuento, cumple_minimo, da_envio_gratis, elegir_promocion, monto_descuento,
+    validar_promocion,
+)
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -292,6 +298,32 @@ def paquete_del_pedido(items):
         [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad']) for i in items])
 
 
+def regla_de_promocion(promocion):
+    """La regla de dominio de un código guardado (domain/promociones.py)."""
+    def decimal(valor):
+        return None if valor is None else Decimal(str(valor))
+    return ReglaDescuento(promocion.tipo_descuento, Decimal(str(promocion.valor_descuento)),
+                          decimal(promocion.umbral_envio_gratis), decimal(promocion.monto_minimo))
+
+
+def mensaje_monto_minimo(promocion):
+    return f"Este código vale para compras desde ${promocion.monto_minimo:,}.".replace(',', '.')
+
+
+def promociones_automaticas_vigentes():
+    """Los descuentos que se aplican solos: activos, sin vencer y con usos disponibles."""
+    ahora = timezone.now()
+    filas = Promocion.objects.filter(automatica=True, is_active=True).filter(
+        Q(fecha_expiracion__isnull=True) | Q(fecha_expiracion__gte=ahora)).order_by('id')
+    return [promocion for promocion in filas if promocion.esta_vigente]
+
+
+def reservar_uso_promocion(promocion_id):
+    """Suma un uso solo si quedan (UPDATE condicional): dos compras al mismo tiempo no se pasan del límite."""
+    con_usos = Q(usos_maximos__isnull=True) | Q(usos__lt=F('usos_maximos'))
+    return Promocion.objects.filter(con_usos, pk=promocion_id, is_active=True).update(usos=F('usos') + 1) == 1
+
+
 def comuna_origen_tienda():
     """Desde donde despacha la tienda: la cotización que ve el comprador y el cobro del checkout usan la misma."""
     config = ConfiguracionGlobal.objects.filter(pk=1).first()
@@ -386,13 +418,18 @@ class CotizacionSolicitudSerializer(serializers.Serializer):
 
 class AdminCotizacionSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    # Los ids de las fotos: el panel las pide a admin/cotizaciones/<id>/fotos/<foto>/ con la sesión del admin
+    fotos = serializers.SerializerMethodField()
 
     class Meta:
         model = Cotizacion
         fields = ['id', 'fecha_creacion', 'estado', 'estado_display', 'nombre', 'correo', 'telefono',
                   'producto_id', 'producto_nombre', 'descripcion', 'cantidad', 'personalizacion',
-                  'fecha_requerida', 'datos_empresa']
+                  'fecha_requerida', 'datos_empresa', 'fotos']
         read_only_fields = fields
+
+    def get_fotos(self, obj):
+        return [foto.id for foto in obj.fotos.all()]
 
 
 class ResenaProductoSerializer(serializers.ModelSerializer):
@@ -611,31 +648,36 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             except CourierNoDisponible:
                 raise ProveedorLogisticoNoDisponible()
 
-        # APLICAR PROMOCION Y VALIDAR EL CUPON
-        subtotal_num = float(validated_data['subtotal'])
+        # RF-04.1: el código escrito y los automáticos; se aplica el que más ahorra, calculado con el subtotal del
+        # catálogo (PrepararPedido ya comprobó que el del navegador coincide)
+        subtotal_num = float(self._pedido.subtotal)
         descuento = 0.0
-        promo_aplicada = None
-
+        candidatas = []
         if codigo_promo:
-            promo = Promocion.objects.filter(
-                codigo__iexact=codigo_promo.strip(), is_active=True
-            ).first()
-            if not promo or not promo.esta_vigente:
+            escrito = Promocion.objects.filter(codigo__iexact=codigo_promo.strip(), is_active=True).order_by('id').first()
+            if not escrito or not escrito.esta_vigente:
                 raise serializers.ValidationError({
                     'codigo_promocion': 'El cupón ingresado no es válido o ya expiró.'
                 })
+            if not cumple_minimo(regla_de_promocion(escrito), self._pedido.subtotal):
+                raise serializers.ValidationError({'codigo_promocion': mensaje_monto_minimo(escrito)})
+            candidatas.append(escrito)
+        candidatas += promociones_automaticas_vigentes()
 
-            if promo.tipo_descuento == 'PORCENTAJE':
-                descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
-            else:
-                descuento = float(promo.valor_descuento)
-            descuento = min(descuento, subtotal_num)
-            descuento = max(0.0, descuento)
-
-            if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
+        promo_aplicada = elegir_promocion(candidatas, self._pedido.subtotal, Decimal(str(costo_envio)),
+                                          regla_de_promocion)
+        if promo_aplicada:
+            # El uso se cuenta aquí, dentro de la transacción: si el límite ya se alcanzó (otra compra al mismo
+            # tiempo) no se aplica, y si después falla el pago, el rollback lo devuelve
+            if not reservar_uso_promocion(promo_aplicada.pk):
+                raise serializers.ValidationError({
+                    'codigo_promocion': 'Este código ya alcanzó su límite de usos. Revisa el total antes de pagar.'
+                })
+            regla = regla_de_promocion(promo_aplicada)
+            descuento = float(monto_descuento(regla, self._pedido.subtotal))
+            if da_envio_gratis(regla, self._pedido.subtotal):
                 costo_envio = 0.0
-
-            promo_aplicada = promo
+        validated_data['promocion'] = promo_aplicada
 
         # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
         validated_data['costo_envio'] = costo_envio
@@ -693,11 +735,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             url_pago = pago.url_pago
             orden.id_transaccion_pasarela = pago.referencia
             orden.save()
-
-        # Desactivamos el cupón solo después de que la orden y la pasarela se iniciaron exitosamente
-        if promo_aplicada:
-            promo_aplicada.is_active = False
-            promo_aplicada.save()
 
         # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
         notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)
@@ -864,6 +901,12 @@ class FotosPublicacionSerializer(serializers.Serializer):
     fotos = serializers.ListField(child=ArchivoImagenField(), allow_empty=False, max_length=MAX_FOTOS_PUBLICACION)
 
 
+class FotosCotizacionSerializer(serializers.Serializer):
+    """Las fotos de la idea del cliente: el mismo control que las del catálogo (formato real, tamaño, píxeles) y
+    se vuelven a codificar, sin los datos de la cámara (ej. la ubicación GPS de una foto del celular)."""
+    fotos = serializers.ListField(child=ArchivoImagenField(), required=False, max_length=MAX_FOTOS_COTIZACION)
+
+
 class FotoPublicacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = FotoPublicacion
@@ -953,11 +996,14 @@ class PromocionSerializer(serializers.ModelSerializer):
         model = Promocion
         # fecha_expiracion: el cupón deja de valer desde ese momento (sin fecha no vence)
         fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'fecha_expiracion',
-                  'is_active']
+                  'is_active', 'monto_minimo', 'automatica', 'usos_maximos', 'usos']
+        # Los usos los cuenta el checkout, no el admin
+        read_only_fields = ['usos']
 
     def validate(self, attrs):
         # Las reglas están en domain/promociones.py; en una edición parcial se completan con lo guardado
-        campos = ('codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis')
+        campos = ('codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'monto_minimo', 'automatica',
+                  'usos_maximos')
         datos = {campo: attrs.get(campo, getattr(self.instance, campo, None)) for campo in campos}
         try:
             codigo = validar_promocion(**datos)

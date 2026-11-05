@@ -9,9 +9,12 @@ from datetime import date
 from enum import StrEnum
 
 from .empresa import DatosEmpresa, DatosEmpresaInvalidos
+from .imagenes import ImagenProcesada
 from .ventas import NombreInvalido, TelefonoInvalido, normalizar_nombre_persona, normalizar_telefono_chile
 
 CANTIDAD_MAXIMA = 100_000
+# Fotos de la idea del cliente: las ve solo la tienda (se guardan fuera de los archivos públicos)
+MAX_FOTOS_COTIZACION = 3
 
 
 class EstadoCotizacion(StrEnum):
@@ -51,9 +54,12 @@ class SolicitudCotizacion:
     fecha_requerida: date | None = None
     # Solo si cotiza como empresa (para la factura)
     empresa: DatosEmpresa | None = None
+    # Ya validadas y limpias (formato, tamaño y sin los datos de la cámara)
+    fotos: tuple[ImagenProcesada, ...] = ()
 
     @classmethod
-    def desde(cls, datos: dict, hoy: date, producto_nombre: str = '') -> 'SolicitudCotizacion':
+    def desde(cls, datos: dict, hoy: date, producto_nombre: str = '',
+              fotos: tuple[ImagenProcesada, ...] = ()) -> 'SolicitudCotizacion':
         """`producto_nombre` lo resuelve quien llama a partir de `producto_id` (vacío si no existe)."""
         texto = {campo: str(datos.get(campo) or '').strip()
                  for campo in ('nombre', 'correo', 'telefono', 'producto_id', 'descripcion', 'personalizacion')}
@@ -92,11 +98,14 @@ class SolicitudCotizacion:
             except DatosEmpresaInvalidos as error:
                 errores['empresa'] = error.errores
 
+        if len(fotos) > MAX_FOTOS_COTIZACION:
+            errores['fotos'] = f'Puedes adjuntar hasta {MAX_FOTOS_COTIZACION} fotos.'
+
         if errores:
             raise CotizacionInvalida(errores)
         return cls(
             nombre=texto['nombre'], correo=texto['correo'], telefono=texto['telefono'], cantidad=cantidad,
             producto_id=texto['producto_id'], producto_nombre=producto_nombre if texto['producto_id'] else '',
             descripcion=texto['descripcion'], personalizacion=texto['personalizacion'], fecha_requerida=fecha,
-            empresa=empresa,
+            empresa=empresa, fotos=tuple(fotos),
         )

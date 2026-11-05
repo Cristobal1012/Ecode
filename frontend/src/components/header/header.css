@@ -343,7 +343,8 @@
   cursor: pointer;
 }
 
-.carrito-cantidad button:disabled {
+.carrito-cantidad button:disabled,
+.carrito-cantidad button[aria-disabled="true"] {
   color: var(--color-border);
   cursor: not-allowed;
 }
@@ -370,6 +371,11 @@
 .carrito-quitar:hover,
 .boton-texto:hover {
   color: var(--color-text);
+}
+
+.carrito-quitar[aria-disabled="true"] {
+  color: var(--color-border);
+  cursor: not-allowed;
 }
 
 .carrito-vacio {

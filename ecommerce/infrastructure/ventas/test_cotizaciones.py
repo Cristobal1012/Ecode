@@ -1,9 +1,18 @@
 """Formulario de cotización y encargos: la tienda recibe la solicitud por correo y la gestiona en el panel."""
 
+from io import BytesIO
+import json
+from pathlib import Path
+import shutil
+import tempfile
 from unittest.mock import patch
+
+from PIL import Image
 
 from django.core import mail
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -174,3 +183,115 @@ class PanelCotizacionesTests(APITestCase):
         self.assertEqual(self.client.patch(url, {'estado': 'ACEPTADA'}, format='json').status_code, 403)
         self.client.force_authenticate(None)
         self.assertIn(self.client.get(reverse('admin-cotizaciones')).status_code, (401, 403))
+
+
+def archivo_imagen(nombre='idea.jpg', formato='JPEG', exif=None):
+    """Una foto real de 40 x 30; con `exif`, como las de un celular (ej. con la ubicación GPS)."""
+    salida = BytesIO()
+    imagen = Image.new('RGB', (40, 30), (200, 80, 60))
+    opciones = {'exif': exif} if exif is not None else {}
+    imagen.save(salida, format=formato, **opciones)
+    tipo = {'JPEG': 'image/jpeg', 'PNG': 'image/png'}[formato]
+    return SimpleUploadedFile(nombre, salida.getvalue(), content_type=tipo)
+
+
+@patch.dict('os.environ', {'FRONTEND_URL': 'http://tienda.test'})
+class FotosCotizacionTests(APITestCase):
+    """El cliente adjunta hasta 3 fotos de su idea; solo las ve la tienda (no quedan en /media/, que es público)."""
+
+    def setUp(self):
+        cache.clear()
+        ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='Tienda QA', cotizaciones_activas=True,
+                                           correo_contacto='hola@tienda.test')
+        productos = patch('ecommerce.infrastructure.ventas.views.MongoNombresProductos', ProductosFalsos)
+        productos.start()
+        self.addCleanup(productos.stop)
+        self.privado = Path(tempfile.mkdtemp())
+        self.media = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.privado, True)
+        self.addCleanup(shutil.rmtree, self.media, True)
+        carpetas = override_settings(ARCHIVOS_PRIVADOS_ROOT=self.privado, MEDIA_ROOT=self.media)
+        carpetas.enable()
+        self.addCleanup(carpetas.disable)
+
+    def enviar(self, fotos, datos=None):
+        cuerpo = {'datos': json.dumps(datos if datos is not None else SOLICITUD), 'fotos': fotos}
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(reverse('cotizaciones'), cuerpo, format='multipart')
+
+    def archivos(self, carpeta):
+        return [ruta for ruta in carpeta.rglob('*') if ruta.is_file()]
+
+    def test_guarda_las_fotos_en_la_carpeta_privada_y_avisa_cuantas_son(self):
+        response = self.enviar([archivo_imagen(), archivo_imagen('ref.png', 'PNG')])
+
+        self.assertEqual(response.status_code, 201, response.data)
+        cotizacion = Cotizacion.objects.get()
+        self.assertEqual(cotizacion.fotos.count(), 2)
+        self.assertEqual(len(self.archivos(self.privado)), 2)
+        self.assertEqual(self.archivos(self.media), [])
+        # El nombre del archivo es al azar: no es el que puso el cliente
+        self.assertNotIn('idea', ' '.join(foto.ruta for foto in cotizacion.fotos.all()))
+        tienda, cliente = mail.outbox
+        self.assertIn('Fotos: 2 adjuntas', tienda.body)
+        self.assertEqual(tienda.attachments, [])
+
+    def test_sin_fotos_sigue_funcionando_como_antes(self):
+        self.assertEqual(self.enviar([]).status_code, 201)
+        self.assertEqual(Cotizacion.objects.get().fotos.count(), 0)
+
+    def test_rechaza_mas_de_tres_fotos_o_archivos_que_no_son_imagenes(self):
+        falsa = SimpleUploadedFile('idea.png', b'no soy una imagen', content_type='image/png')
+        for fotos in ([archivo_imagen() for _ in range(4)], [falsa]):
+            with self.subTest(fotos=len(fotos)):
+                response = self.enviar(fotos)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('fotos', response.data)
+        self.assertFalse(Cotizacion.objects.exists())
+        self.assertEqual(self.archivos(self.privado), [])
+
+    def test_quita_los_datos_de_la_camara_como_la_ubicacion(self):
+        exif = Image.Exif()
+        exif[0x8825] = {2: (33.0, 26.0, 0.0)}  # GPSInfo: una latitud
+        exif[0x010F] = 'Marca del celular'
+        self.assertEqual(self.enviar([archivo_imagen(exif=exif.tobytes())]).status_code, 201)
+        guardada, = self.archivos(self.privado)
+        with Image.open(guardada) as imagen:
+            self.assertEqual(dict(imagen.getexif()), {})
+
+    def test_datos_que_no_son_json_se_rechazan(self):
+        cuerpo = {'datos': 'no es json', 'fotos': [archivo_imagen()]}
+        response = self.client.post(reverse('cotizaciones'), cuerpo, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Cotizacion.objects.exists())
+
+    def test_el_campo_trampa_con_fotos_no_guarda_nada(self):
+        response = self.enviar([archivo_imagen()], datos={**SOLICITUD, 'sitio_web': 'http://spam.test'})
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(Cotizacion.objects.exists())
+        self.assertEqual(self.archivos(self.privado), [])
+
+    def test_solo_el_admin_ve_las_fotos_y_con_cabeceras_seguras(self):
+        self.enviar([archivo_imagen()])
+        cotizacion = Cotizacion.objects.get()
+        foto = cotizacion.fotos.get()
+        url = reverse('admin-foto-cotizacion', args=[cotizacion.id, foto.id])
+
+        self.assertEqual(self.client.get(url).status_code, 401)
+        self.client.force_authenticate(create_user('comprador-fotos@example.test'))
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+        self.client.force_authenticate(create_user('admin-fotos@example.test', rol='ADMIN'))
+        listado = self.client.get(reverse('admin-cotizaciones')).data['results']
+        self.assertEqual(listado[0]['fotos'], [foto.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        self.assertIn('sandbox', response['Content-Security-Policy'])
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertTrue(b''.join(response.streaming_content).startswith(bytes([0xFF, 0xD8])))
+        # Una foto pedida con el número de otra cotización no se entrega
+        otra = Cotizacion.objects.create(nombre='Luis', correo='l@example.test', telefono='+56912345678', cantidad=1)
+        self.assertEqual(self.client.get(reverse('admin-foto-cotizacion', args=[otra.id, foto.id])).status_code, 404)
+

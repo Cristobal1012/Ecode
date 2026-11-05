@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from django.test import SimpleTestCase, TestCase
-from django.utils import timezone
+from django.test import SimpleTestCase
 
 from ecommerce.application.ventas import (
     CambiarEstadoPedido, CancelarPagosVencidos, CatalogoVariantes, ConfirmarPago, InventarioVariantes,
@@ -738,40 +737,3 @@ class RegistrarPagoFueraPlazoTests(SimpleTestCase):
     def test_rechaza_orden_inexistente(self):
         with self.assertRaises(OrdenNoEncontrada):
             self.caso.ejecutar(999)
-
-class CalculoTotalesQATest(TestCase):
-
-    def test_descuento_no_genera_total_negativo(self):
-        subtotal = Decimal('10000.00')
-        descuento = Decimal('15000.00')
-        
-        # Validación de negocio: el total nunca debe ser menor a 0
-        total = max(Decimal('0.00'), subtotal - descuento)
-        
-        self.assertEqual(total, Decimal('0.00'))
-
-    def test_umbral_envio_gratuito(self):
-        umbral_envio = Decimal('30000.00')
-        compra_bajo_umbral = Decimal('25000.00')
-        compra_sobre_umbral = Decimal('35000.00')
-        
-        # Validación de negocio: activación de envío gratis
-        envio_gratis_1 = compra_bajo_umbral >= umbral_envio
-        envio_gratis_2 = compra_sobre_umbral >= umbral_envio
-        
-        self.assertFalse(envio_gratis_1)
-        self.assertTrue(envio_gratis_2)
-
-    def test_invalidacion_cupon_por_uso_o_expiracion(self):
-        cupon = {
-            "codigo": "DESCUENTO20",
-            "usado": False,
-            "activo": True,
-            "expiracion": timezone.now() - timezone.timedelta(days=1) # Simula fecha pasada
-        }
-        
-        # Validación de negocio: invalidación por uso o expiración
-        if cupon["usado"] or timezone.now() > cupon["expiracion"]:
-            cupon["activo"] = False
-            
-        self.assertFalse(cupon["activo"])

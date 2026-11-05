@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
 import useCarrito from '../hooks/useCarrito';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
+import { cumpleMinimo, daEnvioGratis, elegirDescuento, montoDescuento, siguienteAutomatico } from '../utils/descuentos';
 import { soloCaracteresDeTelefono } from '../utils/telefono';
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
@@ -121,10 +122,10 @@ function CheckoutContenido() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
-    // Vista previa del cupón ({ tipo, valor, codigo }) y el código que se envía al checkout
-    const [descuentoAplicado, setDescuentoAplicado] = useState(null);
-    const [codigoValidado, setCodigoValidado] = useState(null);
-    const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
+    // RF-04.1: el código que escribió el comprador (su regla, como la valida el servidor) y los descuentos automáticos.
+    // No se suman: se muestra el que más ahorra, con el mismo cálculo que hace el servidor al pagar
+    const [codigoEscrito, setCodigoEscrito] = useState(null);
+    const [automaticos, setAutomaticos] = useState([]);
     const [codigoInput, setCodigoInput] = useState('');
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opciones: [], error: '' });
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
@@ -190,6 +191,13 @@ function CheckoutContenido() {
         }, 3000);
         return () => clearInterval(interval);
     }, [esperandoPago?.ordenId, verificarEstadoOrden]);
+
+    // Los descuentos automáticos vigentes (sin sus códigos); si falla, el checkout sigue sin la vista previa
+    useEffect(() => {
+        clienteAxios.get('ventas/promociones/automaticas/')
+            .then(({ data }) => setAutomaticos(Array.isArray(data) ? data : []))
+            .catch(() => setAutomaticos([]));
+    }, []);
 
     // Verificación de orden pendiente al cargar la página
     useEffect(() => {
@@ -412,22 +420,14 @@ function CheckoutContenido() {
 
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    let montoDescuento = 0;
-    if (descuentoAplicado) {
-        if (descuentoAplicado.tipo === 'PORCENTAJE') {
-            montoDescuento = subtotal * (descuentoAplicado.valor / 100);
-        } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
-            montoDescuento = descuentoAplicado.valor;
-        }
-    }
-
-    const tieneEnvioGratisCupon = Boolean(
-        codigoValidado &&
-        umbralEnvioGratis !== null &&
-        subtotal >= umbralEnvioGratis
-    );
+    const descuentoElegido = elegirDescuento(codigoEscrito ? [codigoEscrito, ...automaticos] : automaticos,
+        subtotal, costoEnvio);
+    const montoDescontado = descuentoElegido ? montoDescuento(descuentoElegido, subtotal) : 0;
+    const tieneEnvioGratisCupon = Boolean(descuentoElegido && daEnvioGratis(descuentoElegido, subtotal));
+    // "Te faltan $X": el automático más cercano que todavía no se alcanza
+    const proximoAutomatico = siguienteAutomatico(automaticos, subtotal);
     const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
-    const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
+    const totalFinal = Math.max(0, subtotal - montoDescontado) + costoEnvioFinal;
 
     // El cupón se valida en el servidor (vigencia incluida) y su código viaja en el checkout, donde el
     // servidor vuelve a validarlo y lo descuenta del total: lo que se muestra aquí es solo una vista previa
@@ -436,21 +436,18 @@ function CheckoutContenido() {
         if (!codigo) return;
 
         try {
-            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
-            const umbral = respuesta.data.umbral_envio_gratis;
-
-            setDescuentoAplicado({
-                tipo: respuesta.data.tipo_descuento,
-                valor: Number(respuesta.data.valor_descuento),
-                codigo: respuesta.data.codigo
-            });
-            setCodigoValidado(respuesta.data.codigo);
-            setUmbralEnvioGratis(umbral === null || umbral === undefined ? null : Number(umbral));
-            setMensaje('¡Código aplicado con Éxito!');
+            const { data } = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
+            const regla = {
+                codigo: data.codigo, tipo_descuento: data.tipo_descuento, valor_descuento: data.valor_descuento,
+                monto_minimo: data.monto_minimo, umbral_envio_gratis: data.umbral_envio_gratis,
+            };
+            setCodigoEscrito(regla);
+            // No se suman: si un descuento automático ahorra más, se queda ese y se avisa
+            setMensaje(elegirDescuento([regla, ...automaticos], subtotal, costoEnvio) === regla
+                ? '¡Código aplicado con Éxito!'
+                : 'Tu compra ya tiene un descuento mayor, así que se aplica ese (los descuentos no se suman).');
         } catch (error) {
-            setDescuentoAplicado(null);
-            setCodigoValidado(null);
-            setUmbralEnvioGratis(null);
+            setCodigoEscrito(null);
             setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
@@ -538,7 +535,8 @@ function CheckoutContenido() {
             total_final: totalFinal,
             proveedor_logistico: opcionEntregaSeleccionada.proveedor,
             acepta_terminos: aceptaTerminos,
-            codigo_promocion: codigoValidado,
+            // El servidor vuelve a validar el código y elige el descuento; bajo su mínimo, el código no se envía
+            codigo_promocion: codigoEscrito && cumpleMinimo(codigoEscrito, subtotal) ? codigoEscrito.codigo : null,
             items: itemsParaElServidor(itemsCarrito)
         };
         try {
@@ -913,10 +911,11 @@ function CheckoutContenido() {
                     <div className="checkout-totales">
                         <div className="checkout-total-linea"><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
 
-                        {montoDescuento > 0 && (
+                        {montoDescontado > 0 && (
                             <div className="checkout-total-linea checkout-total-linea--descuento">
-                                <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
-                                <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
+                                {/* Un automático no muestra su código: no se escribe y no debe circular */}
+                                <span>Descuento {descuentoElegido?.codigo ? `(${descuentoElegido.codigo})` : '(automático)'}:</span>
+                                <span>-${Math.round(montoDescontado).toLocaleString('es-CL')}</span>
                             </div>
                         )}
 
@@ -937,6 +936,14 @@ function CheckoutContenido() {
                         </div>
 
                         <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+                        {proximoAutomatico && subtotal > 0 && (
+                            <p className="checkout-ayuda" role="status">
+                                Agrega ${(Number(proximoAutomatico.monto_minimo) - subtotal).toLocaleString('es-CL')} más y obtén{' '}
+                                {proximoAutomatico.tipo_descuento === 'PORCENTAJE'
+                                    ? `un ${Number(proximoAutomatico.valor_descuento)}% de descuento`
+                                    : `$${Number(proximoAutomatico.valor_descuento).toLocaleString('es-CL')} de descuento`}.
+                            </p>
+                        )}
                     </div>
 
                     {/* RF-04.4: sin aceptar los términos no se puede pagar (el backend también lo valida) */}

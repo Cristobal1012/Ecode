@@ -2,7 +2,8 @@ from datetime import date
 
 from django.test import SimpleTestCase
 
-from ecommerce.domain.cotizaciones import CotizacionInvalida, SolicitudCotizacion
+from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION, CotizacionInvalida, SolicitudCotizacion
+from ecommerce.domain.imagenes import ImagenProcesada
 
 HOY = date(2026, 10, 20)
 EMPRESA = {'razon_social': 'Comercial Andes SpA', 'rut': '761234560', 'giro': 'Regalos corporativos',
@@ -16,6 +17,12 @@ class SolicitudCotizacionTests(SimpleTestCase):
         with self.assertRaises(CotizacionInvalida) as error:
             SolicitudCotizacion.desde(datos, HOY, **kwargs)
         return error.exception.errores
+
+    def test_hasta_tres_fotos_de_la_idea(self):
+        foto = ImagenProcesada(contenido=b'jpg', extension='jpg')
+        solicitud = SolicitudCotizacion.desde(DATOS, HOY, fotos=(foto,) * MAX_FOTOS_COTIZACION)
+        self.assertEqual(len(solicitud.fotos), 3)
+        self.assertIn('fotos', self.errores(DATOS, fotos=(foto,) * (MAX_FOTOS_COTIZACION + 1)))
 
     def test_una_persona_cotiza_un_producto_descrito_por_ella(self):
         solicitud = SolicitudCotizacion.desde({**DATOS, 'nombre': '  Ana Pérez '}, HOY)

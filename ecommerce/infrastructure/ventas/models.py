@@ -202,6 +202,18 @@ class Cotizacion(models.Model):
         return f'Cotización #{self.id} - {self.nombre}'
 
 
+class FotoCotizacion(models.Model):
+    """Foto de la idea del cliente. El archivo está en ARCHIVOS_PRIVADOS_ROOT, no en media: solo lo entrega la API
+    al admin (repositorio_cotizaciones.py)."""
+
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='fotos')
+    # Ruta relativa dentro de ARCHIVOS_PRIVADOS_ROOT, con un nombre al azar
+    ruta = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ['id']
+
+
 class Promocion(models.Model):
     TIPOS_DESCUENTO = [
         ('PORCENTAJE', 'Porcentaje (%)'),
@@ -214,6 +226,14 @@ class Promocion(models.Model):
     umbral_envio_gratis = models.FloatField(null=True, blank=True)
     fecha_expiracion = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    # Desde qué subtotal vale (vacío = cualquier compra); uno automático lo exige (domain/promociones.py)
+    monto_minimo = models.PositiveIntegerField(null=True, blank=True)
+    # Se aplica solo, sin escribir el código, a toda compra desde monto_minimo
+    automatica = models.BooleanField(default=False)
+    # Cuántas compras pueden usarlo (vacío = sin límite) y cuántas lo usaron; el checkout suma el uso de forma
+    # atómica (reservar_uso_promocion), así dos compras simultáneas no se pasan del límite
+    usos_maximos = models.PositiveIntegerField(null=True, blank=True)
+    usos = models.PositiveIntegerField(default=0)
 
     @property
     def esta_vigente(self) -> bool:
@@ -221,6 +241,8 @@ class Promocion(models.Model):
         if not self.is_active:
             return False
         if self.fecha_expiracion and self.fecha_expiracion < timezone.now():
+            return False
+        if self.usos_maximos is not None and self.usos >= self.usos_maximos:
             return False
         return True
 

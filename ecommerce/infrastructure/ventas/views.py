@@ -22,7 +22,7 @@ import hmac
 import hashlib
 import json
 import base64
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import FileResponse, HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 from decimal import Decimal
 from math import ceil
@@ -73,9 +73,10 @@ from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventa
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
 from .models import (
-    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal,
-    Promocion, Publicacion, Resena,
+    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
+    PaginaLegal, Promocion, Publicacion, Resena,
 )
+from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
 from .pasarelas import pasarela
 from .serializers import (
@@ -93,6 +94,7 @@ from .serializers import (
     PaginaLegalSerializer,
     PaginaLegalDetalleSerializer,
     PaginaLegalAdminSerializer,
+    FotosCotizacionSerializer,
     FotosPublicacionSerializer,
     PublicacionAdminSerializer,
     PublicacionDetalleSerializer,
@@ -105,8 +107,12 @@ from .serializers import (
     courier_para_panel,
     medio_pago_para_panel,
     medios_pago,
+    mensaje_monto_minimo,
     paquete_del_pedido,
+    promociones_automaticas_vigentes,
+    regla_de_promocion,
 )
+from ecommerce.domain.promociones import cumple_minimo, monto_descuento
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .repositorio_documentos import DjangoPedidosDocumentos, filtro_documento_pendiente, modelo_emision_tienda
@@ -978,16 +984,30 @@ class CotizacionCreateView(APIView):
     throttle_classes = [CotizacionThrottle]
 
     def post(self, request):
-        serializer = CotizacionSolicitudSerializer(data=request.data)
+        # Con fotos llega como multipart: los datos van como JSON en "datos" y las fotos en "fotos"
+        con_archivos = (request.content_type or '').startswith('multipart/')
+        if con_archivos:
+            try:
+                entrada = json.loads(request.data.get('datos') or '{}')
+            except ValueError:
+                entrada = None
+            if not isinstance(entrada, dict):
+                return Response({'detail': 'Los datos de la cotización no tienen un formato válido.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            entrada = request.data
+        serializer = CotizacionSolicitudSerializer(data=entrada)
         serializer.is_valid(raise_exception=True)
         datos = dict(serializer.validated_data)
         if datos.pop('sitio_web', ''):
             # Campo trampa lleno: lo envió un bot. Se responde como si nada para no darle pistas
             return Response({'mensaje': MENSAJE_COTIZACION_RECIBIDA}, status=status.HTTP_201_CREATED)
+        fotos = FotosCotizacionSerializer(data={'fotos': request.FILES.getlist('fotos') if con_archivos else []})
+        fotos.is_valid(raise_exception=True)
         config = ConfiguracionGlobal.objects.filter(pk=1).first()
         try:
             solicitar_cotizacion().ejecutar(datos, formulario_activo=bool(config and config.cotizaciones_activas),
-                                            hoy=timezone.localdate())
+                                            hoy=timezone.localdate(), fotos=fotos.validated_data.get('fotos', []))
         except FormularioCotizacionDesactivado as error:
             return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
         except CotizacionInvalida as error:
@@ -1006,7 +1026,31 @@ class AdminCotizacionListView(generics.ListAPIView):
     serializer_class = AdminCotizacionSerializer
     permission_classes = [IsAdministrador]
     pagination_class = PaginacionCotizaciones
-    queryset = Cotizacion.objects.all()
+    queryset = Cotizacion.objects.prefetch_related('fotos')
+
+
+# Las fotos se guardan con la extensión del formato que detectó ArchivoImagenField
+TIPOS_FOTO = {'.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+
+
+class AdminFotoCotizacionView(APIView):
+    """GET admin/cotizaciones/<id>/fotos/<foto>/: una foto que adjuntó el cliente. Solo el admin, con su sesión:
+    el archivo no está en media (que se publica) sino en ARCHIVOS_PRIVADOS_ROOT."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request, pk, foto_id):
+        foto = FotoCotizacion.objects.filter(id=foto_id, cotizacion_id=pk).first()
+        extension = os.path.splitext(foto.ruta)[1].lower() if foto else ''
+        almacen = almacen_privado()
+        if foto is None or extension not in TIPOS_FOTO or not almacen.exists(foto.ruta):
+            return Response({'detail': 'Foto no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        respuesta = FileResponse(almacen.open(foto.ruta, 'rb'), content_type=TIPOS_FOTO[extension])
+        # Una imagen y nada más: sin ejecutar nada si alguien la abre directo, y sin quedar en cachés compartidas
+        respuesta['Content-Disposition'] = 'inline'
+        respuesta['X-Content-Type-Options'] = 'nosniff'
+        respuesta['Content-Security-Policy'] = "default-src 'none'; sandbox"
+        respuesta['Cache-Control'] = 'private, no-store'
+        return respuesta
 
 
 class AdminCotizacionEstadoView(APIView):
@@ -1611,22 +1655,39 @@ class ValidarPromocionAPIView(APIView):
         if not promo.esta_vigente:
             return Response({"error": "Código inválido o expirado."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if promo.tipo_descuento == 'PORCENTAJE':
-            descuento = subtotal * (promo.valor_descuento / 100.0)
-        else:  # MONTO_FIJO
-            descuento = promo.valor_descuento
-
-        # El descuento no puede superar el subtotal ni ser menor a cero
-        descuento = min(descuento, subtotal)
-        descuento = max(0.0, descuento)
+        # El mismo cálculo que el checkout (domain/promociones.py): nunca más que el subtotal ni bajo el mínimo
+        regla = regla_de_promocion(promo)
+        if not cumple_minimo(regla, Decimal(str(subtotal))):
+            return Response({"error": mensaje_monto_minimo(promo), "monto_minimo": promo.monto_minimo},
+                            status=status.HTTP_400_BAD_REQUEST)
+        descuento = monto_descuento(regla, Decimal(str(subtotal)))
 
         return Response({
             "codigo": promo.codigo,
             "tipo_descuento": promo.tipo_descuento,
             "valor_descuento": promo.valor_descuento,
             "descuento": round(descuento),
-            "umbral_envio_gratis": promo.umbral_envio_gratis
+            "umbral_envio_gratis": promo.umbral_envio_gratis,
+            "monto_minimo": promo.monto_minimo,
         }, status=status.HTTP_200_OK)
+
+
+class PromocionesAutomaticasAPIView(APIView):
+    """GET /api/ventas/promociones/automaticas/: los descuentos que se aplican solos desde un monto (RF-04.1).
+
+    Para la vista previa del checkout ("te faltan $X para el descuento"). Sin el código ni el id: un automático no
+    se escribe, y el cobro lo decide el servidor al pagar.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response([{
+            'tipo_descuento': promo.tipo_descuento,
+            'valor_descuento': promo.valor_descuento,
+            'monto_minimo': promo.monto_minimo,
+            'umbral_envio_gratis': promo.umbral_envio_gratis,
+        } for promo in promociones_automaticas_vigentes()])
 
 
 class LinkifyWebhookAPIView(APIView):

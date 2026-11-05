@@ -38,6 +38,8 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'ventas/admin/medios-pago/': [],
       'ventas/admin/couriers/': [{ codigo: 'CHILEXPRESS', nombre: 'Chilexpress', ayuda: '', campos: [], datos: {}, faltantes: [], configuradas: false }],
       'ventas/promociones/': [],
+      // Sin descuentos automáticos: el checkout los pide para la vista previa
+      'ventas/promociones/automaticas/': [],
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
       'ventas/checkout/reglas/': { modo_autenticacion: 'INVITADO' },
       'ventas/logistica/comunas/': { comunas: ['Santiago'] },

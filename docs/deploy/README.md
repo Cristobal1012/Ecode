@@ -114,8 +114,8 @@ Las migraciones corren solas al arrancar el backend. Los datos y las fotos se co
 
 ### Respaldos
 
-`deploy/respaldar.sh` guarda PostgreSQL, MongoDB y las fotos de una tienda en `<carpeta>/<AAAA-MM-DD>/<tienda>/`
-y borra los respaldos de más de 7 días:
+`deploy/respaldar.sh` guarda PostgreSQL, MongoDB, las fotos y los archivos privados (las fotos de las cotizaciones)
+de una tienda en `<carpeta>/<AAAA-MM-DD>/<tienda>/` y borra los respaldos de más de 7 días:
 
 ```bash
 sh deploy/respaldar.sh mitienda /opt/tiendas/mitienda.env /opt/tiendas/respaldos
@@ -135,6 +135,8 @@ $C stop backend web
 $C exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < $D/postgres.dump
 $C exec -T mongo sh -c 'mongorestore --quiet --archive --gzip --drop -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' < $D/mongo.archive.gz
 $C run --rm -T --no-deps backend sh -c 'rm -rf /app/media/* && tar xzf - -C /app/media' < $D/media.tar.gz
+# Si el respaldo trae privado.tar.gz (desde que existen las fotos de las cotizaciones)
+$C run --rm -T --no-deps backend sh -c 'rm -rf /app/privado/* && tar xzf - -C /app/privado' < $D/privado.tar.gz
 $C start backend web
 ```
 
@@ -166,6 +168,7 @@ servidor nuevo se prepara igual que en [la guía](prueba-servidor.md#2-preparar-
    $C exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < $D/postgres.dump
    $C exec -T mongo sh -c 'mongorestore --archive --gzip --drop -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' < $D/mongo.archive.gz
    $C run --rm -T --no-deps backend sh -c 'tar xzf - -C /app/media' < $D/media.tar.gz
+   $C run --rm -T --no-deps backend sh -c 'tar xzf - -C /app/privado' < $D/privado.tar.gz
    $C up -d --wait
    ```
 
@@ -212,8 +215,20 @@ se publican en `MEDIA_URL` (por defecto `/media/`):
 - **Respaldos:** respalda esta carpeta junto con PostgreSQL, porque los registros de la base apuntan a estos
   archivos.
 - **Límites de subida:** las variables `CATALOGO_IMAGEN_*` de `.env.example` valen para todas las imágenes, también
-  las del blog (por defecto, 5 MB por foto y 10 fotos por subida). Además, cada publicación del blog admite hasta
-  10 fotos en su galería; ese tope es fijo.
+  las del blog y las de las cotizaciones (por defecto, 5 MB por foto y 10 fotos por subida). Además, cada
+  publicación del blog admite hasta 10 fotos en su galería y cada cotización hasta 3; esos topes son fijos.
+
+### Archivos privados (fotos de las cotizaciones)
+
+Las fotos que adjunta un cliente al pedir una cotización **no** van en `MEDIA_ROOT`: se guardan en
+`ARCHIVOS_PRIVADOS_ROOT` (por defecto `<proyecto>/privado`, en `cotizaciones/<número>/`) y solo las entrega la API
+al admin con su sesión. Se vuelven a codificar al subirlas, sin los datos de la cámara (ej. la ubicación GPS).
+
+- **Nunca publiques esta carpeta** en el servidor web: si queda dentro de `MEDIA_ROOT` o se sirve en una URL,
+  cualquiera con el enlace vería las fotos de los clientes.
+- Como `MEDIA_ROOT`, tiene que estar en un **disco persistente** y en los **respaldos**. Con
+  `deploy/docker-compose.yml` es el volumen `privado`, que solo monta el backend, y `respaldar.sh` lo guarda en
+  `privado.tar.gz`.
 
 ## Tareas programadas
 

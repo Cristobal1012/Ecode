@@ -3,8 +3,9 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from ecommerce.domain.medios_pago import definicion_medio
+from ecommerce.domain.promociones import PromocionInvalida, validar_promocion
 
-from .models import MedioPago
+from .models import MedioPago, Promocion
 
 
 def campos_publicos(codigo):
@@ -76,3 +77,29 @@ class MedioPagoAdminForm(forms.ModelForm):
             # No borrar ni cifrar datos antiguos automáticamente al editar otros campos.
             raise ValidationError('El registro contiene datos no admitidos. No se guardó ningún cambio.')
         return cleaned
+
+
+class PromocionAdminForm(forms.ModelForm):
+    """El /admin/ de Django con las mismas reglas que el panel (domain/promociones.py): sin esto, un superusuario
+    podía guardar un 250 % o un umbral de envío gratis negativo."""
+
+    class Meta:
+        model = Promocion
+        fields = '__all__'
+
+    def clean(self):
+        datos = super().clean()
+        try:
+            datos['codigo'] = validar_promocion(
+                datos.get('codigo'), datos.get('tipo_descuento'), datos.get('valor_descuento'),
+                datos.get('umbral_envio_gratis'), datos.get('monto_minimo'), datos.get('automatica', False),
+                datos.get('usos_maximos'))
+        except PromocionInvalida as error:
+            for campo, mensaje in error.errores.items():
+                self.add_error(campo if campo in self.fields else None, mensaje)
+            return datos
+        # El comprador escribe el código sin distinguir mayúsculas: dos que solo difieren en eso serían el mismo
+        repetidos = Promocion.objects.filter(codigo__iexact=datos['codigo']).exclude(pk=self.instance.pk)
+        if repetidos.exists():
+            self.add_error('codigo', 'Ya existe un código igual.')
+        return datos

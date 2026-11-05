@@ -63,6 +63,8 @@ const irASeccion = (id) => {
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
+  // Con qué filtro se abre Ventas desde un "Ver" del dashboard (desde el menú se abre sin filtro)
+  const [filtroVentas, setFiltroVentas] = useState(null);
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
   
   // NUEVO ESTADO: Almacena el producto seleccionado para edición
@@ -142,10 +144,27 @@ export default function Admin() {
     }
   };
 
+  const abrirVista = (vista) => {
+    setFiltroVentas(null);
+    setVistaActiva(vista);
+  };
+
+  // "Ver" del dashboard: abre la vista con su filtro y lleva el foco al contenido, como el menú lateral
+  const irA = (vista, filtro = null) => {
+    setFiltroVentas(filtro);
+    setVistaActiva(vista);
+    if (vista === 'inventario') {
+      setMostrandoFormulario(false);
+      setProductoAEditar(null);
+    }
+    requestAnimationFrame(() => document.getElementById('contenido')?.focus({ preventScroll: true }));
+    window.scrollTo({ top: 0 });
+  };
+
   const renderizarContenido = () => {
     switch (vistaActiva) {
       case 'dashboard':
-       return <Dashboard />;
+       return <Dashboard onIrA={irA} />;
       case 'inventario':
         return (
           <div>
@@ -183,7 +202,8 @@ export default function Admin() {
         return (
           <div>
             <h2 className="admin-titulo">Ventas</h2>
-            <GestorPedidos/>
+            {/* El key remonta la lista con el filtro nuevo: GestorPedidos lo lee al montarse */}
+            <GestorPedidos key={JSON.stringify(filtroVentas)} filtroInicial={filtroVentas || undefined} />
           </div>
         );
 
@@ -406,7 +426,7 @@ export default function Admin() {
     <div className="admin">
       <AdminSidebar
         vistaActiva={vistaActiva}
-        setVistaActiva={setVistaActiva}
+        setVistaActiva={abrirVista}
         setMostrandoFormulario={setMostrandoFormulario}
         setProductoAEditar={setProductoAEditar}
         navigate={navigate}

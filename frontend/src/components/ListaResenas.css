@@ -7,15 +7,21 @@
   gap: 6px 10px;
 }
 
-/* 3 por fila en escritorio, 2 en tablet y 1 en celular */
+/* 3 por fila en escritorio, 2 en tablet y 1 en celular. La última fila incompleta se centra (ej. 4 o 5 reseñas):
+   en una grilla quedaba un hueco al final */
 .resenas-lista {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(16px, 2vw, 24px);
-  align-items: start;
+  --resenas-por-fila: 3;
+  --resenas-espacio: clamp(16px, 2vw, 24px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--resenas-espacio);
 }
 
 .resena-tarjeta {
+  flex: 0 0 calc((100% - (var(--resenas-por-fila) - 1) * var(--resenas-espacio)) / var(--resenas-por-fila));
+  min-width: 0;
   padding: clamp(20px, 2.4vw, 28px);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -47,12 +53,12 @@
 
 @media (max-width: 1023px) {
   .resenas-lista {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --resenas-por-fila: 2;
   }
 }
 
 @media (max-width: 600px) {
   .resenas-lista {
-    grid-template-columns: minmax(0, 1fr);
+    --resenas-por-fila: 1;
   }
 }

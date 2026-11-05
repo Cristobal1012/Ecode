@@ -8,6 +8,7 @@ import { cumpleMinimo, daEnvioGratis, elegirDescuento, montoDescuento, siguiente
 import { soloCaracteresDeTelefono } from '../utils/telefono';
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
+import LogoMedioPago from './LogoMedioPago';
 import Header from './header/header';
 import Dialogo from './Dialogo';
 import { Bloque, Cargando } from './carga/Esqueleto';
@@ -32,6 +33,9 @@ const itemsParaElServidor = (items) => items.map(item => ({
 }));
 
 // Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
+// Lo mínimo para avisar antes de pagar; el servidor lo valida de verdad (EmailField)
+const CORREO_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 const NOMBRES_MEDIO_PAGO = {
     TRANSBANK: 'Webpay (Transbank)',
     MERCADO_PAGO: 'Mercado Pago',
@@ -127,6 +131,8 @@ function CheckoutContenido() {
     const [codigoEscrito, setCodigoEscrito] = useState(null);
     const [automaticos, setAutomaticos] = useState([]);
     const [codigoInput, setCodigoInput] = useState('');
+    // El comprador intentó pagar con datos faltantes: desde ahí se muestra junto a los botones qué le falta
+    const [intentoPagar, setIntentoPagar] = useState(false);
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opciones: [], error: '' });
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
@@ -451,6 +457,60 @@ function CheckoutContenido() {
             setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
+    // Lo que falta para pagar, en el orden del formulario: { texto, selector del campo a enfocar }
+    const faltantesParaPagar = () => {
+        const faltan = [];
+        const agregar = (texto, selector) => faltan.push({ texto, selector });
+        if (itemsCarrito.length === 0) agregar('agregar productos al carrito', null);
+        if (!usuarioAutenticado && compraComoInvitado) {
+            if (!emailInvitado.trim()) agregar('tu correo electrónico', '#checkout-email');
+            else if (!CORREO_VALIDO.test(emailInvitado.trim())) agregar('un correo electrónico válido', '#checkout-email');
+        }
+        if (!nombreDestinatario.trim()) agregar('el nombre de quien recibe', '#checkout-destinatario');
+        if (!telefonoDestinatario.trim()) agregar('el teléfono de contacto', '#checkout-telefono');
+        if (compraEmpresa) {
+            const errores = validarDatosEmpresa(datosEmpresa);
+            const primero = Object.keys(errores)[0];
+            if (primero) agregar('los datos de la empresa para la factura', `#checkout-empresa-${primero}`);
+        }
+        if (tipoDespacho === 'SUCURSAL') {
+            if (!comunaSucursal) agregar('la comuna de la sucursal', '#checkout-comuna-sucursal');
+            else if (!sucursalSeleccionada) agregar('la sucursal donde retiras', 'input[name="sucursal"]');
+        } else if ((tipoDespacho === 'DOMICILIO' || direccionOpcional) && direccionSeleccionadaId === 'nueva') {
+            // La entrega coordinada puede ir sin dirección; si se escribe, con calle y comuna
+            const escribioAlgo = [calle, numero, comuna].some(valor => valor.trim());
+            if (!direccionOpcional || escribioAlgo) {
+                if (!calle.trim()) agregar('la calle', '#checkout-calle');
+                if (!direccionOpcional && !numero.trim()) agregar('el número', '#checkout-numero');
+                if (!comuna.trim()) agregar('la comuna', '#checkout-comuna');
+                if (!direccionOpcional && !ciudad.trim()) agregar('la ciudad', '#checkout-ciudad');
+            }
+        }
+        if (!opcionEntregaSeleccionada && !cotizando && faltan.every(f => !f.selector?.startsWith('#checkout-comuna'))) {
+            agregar('una forma de entrega con costo calculado', 'input[name="tipo-despacho"]');
+        }
+        if (!aceptaTerminos) agregar('aceptar los Términos y Condiciones y la Política de Privacidad', '#checkout-terminos');
+        return faltan;
+    };
+    const faltantes = faltantesParaPagar();
+
+    // Con datos faltantes el botón no paga: avisa qué falta junto a los botones y lleva al primer campo
+    const intentarPagar = (metodoSeleccionado) => {
+        if (faltantes.length === 0) {
+            setIntentoPagar(false);
+            procesarPago(metodoSeleccionado);
+            return;
+        }
+        setIntentoPagar(true);
+        if (compraEmpresa) setErroresEmpresa(validarDatosEmpresa(datosEmpresa));
+        const primero = faltantes.find(f => f.selector)?.selector;
+        const campo = primero && document.querySelector(primero);
+        if (campo) {
+            campo.focus({ preventScroll: true });
+            campo.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }
+    };
+
     const procesarPago = async (metodoSeleccionado) => {
         const snapshotPedido = leerSnapshotCarrito();
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
@@ -948,9 +1008,16 @@ function CheckoutContenido() {
 
                     {/* RF-04.4: sin aceptar los términos no se puede pagar (el backend también lo valida) */}
                     <label className="checkout-casilla checkout-terminos">
-                        <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required />
+                        <input id="checkout-terminos" type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required />
                         <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
                     </label>
+
+                    {intentoPagar && faltantes.length > 0 && (
+                        <div id="checkout-faltantes" role="alert" className="checkout-aviso checkout-aviso--error checkout-faltantes">
+                            <strong>Para pagar, completa:</strong>
+                            <ul>{faltantes.map(f => <li key={f.texto}>{f.texto}</li>)}</ul>
+                        </div>
+                    )}
 
                     <div className="checkout-pagos">
                         {cargandoPagos ? (
@@ -963,18 +1030,19 @@ function CheckoutContenido() {
                         ) : pasarelas.length === 0 ? (
                             <p className="checkout-aviso checkout-aviso--error">No hay métodos de pago configurados en la tienda.</p>
                         ) : (
-                            pasarelas.map(pasarela => {
-                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || tipoDespacho === 'ENTREGA_COORDINADA' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
-                                const habilitado = validadoParaPagar && !procesandoPago;
-                                return (
-                                    <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado || Boolean(esperandoPago)}
+                            pasarelas.map(pasarela => (
+                                // Se deshabilita solo mientras procesa o cotiza: con datos faltantes el clic avisa qué falta
+                                <button
+                                        key={pasarela} type="button" onClick={() => intentarPagar(pasarela)}
+                                        disabled={procesandoPago || cotizando || Boolean(esperandoPago)}
+                                        aria-disabled={faltantes.length > 0 || undefined}
+                                        aria-describedby={intentoPagar && faltantes.length > 0 ? 'checkout-faltantes' : undefined}
                                         className="boton boton-primario checkout-pagar"
                                     >
-                                        {procesandoPago && <Spinner />}{procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
+                                        {procesandoPago ? <Spinner /> : <LogoMedioPago codigo={pasarela} />}
+                                        {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
-                                );
-                            })
+                            ))
                         )}
                     </div>
                 </aside>

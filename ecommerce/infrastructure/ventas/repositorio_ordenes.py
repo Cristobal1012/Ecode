@@ -37,6 +37,9 @@ class DjangoRepositorioOrdenes(RepositorioOrdenes):
             cambios['motivo_cancelacion'] = motivo_cancelacion
         if motivo_revision:
             cambios.update(requiere_revision=True, motivo_revision=motivo_revision)
+        if hacia == EstadoPedido.PAGADO:
+            # El dashboard cuenta la venta el día del pago, no el de la orden (una transferencia se valida después)
+            cambios['fecha_pago'] = timezone.now()
         if hacia == EstadoPedido.ENTREGADO:
             # Desde aquí corre el plazo para dejar la reseña (domain/resenas.py)
             cambios['fecha_entrega'] = timezone.now()

@@ -132,6 +132,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
         ]
@@ -225,6 +226,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
             # Solo el panel: qué pedidos piden boleta (no se publica en /api/configuracion/)

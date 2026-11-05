@@ -71,7 +71,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
-             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'instagram_usuario',
+             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'ubicacion_logo_universidad',
+             'instagram_usuario',
              *(f'instagram_foto_{numero}' for numero in range(1, 7))}
         )
 
@@ -151,6 +152,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'correo_contacto': '',
             'horario_atencion': '',
             'mostrar_direccion_pie': False,
+            'ubicacion_logo_universidad': 'HEADER',
             'instagram_usuario': '',
             **{f'instagram_foto_{numero}': None for numero in range(1, 7)},
         })

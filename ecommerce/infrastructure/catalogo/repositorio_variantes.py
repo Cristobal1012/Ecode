@@ -1,4 +1,4 @@
-"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes y NombresProductos."""
+"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes, NombresProductos y StockCatalogo."""
 
 from decimal import Decimal
 
@@ -6,6 +6,7 @@ from bson.errors import InvalidId
 from mongoengine.errors import ValidationError as MongoValidationError
 
 from ecommerce.application.cotizaciones import NombresProductos
+from ecommerce.application.dashboard import StockCatalogo, VariantePocoStock
 from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
 from ecommerce.domain.logistica import MedidasEnvio
 from ecommerce.domain.ventas import VarianteCatalogo
@@ -63,3 +64,19 @@ class MongoNombresProductos(NombresProductos):
         except (MongoValidationError, InvalidId):
             return None
         return producto.nombre if producto else None
+
+
+class MongoStockCatalogo(StockCatalogo):
+    """Para "Para hoy" del dashboard: las variantes de productos activos (publicados o en borrador) con poco stock.
+    Un producto dado de baja ya no se vende: no avisa."""
+
+    def con_poco_stock(self, umbral):
+        productos = Producto.objects(activo=True, variantes__stock__lte=umbral).only('nombre', 'variantes')
+        return [
+            VariantePocoStock(
+                producto_id=str(producto.id), producto=producto.nombre, sku=str(variante.sku),
+                detalle=' · '.join(f'{nombre}: {valor}' for nombre, valor in (variante.atributos_variables or {}).items()),
+                stock=int(variante.stock or 0),
+            )
+            for producto in productos for variante in producto.variantes if int(variante.stock or 0) <= umbral
+        ]

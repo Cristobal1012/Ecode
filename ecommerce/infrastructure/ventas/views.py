@@ -51,6 +51,7 @@ from ecommerce.application.cotizaciones import (
 from ecommerce.application.documentos_tributarios import (
     PedidoNoEncontrado as PedidoParaDocumentarNoEncontrado, RegistrarFolio, SinDocumentoPorRegistrar,
 )
+from ecommerce.application.dashboard import ETIQUETAS_CAUSA_CANCELACION, ResumenDashboard, TareasPendientes
 from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.application.pagos import (
     AplicarResultadoPago, ConciliarPagoOrden, ErrorPasarelaPago, FirmaAvisoInvalida, ProcesarAvisoPago,
@@ -59,17 +60,21 @@ from ecommerce.application.resenas import (
     EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
     ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
 )
+from ecommerce.domain.dashboard import PeriodoInvalido, resolver_periodo
 from ecommerce.domain.documentos_tributarios import FolioInvalido
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos, EstadoPago
 from ecommerce.domain.ventas import (
-    ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida,
+    ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
+    TransicionNoPermitida,
 )
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
-from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
+from ecommerce.infrastructure.catalogo.repositorio_variantes import (
+    MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo,
+)
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
 from .models import (
@@ -78,6 +83,7 @@ from .models import (
 )
 from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
+from .repositorio_dashboard import DjangoMetricasVentas, DjangoPendientesTienda
 from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
@@ -211,8 +217,9 @@ class PaginacionPedidos(PageNumberPagination):
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
-    """GET ?estado=PAGADO&requiere_revision=true&documento=pendiente&pagina=N: los pedidos del panel, los más
-    recientes primero. documento=pendiente deja los que tienen boleta, factura o nota de crédito por emitir."""
+    """GET ?estado=PAGADO&requiere_revision=true&documento=pendiente&orden_transporte=error&pagina=N: los pedidos del
+    panel, los más recientes primero. documento=pendiente deja los que tienen boleta, factura o nota de crédito por
+    emitir; orden_transporte=error, los que esperan su orden de transporte y fallaron al generarla."""
     serializer_class = AdminOrdenCompraSerializer
     permission_classes = [IsAdministrador]
     pagination_class = PaginacionPedidos
@@ -233,6 +240,9 @@ class AdminOrdenCompraListView(generics.ListAPIView):
             ordenes = ordenes.filter(requiere_revision=True)
         if self.request.query_params.get('documento') == 'pendiente':
             ordenes = ordenes.filter(filtro_documento_pendiente(self.modelo_emision))
+        if self.request.query_params.get('orden_transporte') == 'error':
+            ordenes = ordenes.filter(estado__in=[e.value for e in ESTADOS_CON_ORDEN_TRANSPORTE]).exclude(
+                error_orden_transporte='')
         return ordenes
 
 
@@ -1259,114 +1269,75 @@ class DescargarEtiquetaView(APIView):
         response['Content-Disposition'] = f'attachment; filename="Etiqueta_OT_{numero_ot}.{extension}"'
         return response
 
-class DashboardMetricasView(APIView):
-    """
-    Endpoint para el dashboard operativo.
-    Retorna métricas de ventas (histórico y mensual),
-    ventas históricas agrupadas por día y las 5 órdenes más recientes.
+def _periodo_json(periodo):
+    return {'desde': periodo.desde, 'hasta': periodo.hasta} if periodo else None
 
-    Permite filtrar los datos mediante:
-    ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
-    """
+
+def _nombre_cliente(orden):
+    if orden.usuario:
+        nombre = ' '.join(filter(None, [orden.usuario.nombre, orden.usuario.apellido_paterno]))
+        return nombre or orden.usuario.email
+    return orden.email_invitado
+
+
+def _variante_json(variante):
+    return {'producto_id': variante.producto_id, 'producto': variante.producto, 'sku': variante.sku,
+            'detalle': variante.detalle, 'stock': variante.stock}
+
+
+class DashboardMetricasView(APIView):
+    """RF-03.1: GET ?periodo=ESTE_MES (o PERSONALIZADO&desde=AAAA-MM-DD&hasta=AAAA-MM-DD). Las ventas del periodo
+    por la fecha del pago, contra el periodo anterior, su detalle y los 5 pedidos más recientes."""
     permission_classes = [IsEmprendedor]
 
     def get(self, request):
-        # 1. Capturar parámetros de fecha para filtrado (opcional)
-        fecha_inicio = request.query_params.get('fecha_inicio')
-        fecha_fin = request.query_params.get('fecha_fin')
+        parametros = request.query_params
+        try:
+            periodo = resolver_periodo(parametros.get('periodo'), timezone.localdate(),
+                                       parametros.get('desde'), parametros.get('hasta'))
+        except PeriodoInvalido as error:
+            return Response({'periodo': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        dashboard = ResumenDashboard(DjangoMetricasVentas()).ejecutar(periodo)
+        ultimas = OrdenCompra.objects.select_related('usuario').order_by('-fecha_creacion')[:5]
 
-        # 2. Base Queryset: solo las órdenes PAGADAS cuentan como ventas
-        ordenes_pagadas = OrdenCompra.objects.filter(estado='PAGADO')
-
-        # Aplicar filtros de fecha si vienen en la petición
-        if fecha_inicio:
-            ordenes_pagadas = ordenes_pagadas.filter(
-                fecha_creacion__gte=fecha_inicio
-            )
-
-        if fecha_fin:
-            ordenes_pagadas = ordenes_pagadas.filter(
-                fecha_creacion__lte=f"{fecha_fin} 23:59:59"
-            )
-
-        # 3. Calcular total histórico
-        total_historico = (
-            ordenes_pagadas.aggregate(total=Sum('total_final'))['total'] or 0
-        )
-
-        # 4. Calcular ventas del mes actual
-        hoy = timezone.now()
-
-        ventas_mes_actual = (
-            ordenes_pagadas
-            .filter(
-                fecha_creacion__year=hoy.year,
-                fecha_creacion__month=hoy.month
-            )
-            .aggregate(total=Sum('total_final'))['total'] or 0
-        )
-
-        # 5. Agrupar ventas PAGADAS por día
-        historico_ventas = (
-            ordenes_pagadas
-            .annotate(fecha=TruncDate('fecha_creacion'))
-            .values('fecha')
-            .annotate(
-                ventas=Sum('total_final'),
-                pedidos=Count('id')
-            )
-            .order_by('fecha')
-        )
-
-        historico_data = [
-            {
-                "fecha": registro["fecha"],
-                "ventas": float(registro["ventas"] or 0),
-                "pedidos": registro["pedidos"]
-            }
-            for registro in historico_ventas
-        ]
-
-        # 6. Obtener las 5 órdenes más recientes.
-        # Aquí incluimos todos los estados para mostrar la actividad reciente.
-        ultimas_ordenes = (
-            OrdenCompra.objects
-            .all()
-            .order_by('-fecha_creacion')[:5]
-        )
-
-        ordenes_data = []
-
-        for orden in ultimas_ordenes:
-            # Determinamos el nombre del cliente
-            cliente = orden.email_invitado
-
-            if orden.usuario:
-                cliente = getattr(
-                    orden.usuario,
-                    'get_full_name',
-                    lambda: orden.usuario.email
-                )()
-
-            ordenes_data.append({
-                "id": orden.id,
-                "fecha_creacion": orden.fecha_creacion,
-                "estado": orden.estado,
-                "total_final": orden.total_final,
-                "cliente": cliente,
-                "metodo_pago": orden.metodo_pago
-            })
-
-        # 7. Estructurar y retornar la respuesta
         return Response({
-            "metricas": {
-                "total_historico": float(total_historico),
-                "total_mensual": float(ventas_mes_actual)
+            'periodo': {**_periodo_json(periodo), 'clave': periodo.clave, 'agrupacion': periodo.agrupacion},
+            'anterior': _periodo_json(dashboard.anterior),
+            'tarjetas': asdict(dashboard.tarjetas),
+            'serie': [asdict(punto) for punto in dashboard.serie],
+            'mas_vendidos': [asdict(producto) for producto in dashboard.mas_vendidos],
+            'ultimas_ordenes': [{
+                'id': orden.id, 'fecha_creacion': orden.fecha_creacion, 'estado': orden.estado,
+                'total_final': round(orden.total_final), 'cliente': _nombre_cliente(orden),
+            } for orden in ultimas],
+            'detalles': {
+                'medios_pago': [asdict(barra) for barra in dashboard.medios_pago],
+                'entregas': [asdict(barra) for barra in dashboard.entregas],
+                'comunas': [asdict(barra) for barra in dashboard.comunas],
+                'cancelaciones': [{'causa': causa, 'nombre': ETIQUETAS_CAUSA_CANCELACION[causa], 'cantidad': cantidad}
+                                  for causa, cantidad in dashboard.cancelaciones],
+                'cupones': [asdict(cupon) for cupon in dashboard.cupones],
+                'clientes': asdict(dashboard.clientes),
+                'calificacion': asdict(dashboard.calificacion) if dashboard.calificacion else None,
             },
-            "historico": historico_data,
-            "ultimas_ordenes": ordenes_data
         }, status=status.HTTP_200_OK)
-    
+
+
+class DashboardPendientesView(APIView):
+    """RF-03.1: "Para hoy", lo que el admin tiene que atender. Solo trae lo que no está en cero."""
+    permission_classes = [IsEmprendedor]
+
+    def get(self, request):
+        para_hoy = TareasPendientes(DjangoPendientesTienda(modelo_emision_tienda()),
+                                    MongoStockCatalogo()).ejecutar(timezone.now())
+        return Response({
+            'al_dia': para_hoy.al_dia,
+            'tareas': [asdict(tarea) for tarea in para_hoy.tareas],
+            'agotadas': [_variante_json(variante) for variante in para_hoy.agotadas],
+            'stock_bajo': [_variante_json(variante) for variante in para_hoy.stock_bajo],
+        })
+
+
 class PaginaLegalListView(generics.ListAPIView):
     # RF-03.5: el footer solo enlaza las páginas publicadas
     queryset = PaginaLegal.objects.filter(publicada=True).only(

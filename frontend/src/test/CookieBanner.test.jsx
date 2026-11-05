@@ -10,6 +10,7 @@ function renderBanner(props = {}, initialPath = '/') {
     storageError: '',
     onAccept: vi.fn(),
     onReject: vi.fn(),
+    onSave: vi.fn(),
     onClose: vi.fn(),
   };
 
@@ -36,7 +37,33 @@ describe('CookieBanner', () => {
       screen.getByRole('region', { name: 'Tus preferencias de cookies' }),
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/Google Analytics y Meta Pixel/)).toBeInTheDocument();
+    expect(screen.getByText(/análisis \(Google Analytics\) y de publicidad \(Meta Pixel\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Te volveremos a preguntar en 12 meses/)).toBeInTheDocument();
+  });
+
+  it('Configurar muestra cada categoría desmarcada y guarda solo lo elegido', () => {
+    const onSave = vi.fn();
+    renderBanner({ onSave });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+    const analisis = screen.getByRole('checkbox', { name: /Análisis/ });
+    const publicidad = screen.getByRole('checkbox', { name: /Publicidad/ });
+    expect(analisis).not.toBeChecked();
+    expect(publicidad).not.toBeChecked();
+
+    fireEvent.click(analisis);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar mis preferencias' }));
+
+    expect(onSave).toHaveBeenCalledWith({ analitica: true, marketing: false });
+  });
+
+  it('Configurar parte de la elección vigente', () => {
+    renderBanner({ consent: 'custom', preferences: { analitica: false, marketing: true } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+
+    expect(screen.getByRole('checkbox', { name: /Análisis/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Publicidad/ })).toBeChecked();
   });
 
   it('no muestra el banner cuando isOpen es false', () => {
@@ -113,7 +140,7 @@ describe('CookieBanner', () => {
   });
 
   it('muestra el aviso de recarga cuando el consentimiento está aceptado', () => {
-    renderBanner({ consent: 'accepted' });
+    renderBanner({ consent: 'accepted', preferences: { analitica: true, marketing: true } });
 
     expect(
       screen.getByText(/esta página se recargará y se reiniciarán los formularios abiertos/i),

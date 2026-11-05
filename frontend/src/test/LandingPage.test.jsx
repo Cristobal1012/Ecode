@@ -45,12 +45,12 @@ async function renderLanding() {
 }
 
 function LandingConFooter({ LandingPage, Footer }) {
-  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+  const [marcaTemporal, setMarcaTemporal] = useState(null);
 
   return (
     <MemoryRouter>
-      <LandingPage onNombreTiendaTemporal={setNombreTiendaTemporal} />
-      <Footer nombreTiendaTemporal={nombreTiendaTemporal} />
+      <LandingPage onMarcaTemporal={setMarcaTemporal} />
+      <Footer marcaTemporal={marcaTemporal} />
     </MemoryRouter>
   );
 }
@@ -147,6 +147,20 @@ describe('LandingPage', () => {
     expect(await screen.findByText('Taller Maché')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Logo de la Universidad Autónoma' })).toBeInTheDocument();
   });
+
+  it('con el logo en el footer se ve ahí más grande y el header queda con el de la tienda (RN-01)', async () => {
+    responder({ configuracion: { ...CONFIGURACION, ubicacion_logo_universidad: 'FOOTER' } });
+    await renderLandingConFooter();
+
+    const footer = await screen.findByRole('contentinfo');
+    await waitFor(() => expect(within(footer).getByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .toHaveClass('footer-logo-universidad'));
+    expect(within(footer).getByText('Taller Maché')).toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).queryByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .not.toBeInTheDocument();
+    // Nunca desaparece: está en un solo lugar
+    expect(screen.getAllByRole('img', { name: 'Logo de la Universidad Autónoma' })).toHaveLength(1);
+  });
 });
 
 describe('LandingPage en modo edición (RF-01.1)', () => {
@@ -202,6 +216,40 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await renderLanding();
     fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
   }
+
+  it('el admin elige dónde va el logo de la Universidad, lo ve antes de guardar y se publica (RN-01)', async () => {
+    localStorage.setItem('rol', 'ADMIN');
+    responder();
+    await renderLandingConFooter();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
+
+    const ubicacion = screen.getByLabelText('Logo de la Universidad');
+    expect(ubicacion).toHaveValue('HEADER');
+    // Solo dos lugares: no existe una opción para ocultarlo
+    expect([...ubicacion.options].map(opcion => opcion.value)).toEqual(['HEADER', 'FOOTER']);
+
+    fireEvent.change(ubicacion, { target: { value: 'FOOTER' } });
+    const footer = screen.getByRole('contentinfo');
+    await waitFor(() => expect(within(footer).getByRole('img', { name: 'Logo de la Universidad Autónoma' })).toBeInTheDocument());
+    expect(within(screen.getByRole('banner')).queryByRole('img', { name: 'Logo de la Universidad Autónoma' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { ubicacion_logo_universidad: 'FOOTER' }));
+  });
+
+  it('si la configuración no carga no deja editar: el borrador partiría vacío y pisaría la tienda', async () => {
+    // Pasó con una migración sin aplicar: el servidor respondía 500 y el editor abría con todo vacío
+    const errorConsola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.setItem('rol', 'ADMIN');
+    getMock.mockImplementation((url) => (url === 'configuracion/'
+      ? Promise.reject({ response: { status: 500 } })
+      : Promise.resolve({ data: [] })));
+    await renderLanding();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('no se puede editar la página');
+    expect(screen.queryByRole('button', { name: 'Editar página' })).not.toBeInTheDocument();
+    errorConsola.mockRestore();
+  });
 
   it('solo el admin ve el botón para editar la página', async () => {
     localStorage.setItem('rol', 'COMPRADOR');

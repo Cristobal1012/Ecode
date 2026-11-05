@@ -107,6 +107,20 @@ function renderCheckout({ conProducto = true } = {}) {
   );
 }
 
+// Con datos faltantes el botón responde (avisa qué falta) pero se anuncia como no disponible
+function noSePuedePagar(boton) {
+  expect(boton).toHaveAttribute('aria-disabled', 'true');
+}
+
+function sePuedePagar(boton) {
+  expect(boton).toBeEnabled();
+  expect(boton).not.toHaveAttribute('aria-disabled');
+}
+
+const escribirCorreo = () => fireEvent.change(screen.getByLabelText(/correo electrónico/i), {
+  target: { value: 'qa@example.test' },
+});
+
 function completarDestinatario() {
   fireEvent.change(screen.getByLabelText(/nombre de quien recibe/i), {
     target: { value: 'Comprador QA' },
@@ -175,15 +189,14 @@ describe('Checkout', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
     completarDestinatario();
+    escribirCorreo();
 
-    expect(botonPago).toBeDisabled();
+    noSePuedePagar(botonPago);
 
     const checkbox = screen.getByRole('checkbox', { name: /acepto los/i });
     fireEvent.click(checkbox);
 
-    await waitFor(() => {
-      expect(botonPago).toBeEnabled();
-    });
+    await waitFor(() => sePuedePagar(botonPago));
   });
 
   it('permite marcar y desmarcar el checkbox legal', async () => {
@@ -210,7 +223,9 @@ describe('Checkout', () => {
     const checkbox = screen.getByRole('checkbox', { name: /acepto los/i });
     fireEvent.click(checkbox);
 
-    expect(botonPago).toBeDisabled();
+    noSePuedePagar(botonPago);
+    fireEvent.click(botonPago);
+    expect(screen.getByRole('alert')).toHaveTextContent('agregar productos al carrito');
   });
 
   it('muestra los enlaces a las páginas legales cuando están publicadas', async () => {
@@ -242,13 +257,14 @@ describe('Checkout', () => {
     });
 
     completarDestinatario();
+    escribirCorreo();
     fireEvent.click(checkbox);
-    await waitFor(() => expect(botonPago).toBeEnabled());
+    await waitFor(() => sePuedePagar(botonPago));
 
     fireEvent.click(checkbox);
 
     expect(checkbox).not.toBeChecked();
-    expect(botonPago).toBeDisabled();
+    noSePuedePagar(botonPago);
   });
 
   it('no envía la compra cuando los términos no han sido aceptados', async () => {
@@ -267,7 +283,7 @@ describe('Checkout', () => {
     });
 
     expect(checkbox).not.toBeChecked();
-    expect(botonPago).toBeDisabled();
+    noSePuedePagar(botonPago);
 
     fireEvent.click(botonPago);
 
@@ -275,6 +291,7 @@ describe('Checkout', () => {
         'ventas/checkout/',
         expect.anything()
     );
+    expect(screen.getByRole('alert')).toHaveTextContent('aceptar los Términos y Condiciones');
   });
 
   it('envía acepta_terminos como true al confirmar la compra', async () => {
@@ -636,7 +653,7 @@ describe('Checkout', () => {
       name: 'Carrito de compras, 0 productos',
     })).toBeInTheDocument());
     expect(screen.getByText('No hay productos')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' })).toBeDisabled();
+    noSePuedePagar(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' }));
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
@@ -898,6 +915,46 @@ describe('Checkout', () => {
 
     expect(await screen.findByText(/ya tiene un descuento mayor/)).toBeInTheDocument();
     expect(screen.getByText('-$3.000')).toBeInTheDocument();
+  });
+
+  it('al intentar pagar sin los datos dice qué falta, lleva al primer campo y la lista se achica al completar', async () => {
+    prepararRespuestas();
+    renderCheckoutConRuta();
+    const botonPago = await screen.findByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    fireEvent.click(screen.getByRole('radio', { name: /retiro en local/i }));
+    fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@sin-punto' } });
+
+    fireEvent.click(botonPago);
+
+    const aviso = screen.getByRole('alert');
+    expect(aviso).toHaveTextContent('Para pagar, completa:');
+    expect([...aviso.querySelectorAll('li')].map(li => li.textContent)).toEqual([
+      'un correo electrónico válido', 'el nombre de quien recibe', 'el teléfono de contacto',
+      'aceptar los Términos y Condiciones y la Política de Privacidad',
+    ]);
+    expect(screen.getByLabelText(/correo electrónico/i)).toHaveFocus();
+    expect(botonPago).toHaveAttribute('aria-describedby', 'checkout-faltantes');
+    expect(postMock).not.toHaveBeenCalledWith('ventas/checkout/', expect.anything());
+
+    escribirCorreo();
+    completarDestinatario();
+    expect(screen.getByRole('alert')).toHaveTextContent(/^Para pagar, completa:aceptar los Términos/);
+    fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
+    expect(screen.queryByText('Para pagar, completa:')).not.toBeInTheDocument();
+    sePuedePagar(botonPago);
+  });
+
+  it('cada medio de pago muestra su logo, decorativo: el botón se nombra por su texto', async () => {
+    prepararRespuestas({ pasarelas: ['TRANSBANK', 'MERCADO_PAGO', 'TRANSFERENCIA'] });
+    renderCheckoutConRuta();
+
+    const webpay = await screen.findByRole('button', { name: 'Pagar con Webpay (Transbank)' });
+    const mercadoPago = screen.getByRole('button', { name: 'Pagar con Mercado Pago' });
+    const transferencia = screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    expect(webpay.querySelector('img')).toHaveAttribute('src', expect.stringContaining('webpay'));
+    expect(mercadoPago.querySelector('img')).toHaveAttribute('src', expect.stringContaining('mercado-pago'));
+    expect(webpay.querySelector('img')).toHaveAttribute('alt', '');
+    expect(transferencia.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('el teléfono de contacto no acepta letras', async () => {
@@ -1479,10 +1536,13 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
     completarDestinatario();
     fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'qa@example.test' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
-    await waitFor(() => expect(botonPago).toBeEnabled());
+    noSePuedePagar(botonPago);
     fireEvent.click(botonPago);
 
-    expect(await screen.findByText(/completa la calle y la comuna/i)).toBeInTheDocument();
+    // Escribió la calle: entonces la comuna también hace falta (la calle no se pide de nuevo)
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent('la comuna');
+    expect(aviso).not.toHaveTextContent('la calle');
     expect(postMock).not.toHaveBeenCalledWith('ventas/checkout/', expect.anything());
   });
 
@@ -1538,7 +1598,10 @@ describe('Checkout: entrega coordinada (RF-02.3)', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: /acepto los/i }));
     completarDestinatario();
-    expect(screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' })).toBeDisabled();
+    const botonPago = screen.getByRole('button', { name: 'Pagar con Transferencia bancaria' });
+    noSePuedePagar(botonPago);
+    fireEvent.click(botonPago);
+    expect(screen.getByRole('alert')).toHaveTextContent('una forma de entrega');
   });
 });
 

@@ -38,6 +38,7 @@ ventas_urlpatterns = [
     # --- NUEVA RUTA: MÉTRICAS DEL DASHBOARD ---
     # Ruta resultante: GET /api/ventas/dashboard/metricas/
     path('dashboard/metricas/', views.DashboardMetricasView.as_view(), name='dashboard_metricas'),
+    path('dashboard/pendientes/', views.DashboardPendientesView.as_view(), name='dashboard_pendientes'),
     
     path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
 

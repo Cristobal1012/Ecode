@@ -24,6 +24,23 @@
   margin-bottom: 12px;
 }
 
+/* RN-01: con el logo de la Universidad en el footer, va aquí más grande que en el header (52 px). El logo es un
+   bloque rojo y gris con su propio fondo: se lee sobre el fondo oscuro sin placa */
+.footer-logo-universidad {
+  display: block;
+  height: 80px;
+  width: auto;
+  max-width: 100%;
+  margin-top: 20px;
+  object-fit: contain;
+}
+
+@media (max-width: 600px) {
+  .footer-logo-universidad {
+    height: 64px;
+  }
+}
+
 .footer-descripcion,
 .footer-aviso {
   color: #B9B1A6;

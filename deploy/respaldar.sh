@@ -1,6 +1,6 @@
 #!/bin/sh
-# Respaldo de una tienda publicada con deploy/docker-compose.yml: PostgreSQL, MongoDB y las fotos subidas, en
-# <carpeta>/<AAAA-MM-DD>/<tienda>/. Borra los respaldos de más de 7 días. Ver docs/deploy/README.md.
+# Respaldo de una tienda publicada con deploy/docker-compose.yml: PostgreSQL, MongoDB, las fotos y los archivos
+# privados, en <carpeta>/<AAAA-MM-DD>/<tienda>/. Borra los respaldos de más de 7 días. Ver docs/deploy/README.md.
 #
 #   sh deploy/respaldar.sh <tienda> <archivo de la tienda> <carpeta de respaldos>
 #   sh deploy/respaldar.sh alan /opt/tiendas/alan.env /opt/tiendas/respaldos
@@ -27,6 +27,8 @@ $compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 $compose exec -T mongo sh -c 'mongodump --quiet --archive --gzip -u "$MONGO_INITDB_ROOT_USERNAME" \
     -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' > "$destino/mongo.archive.gz"
 $compose exec -T backend tar czf - -C /app/media . > "$destino/media.tar.gz"
+# Los archivos que solo ve el admin (las fotos de las cotizaciones)
+$compose exec -T backend tar czf - -C /app/privado . > "$destino/privado.tar.gz"
 
 # Solo las carpetas por fecha dentro de la carpeta de respaldos
 find "$carpeta" -mindepth 1 -maxdepth 1 -type d -name '????-??-??' -mtime +7 -exec rm -rf {} +

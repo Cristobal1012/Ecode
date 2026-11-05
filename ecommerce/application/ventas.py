@@ -7,11 +7,11 @@ from decimal import Decimal
 from enum import StrEnum
 import logging
 
-from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
+from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte, Paquete, paquete_de_envio
 from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo,
+    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, VarianteNoDisponible,
     armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -52,6 +52,27 @@ class PrepararPedido:
         if subtotal != Decimal(subtotal_informado):
             raise SubtotalDesactualizado(subtotal, lineas)
         return PedidoPreparado(lineas=lineas, subtotal=subtotal)
+
+
+class PaqueteDelPedido:
+    """RF-02.3: el paquete que se cotiza y se despacha, con el peso y las medidas del catálogo.
+
+    El checkout y la cotización usan este, no el que mande el navegador (ver `paquete_de_envio`).
+    """
+
+    def __init__(self, catalogo: CatalogoVariantes):
+        self.catalogo = catalogo
+
+    def ejecutar(self, items: list[ItemSolicitado]) -> Paquete:
+        if not items:
+            raise PedidoVacio()
+        unidades = []
+        for item in agrupar_por_sku(items):
+            variante = self.catalogo.obtener(item.producto_id, item.sku)
+            if variante is None or not variante.disponible:
+                raise VarianteNoDisponible(item.sku)
+            unidades.append((variante.medidas, item.cantidad))
+        return paquete_de_envio(unidades)
 
 
 def agrupar_por_sku(items: list[ItemSolicitado]) -> list[ItemSolicitado]:
@@ -226,6 +247,12 @@ class ResultadoPago(StrEnum):
     # La orden ya estaba pagada: confirmación repetida, sin efectos
     REPETIDO = 'REPETIDO'
     NO_ENCONTRADA = 'NO_ENCONTRADA'
+    # La pasarela no aprobó el pago: rechazado, anulado (la orden pendiente se cancela) o aún en proceso
+    RECHAZADO = 'RECHAZADO'
+    CANCELADO = 'CANCELADO'
+    PENDIENTE = 'PENDIENTE'
+    # El aviso de la pasarela no era sobre un pago
+    IGNORADO = 'IGNORADO'
 
 
 MOTIVO_PAGO_RECHAZADO = 'Pago rechazado'
@@ -340,6 +367,16 @@ class ConfirmarPago:
         self._notificar(orden.id, EventoPedido.CANCELADO if motivo == MOTIVO_PAGO_ANULADO
                         else EventoPedido.PAGO_RECHAZADO)
         return True
+
+    def reembolsado(self, orden_id, motivo_revision: str) -> ResultadoPago:
+        """La pasarela devolvió el pago: una orden ya pagada va a revisión del admin; una pendiente se cancela."""
+        orden = self.ordenes.obtener(orden_id)
+        if orden is not None and orden.estado in ESTADOS_PAGADOS:
+            self.ordenes.marcar_revision(orden.id, motivo_revision)
+            self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
+            return ResultadoPago.EN_REVISION
+        self.rechazar(orden_id, MOTIVO_PAGO_ANULADO)
+        return ResultadoPago.CANCELADO
 
 
 def reponer_stock(inventario: InventarioVariantes, items):

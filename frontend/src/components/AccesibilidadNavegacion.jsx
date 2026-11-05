@@ -9,6 +9,8 @@ const TITULOS = {
   '/pago-exitoso': 'Resultado del pago', '/pedido-recibido': 'Pedido recibido',
   '/pago-cancelado': 'Pago cancelado', '/pago-rechazado': 'Pago rechazado',
   '/admin': 'Panel de administración', '/variantes': 'Selección de variantes', '/resena': 'Deja tu reseña',
+  '/recuperar-contrasena': 'Recuperar contraseña', '/restablecer-contrasena': 'Nueva contraseña',
+  '/cambiar-contrasena': 'Cambiar contraseña',
 };
 
 export default function AccesibilidadNavegacion() {

@@ -36,3 +36,10 @@ def direccion_es_publica(retiro_en_local_activo, mostrar_direccion_pie):
     Muchos emprendedores despachan desde su casa: sin una de las dos, la dirección no sale de la base.
     """
     return bool(retiro_en_local_activo or mostrar_direccion_pie)
+
+
+# RN-01: el admin elige dónde va el logo de la Universidad: en el header junto al del negocio (por defecto) o en
+# el footer, más grande, con el del negocio en el header (decidido el 2026-11-05). No hay ninguna opción para ocultarlo
+LOGO_UNIVERSIDAD_HEADER = 'HEADER'
+LOGO_UNIVERSIDAD_FOOTER = 'FOOTER'
+UBICACIONES_LOGO_UNIVERSIDAD = (LOGO_UNIVERSIDAD_HEADER, LOGO_UNIVERSIDAD_FOOTER)

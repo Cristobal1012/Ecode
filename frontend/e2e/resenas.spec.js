@@ -61,6 +61,8 @@ test('el comprador deja su reseña solo con el teclado', async ({ page }) => {
   const { enviadas, inesperadas } = await simularResenas(page);
   await page.goto(`/resena?t=${encodeURIComponent(TOKEN)}`);
   await expect(page.getByText('Pedido #12')).toBeVisible();
+  // El token del correo sale de la URL al abrirla: la analítica no lo ve
+  expect(await page.evaluate(() => location.pathname + location.search)).toBe('/resena');
 
   // Tienda: se entra al grupo y las flechas eligen
   const tienda = page.getByRole('group', { name: '¿Cómo calificarías a Tienda QA?' });
@@ -102,7 +104,7 @@ test('un enlace alterado no muestra el formulario', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Enviar reseña' })).toHaveCount(0);
 });
 
-for (const tema of [1, 2, 3, 4]) {
+for (const tema of [1, 2, 3, 4, 5, 6]) {
   test(`el formulario cumple WCAG AA en la paleta ${tema}, en escritorio y celular`, async ({ page }) => {
     await simularResenas(page, { tema });
     for (const ancho of [1280, 375]) {

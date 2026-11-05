@@ -19,12 +19,14 @@ COPY backend_project backend_project
 COPY ecommerce ecommerce
 COPY deploy/entrypoint.sh deploy/salud.py deploy/
 
-# Las fotos (volumen) y los estáticos del admin quedan a nombre del usuario de la tienda. El sed quita los CRLF si
-# la imagen se construye desde una copia de Windows
-RUN mkdir -p media staticfiles && chown tienda media staticfiles \
+# Las fotos (volumen), los archivos privados (volumen; ej. las fotos de las cotizaciones, que solo ve el admin) y
+# los estáticos del admin quedan a nombre del usuario de la tienda. El sed quita los CRLF si la imagen se construye
+# desde una copia de Windows
+RUN mkdir -p media privado staticfiles && chown tienda media privado staticfiles \
     && sed -i 's/\r$//' deploy/entrypoint.sh && chmod +x deploy/entrypoint.sh
 
 ENV MEDIA_ROOT=/app/media \
+    ARCHIVOS_PRIVADOS_ROOT=/app/privado \
     STATIC_ROOT=/app/staticfiles
 
 USER tienda

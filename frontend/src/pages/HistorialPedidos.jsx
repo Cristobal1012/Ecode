@@ -4,7 +4,11 @@ import clienteAxios from '../components/auth/axiosConfig';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 import Dialogo from '../components/Dialogo';
+import FotosPedido from '../components/FotosPedido';
+import { guardarTokensDeEnlace } from '../utils/enlacesConToken';
 import './HistorialPedidos.css';
+import { Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoTabla } from '../components/carga/EsqueletosPanel';
 
 const TEMA_PREDETERMINADO = 1;
 
@@ -13,6 +17,9 @@ const NOMBRES_ENTREGA = {
     RETIRO_LOCAL: 'Retiro en local',
     ENTREGA_COORDINADA: 'Entrega coordinada'
 };
+
+// El nombre de un courier sale de la configuración; si ya no está activo, del código (CHILEXPRESS → Chilexpress)
+const nombreDelCodigo = (codigo) => codigo ? codigo.charAt(0) + codigo.slice(1).toLowerCase() : 'Courier';
 
 const diccionarioEstados = {
     'PENDIENTE': 'Pendiente',
@@ -57,6 +64,7 @@ const HistorialPedidos = () => {
     const [pedidos, setPedidos] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null); // Para el diálogo de detalles de envío
+    const [nombresCouriers, setNombresCouriers] = useState({});
     const [temaConfigurado, setTemaConfigurado] = useState(() => {
         const savedPaletteId = Number(localStorage.getItem('ecommerce_palette'));
         return savedPaletteId || TEMA_PREDETERMINADO;
@@ -82,6 +90,7 @@ const HistorialPedidos = () => {
                         localStorage.setItem('ecommerce_palette', idBackend.toString());
                     }
                 }
+                setNombresCouriers(Object.fromEntries((configDb?.couriers || []).map(c => [c.codigo, c.nombre])));
             })
             .catch((error) => console.error('Error cargando configuración:', error));
 
@@ -121,7 +130,7 @@ const HistorialPedidos = () => {
                     <h1 className="historial-titulo">Mi historial de pedidos</h1>
 
                     {cargando ? (
-                        <p className="historial-estado" role="status">Cargando tus pedidos...</p>
+                        <Cargando texto="Cargando tus pedidos..."><EsqueletoTabla filas={4} columnas={5} /></Cargando>
                     ) : (
                         <table className="historial-tabla">
                             <thead>
@@ -137,7 +146,12 @@ const HistorialPedidos = () => {
                                 {pedidos.length > 0 ? (
                                     pedidos.map((orden) => (
                                         <tr key={orden.id}>
-                                            <td data-etiqueta="N° Orden" className="historial-orden">#{orden.id}</td>
+                                            <td data-etiqueta="N° Orden" className="historial-orden">
+                                                <span className="historial-orden-contenido">
+                                                    <FotosPedido pedido={orden} />
+                                                    #{orden.id}
+                                                </span>
+                                            </td>
                                             <td data-etiqueta="Fecha" className="historial-fecha">
                                                 {formatearFecha(orden.fecha || orden.fecha_creacion)}
                                             </td>
@@ -159,7 +173,7 @@ const HistorialPedidos = () => {
                                                         Seguimiento
                                                     </button>
 
-                                                    {/* Opción para ver detalle de la etiqueta/envío si está pagado y usa Chilexpress */}
+                                                    {/* Opción para ver el detalle del envío si está pagado */}
                                                     {orden.estado?.toUpperCase() === 'PAGADO' && (
                                                         <button
                                                             type="button"
@@ -170,10 +184,12 @@ const HistorialPedidos = () => {
                                                         </button>
                                                     )}
 
-                                                    {/* Reseña: entregado, sin reseña y dentro del plazo (lo decide el servidor) */}
+                                                    {/* Reseña: entregado, sin reseña y dentro del plazo (lo decide el servidor).
+                                                        El token se guarda en vez de ir en la URL, que lee la analítica */}
                                                     {orden.token_resena && (
                                                         <Link
-                                                            to={`/resena?t=${encodeURIComponent(orden.token_resena)}`}
+                                                            to="/resena"
+                                                            onClick={() => guardarTokensDeEnlace('/resena', { t: orden.token_resena })}
                                                             className="historial-enlace"
                                                             aria-label={`Dejar reseña del pedido #${orden.id}`}
                                                         >
@@ -212,7 +228,7 @@ const HistorialPedidos = () => {
 
                         <dl className="historial-detalle">
                             <dt>Proveedor logístico</dt>
-                            <dd className="historial-proveedor">{NOMBRES_ENTREGA[pedidoSeleccionado.proveedor_logistico] || pedidoSeleccionado.proveedor_logistico || 'Chilexpress'}</dd>
+                            <dd className="historial-proveedor">{NOMBRES_ENTREGA[pedidoSeleccionado.proveedor_logistico] || nombresCouriers[pedidoSeleccionado.proveedor_logistico] || nombreDelCodigo(pedidoSeleccionado.proveedor_logistico)}</dd>
                             <dt>Estado del pago</dt>
                             <dd>{diccionarioEstados[pedidoSeleccionado.estado] || pedidoSeleccionado.estado}</dd>
                             <dt>Información pasarela / OT</dt>

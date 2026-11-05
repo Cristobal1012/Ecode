@@ -14,7 +14,9 @@ Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443, certific
                      └─ daniela.<ip>.sslip.io ──> tienda "daniela" (127.0.0.1:8082)
 ```
 
-Cada tienda usa alrededor de 1 GB de RAM: dos tiendas caben en una máquina de 4 GB.
+Cada tienda usa unos 650 MB de RAM en reposo y hasta 1,5 GB en un pico ([detalle](README.md#publicar-con-docker)):
+dos tiendas de prueba caben en una máquina de 4 GB con el swap del [paso 2](#2-preparar-el-servidor). La tienda
+real de un cliente va sola, en un servidor de 4 GB.
 
 ## 1. La máquina
 
@@ -78,6 +80,29 @@ Entra con `ssh -i <archivo .pem> azureuser@<IP pública>` y sigue en el paso 2.
 - Oracle puede detener una máquina gratuita con muy poco uso durante 7 días, y avisa por correo antes. Si pasa, se
   vuelve a encender desde la consola sin perder datos.
 
+### Alternativa: cualquier VPS con Ubuntu
+
+Sirve cualquier proveedor que entregue una máquina con **Ubuntu 24.04**, acceso root por SSH y una IP pública fija:
+4 GB de RAM para dos tiendas de prueba, o 2 GB para una, siempre con el swap del [paso 2](#2-preparar-el-servidor).
+Antes de pagar:
+
+- **Confirma por escrito que los puertos 22, 80 y 443 llegan abiertos desde internet.** Hay proveedores que
+  responden al ping, pero bloquean todo TCP en su red: la máquina queda inalcanzable aunque esté encendida.
+- Prefiere uno que cobre **por hora** o tenga **devolución** (ej. 30 días). Así, si la red falla, se borra la
+  máquina sin perder el dinero.
+- Elige una región en **Chile o Brasil**: desde Chile responde en unos 10 a 70 ms, contra 130 ms o más en Estados
+  Unidos.
+
+Apenas la entreguen, desde tu computador, comprueba que el SSH responde. Después de levantar Caddy (paso 4),
+haz lo mismo con el 80 y el 443:
+
+```bash
+ssh -o ConnectTimeout=10 root@<IP pública> true && echo "SSH OK"
+curl -sI --max-time 10 http://<IP pública>/ | head -1
+```
+
+Si el proveedor tiene un firewall en su panel, abre ahí los mismos tres puertos. Sigue en el paso 2.
+
 ## 2. Preparar el servidor
 
 ```bash
@@ -86,6 +111,21 @@ sudo timedatectl set-timezone America/Santiago
 # Parches de seguridad automáticos (en Ubuntu vienen activos; esto lo confirma)
 sudo dpkg-reconfigure -plow unattended-upgrades
 ```
+
+Un swap de 2 GB, para que un pico de memoria ponga lenta la tienda en vez de cerrar MongoDB (si `swapon --show` ya
+muestra uno, sáltate esto):
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+# Usar el swap solo cuando falte memoria
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swap.conf && sudo sysctl --system
+```
+
+Compruébalo con `free -h`: la línea `Swap` debe decir `2.0Gi`.
 
 Docker Engine y el plugin `docker compose`, desde el repositorio oficial de Docker:
 
@@ -110,6 +150,19 @@ sudo mkdir -p /opt/tiendas/respaldos && sudo chown -R despliegue: /opt/tiendas
 Copia en `/home/despliegue/.ssh/authorized_keys` las claves públicas del equipo (con permisos `700` la carpeta y
 `600` el archivo, a nombre de `despliegue`). El SSH queda solo con clave: compruébalo con
 `sudo sshd -T | grep passwordauthentication`, que debe decir `no`.
+
+Si dice `yes` (algunos proveedores lo activan en `/etc/ssh/sshd_config.d/50-cloud-init.conf`), crea un archivo
+que se lea antes que ese, sin editar los del proveedor. SSH usa el primer valor que encuentra:
+
+```bash
+printf '%s\n' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' 'PermitRootLogin prohibit-password' \
+  | sudo tee /etc/ssh/sshd_config.d/00-solo-llave.conf > /dev/null
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+`sshd -t` revisa la configuración antes de aplicarla. **No cierres la sesión** hasta comprobar, desde otra
+terminal, que entras con la clave. Si algo falla, la consola web del proveedor sigue entrando con la contraseña de
+root, porque no pasa por el SSH.
 
 ## 3. Código y variables de cada tienda
 

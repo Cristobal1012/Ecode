@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from './auth/axiosConfig';
+import Spinner from './carga/Spinner';
 
 // Igual que el backend (domain/blog.py)
 const MAX_FOTOS = 10;
@@ -239,7 +240,7 @@ export default function FormularioPublicacion({ publicacion: inicial, alVolver }
             <>
               <button type="button" className="boton boton-primario" disabled={guardando}
                 onClick={() => guardar('PUBLICADA')}>
-                {guardando ? 'Guardando...' : 'Guardar cambios'}
+                {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar cambios'}
               </button>
               <button type="button" className="boton boton-contorno" disabled={guardando}
                 onClick={() => guardar('BORRADOR')}>
@@ -253,7 +254,7 @@ export default function FormularioPublicacion({ publicacion: inicial, alVolver }
             <>
               <button type="button" className="boton boton-primario" disabled={guardando}
                 onClick={() => guardar('PUBLICADA')}>
-                {guardando ? 'Guardando...' : 'Publicar'}
+                {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Publicar'}
               </button>
               <button type="button" className="boton boton-contorno" disabled={guardando}
                 onClick={() => guardar('BORRADOR')}>

@@ -1,15 +1,19 @@
-"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes y NombresProductos."""
+"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes, NombresProductos y StockCatalogo."""
 
 from decimal import Decimal
 
+from bson import ObjectId
 from bson.errors import InvalidId
 from mongoengine.errors import ValidationError as MongoValidationError
 
 from ecommerce.application.cotizaciones import NombresProductos
+from ecommerce.application.dashboard import StockCatalogo, VariantePocoStock
 from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
+from ecommerce.domain.logistica import MedidasEnvio
 from ecommerce.domain.ventas import VarianteCatalogo
 
 from .documents import Producto
+from .images import url_imagen
 
 
 class MongoCatalogoVariantes(CatalogoVariantes):
@@ -40,6 +44,8 @@ class MongoCatalogoVariantes(CatalogoVariantes):
             precio=Decimal(precio_vigente),
             stock=int(variante.stock),
             disponible=bool(producto.activo and producto.publicado),
+            medidas=MedidasEnvio(*(Decimal(str(getattr(variante, campo) or 0))
+                                   for campo in ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm'))),
         )
 
 
@@ -60,3 +66,45 @@ class MongoNombresProductos(NombresProductos):
         except (MongoValidationError, InvalidId):
             return None
         return producto.nombre if producto else None
+
+
+class MongoStockCatalogo(StockCatalogo):
+    """Para "Para hoy" del dashboard: las variantes de productos activos (publicados o en borrador) con poco stock.
+    Un producto dado de baja ya no se vende: no avisa."""
+
+    def con_poco_stock(self, umbral):
+        productos = Producto.objects(activo=True, variantes__stock__lte=umbral).only('nombre', 'variantes')
+        return [
+            VariantePocoStock(
+                producto_id=str(producto.id), producto=producto.nombre, sku=str(variante.sku),
+                detalle=' · '.join(f'{nombre}: {valor}' for nombre, valor in (variante.atributos_variables or {}).items()),
+                stock=int(variante.stock or 0),
+            )
+            for producto in productos for variante in producto.variantes if int(variante.stock or 0) <= umbral
+        ]
+
+
+def _texto_variante(variante):
+    return ' · '.join(f'{nombre}: {valor}' for nombre, valor in (variante.atributos_variables or {}).items())
+
+
+def fotos_de_variantes(pares, request=None):
+    """Para "Mis pedidos": la foto que tiene hoy en el catálogo cada variante comprada (la suya o, si no tiene, la
+    primera del producto) y el texto de su variante. Una sola consulta para todos los pedidos.
+
+    Devuelve {(producto_id, sku): {'imagen': url o None, 'variante': 'Talla: M'}}. Un producto borrado o con un id
+    inválido no aparece: el historial lo muestra sin foto.
+    """
+    ids = {str(producto_id) for producto_id, _ in pares if ObjectId.is_valid(str(producto_id))}
+    if not ids:
+        return {}
+    fotos = {}
+    for producto in Producto.objects(id__in=list(ids)).only('imagenes', 'variantes'):
+        portada = next(iter(producto.imagenes or []), None)
+        for variante in producto.variantes:
+            imagen = variante.imagen_especifica or portada
+            fotos[(str(producto.id), str(variante.sku))] = {
+                'imagen': url_imagen(imagen, request) if imagen else None,
+                'variante': _texto_variante(variante),
+            }
+    return {par: fotos[par] for par in ((str(p), str(s)) for p, s in pares) if par in fotos}

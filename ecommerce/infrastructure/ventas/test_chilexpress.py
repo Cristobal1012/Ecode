@@ -11,21 +11,30 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from ecommerce.domain.logistica import CredencialesChilexpress
+from ecommerce.domain.logistica import CredencialesCourier, CourierNoDisponible
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .adapters.logistica import ProveedorLogisticoAdapter
+from .couriers import DjangoCouriers, DjangoRepositorioCredencialesCourier
+from .couriers.chilexpress import ChilexpressCourier
 from .cifrado import descifrar_json
 from .models import OrdenCompra, ProveedorEnvio
-from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
 
-ADAPTADOR = 'ecommerce.infrastructure.ventas.adapters.logistica'
+ADAPTADOR = 'ecommerce.infrastructure.ventas.couriers.chilexpress'
 COTIZADOR = 'llave-cotizador-secreta-0001'
 ENVIOS = 'llave-envios-secreta-0002'
 
 
+def credenciales(**llaves):
+    return CredencialesCourier.con(ChilexpressCourier.CAMPOS, llaves)
+
+
 def guardar_credenciales(**llaves):
-    DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(**llaves))
+    DjangoRepositorioCredencialesCourier().guardar('CHILEXPRESS', credenciales(**llaves))
+
+
+def chilexpress():
+    """El adaptador con las llaves guardadas, como lo arma el registro (aunque falten las obligatorias)."""
+    return DjangoCouriers().obtener('CHILEXPRESS', solo_activos=False)
 
 
 def sin_llaves_guardadas():
@@ -33,8 +42,8 @@ def sin_llaves_guardadas():
     ProveedorEnvio.objects.all().delete()
 
 
-class AdminChilexpressAPITests(APITestCase):
-    """RNF-03: el admin carga las llaves de Chilexpress desde el panel, cifradas y nunca devueltas completas."""
+class AdminCouriersAPITests(APITestCase):
+    """RNF-03: el admin carga las llaves de cada courier desde el panel, cifradas y nunca devueltas completas."""
 
     @classmethod
     def setUpTestData(cls):
@@ -46,13 +55,15 @@ class AdminChilexpressAPITests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
 
     def guardar(self, datos):
-        return self.client.put(reverse('admin-chilexpress'), {'datos': datos}, format='json')
+        return self.client.put(reverse('admin-courier', args=['CHILEXPRESS']), {'datos': datos}, format='json')
 
     def test_sin_configurar_informa_los_campos_y_lo_que_falta(self):
-        response = self.client.get(reverse('admin-chilexpress'))
+        response = self.client.get(reverse('admin-couriers'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual((response.data['configuradas'], response.data['faltantes']), (False, ['cotizador']))
-        self.assertEqual([(c['nombre'], c['obligatorio']) for c in response.data['campos']],
+        chilexpress, = response.data
+        self.assertEqual((chilexpress['codigo'], chilexpress['nombre']), ('CHILEXPRESS', 'Chilexpress'))
+        self.assertEqual((chilexpress['configuradas'], chilexpress['faltantes']), (False, ['cotizador']))
+        self.assertEqual([(c['nombre'], c['obligatorio']) for c in chilexpress['campos']],
                          [('cotizador', True), ('coberturas', False), ('envios', False)])
 
     def test_guarda_cifrado_devuelve_enmascarado_y_conserva_al_reenviar(self):
@@ -66,8 +77,7 @@ class AdminChilexpressAPITests(APITestCase):
 
         # El panel reenvía lo que mostró: no debe pisar las llaves con los puntos
         self.guardar(response.data['datos'])
-        self.assertEqual(DjangoRepositorioCredencialesChilexpress().obtener(),
-                         CredencialesChilexpress(cotizador=COTIZADOR, envios=ENVIOS))
+        self.assertEqual(chilexpress().credenciales, credenciales(cotizador=COTIZADOR, envios=ENVIOS))
 
     def test_campo_desconocido_es_400(self):
         response = self.guardar({'cotizador': COTIZADOR, 'tcc': '18578680'})
@@ -75,12 +85,16 @@ class AdminChilexpressAPITests(APITestCase):
         self.assertIn('tcc', response.data['datos'])
         self.assertFalse(ProveedorEnvio.objects.exists())
 
+    def test_un_courier_desconocido_es_404(self):
+        response = self.client.put(reverse('admin-courier', args=['NOEXISTE']), {'datos': {}}, format='json')
+        self.assertEqual(response.status_code, 404)
+
     def test_solo_el_admin_ve_y_carga_las_llaves(self):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.buyer_token.key}')
-        self.assertEqual(self.client.get(reverse('admin-chilexpress')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('admin-couriers')).status_code, 403)
         self.assertEqual(self.guardar({'cotizador': COTIZADOR}).status_code, 403)
         self.client.credentials()
-        self.assertEqual(self.client.get(reverse('admin-chilexpress')).status_code, 401)
+        self.assertEqual(self.client.get(reverse('admin-couriers')).status_code, 401)
 
 
 class AdaptadorChilexpressCredencialesTests(TestCase):
@@ -88,13 +102,13 @@ class AdaptadorChilexpressCredencialesTests(TestCase):
 
     def setUp(self):
         sin_llaves_guardadas()
-        ProveedorLogisticoAdapter._CACHE_COBERTURAS = {}
-        self.addCleanup(setattr, ProveedorLogisticoAdapter, '_CACHE_COBERTURAS', {})
+        ChilexpressCourier._CACHE_COBERTURAS = {}
+        self.addCleanup(setattr, ChilexpressCourier, '_CACHE_COBERTURAS', {})
 
     @patch(f'{ADAPTADOR}.requests.get')
     def test_sin_llaves_no_llama_a_chilexpress(self, get):
-        self.assertEqual(ProveedorLogisticoAdapter.obtener_comunas_chilexpress(),
-                         {'error': 'Servicio de coberturas no disponible en este momento.'})
+        with self.assertRaisesMessage(CourierNoDisponible, 'Servicio de coberturas no disponible en este momento.'):
+            chilexpress().comunas()
         get.assert_not_called()
 
     @patch(f'{ADAPTADOR}.requests.get')
@@ -102,14 +116,15 @@ class AdaptadorChilexpressCredencialesTests(TestCase):
         guardar_credenciales(cotizador=COTIZADOR)
         get.return_value = Mock(status_code=200)
         get.return_value.json.return_value = {'regions': []}
-        ProveedorLogisticoAdapter.obtener_comunas_chilexpress()
+        with self.assertRaises(CourierNoDisponible):
+            chilexpress().comunas()
         self.assertEqual(get.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'], COTIZADOR)
 
     @patch(f'{ADAPTADOR}.requests.post')
     def test_la_orden_de_transporte_usa_la_llave_de_envios(self, post):
         guardar_credenciales(cotizador=COTIZADOR, envios=ENVIOS)
         post.return_value = Mock(status_code=500, text='error')
-        ProveedorLogisticoAdapter.generar_orden_transporte({'referencia': 'ORDEN-1'})
+        chilexpress()._solicitar_orden_transporte({'referencia': 'ORDEN-1'})
         self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'], ENVIOS)
 
 
@@ -146,6 +161,21 @@ class DescargarEtiquetaTests(APITestCase):
         self.assertTrue(post.call_args.args[0].startswith('https://'))
         self.assertEqual(post.call_args.kwargs['headers']['Ocp-Apim-Subscription-Key'], ENVIOS)
         self.assertEqual(post.call_args.kwargs['json']['transportOrderNumber'], 712678903156)
+
+    @patch(f'{ADAPTADOR}.requests.post')
+    def test_la_etiqueta_del_sandbox_viene_como_imagen_y_se_descarga_como_jpg(self, post):
+        # Formato real del sandbox: data.label.labelData con un JPEG, y data.detail como objeto
+        guardar_credenciales(cotizador=COTIZADOR, envios=ENVIOS)
+        post.return_value = Mock(status_code=200)
+        post.return_value.json.return_value = {'statusCode': 0, 'data': {
+            'detail': {'transportOrderNumber': 712678903156.0},
+            'label': {'labelData': base64.b64encode(b'\xff\xd8\xff\xe0JPEG').decode()}}}
+
+        response = self.descargar()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
+        self.assertIn('Etiqueta_OT_712678903156.jpg', response['Content-Disposition'])
 
     @patch(f'{ADAPTADOR}.requests.post')
     def test_sin_llaves_avisa_sin_llamar_a_chilexpress(self, post):
@@ -214,7 +244,7 @@ class SeguimientoChilexpressTests(TestCase):
         guardar_credenciales(cotizador=COTIZADOR, envios=ENVIOS)
 
     def consultar(self):
-        return ProveedorLogisticoAdapter.consultar_estado('CHILEXPRESS', '712678906520')
+        return chilexpress().consultar_estado('712678906520')
 
     def test_consulta_por_post_con_la_ot_el_rut_y_la_llave_de_envios(self, post):
         post.return_value = respuesta_tracking('EN PRE-RECEPCION')

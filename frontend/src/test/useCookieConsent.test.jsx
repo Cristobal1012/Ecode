@@ -1,6 +1,11 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Lo que guarda el hook: la elección por categoría y la fecha (vence a los 12 meses)
+const decision = (analitica, marketing, fecha = new Date()) => JSON.stringify({ analitica, marketing, fecha: fecha.toISOString() });
+const leerDecision = (clave) => JSON.parse(localStorage.getItem(clave));
+const haceDias = (dias) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+
 describe('useCookieConsent', () => {
   let useCookieConsentModule;
     let useCookieConsent;
@@ -45,25 +50,70 @@ describe('useCookieConsent', () => {
     });
 
     it('reconoce una aceptación guardada', () => {
-      localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+      localStorage.setItem(COOKIE_CONSENT_KEY, decision(true, true));
 
       const { result } = renderHook(() => useCookieConsent());
 
       expect(result.current.consent).toBe('accepted');
+      expect(result.current.preferences).toEqual({ analitica: true, marketing: true });
       expect(result.current.isBannerOpen).toBe(false);
       expect(isCookieConsentAccepted()).toBe(true);
     });
 
     it('vuelve a guardar una aceptación existente', () => {
-      localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+      const guardada = decision(true, false);
+      localStorage.setItem(COOKIE_CONSENT_KEY, guardada);
       const setItem = vi.spyOn(Storage.prototype, 'setItem');
 
       renderHook(() => useCookieConsent());
 
-      expect(setItem).toHaveBeenCalledWith(
-        COOKIE_CONSENT_KEY,
-        'accepted',
-      );
+      expect(setItem).toHaveBeenCalledWith(COOKIE_CONSENT_KEY, guardada);
+    });
+
+    it('vuelve a preguntar una aceptación del formato anterior: no permitía elegir por categoría', () => {
+      localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+
+      const { result } = renderHook(() => useCookieConsent());
+
+      expect(result.current.consent).toBe('pending');
+      expect(result.current.isBannerOpen).toBe(true);
+      expect(isCookieConsentAccepted()).toBe(false);
+    });
+
+    it('respeta un rechazo del formato anterior y desde ahí corre su vigencia', () => {
+      localStorage.setItem(COOKIE_CONSENT_KEY, 'rejected');
+
+      const { result } = renderHook(() => useCookieConsent());
+
+      expect(result.current.consent).toBe('rejected');
+      expect(leerDecision(COOKIE_CONSENT_KEY)).toEqual(expect.objectContaining({ analitica: false, marketing: false }));
+      expect(Date.now() - Date.parse(leerDecision(COOKIE_CONSENT_KEY).fecha)).toBeLessThan(5000);
+    });
+
+    it('una decisión de hace 364 días sigue vigente', () => {
+      localStorage.setItem(COOKIE_CONSENT_KEY, decision(true, true, haceDias(364)));
+
+      expect(renderHook(() => useCookieConsent()).result.current.consent).toBe('accepted');
+    });
+
+    it('la decisión vence a los 12 meses y se vuelve a preguntar', () => {
+      localStorage.setItem(COOKIE_CONSENT_KEY, decision(true, true, haceDias(366)));
+
+      const { result } = renderHook(() => useCookieConsent());
+
+      expect(result.current.consent).toBe('pending');
+      expect(result.current.isBannerOpen).toBe(true);
+      expect(isCookieConsentAccepted()).toBe(false);
+    });
+
+    it.each([
+      ['sin fecha', JSON.stringify({ analitica: true, marketing: true })],
+      ['con una categoría que no es booleana', JSON.stringify({ analitica: 'si', marketing: true, fecha: new Date().toISOString() })],
+      ['con el JSON roto', '{analitica'],
+    ])('trata una decisión %s como pendiente', (_, valor) => {
+      localStorage.setItem(COOKIE_CONSENT_KEY, valor);
+
+      expect(renderHook(() => useCookieConsent()).result.current.consent).toBe('pending');
     });
 
     it('reconoce un rechazo guardado', () => {
@@ -114,8 +164,45 @@ describe('useCookieConsent', () => {
 
       expect(result.current.consent).toBe('accepted');
       expect(result.current.isBannerOpen).toBe(false);
-      expect(localStorage.getItem(COOKIE_CONSENT_KEY)).toBe('accepted');
+      expect(leerDecision(COOKIE_CONSENT_KEY)).toEqual(expect.objectContaining({ analitica: true, marketing: true }));
       expect(isCookieConsentAccepted()).toBe(true);
+    });
+
+    it('acepta solo las categorías elegidas', () => {
+      const { result } = renderHook(() => useCookieConsent());
+
+      act(() => {
+        result.current.savePreferences({ analitica: true, marketing: false, otra: true });
+      });
+
+      expect(result.current.consent).toBe('custom');
+      expect(result.current.preferences).toEqual({ analitica: true, marketing: false });
+      expect(leerDecision(COOKIE_CONSENT_KEY)).toEqual(expect.objectContaining({ analitica: true, marketing: false }));
+      expect(leerDecision(COOKIE_CONSENT_KEY)).not.toHaveProperty('otra');
+      expect(isCookieConsentAccepted('analitica')).toBe(true);
+      expect(isCookieConsentAccepted('marketing')).toBe(false);
+    });
+
+    it('retirar solo la publicidad quita el Pixel, deja Analytics y recarga', () => {
+      const reload = vi.fn();
+      vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, reload });
+      localStorage.setItem(COOKIE_CONSENT_KEY, decision(true, true));
+      for (const id of ['ecode-google-analytics-script', 'ecode-meta-pixel-script']) {
+        const script = document.createElement('script');
+        script.id = id;
+        document.head.appendChild(script);
+      }
+      window.__ecodeMetaPixelInitialized = ['123'];
+      const { result } = renderHook(() => useCookieConsent());
+
+      act(() => {
+        result.current.savePreferences({ analitica: true, marketing: false });
+      });
+
+      expect(document.getElementById('ecode-meta-pixel-script')).toBeNull();
+      expect(document.getElementById('ecode-google-analytics-script')).not.toBeNull();
+      expect(reload).toHaveBeenCalledTimes(1);
+      document.getElementById('ecode-google-analytics-script').remove();
     });
 
     it('rechaza las cookies y guarda la decisión', () => {
@@ -127,7 +214,7 @@ describe('useCookieConsent', () => {
 
       expect(result.current.consent).toBe('rejected');
       expect(result.current.isBannerOpen).toBe(false);
-      expect(localStorage.getItem(COOKIE_CONSENT_KEY)).toBe('rejected');
+      expect(leerDecision(COOKIE_CONSENT_KEY)).toEqual(expect.objectContaining({ analitica: false, marketing: false }));
       expect(isCookieConsentAccepted()).toBe(false);
     });
 

@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
 import { GoogleLogin } from '@react-oauth/google';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { guardarCarrito } from '../carrito';
+import Spinner from '../carga/Spinner';
 
 // Mensaje según la causa: credenciales incorrectas o la tienda no responde
 const mensajeDeError = (error) => {
@@ -206,8 +207,9 @@ export default function Login({ onSwitchToRegister, googleHabilitado = false, av
                         {...camposConError}
                     />
                 </div>
+                <Link to="/recuperar-contrasena" className="auth-olvido">¿Olvidaste tu contraseña?</Link>
                 <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
-                    {enviando ? 'Entrando...' : 'Entrar'}
+                    {enviando && <Spinner />}{enviando ? 'Entrando...' : 'Entrar'}
                 </button>
             </form>
 

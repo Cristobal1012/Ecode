@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import Spinner from './carga/Spinner';
 
 // Dirección de una foto subida: catalogo/productos/<producto>/<id>.<formato> (CLAVE_IMAGEN en el backend)
 const FOTO_SUBIDA = /\/catalogo\/productos\/[0-9a-f]{24}\/([0-9a-f]{32}(?:_[A-Za-z0-9]{7})*)\.(?:jpg|png|webp)$/;
@@ -391,6 +392,7 @@ export default function GaleriaImagenes({
                         : 'pointer'
                   }}
                 >
+                  {eliminando === index && <Spinner />}
                   {eliminando === index
                     ? 'Eliminando...'
                     : 'Eliminar'}

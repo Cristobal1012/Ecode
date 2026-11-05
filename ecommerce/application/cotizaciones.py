@@ -11,7 +11,7 @@ class RepositorioCotizaciones(ABC):
 
     @abstractmethod
     def guardar(self, solicitud: SolicitudCotizacion) -> int:
-        """Guarda la solicitud como Nueva y devuelve su número."""
+        """Guarda la solicitud como Nueva, con sus fotos donde solo la tienda las ve, y devuelve su número."""
         raise NotImplementedError
 
     @abstractmethod
@@ -58,12 +58,13 @@ class SolicitarCotizacion:
         self.notificador = notificador
         self.productos = productos
 
-    def ejecutar(self, datos: dict, formulario_activo: bool, hoy: date) -> int:
+    def ejecutar(self, datos: dict, formulario_activo: bool, hoy: date, fotos=()) -> int:
+        """`fotos`: hasta MAX_FOTOS_COTIZACION ImagenProcesada, ya validadas por el adaptador de entrada."""
         if not formulario_activo:
             raise FormularioCotizacionDesactivado()
         producto_id = str(datos.get('producto_id') or '').strip()
         nombre_producto = (self.productos.nombre(producto_id) or '') if producto_id else ''
-        solicitud = SolicitudCotizacion.desde(datos, hoy, producto_nombre=nombre_producto)
+        solicitud = SolicitudCotizacion.desde(datos, hoy, producto_nombre=nombre_producto, fotos=tuple(fotos))
         cotizacion_id = self.cotizaciones.guardar(solicitud)
         self.notificador.notificar_nueva(cotizacion_id)
         return cotizacion_id

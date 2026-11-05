@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 const ESTILOS_AVISO = {
   error: { backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b' },
@@ -10,36 +13,24 @@ const ESTILOS_AVISO = {
 const estiloCampo = { width: '100%', padding: '10px', boxSizing: 'border-box', border: '1px solid var(--color-control-border)', borderRadius: '4px' };
 const estiloEtiqueta = { display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--color-text)' };
 
-// RNF-03: el admin carga las llaves de las APIs de Chilexpress; llegan enmascaradas y, si se devuelven
-// sin cambios, el backend conserva las anteriores.
-export default function GestorChilexpress() {
-  const [config, setConfig] = useState(null);
-  const [datos, setDatos] = useState({});
-  const [errorCarga, setErrorCarga] = useState('');
+// RNF-03: las llaves de un courier; llegan enmascaradas y, si se devuelven sin cambios, el backend conserva las
+// anteriores. Los campos y la ayuda los declara cada courier en el backend.
+function FormularioCourier({ inicial }) {
+  const [config, setConfig] = useState(inicial);
+  const [datos, setDatos] = useState(() => ({ ...inicial.datos }));
   const [guardando, setGuardando] = useState(false);
   // { tipo, texto, errores }
   const [aviso, setAviso] = useState(null);
-
-  useEffect(() => {
-    clienteAxios.get('ventas/admin/chilexpress/')
-      .then(({ data }) => {
-        setConfig(data);
-        setDatos({ ...data.datos });
-      })
-      .catch((error) => {
-        console.error('Error al cargar las credenciales de Chilexpress:', error);
-        setErrorCarga('No se pudieron cargar las credenciales de Chilexpress.');
-      });
-  }, []);
+  const { codigo, nombre } = config;
 
   const handleGuardar = async () => {
     setGuardando(true);
     setAviso(null);
     try {
-      const { data } = await clienteAxios.put('ventas/admin/chilexpress/', { datos });
+      const { data } = await clienteAxios.put(`ventas/admin/couriers/${codigo}/`, { datos });
       setConfig(data);
       setDatos({ ...data.datos });
-      setAviso({ tipo: 'exito', texto: 'Credenciales de Chilexpress guardadas.' });
+      setAviso({ tipo: 'exito', texto: `Credenciales de ${nombre} guardadas.` });
     } catch (error) {
       setAviso({
         tipo: 'error',
@@ -51,30 +42,27 @@ export default function GestorChilexpress() {
     }
   };
 
-  if (errorCarga) return <p role="alert" style={{ ...ESTILOS_AVISO.error, padding: '10px 12px', borderRadius: '6px' }}>{errorCarga}</p>;
-  if (!config) return <p>Cargando credenciales de Chilexpress...</p>;
-
   const etiquetas = Object.fromEntries(config.campos.map(c => [c.nombre, c.etiqueta]));
   const errores = aviso?.errores || {};
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '640px' }}>
+    <section aria-labelledby={`courier-${codigo}-titulo`} style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '640px' }}>
+      <h4 id={`courier-${codigo}-titulo`} style={{ margin: 0, fontSize: '1.1rem' }}>{nombre}</h4>
       <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.95rem' }}>
         Con estas llaves la tienda cotiza el despacho, muestra las sucursales y genera la orden de transporte.
-        Se obtienen en el portal de desarrolladores de Chilexpress; si dejas vacías las de coberturas o envíos, se usa la
-        del cotizador. Se guardan cifradas y aquí solo se muestran sus últimos caracteres.
+        {config.ayuda && ` ${config.ayuda}`} Se guardan cifradas y aquí solo se muestran sus últimos caracteres.
       </p>
 
       {config.configuradas
-        ? <p style={{ ...ESTILOS_AVISO.exito, padding: '8px 12px', borderRadius: '6px', margin: 0 }}>Configurado: el checkout puede cotizar con Chilexpress.</p>
+        ? <p style={{ ...ESTILOS_AVISO.exito, padding: '8px 12px', borderRadius: '6px', margin: 0 }}>Configurado: el checkout puede cotizar con {nombre}.</p>
         : (
           <p style={{ ...ESTILOS_AVISO.incompleto, padding: '8px 12px', borderRadius: '6px', margin: 0 }}>
-            Falta {config.faltantes.map(f => etiquetas[f]).join(', ')}: sin ella el checkout no puede cotizar el despacho.
+            Falta {config.faltantes.map(f => etiquetas[f]).join(', ')}: sin ella el checkout no ofrece {nombre}.
           </p>
         )}
 
       {config.campos.map(campo => {
-        const id = `chilexpress-${campo.nombre}`;
+        const id = `courier-${codigo}-${campo.nombre}`;
         const idAyuda = `${id}-ayuda`;
         const idError = `${id}-error`;
         return (
@@ -121,9 +109,33 @@ export default function GestorChilexpress() {
           disabled={guardando}
           style={{ padding: '10px 18px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
         >
-          {guardando ? 'Guardando...' : 'Guardar credenciales de Chilexpress'}
+          {guardando && <Spinner />}{guardando ? 'Guardando...' : `Guardar credenciales de ${nombre}`}
         </button>
       </div>
+    </section>
+  );
+}
+
+// RF-02.3: un formulario por cada courier que la tienda puede usar (Chilexpress, Starken…)
+export default function GestorCouriers() {
+  const [couriers, setCouriers] = useState(null);
+  const [errorCarga, setErrorCarga] = useState('');
+
+  useEffect(() => {
+    clienteAxios.get('ventas/admin/couriers/')
+      .then(({ data }) => setCouriers(data))
+      .catch((error) => {
+        console.error('Error al cargar los couriers:', error);
+        setErrorCarga('No se pudieron cargar las credenciales de los couriers.');
+      });
+  }, []);
+
+  if (errorCarga) return <p role="alert" style={{ ...ESTILOS_AVISO.error, padding: '10px 12px', borderRadius: '6px' }}>{errorCarga}</p>;
+  if (!couriers) return <Cargando texto="Cargando credenciales de los couriers..."><EsqueletoFormulario campos={3} /></Cargando>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      {couriers.map(courier => <FormularioCourier key={courier.codigo} inicial={courier} />)}
     </div>
   );
 }

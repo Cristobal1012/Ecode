@@ -1,18 +1,11 @@
-"""Contratos de cotización independientes de HTTP, Django y cada transportista."""
+"""Logística (RF-02.3): entregas de la tienda y lo común a los couriers, sin HTTP, Django ni un courier fijo."""
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+import math
+import unicodedata
 
 from .medios_pago import enmascarar
-
-
-class ErrorCotizacion(Exception):
-    """El proveedor no pudo entregar una tarifa confiable."""
-
-
-class ConfiguracionCotizacionInvalida(ErrorCotizacion):
-    """Falta información necesaria para consultar el proveedor."""
 
 
 @dataclass(frozen=True)
@@ -23,29 +16,51 @@ class Paquete:
     largo_cm: Decimal
 
 
-@dataclass(frozen=True)
-class SolicitudCotizacion:
-    comuna: str
-    subtotal: Decimal
-    paquete: Paquete | None = None
+def clave_comuna(nombre) -> str:
+    """Para comparar comunas: sin tildes, con la Ñ como N, en mayúsculas y con un espacio entre palabras.
+
+    Los couriers escriben 'NUNOA' o 'MAIPU' y la tienda puede escribir 'Ñuñoa' o 'Maipú': son la misma comuna.
+    """
+    sin_tildes = unicodedata.normalize('NFKD', str(nombre or '')).encode('ascii', 'ignore').decode()
+    return ' '.join(sin_tildes.upper().split())
 
 
 @dataclass(frozen=True)
-class Cotizacion:
-    proveedor: str
-    nombre: str
-    costo_envio: Decimal
-    total_final: Decimal
-    tipo: str = 'DESPACHO'
-    moneda: str = 'CLP'
+class MedidasEnvio:
+    """Peso y medidas de una unidad de una variante, como las carga el admin; sin cargar, las del catálogo."""
+    peso_kg: Decimal = Decimal('1')
+    alto_cm: Decimal = Decimal('10')
+    ancho_cm: Decimal = Decimal('10')
+    largo_cm: Decimal = Decimal('10')
+
+
+# Lo mínimo que se declara si una variante tiene un valor vacío o en cero
+PESO_MINIMO_KG = Decimal('0.1')
+LADO_MINIMO_CM = 10
+
+
+def paquete_de_envio(unidades: list[tuple[MedidasEnvio, int]]) -> Paquete:
+    """RF-02.3: la caja con todo el pedido, que se cotiza y se despacha. La arma el servidor con las medidas del
+    catálogo, nunca con las del navegador: si no, se podría declarar menos peso para pagar menos envío.
+
+    Pesa la suma de los productos y es un cubo con su volumen total, de al menos el lado más largo de un producto
+    y 10 cm.
+    """
+    peso, volumen, lado_mas_largo = Decimal('0'), 0, 0
+    for medidas, cantidad in unidades:
+        peso += (medidas.peso_kg if medidas.peso_kg > 0 else PESO_MINIMO_KG) * cantidad
+        lados = [int(lado) if lado > 0 else LADO_MINIMO_CM
+                 for lado in (medidas.alto_cm, medidas.ancho_cm, medidas.largo_cm)]
+        volumen += math.prod(lados) * cantidad
+        lado_mas_largo = max(lado_mas_largo, *lados)
+    # La potencia 1/3 no es exacta: para 27.000 cm³ da 30,000000000000004, que sin redondear subiría a 31
+    lado = Decimal(max(LADO_MINIMO_CM, lado_mas_largo, math.ceil(round(volumen ** (1 / 3), 9))))
+    return Paquete(peso.quantize(Decimal('0.01'), ROUND_HALF_UP), lado, lado, lado)
 
 
 class ErrorOrdenTransporte(Exception):
     """El transportista no pudo generar la orden de transporte."""
 
-
-# Transportistas con los que se genera una orden de transporte (OT) al confirmarse el pago
-PROVEEDORES_CON_ORDEN_TRANSPORTE = frozenset({'CHILEXPRESS'})
 
 # Entregas que hace la propia tienda, sin transportista ni cotización (RF-02.3)
 RETIRO_LOCAL = 'RETIRO_LOCAL'
@@ -156,52 +171,88 @@ class EnvioSolicitado:
 
     @property
     def requiere_orden_transporte(self) -> bool:
-        return self.proveedor in PROVEEDORES_CON_ORDEN_TRANSPORTE
+        return es_entrega_con_courier(self.proveedor)
 
 
-class PuertoCotizadorLogistico(ABC):
-    """Puerto de salida para un único método de entrega."""
-
-    @abstractmethod
-    def cotizar(self, solicitud: SolicitudCotizacion) -> Cotizacion:
-        raise NotImplementedError
+def es_entrega_con_courier(proveedor: str | None) -> bool:
+    """Toda entrega que no hace la tienda la lleva un courier, que cotiza y genera la orden de transporte."""
+    return bool(proveedor) and proveedor not in ENTREGAS_DE_LA_TIENDA
 
 
-class CredencialesChilexpressInvalidas(Exception):
+# ---------- Couriers (RF-02.3): lo común a Chilexpress, Starken o el que se sume ----------
+
+# RF-02.4: lo que ve el comprador si el courier no responde el seguimiento
+ESTADO_NO_DISPONIBLE = 'Estado no disponible temporalmente'
+
+
+class ErrorCourier(Exception):
+    """Un courier no pudo responder lo que se le pidió."""
+
+
+class SinCobertura(ErrorCourier):
+    """El courier no llega a esa comuna: es un dato del comprador, no una falla (el checkout responde 400)."""
+
+
+class CourierNoDisponible(ErrorCourier):
+    """El courier no respondió o respondió algo inválido (el checkout responde 503)."""
+
+
+@dataclass(frozen=True)
+class CotizacionEnvio:
+    """Tarifa de un courier para un paquete, en pesos enteros."""
+
+    proveedor: str
+    nombre: str
+    precio: int
+    tiempo_estimado: str = ''
+
+
+@dataclass(frozen=True)
+class Sucursal:
+    """Oficina del courier donde el comprador retira su pedido."""
+
+    codigo: str
+    nombre: str
+    direccion: str = ''
+
+
+@dataclass(frozen=True)
+class CampoCredencial:
+    nombre: str
+    etiqueta: str
+    obligatorio: bool = False
+
+
+class CredencialesInvalidas(Exception):
     def __init__(self, errores: dict[str, str]):
         self.errores = errores
         super().__init__('; '.join(f'{campo}: {error}' for campo, error in errores.items()))
 
 
 @dataclass(frozen=True)
-class CredencialesChilexpress:
-    """Llaves de las APIs de Chilexpress que carga el admin en el panel (RNF-03): nunca en el .env ni completas
-    hacia el frontend. Cada API de Chilexpress tiene su propia llave; sin la de coberturas o la de envíos se usa
-    la del cotizador.
+class CredencialesCourier:
+    """Llaves de un courier que carga el admin en el panel (RNF-03): nunca en el .env ni completas hacia el
+    frontend. Cada courier declara sus campos; los valores que faltan quedan vacíos.
     """
 
-    cotizador: str = ''
-    coberturas: str = ''
-    envios: str = ''
+    campos: tuple[CampoCredencial, ...]
+    valores: tuple[tuple[str, str], ...] = ()
 
-    # (nombre, etiqueta, obligatorio), en el orden del panel
-    CAMPOS = (
-        ('cotizador', 'API key del cotizador (Rating)', True),
-        ('coberturas', 'API key de coberturas y sucursales (Georeference)', False),
-        ('envios', 'API key de envíos (Transport Orders y seguimiento)', False),
-    )
+    @classmethod
+    def con(cls, campos, valores: dict[str, str] | None = None) -> 'CredencialesCourier':
+        """Toma solo los campos declarados, en su orden; lo demás se descarta."""
+        valores = valores or {}
+        return cls(tuple(campos), tuple((campo.nombre, str(valores.get(campo.nombre) or '')) for campo in campos))
 
-    @property
-    def llave_coberturas(self) -> str:
-        return self.coberturas or self.cotizador
+    def valor(self, nombre: str) -> str:
+        return dict(self.valores).get(nombre, '')
 
-    @property
-    def llave_envios(self) -> str:
-        return self.envios or self.cotizador
+    def como_dict(self) -> dict[str, str]:
+        return dict(self.valores)
 
     @property
     def faltantes(self) -> list[str]:
-        return [nombre for nombre, _, obligatorio in self.CAMPOS if obligatorio and not getattr(self, nombre)]
+        return [campo.nombre for campo in self.campos if campo.obligatorio and not self.valor(campo.nombre)]
 
     @property
     def configuradas(self) -> bool:
@@ -209,22 +260,22 @@ class CredencialesChilexpress:
 
     def visibles(self) -> dict[str, str]:
         """Para el panel del admin: solo los últimos 4 caracteres de cada llave."""
-        return {nombre: enmascarar(getattr(self, nombre)) for nombre, _, _ in self.CAMPOS}
+        return {campo.nombre: enmascarar(self.valor(campo.nombre)) for campo in self.campos}
 
-    def con_cambios(self, datos: dict[str, str]) -> 'CredencialesChilexpress':
+    def con_cambios(self, datos: dict[str, str]) -> 'CredencialesCourier':
         """Combina lo que envía el panel con lo guardado: una llave que llega enmascarada (tal como el panel la
         mostró) o que no llega se conserva; un texto vacío la borra.
         """
-        nombres = {nombre for nombre, _, _ in self.CAMPOS}
+        nombres = {campo.nombre for campo in self.campos}
         errores = {nombre: 'Campo desconocido.' for nombre in datos if nombre not in nombres}
         if errores:
-            raise CredencialesChilexpressInvalidas(errores)
+            raise CredencialesInvalidas(errores)
         valores = {}
         for nombre in nombres:
-            actual = getattr(self, nombre)
+            actual = self.valor(nombre)
             if nombre not in datos:
                 valores[nombre] = actual
                 continue
             valor = str(datos[nombre] or '').strip()
             valores[nombre] = actual if valor and valor == enmascarar(actual) else valor
-        return CredencialesChilexpress(**valores)
+        return CredencialesCourier.con(self.campos, valores)

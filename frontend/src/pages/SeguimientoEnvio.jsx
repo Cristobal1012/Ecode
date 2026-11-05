@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
 import './SeguimientoEnvio.css';
+import Spinner from '../components/carga/Spinner';
 
 export default function SeguimientoEnvio() {
     return (
@@ -94,8 +95,10 @@ function SeguimientoContenido() {
                             id="seguimiento-orden"
                             type="text"
                             inputMode="numeric"
+                            maxLength={12}
                             value={numeroOrden}
-                            onChange={(e) => setNumeroOrden(e.target.value)}
+                            // Solo los dígitos: si pega "#148" o "Pedido 148", queda 148
+                            onChange={(e) => setNumeroOrden(e.target.value.replace(/\D/g, ''))}
                             required
                             {...camposConError}
                         />
@@ -115,7 +118,7 @@ function SeguimientoContenido() {
                     </div>
 
                     <button type="submit" className="boton boton-primario" disabled={cargando}>
-                        {cargando ? 'Consultando...' : 'Consultar seguimiento'}
+                        {cargando && <Spinner />}{cargando ? 'Consultando...' : 'Consultar seguimiento'}
                     </button>
                 </form>
 

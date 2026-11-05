@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import FotosCotizacion from './FotosCotizacion';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 
 // Las solicitudes del formulario de cotización: la tienda las responde por correo o teléfono y aquí anota en qué
 // quedó cada una
@@ -58,7 +61,7 @@ export default function GestorCotizaciones() {
     }
   };
 
-  if (cargando) return <p className="texto-secundario">Cargando cotizaciones...</p>;
+  if (cargando) return <Cargando texto="Cargando cotizaciones..."><EsqueletoLista /></Cargando>;
 
   return (
     <>
@@ -95,6 +98,9 @@ export default function GestorCotizaciones() {
                   {c.descripcion && <><dt>Qué necesita</dt><dd>{c.descripcion}</dd></>}
                   <dt>Cantidad</dt><dd>{c.cantidad}</dd>
                   {c.personalizacion && <><dt>Personalización</dt><dd>{c.personalizacion}</dd></>}
+                  {c.fotos?.length > 0 && (
+                    <><dt>Fotos de su idea</dt><dd><FotosCotizacion cotizacionId={c.id} fotos={c.fotos} /></dd></>
+                  )}
                   {c.fecha_requerida && <><dt>Lo necesita para el</dt><dd>{formatearDia(c.fecha_requerida)}</dd></>}
                   <dt>Contacto</dt>
                   <dd>

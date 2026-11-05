@@ -10,6 +10,8 @@ import { formatearFechaLarga } from '../utils/fechas';
 // El texto del editor se muestra con los mismos estilos que las páginas legales (.legal-contenido)
 import './PaginaLegal.css';
 import './Blog.css';
+import { Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
 
 // Una publicación del blog: portada, texto y galería. Un borrador responde igual que una que no existe
 export default function PublicacionBlog() {
@@ -44,7 +46,7 @@ export default function PublicacionBlog() {
       <main className="blog-main">
         <div className="blog-articulo">
           {cargando ? (
-            <p className="blog-estado" role="status">Cargando...</p>
+            <Cargando texto="Cargando la publicación..."><EsqueletoTexto /></Cargando>
           ) : publicacion ? (
             <article>
               <Link to="/blog" className="enlace-flecha blog-volver">

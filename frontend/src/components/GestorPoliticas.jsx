@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoFormulario } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 const NOMBRES_PAGINA = {
   TERMINOS: 'Términos y Condiciones',
@@ -121,7 +124,12 @@ export default function GestorPoliticas() {
     }
   };
 
-  if (cargando) return <div role="status" style={{ padding: '20px' }}>Cargando páginas legales...</div>;
+  if (cargando) return (
+    <div>
+      <h2 className="admin-titulo">Páginas legales</h2>
+      <Cargando texto="Cargando páginas legales..."><EsqueletoFormulario campos={2} editor /></Cargando>
+    </div>
+  );
 
   const paginaActual = paginas.find(p => p.tipo_pagina === tipo);
   const faltantes = REQUERIDAS_PARA_VENDER.filter(t => !paginas.find(p => p.tipo_pagina === t)?.publicada);
@@ -226,7 +234,7 @@ export default function GestorPoliticas() {
           transition: 'opacity 0.2s'
         }}
       >
-        {guardando ? 'Guardando...' : 'Guardar cambios'}
+        {guardando && <Spinner />}{guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </div>
   );

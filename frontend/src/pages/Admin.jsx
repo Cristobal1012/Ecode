@@ -12,7 +12,7 @@ import AdminTopbar from '../components/AdminTopbar';
 import GestorPedidos from '../components/GestorPedidos';
 import GestorPoliticas from '../components/GestorPoliticas';
 import GestorMediosPago from '../components/GestorMediosPago';
-import GestorChilexpress from '../components/GestorChilexpress';
+import GestorCouriers from '../components/GestorCouriers';
 import GestorPromociones from '../components/GestorPromociones';
 import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
@@ -23,7 +23,9 @@ import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
 import GestorActivarResenas from '../components/GestorActivarResenas';
+import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import './Admin.css';
+import Spinner from '../components/carga/Spinner';
 
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
@@ -34,8 +36,9 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
-  { id: 'config-chilexpress', titulo: 'Envíos con Chilexpress' },
+  { id: 'config-couriers', titulo: 'Envíos por courier' },
   { id: 'config-medios-pago', titulo: 'Medios de Pago' },
+  { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
   { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
@@ -60,6 +63,8 @@ const irASeccion = (id) => {
 
 export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
+  // Con qué filtro se abre Ventas desde un "Ver" del dashboard (desde el menú se abre sin filtro)
+  const [filtroVentas, setFiltroVentas] = useState(null);
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
   
   // NUEVO ESTADO: Almacena el producto seleccionado para edición
@@ -76,7 +81,10 @@ export default function Admin() {
   });
   const [guardandoLocal, setGuardandoLocal] = useState(false);
   const [mensajeLocal, setMensajeLocal] = useState('');
-  
+  // Con un courier activo, la comuna del local se elige de su lista: escrita a mano ('Maipú') no coincidía con la
+  // del courier ('MAIPU') y no se podía cotizar. Sin courier, se escribe libre
+  const [comunasCourier, setComunasCourier] = useState([]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -108,6 +116,10 @@ export default function Admin() {
     };
 
     fetchTema();
+    // Sin couriers activos responde 503: la comuna queda como texto libre
+    clienteAxios.get('ventas/logistica/comunas/')
+      .then(({ data }) => setComunasCourier(data.comunas || []))
+      .catch(() => setComunasCourier([]));
 
     const handleThemeChanged = (e) => {
       aplicarPaleta(e.detail.temaId);
@@ -132,10 +144,27 @@ export default function Admin() {
     }
   };
 
+  const abrirVista = (vista) => {
+    setFiltroVentas(null);
+    setVistaActiva(vista);
+  };
+
+  // "Ver" del dashboard: abre la vista con su filtro y lleva el foco al contenido, como el menú lateral
+  const irA = (vista, filtro = null) => {
+    setFiltroVentas(filtro);
+    setVistaActiva(vista);
+    if (vista === 'inventario') {
+      setMostrandoFormulario(false);
+      setProductoAEditar(null);
+    }
+    requestAnimationFrame(() => document.getElementById('contenido')?.focus({ preventScroll: true }));
+    window.scrollTo({ top: 0 });
+  };
+
   const renderizarContenido = () => {
     switch (vistaActiva) {
       case 'dashboard':
-       return <Dashboard />;
+       return <Dashboard onIrA={irA} />;
       case 'inventario':
         return (
           <div>
@@ -173,7 +202,8 @@ export default function Admin() {
         return (
           <div>
             <h2 className="admin-titulo">Ventas</h2>
-            <GestorPedidos/>
+            {/* El key remonta la lista con el filtro nuevo: GestorPedidos lo lee al montarse */}
+            <GestorPedidos key={JSON.stringify(filtroVentas)} filtroInicial={filtroVentas || undefined} />
           </div>
         );
 
@@ -248,13 +278,13 @@ export default function Admin() {
                     <div className="admin-fila">
                       <div className="admin-campo admin-campo--ancho">
                         <label htmlFor="local-calle">Calle del local</label>
-                        <input id="local-calle" type="text" value={configLocal.calle_origen}
+                        <input id="local-calle" maxLength={255} type="text" value={configLocal.calle_origen}
                           onChange={(e) => setConfigLocal({...configLocal, calle_origen: e.target.value})}
                           required placeholder="Ej: Av. Principal" />
                       </div>
                       <div className="admin-campo">
                         <label htmlFor="local-numero">Número</label>
-                        <input id="local-numero" type="text" value={configLocal.numero_origen}
+                        <input id="local-numero" maxLength={50} type="text" value={configLocal.numero_origen}
                           onChange={(e) => setConfigLocal({...configLocal, numero_origen: e.target.value})}
                           required placeholder="Ej: 123" />
                       </div>
@@ -262,7 +292,7 @@ export default function Admin() {
 
                     <div className="admin-campo">
                       <label htmlFor="local-detalle">Piso, oficina, bodega o detalle (opcional)</label>
-                      <input id="local-detalle" type="text" value={configLocal.dpto_casa_origen}
+                      <input id="local-detalle" maxLength={100} type="text" value={configLocal.dpto_casa_origen}
                         onChange={(e) => setConfigLocal({...configLocal, dpto_casa_origen: e.target.value})}
                         placeholder="Ej: Piso 4, Oficina 405" />
                     </div>
@@ -270,13 +300,25 @@ export default function Admin() {
                     <div className="admin-fila">
                       <div className="admin-campo">
                         <label htmlFor="local-comuna">Comuna</label>
-                        <input id="local-comuna" type="text" value={configLocal.comuna_origen}
-                          onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})}
-                          required placeholder="Ej: Santiago" />
+                        {comunasCourier.length > 0 ? (
+                          <select id="local-comuna" value={configLocal.comuna_origen}
+                            onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})} required>
+                            <option value="">-- Selecciona --</option>
+                            {/* La guardada antes a mano, aunque no esté en la lista, para que se vea y se pueda cambiar */}
+                            {configLocal.comuna_origen && !comunasCourier.includes(configLocal.comuna_origen) && (
+                              <option value={configLocal.comuna_origen}>{configLocal.comuna_origen}</option>
+                            )}
+                            {comunasCourier.map(comuna => <option key={comuna} value={comuna}>{comuna}</option>)}
+                          </select>
+                        ) : (
+                          <input id="local-comuna" maxLength={100} type="text" value={configLocal.comuna_origen}
+                            onChange={(e) => setConfigLocal({...configLocal, comuna_origen: e.target.value})}
+                            required placeholder="Ej: Santiago" />
+                        )}
                       </div>
                       <div className="admin-campo">
                         <label htmlFor="local-region">Región</label>
-                        <input id="local-region" type="text" value={configLocal.region_origen}
+                        <input id="local-region" maxLength={100} type="text" value={configLocal.region_origen}
                           onChange={(e) => setConfigLocal({...configLocal, region_origen: e.target.value})}
                           placeholder="Ej: Metropolitana" />
                       </div>
@@ -290,7 +332,7 @@ export default function Admin() {
 
                     <div>
                       <button type="submit" disabled={guardandoLocal} className="boton boton-primario">
-                        {guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
+                        {guardandoLocal && <Spinner />}{guardandoLocal ? 'Guardando...' : 'Guardar dirección y opciones de retiro'}
                       </button>
                     </div>
                   </form>
@@ -313,8 +355,8 @@ export default function Admin() {
                 <hr className="admin-separador" />
 
                 <div>
-                  <TituloSeccion id="config-chilexpress" />
-                  <GestorChilexpress />
+                  <TituloSeccion id="config-couriers" />
+                  <GestorCouriers />
                 </div>
 
                 <hr className="admin-separador" />
@@ -322,6 +364,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-medios-pago" />
                   <GestorMediosPago />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-documentos" />
+                  <GestorDocumentosTributarios />
                 </div>
 
                 <hr className="admin-separador" />
@@ -377,7 +426,7 @@ export default function Admin() {
     <div className="admin">
       <AdminSidebar
         vistaActiva={vistaActiva}
-        setVistaActiva={setVistaActiva}
+        setVistaActiva={abrirVista}
         setMostrandoFormulario={setMostrandoFormulario}
         setProductoAEditar={setProductoAEditar}
         navigate={navigate}

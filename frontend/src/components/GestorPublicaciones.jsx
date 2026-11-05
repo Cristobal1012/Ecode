@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import FormularioPublicacion from './FormularioPublicacion';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { formatearFechaLarga } from '../utils/fechas';
 
@@ -76,7 +78,7 @@ export default function GestorPublicaciones() {
       )}
 
       {cargando ? (
-        <p className="texto-secundario">Cargando publicaciones...</p>
+        <Cargando texto="Cargando publicaciones..."><EsqueletoLista /></Cargando>
       ) : publicaciones.length === 0 ? (
         <p className="texto-secundario">Aún no tienes publicaciones. Crea la primera con "Nueva publicación".</p>
       ) : (

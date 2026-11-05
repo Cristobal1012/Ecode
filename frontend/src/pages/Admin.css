@@ -338,6 +338,47 @@
   margin: 4px 0 0 28px;
 }
 
+/* Grupo de opciones (radios) con su pregunta como legend; la ayuda de cada opción va bajo su texto */
+.admin-opciones {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-opciones legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.admin-opcion-ayuda {
+  display: block;
+  margin-top: 2px;
+}
+
+/* Recuadro de orientación (ej. qué documento tributario emitir en cada caso) */
+.admin-guia {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+}
+
+.admin-guia-titulo {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.admin-guia ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
 .admin-error-campo {
   font-size: 0.85rem;
   color: #B91C1C;
@@ -387,8 +428,11 @@
   outline-offset: 1px;
 }
 
+/* Cada tabla se desplaza de lado dentro de su contenedor (overflow-x: auto). Sin overflow-wrap: normal hereda el
+   anywhere de .admin-contenido y en celular se aprieta al ancho de la pantalla cortando las palabras letra por letra */
 .admin-contenido table {
   border-collapse: collapse;
+  overflow-wrap: normal;
 }
 
 /* Por defecto un fieldset no se encoge más que su contenido (min-width: min-content) y en celular empuja la

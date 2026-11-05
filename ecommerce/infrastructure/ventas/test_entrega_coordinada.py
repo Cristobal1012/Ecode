@@ -6,12 +6,11 @@ from unittest.mock import patch
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from ecommerce.domain.logistica import CredencialesChilexpress
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
 from .models import ConfiguracionGlobal, OrdenCompra, Promocion, ProveedorEnvio
-from .repositorio_chilexpress import DjangoRepositorioCredencialesChilexpress
+from .test_chilexpress import guardar_credenciales
 from .test_logistica import ADAPTADOR_CHILEXPRESS, ITEMS
 from .tests import DESTINATARIO, habilitar_medios_pago, usar_catalogo_falso
 
@@ -150,11 +149,11 @@ class ConfiguracionEntregaCoordinadaTests(APITestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(ConfiguracionGlobal.objects.get().entrega_coordinada_activa)
 
-    def test_la_configuracion_publica_dice_si_hay_chilexpress_sin_mostrar_sus_llaves(self):
-        self.assertFalse(self.publica()['chilexpress_activo'])
+    def test_la_configuracion_publica_dice_que_couriers_hay_sin_mostrar_sus_llaves(self):
+        self.assertEqual(self.publica()['couriers'], [])
 
-        DjangoRepositorioCredencialesChilexpress().guardar(CredencialesChilexpress(cotizador='llave-secreta-1234'))
+        guardar_credenciales(cotizador='llave-secreta-1234')
 
         datos = self.publica()
-        self.assertTrue(datos['chilexpress_activo'])
+        self.assertEqual(datos['couriers'], [{'codigo': 'CHILEXPRESS', 'nombre': 'Chilexpress', 'sucursales': True}])
         self.assertNotIn('llave-secreta', str(datos))

@@ -192,8 +192,8 @@ npm run build
 | Vector de Riesgo | Medida Defensiva en Código | Comprobación |
 | :--- | :--- | :--- |
 | **Alteración del precio** | El backend ignora cualquier precio enviado por el frontend. Calcula el total sumando los items validados en MongoDB y la tarifa del courier. | En [serializers.py:354](file:///c:/Users/jhona/Ecode/ecommerce/infrastructure/ventas/serializers.py#L354). |
-| **Spoofing de Webhook** | El endpoint exige firma HMAC-SHA256 (`x-signature`). No confía en los datos recibidos y consulta directamente a la API oficial de Mercado Pago. | En [payment_services.py:242-266](file:///c:/Users/jhona/Ecode/ecommerce/infrastructure/ventas/payment_services.py#L242-L266). |
-| **Timing Attacks** | Se utiliza `hmac.compare_digest` para comparar firmas en tiempo constante. | En [payment_services.py:266](file:///c:/Users/jhona/Ecode/ecommerce/infrastructure/ventas/payment_services.py#L266). |
+| **Spoofing de Webhook** | El endpoint exige firma HMAC-SHA256 (`x-signature`). No confía en los datos recibidos y consulta directamente a la API oficial de Mercado Pago. | En `aviso_autentico` de [adapters/mercadopago.py](ecommerce/infrastructure/ventas/adapters/mercadopago.py) y el caso de uso `ProcesarAvisoPago` de [application/pagos.py](ecommerce/application/pagos.py). |
+| **Timing Attacks** | Se utiliza `hmac.compare_digest` para comparar firmas en tiempo constante. | En `aviso_autentico` de [adapters/mercadopago.py](ecommerce/infrastructure/ventas/adapters/mercadopago.py). |
 | **Manipulación de URLs de Retorno** | El cliente no puede forzar la aprobación alterando la URL (`?status=approved`); el backend valida el pago con la API antes de cambiar el estado de la orden. | En [views.py:365-385](file:///c:/Users/jhona/Ecode/ecommerce/infrastructure/ventas/views.py#L365-L385). |
 | **Cifrado de Credenciales** | `access_token` y `webhook_secret` se guardan cifrados con AES en base de datos (`CLAVE_CIFRADO_CREDENCIALES`). | En [models.py](file:///c:/Users/jhona/Ecode/ecommerce/infrastructure/ventas/models.py). |
 

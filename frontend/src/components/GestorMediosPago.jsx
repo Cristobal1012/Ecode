@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import clienteAxios from './auth/axiosConfig';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
+import Spinner from './carga/Spinner';
 
 // Textos de la interfaz para los valores que guarda el backend
 const ETIQUETAS_OPCION = {
@@ -111,7 +114,7 @@ export default function GestorMediosPago() {
     }
   };
 
-  if (cargando) return <p>Cargando medios de pago...</p>;
+  if (cargando) return <Cargando texto="Cargando medios de pago..."><EsqueletoLista /></Cargando>;
   if (errorCarga) return <p role="alert" style={{ ...ESTILOS_AVISO.error, padding: '10px 12px', borderRadius: '6px' }}>{errorCarga}</p>;
 
   return (
@@ -171,7 +174,10 @@ export default function GestorMediosPago() {
                   ) : (
                     <input
                       id={id}
-                      type="text"
+                      type={campo.formato === 'correo' ? 'email' : 'text'}
+                      // Teclado numérico para la cuenta en el celular; el servidor valida el formato
+                      inputMode={campo.formato === 'numero_cuenta' ? 'numeric' : undefined}
+                      maxLength={500}
                       value={valor}
                       autoComplete="off"
                       spellCheck={false}
@@ -210,7 +216,7 @@ export default function GestorMediosPago() {
               disabled={guardando === medio.codigo}
               style={{ padding: '10px 18px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: guardando === medio.codigo ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
             >
-              {guardando === medio.codigo ? 'Guardando...' : `Guardar ${medio.nombre}`}
+              {guardando === medio.codigo && <Spinner />}{guardando === medio.codigo ? 'Guardando...' : `Guardar ${medio.nombre}`}
             </button>
           </fieldset>
         );

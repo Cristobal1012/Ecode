@@ -57,6 +57,25 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
     expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, estado: 'ENVIADO' } });
   });
 
+  it('abre con el filtro que pide el dashboard: órdenes de transporte con error', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(0, []));
+
+    render(<GestorPedidos filtroInicial={{ ordenTransporte: true }} />);
+
+    expect(await screen.findByText('No hay órdenes de transporte con error.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Con error en la orden de transporte')).toBeChecked();
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, orden_transporte: 'error' } });
+  });
+
+  it('abre con el estado que pide el dashboard: pagados por preparar', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(1));
+
+    render(<GestorPedidos filtroInicial={{ estado: 'PAGADO' }} />);
+
+    expect(await screen.findByRole('combobox', { name: 'Estado' })).toHaveValue('PAGADO');
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, estado: 'PAGADO' } });
+  });
+
   it('una entrega coordinada sin dirección avisa que se acuerda con el comprador', async () => {
     clienteAxios.get.mockResolvedValueOnce(pagina(2, [
       { id: 1, estado: 'PAGADO', transiciones_permitidas: [], proveedor_logistico: 'ENTREGA_COORDINADA',
@@ -68,6 +87,17 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
 
     expect(await screen.findByText('Dirección por acordar con el comprador')).toBeInTheDocument();
     expect(screen.getByText('Los Aromos 1550, Ñuñoa')).toBeInTheDocument();
+  });
+
+  it('el filtro de boleta o factura pendiente pide solo esos pedidos', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(25)).mockResolvedValueOnce(pagina(0, []));
+    render(<GestorPedidos />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Solo con boleta o factura pendiente' }));
+
+    expect(await screen.findByText('No hay boletas, facturas ni notas de crédito pendientes.')).toBeInTheDocument();
+    expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/ordenes/',
+      { params: { pagina: 1, documento: 'pendiente' } });
   });
 
   it('si la página pedida ya no existe, vuelve a la anterior sin mostrar un error', async () => {

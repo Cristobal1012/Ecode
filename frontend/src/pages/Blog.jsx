@@ -5,6 +5,8 @@ import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { formatearFechaLarga } from '../utils/fechas';
 import './Blog.css';
+import { Bloque, Cargando } from '../components/carga/Esqueleto';
+import { EsqueletoBlog } from '../components/carga/EsqueletosTienda';
 
 // Blog o portafolio de la tienda (si el admin lo activó): las publicaciones más recientes primero
 export default function Blog() {
@@ -37,7 +39,13 @@ export default function Blog() {
       <main className="blog-main">
         <div className="contenedor">
           {cargando ? (
-            <p className="blog-estado" role="status">Cargando...</p>
+            <Cargando texto="Cargando publicaciones...">
+              <div className="blog-cabecera esqueleto-columna">
+                <Bloque ancho="9rem" alto="0.75rem" />
+                <Bloque ancho="14rem" alto="clamp(2.25rem, 5vw, 3.25rem)" />
+              </div>
+              <EsqueletoBlog />
+            </Cargando>
           ) : error ? (
             <div className="blog-error" role={error === 'conexion' ? 'alert' : undefined}>
               <h1 className="blog-titulo">

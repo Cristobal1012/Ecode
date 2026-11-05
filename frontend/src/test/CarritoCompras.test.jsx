@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
+// La revisión de stock llama al servidor: en estas pruebas se controla cuándo responde
+vi.mock('../components/carrito', async (original) => ({ ...(await original()), validarCarrito: vi.fn() }));
+
+import { validarCarrito } from '../components/carrito';
 import CarritoCompras from '../components/CarritoCompras';
 
 const productosEjemplo = [
@@ -146,6 +151,41 @@ describe('CarritoCompras', () => {
     fireEvent.click(boton);
     expect(screen.queryByText('Mi Carrito')).not.toBeInTheDocument();
     expect(boton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('el carrito sigue abierto al cambiar la cantidad y el foco queda en el botón', async () => {
+    localStorage.setItem('carrito_local', JSON.stringify([{ ...productosEjemplo[0], id: 'teclado' }]));
+    let responder;
+    validarCarrito.mockReturnValue(new Promise((resolve) => { responder = resolve; }));
+    renderCarrito();
+    fireEvent.click(screen.getByRole('button', { name: /Carrito de compras/ }));
+
+    const mas = screen.getByRole('button', { name: 'Aumentar cantidad de Teclado mecánico' });
+    mas.focus();
+    fireEvent.click(mas);
+    // Mientras revisa el stock el botón queda inactivo, pero enfocado: un blur sin destino no cierra el carrito
+    expect(mas).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.focusOut(mas, { relatedTarget: null });
+    expect(screen.getByText('Mi Carrito')).toBeInTheDocument();
+
+    responder({ items: [{ producto_mongo_id: 'teclado', variante_sku: 'SKU-001', disponible: 10, precio: 15000, problema: null }] });
+    expect(await screen.findByLabelText('Cantidad: 3')).toBeInTheDocument();
+    await waitFor(() => expect(mas).toHaveAttribute('aria-disabled', 'false'));
+    expect(mas).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disminuir cantidad de Teclado mecánico' }));
+    expect(await screen.findByLabelText('Cantidad: 2')).toBeInTheDocument();
+    expect(screen.getByText('Mi Carrito')).toBeInTheDocument();
+  });
+
+  it('se cierra cuando el foco sale del carrito, por ejemplo con Tab', () => {
+    render(<MemoryRouter><CarritoCompras /><button type="button">Afuera</button></MemoryRouter>);
+    const boton = screen.getByRole('button', { name: /Carrito de compras/ });
+    fireEvent.click(boton);
+
+    fireEvent.focusOut(boton, { relatedTarget: screen.getByRole('button', { name: 'Afuera' }) });
+
+    expect(screen.queryByText('Mi Carrito')).not.toBeInTheDocument();
   });
 
   it('cierra el carrito al hacer clic fuera de él', () => {

@@ -1,255 +1,50 @@
-export default function RecentOrders({ ordenes = [] }) {
+import { formatearMonto } from './dashboard/formato';
 
-  const obtenerColorEstado = (estado) => {
-    switch (estado) {
-      case 'PAGADO':
-        return {
-          background: '#dcfce7',
-          color: '#166534',
-          border: '1px solid #bbf7d0'
-        };
+const ETIQUETAS_ESTADO = {
+  PENDIENTE: 'Pendiente',
+  PAGADO: 'Pagado',
+  EN_PREPARACION: 'En preparación',
+  ENVIADO: 'Despachado',
+  ENTREGADO: 'Entregado',
+  CANCELADO: 'Cancelado',
+};
 
-      case 'CANCELADO':
-        return {
-          background: '#fee2e2',
-          color: '#991b1b',
-          border: '1px solid #fecaca'
-        };
-
-      case 'PENDIENTE':
-      default:
-        return {
-          background: '#fef3c7',
-          color: '#92400e',
-          border: '1px solid #fde68a'
-        };
-    }
-  };
-
-  const formatearMonto = (monto) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      maximumFractionDigits: 0
-    }).format(Number(monto) || 0);
-  };
-
-  const formatearFecha = (fecha) => {
-    if (!fecha) return '-';
-
-    return new Date(fecha)
-      .toLocaleDateString('es-CL', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      })
-      .replace(/\//g, '-');
-  };
-
-  const ordenesOrdenadas = [...ordenes].sort((a, b) => {
-    return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);
-  });
-
+// Los 5 pedidos más recientes, compactos para ir junto a "Más vendidos". Sin colores de alerta: el estado va escrito
+export default function RecentOrders({ ordenes = [], onVerTodos }) {
   return (
-    <section
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '12px',
-        padding: '24px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px'
-        }}
-      >
-        <div>
-          <h3
-            style={{
-              margin: 0,
-              color: 'var(--color-text)',
-              fontSize: '1.2rem'
-            }}
-          >
-            Últimos pedidos
-          </h3>
-
-          <p
-            style={{
-              margin: '5px 0 0',
-              color: 'var(--color-muted)',
-              fontSize: '0.9rem'
-            }}
-          >
-            Las últimas órdenes registradas en tu tienda.
-          </p>
-        </div>
+    <section className="dashboard-bloque" aria-labelledby="dashboard-ultimos-pedidos">
+      <div className="dashboard-bloque-encabezado">
+        <h3 id="dashboard-ultimos-pedidos" className="dashboard-bloque-titulo">Últimos pedidos</h3>
+        {onVerTodos && ordenes.length > 0 && (
+          <button type="button" className="dashboard-ver" onClick={onVerTodos}>
+            Ver todos{' '}<span className="visualmente-oculto">los pedidos</span> <span aria-hidden="true">→</span>
+          </button>
+        )}
       </div>
-
-      {ordenesOrdenadas.length === 0 ? (
-        <div
-          style={{
-            padding: '30px',
-            textAlign: 'center',
-            color: 'var(--color-muted)'
-          }}
-        >
-          No hay pedidos registrados.
-        </div>
+      {ordenes.length === 0 ? (
+        <p className="dashboard-vacio">No hay pedidos registrados.</p>
       ) : (
-        <div tabIndex={0} role="region" aria-label="Últimos pedidos" style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              minWidth: '650px'
-            }}
-          >
-            <thead>
-              <tr>
-                {[
-                  'Pedido',
-                  'Cliente',
-                  'Fecha',
-                  'Método de pago',
-                  'Estado',
-                  'Total'
-                ].map((titulo) => (
-                  <th
-                    key={titulo}
-                    style={{
-                      padding: '12px',
-                      textAlign: titulo === 'Total' ? 'right' : 'left',
-                      borderBottom: '1px solid var(--color-border)',
-                      color: 'var(--color-muted)',
-                      fontSize: '0.8rem',
-                      fontWeight: '600',
-                      textTransform: 'uppercase'
-                    }}
-                  >
-                    {titulo}
-                  </th>
-                ))}
+        <table className="dashboard-tabla dashboard-tabla--pedidos">
+          <caption className="visualmente-oculto">Los 5 pedidos más recientes</caption>
+          <thead>
+            <tr>
+              <th scope="col">Pedido</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordenes.map((orden) => (
+              <tr key={orden.id}>
+                <th scope="row">#{orden.id}</th>
+                <td className="dashboard-tabla-cliente">{orden.cliente || '—'}</td>
+                <td><span className="dashboard-estado">{ETIQUETAS_ESTADO[orden.estado] || orden.estado}</span></td>
+                <td>{formatearMonto(orden.total_final)}</td>
               </tr>
-            </thead>
-
-            <tbody>
-              {ordenesOrdenadas.map((orden) => {
-                const estado = obtenerColorEstado(orden.estado);
-
-                return (
-                  <tr key={orden.id}>
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)',
-                        fontWeight: '600',
-                        color: 'var(--color-text)'
-                      }}
-                    >
-                      #{String(orden.id).padStart(3, '0')}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)',
-                        color: 'var(--color-text)'
-                      }}
-                    >
-                      {orden.cliente || 'Cliente invitado'}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)',
-                        color: 'var(--color-muted)'
-                      }}
-                    >
-                      {formatearFecha(orden.fecha_creacion)}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)',
-                        color: 'var(--color-muted)'
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect
-                            x="1"
-                            y="4"
-                            width="22"
-                            height="16"
-                            rx="2"
-                            ry="2"
-                          />
-                          <line x1="1" y1="10" x2="23" y2="10" />
-                        </svg>
-
-                        {orden.metodo_pago || '-'}
-                      </div>
-                    </td>
-
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)'
-                      }}
-                    >
-                      <span
-                        style={{
-                          ...estado,
-                          padding: '4px 10px',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600'
-                        }}
-                      >
-                        {orden.estado}
-                      </span>
-                    </td>
-
-                    <td
-                      style={{
-                        padding: '15px 12px',
-                        borderBottom: '1px solid var(--color-border)',
-                        textAlign: 'right',
-                        fontWeight: '600',
-                        color: 'var(--color-text)'
-                      }}
-                    >
-                      {formatearMonto(orden.total_final)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       )}
     </section>
   );

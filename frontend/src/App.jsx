@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Checkout from './components/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
+import { EsqueletoPanel } from './components/carga/EsqueletosPanel';
 import VariantSelector from './components/VariantSelector';
 import Catalogo from './pages/Catalogo';
 import LandingPage from './pages/LandingPage';
@@ -27,55 +28,48 @@ import PublicacionBlog from './pages/PublicacionBlog';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
-import Header from './components/header/header';
 import AccesibilidadNavegacion from './components/AccesibilidadNavegacion';
 import useConfiguracionTienda from './hooks/useConfiguracionTienda';
-import { PORTADA_POR_DEFECTO } from './components/landing/textosPorDefecto';
-import './components/auth/auth.css';
+import AuthLayout from './components/auth/AuthLayout';
+import RecuperarContrasena from './pages/RecuperarContrasena';
+import RestablecerContrasena from './pages/RestablecerContrasena';
+import CambiarContrasena from './pages/CambiarContrasena';
 
 const applyPaletteToRoot = aplicarPaleta;
 
 // Componente para manejar la vista de autenticación (Login / Registro con Google SSO)
 function AuthPage({ googleHabilitado }) {
   const [showLogin, setShowLogin] = useState(true);
-  // Aviso que deja el registro para el login ("Tu cuenta quedó creada...", con el correo ya escrito)
-  const [avisoLogin, setAvisoLogin] = useState(null);
-  // La misma portada de la landing acompaña al formulario (decorativa: el nombre ya está en el header)
-  const configuracion = useConfiguracionTienda();
-  const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
+  // Aviso para el login: lo deja el registro ("Tu cuenta quedó creada...", con el correo ya escrito) o la página
+  // de nueva contraseña al navegar aquí ("Tu contraseña se cambió...")
+  const { state } = useLocation();
+  const [avisoLogin, setAvisoLogin] = useState(state?.aviso || null);
 
   return (
-    <>
-      <Header />
-      <main tabIndex={-1} id="contenido" className="auth-main">
-        <div className="auth-imagen" aria-hidden="true" style={{ backgroundImage: `url("${portada}")` }}>
-          {configuracion?.nombre_tienda && <span className="auth-imagen-nombre">{configuracion.nombre_tienda}</span>}
-        </div>
-        <div className="auth-contenido">
-          {showLogin ? (
-            <Login
-              onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
-              googleHabilitado={googleHabilitado}
-              aviso={avisoLogin}
-            />
-          ) : (
-            <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
-          )}
-        </div>
-      </main>
-    </>
+    <AuthLayout>
+      {showLogin ? (
+        <Login
+          onSwitchToRegister={() => { setAvisoLogin(null); setShowLogin(false); }}
+          googleHabilitado={googleHabilitado}
+          aviso={avisoLogin}
+        />
+      ) : (
+        <Register onSwitchToLogin={(aviso = null) => { setAvisoLogin(aviso); setShowLogin(true); }} />
+      )}
+    </AuthLayout>
   );
 }
 
 function App() {
   const {
-    consent, isBannerOpen, storageError,
-    acceptCookies, rejectCookies, openPreferences, closePreferences,
+    consent, preferences, isBannerOpen, storageError,
+    acceptCookies, rejectCookies, savePreferences, openPreferences, closePreferences,
   } = useCookieConsent();
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const configuracion = useConfiguracionTienda();
   const googleClientId = configuracion?.google_client_id || '';
-  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+  // Borrador del nombre y los logos mientras el admin edita la landing (el footer está fuera de la página)
+  const [marcaTemporal, setMarcaTemporal] = useState(null);
   useEffect(() => {
     if (configuracion?.tema_seleccionado !== undefined) {
       const serverId = Number(configuracion.tema_seleccionado);
@@ -121,13 +115,14 @@ function App() {
       <TrackingScripts
         googleAnalyticsId={configuracion?.google_analytics_id || ''}
         metaPixelId={configuracion?.meta_pixel_id || ''}
-        consent={consent}
+        analitica={preferences.analitica}
+        marketing={preferences.marketing}
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
-            <Route path="/" element={<LandingPage onNombreTiendaTemporal = {setNombreTiendaTemporal} />} />
+            <Route path="/" element={<LandingPage onMarcaTemporal={setMarcaTemporal} />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
             {/* Encargos, personalizados y compras en cantidad (si el admin activó el formulario) */}
@@ -152,6 +147,9 @@ function App() {
                 <AuthPage googleHabilitado />
               </GoogleOAuthProvider>
             ) : <AuthPage googleHabilitado={false} />} />
+            {/* Contraseña olvidada: pedir el enlace por correo y elegir la nueva con ese enlace */}
+            <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
+            <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
 
             {/* Vista pública para desplegar páginas legales individuales (RF-03.5) */}
             <Route path="/legal/:tipo" element={<PaginaLegal />} />
@@ -159,23 +157,26 @@ function App() {
             {/* NUEVO: Ruta protegida genérica (solo requiere estar logueado como cliente) */}
             <Route element={<ProtectedRoute />}>
               <Route path="/mis-pedidos" element={<HistorialPedidos />} />
+              <Route path="/cambiar-contrasena" element={<CambiarContrasena />} />
             </Route>
 
             {/* Ruta protegida para usuarios con rol ADMIN */}
-            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} esqueleto={<EsqueletoPanel />} />}>
               <Route path="/admin" element={<Admin />} />
             </Route>
           </Routes>
         </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer onOpenCookiePreferences={openPreferences} nombreTiendaTemporal = {nombreTiendaTemporal}/>
+        <Footer onOpenCookiePreferences={openPreferences} marcaTemporal={marcaTemporal} />
         <CookieBanner
           consent={consent}
+          preferences={preferences}
           isOpen={isBannerOpen}
           storageError={storageError}
           onAccept={acceptCookies}
           onReject={rejectCookies}
+          onSave={savePreferences}
           onClose={closePreferences}
         />
       </div>

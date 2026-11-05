@@ -5,7 +5,9 @@ from django.conf import settings
 from ecommerce.domain.blog import (
     LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
 )
+from ecommerce.domain.contacto import LOGO_UNIVERSIDAD_HEADER, UBICACIONES_LOGO_UNIVERSIDAD
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
+from ecommerce.domain.documentos_tributarios import ModeloEmision
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
     ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
@@ -52,6 +54,10 @@ class ConfiguracionGlobal(models.Model):
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
+    # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago
+    # con tarjeta también pide boleta en el panel. Sin declarar, el SII asume VOUCHER
+    modelo_emision = models.CharField(max_length=20, choices=[(m.value, m.value) for m in ModeloEmision],
+                                      default=ModeloEmision.VOUCHER.value)
 
     tema_seleccionado = models.IntegerField(default=1)
     # Combinación de fuentes (título + texto) de la tienda y el panel: los IDs y las fuentes viven en
@@ -83,6 +89,9 @@ class ConfiguracionGlobal(models.Model):
     correo_contacto = models.EmailField(blank=True, default='')
     horario_atencion = models.TextField(blank=True, default='')
     mostrar_direccion_pie = models.BooleanField(default=False)
+    # RN-01: dónde va el logo de la Universidad, header o footer; nunca se oculta (domain/contacto.py)
+    ubicacion_logo_universidad = models.CharField(
+        max_length=10, choices=[(u, u) for u in UBICACIONES_LOGO_UNIVERSIDAD], default=LOGO_UNIVERSIDAD_HEADER)
     # Sección de Instagram de la landing: sin usuario no se muestra; las fotos las sube el admin (no es el feed)
     instagram_usuario = models.CharField(max_length=30, blank=True, default='')
     instagram_foto_1 = models.ImageField(upload_to='negocio/instagram/', blank=True, null=True)
@@ -120,15 +129,18 @@ class MedioPago(models.Model):
 
 
 class ProveedorEnvio(models.Model):
-    """Credenciales de un transportista que carga el emprendedor en el panel (ej. las llaves de Chilexpress)."""
+    """Credenciales de un courier que carga el emprendedor en el panel, una fila por courier.
 
-    codigo = models.CharField(max_length=30, unique=True, choices=[('CHILEXPRESS', 'Chilexpress')])
+    El código es el del registro de couriers (ventas/couriers/__init__.py), ej. CHILEXPRESS.
+    """
+
+    codigo = models.CharField(max_length=30, unique=True)
     # JSON cifrado con CLAVE_CIFRADO_CREDENCIALES; nunca en texto plano
     credenciales_cifradas = models.TextField(blank=True, default='')
     actualizado = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.get_codigo_display()
+        return self.codigo
 
 
 class DireccionEnvio(models.Model):
@@ -194,6 +206,18 @@ class Cotizacion(models.Model):
         return f'Cotización #{self.id} - {self.nombre}'
 
 
+class FotoCotizacion(models.Model):
+    """Foto de la idea del cliente. El archivo está en ARCHIVOS_PRIVADOS_ROOT, no en media: solo lo entrega la API
+    al admin (repositorio_cotizaciones.py)."""
+
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='fotos')
+    # Ruta relativa dentro de ARCHIVOS_PRIVADOS_ROOT, con un nombre al azar
+    ruta = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ['id']
+
+
 class Promocion(models.Model):
     TIPOS_DESCUENTO = [
         ('PORCENTAJE', 'Porcentaje (%)'),
@@ -206,6 +230,14 @@ class Promocion(models.Model):
     umbral_envio_gratis = models.FloatField(null=True, blank=True)
     fecha_expiracion = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    # Desde qué subtotal vale (vacío = cualquier compra); uno automático lo exige (domain/promociones.py)
+    monto_minimo = models.PositiveIntegerField(null=True, blank=True)
+    # Se aplica solo, sin escribir el código, a toda compra desde monto_minimo
+    automatica = models.BooleanField(default=False)
+    # Cuántas compras pueden usarlo (vacío = sin límite) y cuántas lo usaron; el checkout suma el uso de forma
+    # atómica (reservar_uso_promocion), así dos compras simultáneas no se pasan del límite
+    usos_maximos = models.PositiveIntegerField(null=True, blank=True)
+    usos = models.PositiveIntegerField(default=0)
 
     @property
     def esta_vigente(self) -> bool:
@@ -213,6 +245,8 @@ class Promocion(models.Model):
         if not self.is_active:
             return False
         if self.fecha_expiracion and self.fecha_expiracion < timezone.now():
+            return False
+        if self.usos_maximos is not None and self.usos >= self.usos_maximos:
             return False
         return True
 
@@ -286,6 +320,13 @@ class OrdenCompra(models.Model):
     # Cuándo pasó a Entregado; desde ahí corre el plazo para dejar la reseña. Vacío en los entregados antes de
     # que se registrara
     fecha_entrega = models.DateTimeField(null=True, blank=True)
+    # Cuándo pasó a Pagado (pago en línea confirmado o transferencia validada): el dashboard cuenta las ventas por
+    # esta fecha. En los pagados antes de que se registrara se rellenó con la de creación
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+    # Folios que la tienda anota de los documentos que emitió por su cuenta (domain/documentos_tributarios.py):
+    # la boleta o factura del pedido y, si se canceló después, su nota de crédito
+    folio_documento = models.CharField(max_length=10, blank=True, default='')
+    folio_nota_credito = models.CharField(max_length=10, blank=True, default='')
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario

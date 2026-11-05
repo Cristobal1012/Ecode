@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import clienteAxios from './axiosConfig';
+import Spinner from '../carga/Spinner';
 
 const campos = [
     { nombre: 'nombre', etiqueta: 'Nombre', tipo: 'text', autocompletar: 'given-name' },
@@ -99,6 +100,8 @@ export default function Register({ onSwitchToLogin }) {
                                 type={campo.tipo}
                                 name={campo.nombre}
                                 autoComplete={campo.autocompletar}
+                                // El mismo largo que acepta el servidor (nombre, apellido, correo y contraseña)
+                                maxLength={campo.tipo === 'password' ? 128 : 255}
                                 value={formData[campo.nombre]}
                                 onChange={handleChange}
                                 required
@@ -110,7 +113,7 @@ export default function Register({ onSwitchToLogin }) {
                     );
                 })}
                 <button type="submit" className="boton boton-primario auth-enviar" disabled={enviando}>
-                    {enviando ? 'Creando cuenta...' : 'Registrarse'}
+                    {enviando && <Spinner />}{enviando ? 'Creando cuenta...' : 'Registrarse'}
                 </button>
             </form>
 

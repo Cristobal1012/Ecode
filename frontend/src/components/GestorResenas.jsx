@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import clienteAxios from './auth/axiosConfig';
 import Estrellas from './Estrellas';
+import { Cargando } from './carga/Esqueleto';
+import { EsqueletoLista } from './carga/EsqueletosPanel';
 
 // Moderación de reseñas: llegan pendientes y solo se publican las aprobadas. El admin no puede crearlas ni
 // editarlas, así el promedio de la tienda es real
@@ -107,7 +109,7 @@ export default function GestorResenas() {
       )}
 
       {cargando ? (
-        <p className="texto-secundario">Cargando reseñas...</p>
+        <Cargando texto="Cargando reseñas..."><EsqueletoLista /></Cargando>
       ) : cargada.resenas.length === 0 ? (
         <p className="texto-secundario">{VACIO[filtro.estado]}</p>
       ) : (

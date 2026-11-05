@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import clienteAxios from '../components/auth/axiosConfig';
 import DatosEmpresa from '../components/DatosEmpresa';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
+import { soloCaracteresDeTelefono } from '../utils/telefono';
 import '../components/Checkout.css';
+import '../components/FotosCotizacion.css';
 import './Cotizacion.css';
+import Spinner from '../components/carga/Spinner';
 
 const FORMULARIO_VACIO = {
   nombre: '', correo: '', telefono: '', producto_id: '', descripcion: '', cantidad: '1',
@@ -19,8 +22,16 @@ const hoy = () => {
   return new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 
-// El backend responde { campo: mensaje | [mensajes] } y los de la empresa anidados en 'empresa'
-const comoTexto = (mensajes) => [].concat(mensajes).join(' ');
+// El backend responde { campo: mensaje | [mensajes] } y los de la empresa anidados en 'empresa'. Los de las fotos
+// vienen por foto ({ 0: [mensaje] }): se juntan en un solo texto
+const comoTexto = (mensajes) => (mensajes && typeof mensajes === 'object' && !Array.isArray(mensajes)
+  ? Object.values(mensajes).map(comoTexto).join(' ')
+  : [].concat(mensajes).join(' '));
+
+// Fotos de la idea: las mismas reglas que el servidor (domain/cotizaciones.py y el control de imágenes del catálogo)
+const MAX_FOTOS = 3;
+const FORMATOS_FOTO = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_BYTES_FOTO = 5 * 1024 * 1024;
 
 export default function Cotizacion() {
   const configuracion = useConfiguracionTienda();
@@ -36,6 +47,36 @@ export default function Cotizacion() {
   const [erroresEmpresa, setErroresEmpresa] = useState({});
   const [aviso, setAviso] = useState(null);
   const [enviando, setEnviando] = useState(false);
+  // { archivo, vista }: la vista previa es un object URL que se libera al quitar la foto o salir de la página
+  const [fotos, setFotos] = useState([]);
+
+  const fotosActuales = useRef(fotos);
+  useEffect(() => { fotosActuales.current = fotos; }, [fotos]);
+  // Al salir de la página se liberan las que queden
+  useEffect(() => () => fotosActuales.current.forEach(foto => URL.revokeObjectURL(foto.vista)), []);
+
+  const agregarFotos = (e) => {
+    const elegidas = Array.from(e.target.files || []);
+    e.target.value = '';
+    const libres = MAX_FOTOS - fotos.length;
+    const invalida = elegidas.find(archivo => !FORMATOS_FOTO.includes(archivo.type) || archivo.size > MAX_BYTES_FOTO);
+    if (invalida) {
+      setErrores(actual => ({ ...actual, fotos: `"${invalida.name}" no sirve: usa JPG, PNG o WebP de hasta 5 MB.` }));
+      return;
+    }
+    if (elegidas.length > libres) {
+      setErrores(actual => ({ ...actual, fotos: `Puedes adjuntar hasta ${MAX_FOTOS} fotos.` }));
+      return;
+    }
+    setErrores(actual => ({ ...actual, fotos: undefined }));
+    setFotos(actual => [...actual, ...elegidas.map(archivo => ({ archivo, vista: URL.createObjectURL(archivo) }))]);
+  };
+
+  const quitarFoto = (indice) => {
+    URL.revokeObjectURL(fotos[indice].vista);
+    setFotos(actual => actual.filter((_, i) => i !== indice));
+    setErrores(actual => ({ ...actual, fotos: undefined }));
+  };
 
   useEffect(() => {
     // Sin `todos` el catálogo llega paginado; el selector necesita la lista completa
@@ -68,7 +109,7 @@ export default function Cotizacion() {
     }
     setEnviando(true);
     try {
-      const { data } = await clienteAxios.post('ventas/cotizaciones/', {
+      const solicitud = {
         ...formulario,
         cantidad: Number(formulario.cantidad),
         fecha_requerida: formulario.fecha_requerida || null,
@@ -76,8 +117,18 @@ export default function Cotizacion() {
         empresa: comoEmpresa ? { ...empresa, rut: normalizarRut(empresa.rut) } : null,
         acepta_privacidad: aceptaPrivacidad,
         sitio_web: sitioWeb
-      });
+      };
+      // Con fotos va como multipart: los datos en "datos" (JSON) y cada foto en "fotos"
+      let cuerpo = solicitud;
+      if (fotos.length > 0) {
+        cuerpo = new FormData();
+        cuerpo.append('datos', JSON.stringify(solicitud));
+        fotos.forEach(foto => cuerpo.append('fotos', foto.archivo));
+      }
+      const { data } = await clienteAxios.post('ventas/cotizaciones/', cuerpo);
       setFormulario(FORMULARIO_VACIO);
+      fotos.forEach(foto => URL.revokeObjectURL(foto.vista));
+      setFotos([]);
       setEmpresa(EMPRESA_VACIA);
       setComoEmpresa(false);
       setAceptaPrivacidad(false);
@@ -185,9 +236,35 @@ export default function Cotizacion() {
                       placeholder="Ej: con el nombre Sofía, en letras doradas"
                       {...describir('personalizacion', 'cotizacion-personalizacion-ayuda')} />
                     <p id="cotizacion-personalizacion-ayuda" className="checkout-ayuda">
-                      Nombres, colores, logo, texto o lo que quieras agregar. Si es un logo, te lo pediremos al responder.
+                      Nombres, colores, logo, texto o lo que quieras agregar. Si tienes una foto o un dibujo de tu idea,
+                      adjúntalo abajo.
                     </p>
                     {errorCampo('personalizacion')}
+                  </div>
+
+                  <div className="checkout-campo">
+                    <label htmlFor="cotizacion-fotos">Fotos de tu idea (opcional)</label>
+                    {fotos.length > 0 && (
+                      <ul className="cotizacion-fotos" aria-label="Fotos adjuntas">
+                        {fotos.map((foto, indice) => (
+                          <li key={foto.vista}>
+                            <img src={foto.vista} alt={`Foto ${indice + 1}: ${foto.archivo.name}`} />
+                            <button type="button" className="boton-edicion" onClick={() => quitarFoto(indice)}
+                              aria-label={`Quitar la foto ${indice + 1}`}>
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {fotos.length < MAX_FOTOS && (
+                      <input id="cotizacion-fotos" type="file" accept={FORMATOS_FOTO.join(',')} multiple
+                        onChange={agregarFotos} {...describir('fotos', 'cotizacion-fotos-ayuda')} />
+                    )}
+                    <p id="cotizacion-fotos-ayuda" className="checkout-ayuda">
+                      Hasta {MAX_FOTOS} fotos JPG, PNG o WebP de 5 MB cada una. Solo las ve la tienda.
+                    </p>
+                    {errorCampo('fotos')}
                   </div>
                 </fieldset>
 
@@ -210,7 +287,7 @@ export default function Cotizacion() {
                       <label htmlFor="cotizacion-telefono">Teléfono</label>
                       <input id="cotizacion-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} required
                         placeholder="+56 9 1234 5678" value={formulario.telefono}
-                        onChange={(e) => editar('telefono', e.target.value)} {...describir('telefono')} />
+                        onChange={(e) => editar('telefono', soloCaracteresDeTelefono(e.target.value))} {...describir('telefono')} />
                       {errorCampo('telefono')}
                     </div>
                   </div>
@@ -246,7 +323,7 @@ export default function Cotizacion() {
 
                 <button type="submit" className="boton boton-primario cotizacion-enviar"
                   disabled={!aceptaPrivacidad || enviando}>
-                  {enviando ? 'Enviando...' : 'Enviar solicitud'}
+                  {enviando && <Spinner />}{enviando ? 'Enviando...' : 'Enviar solicitud'}
                 </button>
               </form>
             </>

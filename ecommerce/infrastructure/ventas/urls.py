@@ -13,11 +13,11 @@ configuracion_urlpatterns = [
 
 # Todo lo que esté aquí, Django le pondrá '/api/ventas/' antes
 ventas_urlpatterns = [
-    # NUEVO ENDPOINT LOGÍSTICO CHILEXPRESS
+    # Couriers (RF-02.3): cotizar con los activos, sus comunas y sus sucursales
     # Ruta resultante: POST /api/ventas/logistica/cotizar/
     path('logistica/cotizar/', views.CotizacionEnvioView.as_view(), name='cotizar-envio'),
     path('logistica/comunas/', views.ComunasCoberturaAPIView.as_view(), name='comunas-cobertura'),
-    path('logistica/sucursales/', views.SucursalesChilexpressAPIView.as_view(), name='sucursales-chilexpress'),
+    path('logistica/sucursales/', views.SucursalesCourierAPIView.as_view(), name='sucursales-courier'),
     
     # Ruta resultante: POST /api/ventas/checkout/
     path('checkout/', views.CheckoutAPIView.as_view(), name='checkout'),
@@ -38,6 +38,7 @@ ventas_urlpatterns = [
     # --- NUEVA RUTA: MÉTRICAS DEL DASHBOARD ---
     # Ruta resultante: GET /api/ventas/dashboard/metricas/
     path('dashboard/metricas/', views.DashboardMetricasView.as_view(), name='dashboard_metricas'),
+    path('dashboard/pendientes/', views.DashboardPendientesView.as_view(), name='dashboard_pendientes'),
     
     path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
 
@@ -49,6 +50,8 @@ ventas_urlpatterns = [
     path('carrito/validar/', views.ValidarCarritoView.as_view(), name='carrito-validar'),
     #para validar promociones
     path('promociones/validar/', views.ValidarPromocionAPIView.as_view(), name='validar-promocion'),
+    # Descuentos automáticos vigentes, sin sus códigos: GET /api/ventas/promociones/automaticas/
+    path('promociones/automaticas/', views.PromocionesAutomaticasAPIView.as_view(), name='promociones-automaticas'),
     
     path('mis-pedidos/', views.HistorialPedidosAPIView.as_view(), name='mis-pedidos'),
 # --- RUTAS PARA DIRECCIONES DE ENVÍO ---
@@ -62,6 +65,9 @@ ventas_urlpatterns = [
     path('cotizaciones/', views.CotizacionCreateView.as_view(), name='cotizaciones'),
     path('admin/cotizaciones/', views.AdminCotizacionListView.as_view(), name='admin-cotizaciones'),
     path('admin/cotizaciones/<int:pk>/', views.AdminCotizacionEstadoView.as_view(), name='admin-cotizacion-estado'),
+    # Una foto que adjuntó el cliente: solo el admin (no está en /media/)
+    path('admin/cotizaciones/<int:pk>/fotos/<int:foto_id>/', views.AdminFotoCotizacionView.as_view(),
+         name='admin-foto-cotizacion'),
     # Reseñas (si el admin las activó): formulario con el enlace firmado del correo, envío y lo aprobado
     path('resenas/', views.ResenaEnvioView.as_view(), name='resenas'),
     path('resenas/formulario/', views.ResenaFormularioView.as_view(), name='resena-formulario'),
@@ -71,7 +77,7 @@ ventas_urlpatterns = [
     path('admin/resenas/', views.AdminResenaListView.as_view(), name='admin-resenas'),
     path('admin/resenas/<int:pk>/', views.AdminResenaEstadoView.as_view(), name='admin-resena-estado'),
     
-    # Ruta para descargar la etiqueta de Chilexpress
+    # Ruta para descargar la etiqueta de la orden de transporte del courier
     path('ordenes/<int:orden_id>/etiqueta/', views.DescargarEtiquetaView.as_view(), name='descargar-etiqueta'),
 
     # NUEVAS RUTAS: administración de órdenes (solo administradores)
@@ -85,6 +91,8 @@ ventas_urlpatterns = [
     # Ruta resultante: POST /api/ventas/admin/ordenes/<pk>/orden-transporte/ (genera o reintenta la OT)
     path('admin/ordenes/<int:pk>/orden-transporte/', views.AdminOrdenTransporteView.as_view(),
          name='admin-ordenes-orden-transporte'),
+    # POST { folio }: el folio de la boleta, factura o nota de crédito que la tienda emitió por su cuenta
+    path('admin/ordenes/<int:pk>/documento/', views.AdminDocumentoOrdenView.as_view(), name='admin-ordenes-documento'),
     path('admin/ordenes/<int:pk>/pago-fuera-plazo/', views.AdminRegistrarPagoFueraPlazoView.as_view(),
         name='admin-ordenes-pago-fuera-plazo'),
     path('paginas-legales/', views.PaginaLegalListView.as_view(), name='paginas-legales-publicas'),
@@ -105,8 +113,9 @@ ventas_urlpatterns = [
     # Medios de pago (RN-02): GET la lista y PUT /api/ventas/admin/medios-pago/<codigo>/ (ej. transferencia)
     path('admin/medios-pago/', views.AdminMediosPagoView.as_view(), name='admin-medios-pago'),
     path('admin/medios-pago/<str:codigo>/', views.AdminMedioPagoView.as_view(), name='admin-medio-pago'),
-    # Llaves de Chilexpress (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
-    path('admin/chilexpress/', views.AdminChilexpressView.as_view(), name='admin-chilexpress'),
+    # Llaves de cada courier (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
+    path('admin/couriers/', views.AdminCouriersView.as_view(), name='admin-couriers'),
+    path('admin/couriers/<str:codigo>/', views.AdminCourierView.as_view(), name='admin-courier'),
     # Ruta para las consultas y notificaciones de Linkify
     path('webhooks/linkify/', LinkifyWebhookAPIView.as_view(), name='webhook-linkify'),
 ]

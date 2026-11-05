@@ -169,6 +169,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# El enlace para elegir una nueva contraseña vence en 1 hora (y deja de servir apenas se usa)
+PASSWORD_RESET_TIMEOUT = 60 * 60
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
@@ -199,6 +202,9 @@ warnings.filterwarnings('ignore', message='No directory at', category=UserWarnin
 # and static assets; production must serve MEDIA_URL through its media server.
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
 MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+# Archivos que solo ve el admin (las fotos de las cotizaciones): fuera de MEDIA_ROOT, que se publica, y sin URL.
+# Se entregan por la API con la sesión del admin. Tiene que estar en un disco persistente y en los respaldos
+ARCHIVOS_PRIVADOS_ROOT = Path(os.environ.get('ARCHIVOS_PRIVADOS_ROOT', BASE_DIR / 'privado'))
 CATALOGO_IMAGEN_MAX_BYTES = int(os.environ.get('CATALOGO_IMAGEN_MAX_BYTES', 5 * 1024 * 1024))
 CATALOGO_IMAGEN_MAX_ARCHIVOS = int(os.environ.get('CATALOGO_IMAGEN_MAX_ARCHIVOS', 10))
 CATALOGO_IMAGEN_MAX_GALERIA = int(os.environ.get('CATALOGO_IMAGEN_MAX_GALERIA', 20))
@@ -232,6 +238,10 @@ REST_FRAMEWORK = {
         'cotizaciones': '10/hour',
         # Envío del formulario de reseña: deja corregir errores, pero no inundar la tienda
         'resenas': '20/hour',
+        # Pedir el enlace por correo: pocos, para no llenar de correos a nadie
+        'contrasena_olvido': '5/hour',
+        # Elegir o cambiar la contraseña: sin adivinar la actual a fuerza de intentos
+        'contrasenas': '10/hour',
     },
 }
 

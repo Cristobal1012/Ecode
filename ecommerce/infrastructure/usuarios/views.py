@@ -64,7 +64,8 @@ class GoogleLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        user = User.objects.filter(email=email).first()
+        # La misma cuenta aunque se haya registrado con otras mayúsculas
+        user = User.objects.por_correo(email)
 
         if not user:
             user = User.objects.create_user(

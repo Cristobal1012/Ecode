@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
 import { isAdminRoute } from '../hooks/useCookieConsent';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
+import logoUniversidad from './header/logoU.png';
 import './footer.css';
 
 // Dirección del local en dos líneas; solo si el admin eligió mostrarla (la API no la entrega si no se usa)
@@ -15,11 +16,16 @@ const lineasDireccion = (configuracion) => {
   ].filter(Boolean);
 };
 
-export const Footer = ({ onOpenCookiePreferences, nombreTiendaTemporal = null }) => {
+// marcaTemporal: en modo edición de la landing, el borrador del nombre, el logo y la ubicación del logo de la
+// Universidad, para ver el cambio antes de guardarlo
+export const Footer = ({ onOpenCookiePreferences, marcaTemporal = null }) => {
   const { pathname } = useLocation();
-  const configuracion = useConfiguracionTienda();
-  const nombreTienda =
-    nombreTiendaTemporal ?? (configuracion?.nombre_tienda || 'Tienda');
+  const publicada = useConfiguracionTienda();
+  const configuracion = marcaTemporal ? { ...publicada, ...marcaTemporal } : publicada;
+  const nombreTienda = marcaTemporal ? marcaTemporal.nombre_tienda : (configuracion?.nombre_tienda || 'Tienda');
+  // RN-01: si el admin lo llevó aquí, el logo de la Universidad va en el footer y más grande; el de la tienda
+  // sigue en el header
+  const universidadEnFooter = configuracion?.ubicacion_logo_universidad === 'FOOTER';
   const direccion = lineasDireccion(configuracion);
   const correo = configuracion?.correo_contacto;
   const horario = configuracion?.horario_atencion?.trim();
@@ -54,6 +60,9 @@ export const Footer = ({ onOpenCookiePreferences, nombreTiendaTemporal = null })
           <p className="footer-nombre">{nombreTienda}</p>
           {configuracion?.subtitulo_bienvenida && (
             <p className="footer-descripcion">{configuracion.subtitulo_bienvenida}</p>
+          )}
+          {universidadEnFooter && (
+            <img className="footer-logo-universidad" src={logoUniversidad} alt="Logo de la Universidad Autónoma" />
           )}
         </div>
 

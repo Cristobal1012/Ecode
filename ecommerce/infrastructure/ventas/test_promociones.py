@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 
-from .models import Promocion
+from .models import OrdenCompra, Promocion
 
 
 class ValidarPromocionTests(APITestCase):
@@ -110,6 +110,8 @@ class CheckoutPromocionTests(APITestCase):
             umbral_envio_gratis=15000.0,
             fecha_expiracion=self.ahora + timedelta(days=5),
             is_active=True,
+            # Un solo uso, como funcionaban todos los códigos antes de poder elegirlo
+            usos_maximos=1,
         )
 
         self.payload_base = {
@@ -119,7 +121,6 @@ class CheckoutPromocionTests(APITestCase):
             'direccion_envio_snapshot': {'calle': 'Calle 1', 'ciudad': 'Santiago', 'comuna': 'Santiago'},
             'subtotal': 20000,
             'proveedor_logistico': 'CHILEXPRESS',
-            'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
             **DESTINATARIO,
         }
@@ -147,9 +148,10 @@ class CheckoutPromocionTests(APITestCase):
 
         # Confirmar que la orden se eliminó
         self.assertEqual(OrdenCompra.objects.count(), 0)
-        # Confirmar que el cupón sigue activo y listo para reintento
+        # El uso se devuelve con el rollback: el cupón sigue disponible para reintentar
         self.promo_valida.refresh_from_db()
-        self.assertTrue(self.promo_valida.is_active)
+        self.assertEqual(self.promo_valida.usos, 0)
+        self.assertTrue(self.promo_valida.esta_vigente)
 
     def test_cupon_con_envio_gratis_y_desactivacion_exitosa(self):
         from .models import OrdenCompra
@@ -166,10 +168,104 @@ class CheckoutPromocionTests(APITestCase):
         self.assertEqual(orden.costo_envio, 0.0)
         self.assertEqual(orden.total_final, 18000.0)
 
-        # El cupón debe quedar desactivado tras compra exitosa
+        # Su único uso queda contado: deja de valer, y el pedido guarda qué código se aplicó
         self.promo_valida.refresh_from_db()
-        self.assertFalse(self.promo_valida.is_active)
+        self.assertEqual(self.promo_valida.usos, 1)
+        self.assertFalse(self.promo_valida.esta_vigente)
+        self.assertEqual(orden.promocion, self.promo_valida)
 
+
+
+class DescuentoAutomaticoTests(APITestCase):
+    """RF-04.1: códigos con monto mínimo, automáticos y con límite de usos (domain/promociones.py)."""
+
+    # La misma tienda y el mismo carrito de $20.000 que CheckoutPromocionTests, sin repetir sus tests
+    setUp = CheckoutPromocionTests.setUp
+
+    def checkout(self, subtotal=20000, **extra):
+        return self.client.post(self.url, {**self.payload_base, 'subtotal': subtotal, **extra}, format='json')
+
+    def test_el_automatico_se_aplica_solo_desde_su_minimo_y_no_se_gasta(self):
+        Promocion.objects.create(codigo='AUTO15', tipo_descuento='PORCENTAJE', valor_descuento=15,
+                                 monto_minimo=20000, automatica=True)
+        for _ in range(2):
+            self.assertEqual(self.checkout().status_code, status.HTTP_201_CREATED)
+        orden = OrdenCompra.objects.latest('pk')
+        # 20.000 - 15 % = 17.000, más el envío de 3.000 (el automático no lo deja gratis)
+        self.assertEqual((orden.total_final, orden.costo_envio), (20000.0, 3000.0))
+        self.assertEqual(orden.promocion.codigo, 'AUTO15')
+        self.assertEqual(Promocion.objects.get(codigo='AUTO15').usos, 2)
+
+    def test_bajo_el_minimo_no_se_aplica(self):
+        Promocion.objects.create(codigo='AUTO15', tipo_descuento='PORCENTAJE', valor_descuento=15,
+                                 monto_minimo=30000, automatica=True)
+        self.assertEqual(self.checkout().status_code, status.HTTP_201_CREATED)
+        orden = OrdenCompra.objects.get()
+        self.assertIsNone(orden.promocion)
+        self.assertEqual(orden.total_final, 23000.0)
+
+    def test_con_un_codigo_escrito_gana_el_que_mas_ahorra(self):
+        Promocion.objects.create(codigo='AUTO5', tipo_descuento='PORCENTAJE', valor_descuento=5,
+                                 monto_minimo=10000, automatica=True)
+        # REINTENTO: 10 % y envío gratis desde 15.000 -> ahorra 2.000 + 3.000; el automático, 1.000
+        self.assertEqual(self.checkout(codigo_promocion='REINTENTO').status_code, status.HTTP_201_CREATED)
+        self.assertEqual(OrdenCompra.objects.get().promocion.codigo, 'REINTENTO')
+
+        Promocion.objects.create(codigo='AUTO50', tipo_descuento='MONTO_FIJO', valor_descuento=8000,
+                                 monto_minimo=10000, automatica=True)
+        self.promo_valida.usos = 0
+        self.promo_valida.save()
+        self.assertEqual(self.checkout(codigo_promocion='REINTENTO').status_code, status.HTTP_201_CREATED)
+        orden = OrdenCompra.objects.latest('pk')
+        self.assertEqual((orden.promocion.codigo, orden.total_final), ('AUTO50', 15000.0))
+        # El código escrito no se aplicó: no gasta su uso
+        self.promo_valida.refresh_from_db()
+        self.assertEqual(self.promo_valida.usos, 0)
+
+    def test_un_codigo_escrito_bajo_su_minimo_se_rechaza(self):
+        Promocion.objects.create(codigo='GRANDE', tipo_descuento='PORCENTAJE', valor_descuento=20, monto_minimo=50000)
+        respuesta = self.checkout(codigo_promocion='grande')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('$50.000', str(respuesta.data['codigo_promocion']))
+        self.assertFalse(OrdenCompra.objects.exists())
+
+    def test_el_limite_de_usos_se_respeta(self):
+        Promocion.objects.create(codigo='DOS', tipo_descuento='MONTO_FIJO', valor_descuento=1000, usos_maximos=2)
+        for _ in range(2):
+            self.assertEqual(self.checkout(codigo_promocion='DOS').status_code, status.HTTP_201_CREATED)
+        respuesta = self.checkout(codigo_promocion='DOS')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Promocion.objects.get(codigo='DOS').usos, 2)
+
+    def test_reservar_un_uso_es_condicional(self):
+        """Si otra compra se llevó el último uso entre la elección y el cobro, este no se suma."""
+        from .serializers import reservar_uso_promocion
+        promo = Promocion.objects.create(codigo='UNO', tipo_descuento='MONTO_FIJO', valor_descuento=1000,
+                                         usos_maximos=1)
+        self.assertTrue(reservar_uso_promocion(promo.pk))
+        self.assertFalse(reservar_uso_promocion(promo.pk))
+        promo.refresh_from_db()
+        self.assertEqual(promo.usos, 1)
+
+    def test_la_tienda_publica_los_automaticos_sin_sus_codigos(self):
+        Promocion.objects.create(codigo='SECRETO-AUTO', tipo_descuento='PORCENTAJE', valor_descuento=10,
+                                 monto_minimo=30000, automatica=True)
+        Promocion.objects.create(codigo='AGOTADO', tipo_descuento='PORCENTAJE', valor_descuento=10,
+                                 monto_minimo=30000, automatica=True, usos_maximos=1, usos=1)
+        Promocion.objects.create(codigo='VENCIDO', tipo_descuento='PORCENTAJE', valor_descuento=10,
+                                 monto_minimo=30000, automatica=True, fecha_expiracion=self.ahora - timedelta(days=1))
+        respuesta = self.client.get(reverse('promociones-automaticas'))
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertEqual(respuesta.data, [{'tipo_descuento': 'PORCENTAJE', 'valor_descuento': 10.0,
+                                           'monto_minimo': 30000, 'umbral_envio_gratis': None}])
+        self.assertNotIn('SECRETO', str(respuesta.content))
+
+    def test_validar_un_codigo_respeta_su_minimo(self):
+        Promocion.objects.create(codigo='GRANDE', tipo_descuento='PORCENTAJE', valor_descuento=20, monto_minimo=50000)
+        url = reverse('validar-promocion')
+        respuesta = self.client.post(url, {'codigo': 'GRANDE', 'subtotal': 20000})
+        self.assertEqual((respuesta.status_code, respuesta.data['monto_minimo']), (400, 50000))
+        self.assertEqual(self.client.post(url, {'codigo': 'GRANDE', 'subtotal': 60000}).data['descuento'], 12000)
 
 
 class GestionPromocionesPermisosTests(APITestCase):
@@ -214,3 +310,62 @@ class GestionPromocionesPermisosTests(APITestCase):
         self.client.patch(self.detalle, {'fecha_expiracion': None}, format='json')
         self.promo.refresh_from_db()
         self.assertTrue(self.promo.esta_vigente)
+
+    def test_rechaza_cupones_que_regalarian_la_compra_o_el_envio(self):
+        """RF-04.1: un 250 % o un umbral negativo (envío gratis en toda compra) no se pueden guardar."""
+        self.client.force_authenticate(create_user('admin-reglas@example.test', rol='ADMIN'))
+        for cambios, campo in (
+            ({'valor_descuento': 250}, 'valor_descuento'),
+            ({'valor_descuento': -50}, 'valor_descuento'),
+            ({'valor_descuento': 0}, 'valor_descuento'),
+            ({'tipo_descuento': 'MONTO_FIJO', 'valor_descuento': 990.5}, 'valor_descuento'),
+            ({'umbral_envio_gratis': -1}, 'umbral_envio_gratis'),
+            ({'codigo': 'VERANO 20'}, 'codigo'),
+            ({'codigo': 'base10'}, 'codigo'),
+        ):
+            with self.subTest(cambios=cambios):
+                response = self.client.post(self.lista, {**self.nueva, **cambios}, format='json')
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(campo, response.data)
+        self.assertEqual(Promocion.objects.count(), 1)
+
+    def test_el_admin_crea_un_automatico_con_minimo_y_no_puede_tocar_los_usos(self):
+        self.client.force_authenticate(create_user('admin-auto@example.test', rol='ADMIN'))
+        sin_minimo = self.client.post(self.lista, {**self.nueva, 'codigo': 'AUTO', 'automatica': True}, format='json')
+        self.assertEqual(sin_minimo.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('monto_minimo', sin_minimo.data)
+
+        respuesta = self.client.post(self.lista, {**self.nueva, 'codigo': 'AUTO', 'automatica': True,
+                                                  'monto_minimo': 30000, 'usos': 99}, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED, respuesta.data)
+        self.assertEqual((respuesta.data['usos'], respuesta.data['usos_maximos']), (0, None))
+
+
+    def test_el_codigo_se_guarda_en_mayusculas_y_editar_otro_campo_no_lo_exige(self):
+        self.client.force_authenticate(create_user('admin-mayus@example.test', rol='ADMIN'))
+        response = self.client.post(self.lista, {**self.nueva, 'codigo': ' navidad-25 '}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['codigo'], 'NAVIDAD-25')
+
+        respuesta = self.client.patch(self.detalle, {'valor_descuento': 15}, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK, respuesta.data)
+        respuesta = self.client.patch(self.detalle, {'valor_descuento': 150}, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ValidarPromocionEntradasRarasTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('validar-promocion')
+
+    def test_codigos_antiguos_que_solo_difieren_en_mayusculas_no_dan_error_500(self):
+        Promocion.objects.create(codigo='verano20', tipo_descuento='PORCENTAJE', valor_descuento=10)
+        Promocion.objects.create(codigo='VERANO20', tipo_descuento='PORCENTAJE', valor_descuento=20)
+        response = self.client.post(self.url, {'codigo': 'Verano20', 'subtotal': 10000})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_subtotal_que_no_es_numero_responde_400(self):
+        Promocion.objects.create(codigo='DIEZ', tipo_descuento='PORCENTAJE', valor_descuento=10)
+        for subtotal in ('abc', 'nan', 'inf', -5):
+            with self.subTest(subtotal=subtotal):
+                response = self.client.post(self.url, {'codigo': 'DIEZ', 'subtotal': subtotal})
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

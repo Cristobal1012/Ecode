@@ -1,9 +1,12 @@
-﻿from decimal import Decimal
+﻿from dataclasses import asdict
+from decimal import Decimal
 import uuid
 
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import F, Q
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from mongoengine.errors import ValidationError as MongoValidationError
@@ -14,19 +17,24 @@ import re
 from ecommerce.application.couriers import CotizarEnvio, CourierNoActivo
 from ecommerce.domain.logistica import (
     ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, RETIRO_LOCAL, CourierNoDisponible, EntregaNoHabilitada,
-    EntregasDeLaTienda, Paquete, SinCobertura, error_direccion_entrega, es_entrega_con_courier,
+    EntregasDeLaTienda, SinCobertura, error_direccion_entrega, es_entrega_con_courier,
 )
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.pagos import ErrorPasarelaPago
-from ecommerce.application.ventas import PrepararPedido, RevisarCarrito
+from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
+from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
+from ecommerce.domain.promociones import (
+    PromocionInvalida, ReglaDescuento, cumple_minimo, da_envio_gratis, elegir_promocion, monto_descuento,
+    validar_promocion,
+)
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
-    TelefonoInvalido, normalizar_telefono_chile,
+    NombreInvalido, TelefonoInvalido, normalizar_nombre_persona, normalizar_telefono_chile,
     paginas_legales_faltantes, plazo_pago, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
@@ -124,6 +132,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
         ]
@@ -169,6 +178,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     instagram_foto_4 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_5 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_6 = ImagenNegocioField(required=False, allow_null=True)
+    # El título de la portada: el mismo límite que el panel (en el modelo es un TextField sin límite)
+    texto_bienvenida = serializers.CharField(max_length=300, required=False)
     texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
     nosotros_texto = serializers.CharField(max_length=2000, required=False, allow_blank=True)
     horario_atencion = serializers.CharField(max_length=500, required=False, allow_blank=True)
@@ -215,6 +226,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
             # Solo el panel: qué pedidos piden boleta (no se publica en /api/configuracion/)
@@ -267,11 +279,57 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         return instance
 
 
-class PaqueteSerializer(serializers.Serializer):
-    peso_kg = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0.01'))
-    alto_cm = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0.01'))
-    ancho_cm = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0.01'))
-    largo_cm = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0.01'))
+class DireccionEntregaSerializer(serializers.Serializer):
+    """La dirección que guarda el pedido: solo estos campos, como texto y con largo máximo. Se muestra en el panel,
+    los correos y la orden de transporte, así que no se acepta cualquier JSON. Todos son opcionales: qué exige cada
+    forma de entrega lo decide error_direccion_entrega (domain/logistica.py)."""
+
+    calle = serializers.CharField(max_length=300, required=False, allow_blank=True, allow_null=True)
+    numero = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    dpto_casa = serializers.CharField(max_length=150, required=False, allow_blank=True, allow_null=True)
+    comuna = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    ciudad = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    region = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    # Retiro en una oficina del courier: ahí se entrega la orden de transporte
+    codigo_sucursal = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+
+
+def paquete_del_pedido(items):
+    """RF-02.3: el paquete del envío con las medidas del catálogo; `items` como los valida ItemPedidoSerializer."""
+    return PaqueteDelPedido(catalogo_variantes()).ejecutar(
+        [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad']) for i in items])
+
+
+def regla_de_promocion(promocion):
+    """La regla de dominio de un código guardado (domain/promociones.py)."""
+    def decimal(valor):
+        return None if valor is None else Decimal(str(valor))
+    return ReglaDescuento(promocion.tipo_descuento, Decimal(str(promocion.valor_descuento)),
+                          decimal(promocion.umbral_envio_gratis), decimal(promocion.monto_minimo))
+
+
+def mensaje_monto_minimo(promocion):
+    return f"Este código vale para compras desde ${promocion.monto_minimo:,}.".replace(',', '.')
+
+
+def promociones_automaticas_vigentes():
+    """Los descuentos que se aplican solos: activos, sin vencer y con usos disponibles."""
+    ahora = timezone.now()
+    filas = Promocion.objects.filter(automatica=True, is_active=True).filter(
+        Q(fecha_expiracion__isnull=True) | Q(fecha_expiracion__gte=ahora)).order_by('id')
+    return [promocion for promocion in filas if promocion.esta_vigente]
+
+
+def reservar_uso_promocion(promocion_id):
+    """Suma un uso solo si quedan (UPDATE condicional): dos compras al mismo tiempo no se pasan del límite."""
+    con_usos = Q(usos_maximos__isnull=True) | Q(usos__lt=F('usos_maximos'))
+    return Promocion.objects.filter(con_usos, pk=promocion_id, is_active=True).update(usos=F('usos') + 1) == 1
+
+
+def comuna_origen_tienda():
+    """Desde donde despacha la tienda: la cotización que ve el comprador y el cobro del checkout usan la misma."""
+    config = ConfiguracionGlobal.objects.filter(pk=1).first()
+    return config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
 
 
 class ProveedorLogisticoNoDisponible(APIException):
@@ -362,13 +420,18 @@ class CotizacionSolicitudSerializer(serializers.Serializer):
 
 class AdminCotizacionSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    # Los ids de las fotos: el panel las pide a admin/cotizaciones/<id>/fotos/<foto>/ con la sesión del admin
+    fotos = serializers.SerializerMethodField()
 
     class Meta:
         model = Cotizacion
         fields = ['id', 'fecha_creacion', 'estado', 'estado_display', 'nombre', 'correo', 'telefono',
                   'producto_id', 'producto_nombre', 'descripcion', 'cantidad', 'personalizacion',
-                  'fecha_requerida', 'datos_empresa']
+                  'fecha_requerida', 'datos_empresa', 'fotos']
         read_only_fields = fields
+
+    def get_fotos(self, obj):
+        return [foto.id for foto in obj.fotos.all()]
 
 
 class ResenaProductoSerializer(serializers.ModelSerializer):
@@ -403,12 +466,16 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
     total_final = serializers.FloatField(read_only=True)
     # Una entrega de la tienda o el código de un courier activo (se valida en validate)
     proveedor_logistico = serializers.CharField(max_length=30, required=False)
-    paquete = PaqueteSerializer(write_only=True, required=False)
+    # RF-02.3: lo arma el servidor con el peso y las medidas del catálogo; el que envíe el navegador se ignora
+    paquete = serializers.JSONField(read_only=True)
     # RF-04.4: aceptación de Términos y Condiciones y Política de Privacidad
     acepta_terminos = serializers.BooleanField(write_only=True)
-    items = ItemPedidoSerializer(many=True, write_only=True)
+    # Hasta 100 líneas, como la revisión del carrito (RevisionCarritoSerializer)
+    items = ItemPedidoSerializer(many=True, write_only=True, max_length=100)
     codigo_promocion = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True, write_only=True)
     email_cliente = serializers.SerializerMethodField()
+    # Invitado: ahí le llegan el pedido y el seguimiento; se guarda en minúsculas (el seguimiento no las distingue)
+    email_invitado = serializers.EmailField(max_length=255, required=False, allow_blank=True, allow_null=True)
     # RF-02.3: quién recibe o retira; el courier y la tienda lo necesitan para entregar
     nombre_destinatario = serializers.CharField(max_length=120)
     telefono_destinatario = serializers.CharField(max_length=30)
@@ -448,6 +515,24 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 'Debes aceptar los Términos y Condiciones y la Política de Privacidad.'
             )
         return value
+
+    def validate_email_invitado(self, value):
+        return value.strip().lower() if value else value
+
+    def validate_direccion_envio_snapshot(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('La dirección no tiene un formato válido.')
+        direccion = DireccionEntregaSerializer(data=value)
+        if not direccion.is_valid():
+            raise serializers.ValidationError(direccion.errors)
+        # Un campo nulo queda vacío: los correos y el panel lo muestran como texto
+        return {campo: valor or '' for campo, valor in direccion.validated_data.items()}
+
+    def validate_nombre_destinatario(self, value):
+        try:
+            return normalizar_nombre_persona(value)
+        except NombreInvalido as error:
+            raise serializers.ValidationError(str(error))
 
     def validate_telefono_destinatario(self, value):
         try:
@@ -511,8 +596,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         error_direccion = error_direccion_entrega(proveedor, data.get('direccion_envio_snapshot'))
         if error_direccion:
             raise serializers.ValidationError({'direccion_envio_snapshot': error_direccion})
-        if proveedor not in ENTREGAS_DE_LA_TIENDA and 'paquete' not in data:
-            raise serializers.ValidationError({'paquete': 'Se requiere peso y dimensiones.'})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
@@ -531,6 +614,14 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         except ErrorPedido as error:
             raise serializers.ValidationError({'items': str(error)})
 
+        # RF-02.3: un courier cotiza y despacha el paquete que arma el servidor con las medidas del catálogo
+        self._paquete = None
+        if proveedor not in ENTREGAS_DE_LA_TIENDA:
+            try:
+                self._paquete = paquete_del_pedido(data['items'])
+            except ErrorPedido as error:
+                raise serializers.ValidationError({'items': str(error)})
+
         return data
 
     @transaction.atomic
@@ -539,16 +630,14 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
         validated_data.pop('acepta_terminos')
         validated_data.pop('items')
         codigo_promo = validated_data.pop('codigo_promocion', None)
-        paquete_data = validated_data.pop('paquete', None)
-        paquete = Paquete(**paquete_data) if paquete_data else None
+        paquete = self._paquete
         proveedor = validated_data.get('proveedor_logistico')
 
-        # 1. COTIZACIÓN REAL O ENTREGA DE LA TIENDA (validate ya exige comuna y paquete para un courier)
+        # 1. COTIZACIÓN REAL O ENTREGA DE LA TIENDA (validate ya exige comuna y arma el paquete para un courier)
         if proveedor in ENTREGAS_DE_LA_TIENDA:
             costo_envio = float(self._costo_entrega_propia)
         else:
-            config = ConfiguracionGlobal.objects.filter(pk=1).first()
-            origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
+            origen = comuna_origen_tienda()
             destino = validated_data['direccion_envio_snapshot']['comuna']
 
             # El costo lo cotiza el servidor con el courier elegido; el que envía el navegador se ignora
@@ -561,38 +650,43 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             except CourierNoDisponible:
                 raise ProveedorLogisticoNoDisponible()
 
-        # APLICAR PROMOCION Y VALIDAR EL CUPON
-        subtotal_num = float(validated_data['subtotal'])
+        # RF-04.1: el código escrito y los automáticos; se aplica el que más ahorra, calculado con el subtotal del
+        # catálogo (PrepararPedido ya comprobó que el del navegador coincide)
+        subtotal_num = float(self._pedido.subtotal)
         descuento = 0.0
-        promo_aplicada = None
-
+        candidatas = []
         if codigo_promo:
-            promo = Promocion.objects.filter(
-                codigo__iexact=codigo_promo.strip(), is_active=True
-            ).first()
-            if not promo or not promo.esta_vigente:
+            escrito = Promocion.objects.filter(codigo__iexact=codigo_promo.strip(), is_active=True).order_by('id').first()
+            if not escrito or not escrito.esta_vigente:
                 raise serializers.ValidationError({
                     'codigo_promocion': 'El cupón ingresado no es válido o ya expiró.'
                 })
+            if not cumple_minimo(regla_de_promocion(escrito), self._pedido.subtotal):
+                raise serializers.ValidationError({'codigo_promocion': mensaje_monto_minimo(escrito)})
+            candidatas.append(escrito)
+        candidatas += promociones_automaticas_vigentes()
 
-            if promo.tipo_descuento == 'PORCENTAJE':
-                descuento = subtotal_num * (float(promo.valor_descuento) / 100.0)
-            else:
-                descuento = float(promo.valor_descuento)
-            descuento = min(descuento, subtotal_num)
-            descuento = max(0.0, descuento)
-
-            if promo.umbral_envio_gratis and subtotal_num >= float(promo.umbral_envio_gratis):
+        promo_aplicada = elegir_promocion(candidatas, self._pedido.subtotal, Decimal(str(costo_envio)),
+                                          regla_de_promocion)
+        if promo_aplicada:
+            # El uso se cuenta aquí, dentro de la transacción: si el límite ya se alcanzó (otra compra al mismo
+            # tiempo) no se aplica, y si después falla el pago, el rollback lo devuelve
+            if not reservar_uso_promocion(promo_aplicada.pk):
+                raise serializers.ValidationError({
+                    'codigo_promocion': 'Este código ya alcanzó su límite de usos. Revisa el total antes de pagar.'
+                })
+            regla = regla_de_promocion(promo_aplicada)
+            descuento = float(monto_descuento(regla, self._pedido.subtotal))
+            if da_envio_gratis(regla, self._pedido.subtotal):
                 costo_envio = 0.0
-
-            promo_aplicada = promo
+        validated_data['promocion'] = promo_aplicada
 
         # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
         validated_data['costo_envio'] = costo_envio
         validated_data['total_final'] = max(0.0, (subtotal_num - descuento) + costo_envio)
         # La orden de transporte se genera con el mismo paquete que se cotizó
         validated_data['paquete'] = (
-            {campo: str(valor) for campo, valor in paquete_data.items()} if paquete_data else None)
+            {campo: str(valor) for campo, valor in asdict(paquete).items()} if paquete else None)
 
         # 2. ASIGNAR USUARIO
         if request and request.user.is_authenticated:
@@ -643,11 +737,6 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             url_pago = pago.url_pago
             orden.id_transaccion_pasarela = pago.referencia
             orden.save()
-
-        # Desactivamos el cupón solo después de que la orden y la pasarela se iniciaron exitosamente
-        if promo_aplicada:
-            promo_aplicada.is_active = False
-            promo_aplicada.save()
 
         # RF-04.2: resumen de la compra al comprador (si Transbank falló, la orden ya se borró arriba)
         notificador_pedidos().notificar(orden.id, EventoPedido.RECIBIDO)
@@ -814,6 +903,12 @@ class FotosPublicacionSerializer(serializers.Serializer):
     fotos = serializers.ListField(child=ArchivoImagenField(), allow_empty=False, max_length=MAX_FOTOS_PUBLICACION)
 
 
+class FotosCotizacionSerializer(serializers.Serializer):
+    """Las fotos de la idea del cliente: el mismo control que las del catálogo (formato real, tamaño, píxeles) y
+    se vuelven a codificar, sin los datos de la cámara (ej. la ubicación GPS de una foto del celular)."""
+    fotos = serializers.ListField(child=ArchivoImagenField(), required=False, max_length=MAX_FOTOS_COTIZACION)
+
+
 class FotoPublicacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = FotoPublicacion
@@ -871,6 +966,8 @@ def medio_pago_para_panel(medio):
             'obligatorio': campo.obligatorio,
             # Ej. ['ambiente', 'PRODUCCION']: obligatorio solo con ese valor
             'obligatorio_si': list(campo.obligatorio_si) if campo.obligatorio_si else None,
+            # 'rut', 'correo' o 'numero_cuenta' (lo valida el servidor); el panel elige el teclado
+            'formato': campo.formato,
         } for campo in medio.definicion.campos],
         'datos': medio.datos_visibles(),
     }
@@ -901,4 +998,25 @@ class PromocionSerializer(serializers.ModelSerializer):
         model = Promocion
         # fecha_expiracion: el cupón deja de valer desde ese momento (sin fecha no vence)
         fields = ['id', 'codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'fecha_expiracion',
-                  'is_active']
+                  'is_active', 'monto_minimo', 'automatica', 'usos_maximos', 'usos']
+        # Los usos los cuenta el checkout, no el admin
+        read_only_fields = ['usos']
+
+    def validate(self, attrs):
+        # Las reglas están en domain/promociones.py; en una edición parcial se completan con lo guardado
+        campos = ('codigo', 'tipo_descuento', 'valor_descuento', 'umbral_envio_gratis', 'monto_minimo', 'automatica',
+                  'usos_maximos')
+        datos = {campo: attrs.get(campo, getattr(self.instance, campo, None)) for campo in campos}
+        try:
+            codigo = validar_promocion(**datos)
+        except PromocionInvalida as error:
+            raise serializers.ValidationError(error.errores)
+        # El comprador escribe el código sin distinguir mayúsculas: dos que solo difieren en eso serían el mismo
+        repetidos = Promocion.objects.filter(codigo__iexact=codigo)
+        if self.instance is not None:
+            repetidos = repetidos.exclude(pk=self.instance.pk)
+        if repetidos.exists():
+            raise serializers.ValidationError({'codigo': 'Ya existe un código igual.'})
+        if 'codigo' in attrs:
+            attrs['codigo'] = codigo
+        return attrs

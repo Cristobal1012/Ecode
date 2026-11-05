@@ -423,6 +423,49 @@
   padding-bottom: 1.05rem;
 }
 
+/* Con datos faltantes se ve menos marcado, pero responde: al apretarlo avisa qué falta */
+.checkout-pagar[aria-disabled="true"] {
+  opacity: 0.75;
+}
+
+.checkout-faltantes ul {
+  margin: 6px 0 0;
+  padding-left: 1.2rem;
+}
+
+/* Logo oficial de la pasarela sobre una placa blanca: se ve igual con cualquier tema del botón */
+.checkout-pagar-logo {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 2rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 4px;
+  background: #FFFFFF;
+}
+
+.checkout-pagar-logo img {
+  display: block;
+  width: auto;
+  height: 100%;
+}
+
+/* El SVG oficial de Mercado Pago trae su propio margen transparente: el dibujo ocupa el 47 % del alto y el 75 % del
+   ancho. No se puede editar (guía de la marca), así que se muestra más grande y ese margen queda fuera de la placa:
+   el dibujo se ve completo y del mismo alto que el de Webpay */
+.checkout-pagar-logo--mercado-pago {
+  overflow: hidden;
+}
+
+.checkout-pagar-logo--mercado-pago img {
+  height: 2.9rem;
+  margin: -0.75rem -0.85rem;
+}
+
+.checkout-pagar-icono {
+  flex-shrink: 0;
+}
+
 /* ---------- Ventana de espera de Mercado Pago ---------- */
 
 .checkout-modal-fondo {

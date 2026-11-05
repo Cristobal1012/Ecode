@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from django.test import SimpleTestCase
 
 from ecommerce.domain.ventas import (
-    EstadoPedido, OrdenTransporteNoPermitida, TelefonoInvalido, TransicionNoPermitida,
-    normalizar_telefono_chile, paginas_legales_faltantes, plazo_pago, transiciones_desde,
+    EstadoPedido, NombreInvalido, OrdenTransporteNoPermitida, TelefonoInvalido, TransicionNoPermitida,
+    normalizar_nombre_persona, normalizar_telefono_chile, paginas_legales_faltantes, plazo_pago, transiciones_desde,
     validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -65,6 +65,19 @@ class TelefonoDestinatarioTests(SimpleTestCase):
         for texto in ('', '12345', '+1 555 123 4567', '012345678', 'no tengo', '+56 9 1234 56789'):
             with self.subTest(texto=texto), self.assertRaises(TelefonoInvalido):
                 normalizar_telefono_chile(texto)
+
+
+class NombrePersonaTests(SimpleTestCase):
+    def test_acepta_nombres_con_tildes_guiones_apostrofos_y_puntos(self):
+        for texto, esperado in (('María José', 'María José'), ("O'Higgins", "O'Higgins"), ('Juan P.', 'Juan P.'),
+                                ('Núñez-Pérez', 'Núñez-Pérez'), ('  Ana   María ', 'Ana María')):
+            with self.subTest(texto=texto):
+                self.assertEqual(normalizar_nombre_persona(texto), esperado)
+
+    def test_rechaza_numeros_simbolos_o_texto_vacio(self):
+        for texto in ('', '   ', '12345', 'Ana2', '<b>Ana</b>', '-Ana', 'Ana_Pérez', '@@@'):
+            with self.subTest(texto=texto), self.assertRaises(NombreInvalido):
+                normalizar_nombre_persona(texto)
 
 
 class GeneracionOrdenTransporteTests(SimpleTestCase):

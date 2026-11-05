@@ -49,6 +49,7 @@ consola. Los pasos para Gmail y Resend están en `README.md` de esta carpeta.
 | Variable | Descripción |
 | :--- | :--- |
 | `MEDIA_ROOT`, `MEDIA_URL` | Ruta y URL de almacenamiento (por defecto `/media/`). La carpeta tiene que estar en un disco persistente. |
+| `ARCHIVOS_PRIVADOS_ROOT` | Carpeta de los archivos que solo ve el admin, como las fotos de las cotizaciones (por defecto `<proyecto>/privado`). Disco persistente, fuera de `MEDIA_ROOT` y **sin publicar** en el servidor web. |
 | `CATALOGO_IMAGEN_MAX_BYTES` | Peso máximo por imagen (ej. `5242880` = 5MB). |
 | `CATALOGO_IMAGEN_MAX_ARCHIVOS`, `CATALOGO_IMAGEN_MAX_GALERIA` | Límites de subida por petición y por galería de producto. |
 | `CATALOGO_IMAGEN_MAX_PIXELES` | Límite de megapíxeles para evitar ataques de descompresión (ej. `20000000`). |
@@ -68,7 +69,8 @@ Vite las lee al compilar (`npm run build`) y quedan dentro del JavaScript public
 
 ## 8. Publicación con Docker (`deploy/tienda.env.example`)
 Además de las anteriores, el archivo de cada tienda lleva las variables del stack de `deploy/docker-compose.yml`.
-`POSTGRES_HOST`, `POSTGRES_PORT`, `MONGO_URI`, `MEDIA_ROOT` y `STATIC_ROOT` las fija el stack: no van en el archivo.
+`POSTGRES_HOST`, `POSTGRES_PORT`, `MONGO_URI`, `MEDIA_ROOT`, `ARCHIVOS_PRIVADOS_ROOT` y `STATIC_ROOT` las fija el
+stack: no van en el archivo.
 
 | Variable | Descripción |
 | :--- | :--- |

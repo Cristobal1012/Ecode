@@ -50,6 +50,19 @@ class ConfigurarMedioPagoTests(SimpleTestCase):
         self.assertEqual(set(error.exception.errores), {'tipo_cuenta', 'clave_banco'})
         self.assertEqual(self.repo.medios, {})
 
+    def test_los_datos_de_la_transferencia_se_validan_porque_el_comprador_los_copia_para_pagar(self):
+        with self.assertRaises(DatosMedioPagoInvalidos) as error:
+            self.caso.ejecutar('TRANSFERENCIA', True, {**DATOS_BANCO, 'rut_titular': '11.111.111-2',
+                                                      'email': 'pagos@', 'numero_cuenta': 'cuenta 12'})
+        self.assertEqual(set(error.exception.errores), {'rut_titular', 'email', 'numero_cuenta'})
+        self.assertEqual(self.repo.medios, {})
+
+    def test_el_rut_el_correo_y_la_cuenta_se_guardan_con_un_formato_uniforme(self):
+        medio = self.caso.ejecutar('TRANSFERENCIA', True, {**DATOS_BANCO, 'rut_titular': '111111111',
+                                                          'email': 'Pagos@Example.TEST', 'numero_cuenta': '000-123  456'})
+        self.assertEqual((medio.datos['rut_titular'], medio.datos['email'], medio.datos['numero_cuenta']),
+                         ('11.111.111-1', 'pagos@example.test', '000-123 456'))
+
 
 class MediosPagoDisponiblesTests(SimpleTestCase):
     """RN-02: solo se ofrecen y aceptan los medios habilitados y configurados."""

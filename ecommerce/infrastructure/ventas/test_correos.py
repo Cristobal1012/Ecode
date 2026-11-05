@@ -48,7 +48,6 @@ class CorreoPedidoRecibidoTests(APITestCase):
             'direccion_envio_snapshot': {'calle': 'Los Olmos', 'numero': '123', 'comuna': 'PROVIDENCIA'},
             'subtotal': 20000,
             'proveedor_logistico': 'CHILEXPRESS',
-            'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
             **DESTINATARIO,
         }

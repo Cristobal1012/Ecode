@@ -111,7 +111,9 @@ const CarritoCompras = () => {
     const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
 
     return (
-        <div className="carrito-compras" ref={carritoRef} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setIsOpen(false); botonRef.current?.focus(); } }}>
+        // Se cierra si el foco pasa a algo fuera del carrito (ej. con Tab). Un blur sin destino no lo cierra: pasa al
+        // deshabilitarse o desaparecer el botón enfocado, y los clics fuera ya los atiende handleClickOutside
+        <div className="carrito-compras" ref={carritoRef} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setIsOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setIsOpen(false); botonRef.current?.focus(); } }}>
             <button
                 ref={botonRef}
                 type="button"
@@ -159,7 +161,9 @@ const CarritoCompras = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => cambiarCantidad(item, -1)}
-                                                disabled={item.cantidad <= 1 || actualizando}
+                                                // aria-disabled y no disabled: el botón conserva el foco (con disabled
+                                                // el foco se perdía al apretarlo); cambiarCantidad ignora el clic
+                                                aria-disabled={item.cantidad <= 1 || actualizando}
                                                 aria-label={`Disminuir cantidad de ${item.nombre}`}
                                             >
                                                 −
@@ -172,7 +176,7 @@ const CarritoCompras = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => cambiarCantidad(item, 1)}
-                                                disabled={actualizando}
+                                                aria-disabled={actualizando}
                                                 aria-label={`Aumentar cantidad de ${item.nombre}`}
                                             >
                                                 +
@@ -183,7 +187,7 @@ const CarritoCompras = () => {
                                             type="button"
                                             className="carrito-quitar"
                                             onClick={() => quitarProducto(item)}
-                                            disabled={actualizando}
+                                            aria-disabled={actualizando}
                                             aria-label={`Quitar ${item.nombre} del carrito`}
                                         >
                                             Quitar

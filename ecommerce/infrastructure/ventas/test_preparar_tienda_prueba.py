@@ -34,7 +34,10 @@ class ComandoPrepararTiendaPruebaTests(TestCase):
         self.assertEqual(MediosPagoDisponibles(DjangoRepositorioMediosPago()).disponibles(),
                          [CodigoMedioPago.TRANSBANK, CodigoMedioPago.TRANSFERENCIA])
         self.assertEqual(MedioPago.objects.get(codigo='TRANSBANK').datos, {'ambiente': 'INTEGRACION'})
-        self.assertIn('PRUEBA', MedioPago.objects.get(codigo='TRANSFERENCIA').datos['numero_cuenta'])
+        # Claramente ficticia: el comprador ve el aviso en el banco y un número de ceros
+        datos_banco = MedioPago.objects.get(codigo='TRANSFERENCIA').datos
+        self.assertIn('PRUEBA', datos_banco['banco'])
+        self.assertEqual(datos_banco['numero_cuenta'], '00000000')
         self.assertEqual(set(PaginaLegal.objects.values_list('tipo_pagina', flat=True)),
                          {'TERMINOS', 'PRIVACIDAD', 'REEMBOLSOS'})
 

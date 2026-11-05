@@ -151,6 +151,19 @@ Copia en `/home/despliegue/.ssh/authorized_keys` las claves públicas del equipo
 `600` el archivo, a nombre de `despliegue`). El SSH queda solo con clave: compruébalo con
 `sudo sshd -T | grep passwordauthentication`, que debe decir `no`.
 
+Si dice `yes` (algunos proveedores lo activan en `/etc/ssh/sshd_config.d/50-cloud-init.conf`), crea un archivo
+que se lea antes que ese, sin editar los del proveedor. SSH usa el primer valor que encuentra:
+
+```bash
+printf '%s\n' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' 'PermitRootLogin prohibit-password' \
+  | sudo tee /etc/ssh/sshd_config.d/00-solo-llave.conf > /dev/null
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+`sshd -t` revisa la configuración antes de aplicarla. **No cierres la sesión** hasta comprobar, desde otra
+terminal, que entras con la clave. Si algo falla, la consola web del proveedor sigue entrando con la contraseña de
+root, porque no pasa por el SSH.
+
 ## 3. Código y variables de cada tienda
 
 Como `despliegue`:

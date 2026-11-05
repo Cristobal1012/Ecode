@@ -2,18 +2,22 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isAdminRoute, isCookieConsentAccepted, suspendTracking } from '../hooks/useCookieConsent';
 
-function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
+// RF-04.4: cada proveedor solo con su categoría aceptada: Google Analytics con 'analitica' y Meta Pixel con
+// 'marketing'. En el panel de administración nunca se carga ninguno.
+function TrackingScripts({ googleAnalyticsId, metaPixelId, analitica = false, marketing = false }) {
   const { pathname, search, key } = useLocation();
-  const allowed = consent === 'accepted' && !isAdminRoute(pathname);
+  const enAdmin = isAdminRoute(pathname);
+  const allowedGa = analitica && !enAdmin;
+  const allowedMeta = marketing && !enAdmin;
   const lastPageView = useRef({ ga: null, meta: null });
 
+  // Google Analytics 4
   useEffect(() => {
-    if (!allowed || !isCookieConsentAccepted()) {
-      suspendTracking();
+    if (!allowedGa || !isCookieConsentAccepted('analitica')) {
+      suspendTracking(['analitica']);
       return;
     }
 
-    // Google Analytics 4
     if (googleAnalyticsId) {
       window[`ga-disable-${googleAnalyticsId}`] = false;
       window.__ecodeGaInitialized ??= [];
@@ -44,8 +48,15 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
         window.__ecodeGaInitialized.push(googleAnalyticsId);
       }
     }
+  }, [allowedGa, googleAnalyticsId]);
 
-    // Meta Pixel
+  // Meta Pixel
+  useEffect(() => {
+    if (!allowedMeta || !isCookieConsentAccepted('marketing')) {
+      suspendTracking(['marketing']);
+      return;
+    }
+
     if (metaPixelId) {
       window.__ecodeMetaPixelInitialized ??= [];
 
@@ -82,17 +93,16 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
         window.fbq('consent', 'grant');
       }
     }
-  }, [allowed, googleAnalyticsId, metaPixelId]);
+  }, [allowedMeta, metaPixelId]);
 
-  // Registrar visitas en la navegación entre páginas de React.
+  // Registrar visitas en la navegación entre páginas de React, en cada proveedor permitido.
   useEffect(() => {
-    if (!allowed || !isCookieConsentAccepted()) return;
-
     const navigation = `${key}:${pathname}${search}`;
     const gaVisit = `${googleAnalyticsId}:${navigation}`;
     const metaVisit = `${metaPixelId}:${navigation}`;
 
     if (
+      allowedGa && isCookieConsentAccepted('analitica') &&
       googleAnalyticsId &&
       window.gtag &&
       window.__ecodeGaInitialized?.includes(googleAnalyticsId) &&
@@ -107,6 +117,7 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
     }
 
     if (
+      allowedMeta && isCookieConsentAccepted('marketing') &&
       metaPixelId &&
       window.fbq &&
       window.__ecodeMetaPixelInitialized?.includes(metaPixelId) &&
@@ -115,7 +126,7 @@ function TrackingScripts({ googleAnalyticsId, metaPixelId, consent }) {
       window.fbq('track', 'PageView');
       lastPageView.current.meta = metaVisit;
     }
-  }, [key, pathname, search, allowed, googleAnalyticsId, metaPixelId]);
+  }, [key, pathname, search, allowedGa, allowedMeta, googleAnalyticsId, metaPixelId]);
 
   return null;
 }

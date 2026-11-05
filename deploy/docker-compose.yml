@@ -71,6 +71,8 @@ services:
         condition: service_healthy
     volumes:
       - media:/app/media
+      # Solo el backend: lo que hay aquí no lo publica el Caddy de la tienda (ej. las fotos de las cotizaciones)
+      - privado:/app/privado
     healthcheck:
       test: ["CMD", "python", "deploy/salud.py"]
       interval: 30s
@@ -103,5 +105,6 @@ volumes:
   postgres:
   mongo:
   media:
+  privado:
   caddy_datos:
   caddy_config:

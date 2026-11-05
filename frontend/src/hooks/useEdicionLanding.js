@@ -10,7 +10,9 @@ export const CAMPOS_TEXTO = {
   texto_landing: { etiqueta: 'Texto de la portada', maximo: 1000 },
   texto_boton_ingreso: { etiqueta: 'Texto del botón', maximo: 100, obligatorio: true },
   nosotros_titulo: { etiqueta: 'Título de Nosotros', maximo: 120 },
-  nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 }
+  nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 },
+  // RN-01: dónde va el logo de la Universidad: 'HEADER' (o vacío) o 'FOOTER'; no hay opción para ocultarlo
+  ubicacion_logo_universidad: { etiqueta: 'Logo de la Universidad' }
 };
 
 // Fotos de la sección de Instagram: 6 espacios fijos (el usuario se configura en el panel)

@@ -7,11 +7,11 @@ from decimal import Decimal
 from enum import StrEnum
 import logging
 
-from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte
+from ecommerce.domain.logistica import EnvioSolicitado, ErrorOrdenTransporte, Paquete, paquete_de_envio
 from ecommerce.domain.medios_pago import CodigoMedioPago
 from ecommerce.domain.ventas import (
     ESTADOS_PAGADOS, EstadoPedido, EventoPedido, ItemSolicitado, LineaPedido, LineaRevisada, OrdenRegistrada,
-    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo,
+    OrdenTransporteNoPermitida, PedidoVacio, SubtotalDesactualizado, VarianteCatalogo, VarianteNoDisponible,
     armar_linea, revisar_linea, validar_generacion_orden_transporte, validar_transicion,
 )
 
@@ -52,6 +52,27 @@ class PrepararPedido:
         if subtotal != Decimal(subtotal_informado):
             raise SubtotalDesactualizado(subtotal, lineas)
         return PedidoPreparado(lineas=lineas, subtotal=subtotal)
+
+
+class PaqueteDelPedido:
+    """RF-02.3: el paquete que se cotiza y se despacha, con el peso y las medidas del catálogo.
+
+    El checkout y la cotización usan este, no el que mande el navegador (ver `paquete_de_envio`).
+    """
+
+    def __init__(self, catalogo: CatalogoVariantes):
+        self.catalogo = catalogo
+
+    def ejecutar(self, items: list[ItemSolicitado]) -> Paquete:
+        if not items:
+            raise PedidoVacio()
+        unidades = []
+        for item in agrupar_por_sku(items):
+            variante = self.catalogo.obtener(item.producto_id, item.sku)
+            if variante is None or not variante.disponible:
+                raise VarianteNoDisponible(item.sku)
+            unidades.append((variante.medidas, item.cantidad))
+        return paquete_de_envio(unidades)
 
 
 def agrupar_por_sku(items: list[ItemSolicitado]) -> list[ItemSolicitado]:

@@ -10,24 +10,29 @@ from .images import (
 )
 
 class VarianteSerializer(serializers.Serializer):
-    sku = serializers.CharField()
+    sku = serializers.CharField(max_length=64)
     precio = serializers.DecimalField(max_digits=10, decimal_places=2)
     precio_oferta = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
-    stock = serializers.IntegerField(default=0)
+    # RN-03: el stock nunca es negativo; con 0 la variante no se vende
+    stock = serializers.IntegerField(default=0, min_value=0)
     imagen_especifica = ReferenciaImagenField(required=False, allow_blank=True, allow_null=True)
     atributos_variables = serializers.DictField(required=False, default=dict)
-    
-    # --- NUEVOS CAMPOS LOGÍSTICOS ---
-    peso_kg = serializers.FloatField(required=False, default=1.0)
-    alto_cm = serializers.IntegerField(required=False, default=10)
-    ancho_cm = serializers.IntegerField(required=False, default=10)
-    largo_cm = serializers.IntegerField(required=False, default=10)
+
+    # Peso y medidas de una unidad: con ellos el servidor arma el paquete del envío (domain/logistica.py)
+    peso_kg = serializers.FloatField(required=False, default=1.0, min_value=0.01, max_value=1000)
+    alto_cm = serializers.IntegerField(required=False, default=10, min_value=1, max_value=1000)
+    ancho_cm = serializers.IntegerField(required=False, default=10, min_value=1, max_value=1000)
+    largo_cm = serializers.IntegerField(required=False, default=10, min_value=1, max_value=1000)
 
     def validate(self, attrs):
         precio = attrs.get('precio')
         precio_oferta = attrs.get('precio_oferta')
         if precio is not None and precio <= 0:
             raise serializers.ValidationError({"precio": "El precio debe ser mayor a cero."})
+        # Pesos chilenos: sin decimales (el checkout y Transbank cobran montos enteros)
+        for campo, valor in (('precio', precio), ('precio_oferta', precio_oferta)):
+            if valor is not None and valor != valor.to_integral_value():
+                raise serializers.ValidationError({campo: "El precio va en pesos, sin decimales."})
         if precio_oferta is not None:
             if precio_oferta <= 0:
                 raise serializers.ValidationError({"precio_oferta": "El precio de oferta debe ser mayor a cero."})
@@ -41,7 +46,7 @@ class ProductoSerializer(serializers.Serializer):
     descripcion = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     meta_titulo = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
     meta_descripcion = serializers.CharField(max_length=160, required=False, allow_blank=True, allow_null=True)
-    categoria = serializers.CharField()
+    categoria = serializers.CharField(max_length=100)
     imagenes = serializers.ListField(child=ReferenciaImagenField(), required=False)
     
     fecha_creacion = serializers.DateTimeField(read_only=True)

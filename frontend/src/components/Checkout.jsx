@@ -4,8 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito, vaciarCarrito, validarCarrito } from './carrito';
 import useCarrito from '../hooks/useCarrito';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
+import { cumpleMinimo, daEnvioGratis, elegirDescuento, montoDescuento, siguienteAutomatico } from '../utils/descuentos';
+import { soloCaracteresDeTelefono } from '../utils/telefono';
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
+import LogoMedioPago from './LogoMedioPago';
 import Header from './header/header';
 import Dialogo from './Dialogo';
 import { Bloque, Cargando } from './carga/Esqueleto';
@@ -24,21 +27,15 @@ const NOMBRES_TIPO_DESPACHO = {
     ENTREGA_COORDINADA: 'Entrega coordinada',
 };
 
-const calcularCajaDeEnvio = (items) => {
-    let pesoTotal = 0, volumenTotal = 0, ladoMasLargo = 0;
-    items.forEach(item => {
-        const peso = parseFloat(item.peso_kg) || 0.1;
-        const alto = parseInt(item.alto_cm, 10) || 10;
-        const ancho = parseInt(item.ancho_cm, 10) || 10;
-        const largo = parseInt(item.largo_cm, 10) || 10;
-        pesoTotal += peso * item.cantidad;
-        volumenTotal += alto * ancho * largo * item.cantidad;
-        ladoMasLargo = Math.max(ladoMasLargo, alto, ancho, largo);
-    });
-    return { peso: Number(pesoTotal.toFixed(2)), lado: Math.max(10, ladoMasLargo, Math.ceil(Math.cbrt(volumenTotal))) };
-};
+// Lo que el servidor necesita de cada producto: el peso y las medidas del paquete los toma del catálogo
+const itemsParaElServidor = (items) => items.map(item => ({
+    producto_mongo_id: item.id, variante_sku: item.sku, cantidad: item.cantidad,
+}));
 
 // Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
+// Lo mínimo para avisar antes de pagar; el servidor lo valida de verdad (EmailField)
+const CORREO_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 const NOMBRES_MEDIO_PAGO = {
     TRANSBANK: 'Webpay (Transbank)',
     MERCADO_PAGO: 'Mercado Pago',
@@ -129,11 +126,13 @@ function CheckoutContenido() {
     const [pasarelas, setPasarelas] = useState([]);
     const [cargandoPagos, setCargandoPagos] = useState(true);
 
-    // Vista previa del cupón ({ tipo, valor, codigo }) y el código que se envía al checkout
-    const [descuentoAplicado, setDescuentoAplicado] = useState(null);
-    const [codigoValidado, setCodigoValidado] = useState(null);
-    const [umbralEnvioGratis, setUmbralEnvioGratis] = useState(null);
+    // RF-04.1: el código que escribió el comprador (su regla, como la valida el servidor) y los descuentos automáticos.
+    // No se suman: se muestra el que más ahorra, con el mismo cálculo que hace el servidor al pagar
+    const [codigoEscrito, setCodigoEscrito] = useState(null);
+    const [automaticos, setAutomaticos] = useState([]);
     const [codigoInput, setCodigoInput] = useState('');
+    // El comprador intentó pagar con datos faltantes: desde ahí se muestra junto a los botones qué le falta
+    const [intentoPagar, setIntentoPagar] = useState(false);
     const [resultadoCotizacion, setResultadoCotizacion] = useState({ clave: null, opciones: [], error: '' });
     // RF-04.4: consentimiento obligatorio, desmarcado por defecto
     const [aceptaTerminos, setAceptaTerminos] = useState(false);
@@ -198,6 +197,13 @@ function CheckoutContenido() {
         }, 3000);
         return () => clearInterval(interval);
     }, [esperandoPago?.ordenId, verificarEstadoOrden]);
+
+    // Los descuentos automáticos vigentes (sin sus códigos); si falla, el checkout sigue sin la vista previa
+    useEffect(() => {
+        clienteAxios.get('ventas/promociones/automaticas/')
+            .then(({ data }) => setAutomaticos(Array.isArray(data) ? data : []))
+            .catch(() => setAutomaticos([]));
+    }, []);
 
     // Verificación de orden pendiente al cargar la página
     useEffect(() => {
@@ -371,11 +377,10 @@ function CheckoutContenido() {
     useEffect(() => {
         if (!claveCotizacion) return;
         const [tipo, destino, items, proveedor] = JSON.parse(claveCotizacion);
-        const medidas = calcularCajaDeEnvio(items);
         let vigente = true;
         const controller = new AbortController();
         clienteAxios.post('ventas/logistica/cotizar/', {
-            destino, peso: medidas.peso, alto: medidas.lado, ancho: medidas.lado, largo: medidas.lado,
+            destino, items: itemsParaElServidor(items),
             ...(proveedor ? { proveedor } : {}),
         }, { signal: controller.signal })
             .then(({ data }) => {
@@ -414,8 +419,6 @@ function CheckoutContenido() {
     const opcionesEntrega = opcionEntregaPropia ? (opcionEntregaSeleccionada ? [opcionEntregaSeleccionada] : [])
         : opcionesCourier;
     const costoEnvio = Number(opcionEntregaSeleccionada?.costo_envio || 0);
-    const medidasCaja = calcularCajaDeEnvio(itemsCarrito);
-    const cajaCalculada = { peso_kg: String(medidasCaja.peso), alto_cm: String(medidasCaja.lado), ancho_cm: String(medidasCaja.lado), largo_cm: String(medidasCaja.lado) };
     const mensajeVisible = mensaje || cotizacionVigente?.error || '';
 
 
@@ -423,22 +426,14 @@ function CheckoutContenido() {
 
     const compraComoInvitado = modoAutenticacion === 'INVITADO' || (modoAutenticacion === 'MIXTO' && opcionCompra === 'INVITADO');
     const subtotal = itemsCarrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
-    let montoDescuento = 0;
-    if (descuentoAplicado) {
-        if (descuentoAplicado.tipo === 'PORCENTAJE') {
-            montoDescuento = subtotal * (descuentoAplicado.valor / 100);
-        } else if (descuentoAplicado.tipo === 'MONTO_FIJO') {
-            montoDescuento = descuentoAplicado.valor;
-        }
-    }
-
-    const tieneEnvioGratisCupon = Boolean(
-        codigoValidado &&
-        umbralEnvioGratis !== null &&
-        subtotal >= umbralEnvioGratis
-    );
+    const descuentoElegido = elegirDescuento(codigoEscrito ? [codigoEscrito, ...automaticos] : automaticos,
+        subtotal, costoEnvio);
+    const montoDescontado = descuentoElegido ? montoDescuento(descuentoElegido, subtotal) : 0;
+    const tieneEnvioGratisCupon = Boolean(descuentoElegido && daEnvioGratis(descuentoElegido, subtotal));
+    // "Te faltan $X": el automático más cercano que todavía no se alcanza
+    const proximoAutomatico = siguienteAutomatico(automaticos, subtotal);
     const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
-    const totalFinal = Math.max(0, subtotal - montoDescuento) + costoEnvioFinal;
+    const totalFinal = Math.max(0, subtotal - montoDescontado) + costoEnvioFinal;
 
     // El cupón se valida en el servidor (vigencia incluida) y su código viaja en el checkout, donde el
     // servidor vuelve a validarlo y lo descuenta del total: lo que se muestra aquí es solo una vista previa
@@ -447,24 +442,75 @@ function CheckoutContenido() {
         if (!codigo) return;
 
         try {
-            const respuesta = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
-            const umbral = respuesta.data.umbral_envio_gratis;
-
-            setDescuentoAplicado({
-                tipo: respuesta.data.tipo_descuento,
-                valor: Number(respuesta.data.valor_descuento),
-                codigo: respuesta.data.codigo
-            });
-            setCodigoValidado(respuesta.data.codigo);
-            setUmbralEnvioGratis(umbral === null || umbral === undefined ? null : Number(umbral));
-            setMensaje('¡Código aplicado con Éxito!');
+            const { data } = await clienteAxios.post('ventas/promociones/validar/', { codigo, subtotal });
+            const regla = {
+                codigo: data.codigo, tipo_descuento: data.tipo_descuento, valor_descuento: data.valor_descuento,
+                monto_minimo: data.monto_minimo, umbral_envio_gratis: data.umbral_envio_gratis,
+            };
+            setCodigoEscrito(regla);
+            // No se suman: si un descuento automático ahorra más, se queda ese y se avisa
+            setMensaje(elegirDescuento([regla, ...automaticos], subtotal, costoEnvio) === regla
+                ? '¡Código aplicado con Éxito!'
+                : 'Tu compra ya tiene un descuento mayor, así que se aplica ese (los descuentos no se suman).');
         } catch (error) {
-            setDescuentoAplicado(null);
-            setCodigoValidado(null);
-            setUmbralEnvioGratis(null);
+            setCodigoEscrito(null);
             setMensaje(error.response?.data?.error || 'Código inválido o expirado.');
         }
     };
+    // Lo que falta para pagar, en el orden del formulario: { texto, selector del campo a enfocar }
+    const faltantesParaPagar = () => {
+        const faltan = [];
+        const agregar = (texto, selector) => faltan.push({ texto, selector });
+        if (itemsCarrito.length === 0) agregar('agregar productos al carrito', null);
+        if (!usuarioAutenticado && compraComoInvitado) {
+            if (!emailInvitado.trim()) agregar('tu correo electrónico', '#checkout-email');
+            else if (!CORREO_VALIDO.test(emailInvitado.trim())) agregar('un correo electrónico válido', '#checkout-email');
+        }
+        if (!nombreDestinatario.trim()) agregar('el nombre de quien recibe', '#checkout-destinatario');
+        if (!telefonoDestinatario.trim()) agregar('el teléfono de contacto', '#checkout-telefono');
+        if (compraEmpresa) {
+            const errores = validarDatosEmpresa(datosEmpresa);
+            const primero = Object.keys(errores)[0];
+            if (primero) agregar('los datos de la empresa para la factura', `#checkout-empresa-${primero}`);
+        }
+        if (tipoDespacho === 'SUCURSAL') {
+            if (!comunaSucursal) agregar('la comuna de la sucursal', '#checkout-comuna-sucursal');
+            else if (!sucursalSeleccionada) agregar('la sucursal donde retiras', 'input[name="sucursal"]');
+        } else if ((tipoDespacho === 'DOMICILIO' || direccionOpcional) && direccionSeleccionadaId === 'nueva') {
+            // La entrega coordinada puede ir sin dirección; si se escribe, con calle y comuna
+            const escribioAlgo = [calle, numero, comuna].some(valor => valor.trim());
+            if (!direccionOpcional || escribioAlgo) {
+                if (!calle.trim()) agregar('la calle', '#checkout-calle');
+                if (!direccionOpcional && !numero.trim()) agregar('el número', '#checkout-numero');
+                if (!comuna.trim()) agregar('la comuna', '#checkout-comuna');
+                if (!direccionOpcional && !ciudad.trim()) agregar('la ciudad', '#checkout-ciudad');
+            }
+        }
+        if (!opcionEntregaSeleccionada && !cotizando && faltan.every(f => !f.selector?.startsWith('#checkout-comuna'))) {
+            agregar('una forma de entrega con costo calculado', 'input[name="tipo-despacho"]');
+        }
+        if (!aceptaTerminos) agregar('aceptar los Términos y Condiciones y la Política de Privacidad', '#checkout-terminos');
+        return faltan;
+    };
+    const faltantes = faltantesParaPagar();
+
+    // Con datos faltantes el botón no paga: avisa qué falta junto a los botones y lleva al primer campo
+    const intentarPagar = (metodoSeleccionado) => {
+        if (faltantes.length === 0) {
+            setIntentoPagar(false);
+            procesarPago(metodoSeleccionado);
+            return;
+        }
+        setIntentoPagar(true);
+        if (compraEmpresa) setErroresEmpresa(validarDatosEmpresa(datosEmpresa));
+        const primero = faltantes.find(f => f.selector)?.selector;
+        const campo = primero && document.querySelector(primero);
+        if (campo) {
+            campo.focus({ preventScroll: true });
+            campo.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }
+    };
+
     const procesarPago = async (metodoSeleccionado) => {
         const snapshotPedido = leerSnapshotCarrito();
         if (itemsCarrito.length === 0) return setMensaje('Tu carrito está vacío.');
@@ -547,11 +593,11 @@ function CheckoutContenido() {
             subtotal, 
             costo_envio: costoEnvioFinal, 
             total_final: totalFinal,
-            proveedor_logistico: opcionEntregaSeleccionada.proveedor, 
-            paquete: opcionEntregaPropia ? undefined : cajaCalculada,
+            proveedor_logistico: opcionEntregaSeleccionada.proveedor,
             acepta_terminos: aceptaTerminos,
-            codigo_promocion: codigoValidado,
-            items: itemsCarrito.map(item => ({ producto_mongo_id: item.id, variante_sku: item.sku, nombre_producto_snapshot: item.nombre, precio_unitario_snapshot: item.precio, cantidad: item.cantidad }))
+            // El servidor vuelve a validar el código y elige el descuento; bajo su mínimo, el código no se envía
+            codigo_promocion: codigoEscrito && cumpleMinimo(codigoEscrito, subtotal) ? codigoEscrito.codigo : null,
+            items: itemsParaElServidor(itemsCarrito)
         };
         try {
             const respuesta = await clienteAxios.post('ventas/checkout/', payload);
@@ -692,7 +738,7 @@ function CheckoutContenido() {
                         </div>
                         <div className="checkout-campo">
                             <label htmlFor="checkout-telefono">Teléfono de contacto</label>
-                            <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(e.target.value)} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" />
+                            <input id="checkout-telefono" type="tel" inputMode="tel" autoComplete="tel" maxLength={30} value={telefonoDestinatario} onChange={(e) => setTelefonoDestinatario(soloCaracteresDeTelefono(e.target.value))} required aria-describedby="checkout-telefono-ayuda" placeholder="+56 9 1234 5678" />
                             <p id="checkout-telefono-ayuda" className="checkout-ayuda">
                                 Teléfono chileno de 9 dígitos. Lo usamos solo para coordinar la entrega.
                             </p>
@@ -778,16 +824,16 @@ function CheckoutContenido() {
                                         <div className="checkout-fila">
                                             <div className="checkout-campo checkout-campo--ancho">
                                                 <label htmlFor="checkout-calle">Calle</label>
-                                                <input id="checkout-calle" type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
+                                                <input id="checkout-calle" maxLength={255} type="text" value={calle} onChange={(e) => setCalle(e.target.value)} required={!direccionOpcional} placeholder="Ej: Av. Providencia" />
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-numero">Número</label>
-                                                <input id="checkout-numero" type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
+                                                <input id="checkout-numero" maxLength={50} type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         <div className="checkout-campo">
                                             <label htmlFor="checkout-dpto">Dpto, Casa o Referencia (Opcional)</label>
-                                            <input id="checkout-dpto" type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} placeholder="Ej: Depto 505" />
+                                            <input id="checkout-dpto" maxLength={100} type="text" value={dptoCasa} onChange={(e) => setDptoCasa(e.target.value)} placeholder="Ej: Depto 505" />
                                         </div>
                                         <div className="checkout-fila">
                                             <div className="checkout-campo">
@@ -798,12 +844,12 @@ function CheckoutContenido() {
                                                         {listaComunas.map(c => <option key={c} value={c}>{c}</option>)}
                                                     </select>
                                                 ) : (
-                                                    <input id="checkout-comuna" type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
+                                                    <input id="checkout-comuna" maxLength={100} type="text" autoComplete="address-level2" value={comuna} onChange={(e) => setComuna(e.target.value)} required={!direccionOpcional} placeholder="Ej: Ñuñoa" />
                                                 )}
                                             </div>
                                             <div className="checkout-campo">
                                                 <label htmlFor="checkout-ciudad">Ciudad</label>
-                                                <input id="checkout-ciudad" type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
+                                                <input id="checkout-ciudad" maxLength={100} type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} required={!direccionOpcional} />
                                             </div>
                                         </div>
                                         {usuarioAutenticado && (
@@ -925,10 +971,11 @@ function CheckoutContenido() {
                     <div className="checkout-totales">
                         <div className="checkout-total-linea"><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
 
-                        {montoDescuento > 0 && (
+                        {montoDescontado > 0 && (
                             <div className="checkout-total-linea checkout-total-linea--descuento">
-                                <span>Descuento {descuentoAplicado?.codigo ? `(${descuentoAplicado.codigo})` : ''}:</span>
-                                <span>-${Math.round(montoDescuento).toLocaleString('es-CL')}</span>
+                                {/* Un automático no muestra su código: no se escribe y no debe circular */}
+                                <span>Descuento {descuentoElegido?.codigo ? `(${descuentoElegido.codigo})` : '(automático)'}:</span>
+                                <span>-${Math.round(montoDescontado).toLocaleString('es-CL')}</span>
                             </div>
                         )}
 
@@ -949,13 +996,28 @@ function CheckoutContenido() {
                         </div>
 
                         <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+                        {proximoAutomatico && subtotal > 0 && (
+                            <p className="checkout-ayuda" role="status">
+                                Agrega ${(Number(proximoAutomatico.monto_minimo) - subtotal).toLocaleString('es-CL')} más y obtén{' '}
+                                {proximoAutomatico.tipo_descuento === 'PORCENTAJE'
+                                    ? `un ${Number(proximoAutomatico.valor_descuento)}% de descuento`
+                                    : `$${Number(proximoAutomatico.valor_descuento).toLocaleString('es-CL')} de descuento`}.
+                            </p>
+                        )}
                     </div>
 
                     {/* RF-04.4: sin aceptar los términos no se puede pagar (el backend también lo valida) */}
                     <label className="checkout-casilla checkout-terminos">
-                        <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required />
+                        <input id="checkout-terminos" type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} required />
                         <span>Acepto los {enlaceLegal('TERMINOS', 'Términos y Condiciones')} y la {enlaceLegal('PRIVACIDAD', 'Política de Privacidad')}.</span>
                     </label>
+
+                    {intentoPagar && faltantes.length > 0 && (
+                        <div id="checkout-faltantes" role="alert" className="checkout-aviso checkout-aviso--error checkout-faltantes">
+                            <strong>Para pagar, completa:</strong>
+                            <ul>{faltantes.map(f => <li key={f.texto}>{f.texto}</li>)}</ul>
+                        </div>
+                    )}
 
                     <div className="checkout-pagos">
                         {cargandoPagos ? (
@@ -968,18 +1030,19 @@ function CheckoutContenido() {
                         ) : pasarelas.length === 0 ? (
                             <p className="checkout-aviso checkout-aviso--error">No hay métodos de pago configurados en la tienda.</p>
                         ) : (
-                            pasarelas.map(pasarela => {
-                                const validadoParaPagar = aceptaTerminos && nombreDestinatario.trim() && telefonoDestinatario.trim() && itemsCarrito.length > 0 && !cotizando && opcionEntregaSeleccionada && (tipoDespacho === 'DOMICILIO' || tipoDespacho === 'RETIRO_LOCAL' || tipoDespacho === 'ENTREGA_COORDINADA' || (tipoDespacho === 'SUCURSAL' && sucursalSeleccionada));
-                                const habilitado = validadoParaPagar && !procesandoPago;
-                                return (
-                                    <button
-                                        key={pasarela} type="button" onClick={() => procesarPago(pasarela)} disabled={!habilitado || Boolean(esperandoPago)}
+                            pasarelas.map(pasarela => (
+                                // Se deshabilita solo mientras procesa o cotiza: con datos faltantes el clic avisa qué falta
+                                <button
+                                        key={pasarela} type="button" onClick={() => intentarPagar(pasarela)}
+                                        disabled={procesandoPago || cotizando || Boolean(esperandoPago)}
+                                        aria-disabled={faltantes.length > 0 || undefined}
+                                        aria-describedby={intentoPagar && faltantes.length > 0 ? 'checkout-faltantes' : undefined}
                                         className="boton boton-primario checkout-pagar"
                                     >
-                                        {procesandoPago && <Spinner />}{procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
+                                        {procesandoPago ? <Spinner /> : <LogoMedioPago codigo={pasarela} />}
+                                        {procesandoPago ? 'Procesando pedido...' : `Pagar con ${NOMBRES_MEDIO_PAGO[pasarela] || pasarela}`}
                                     </button>
-                                );
-                            })
+                            ))
                         )}
                     </div>
                 </aside>

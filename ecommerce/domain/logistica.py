@@ -1,7 +1,9 @@
 """Logística (RF-02.3): entregas de la tienda y lo común a los couriers, sin HTTP, Django ni un courier fijo."""
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+import math
+import unicodedata
 
 from .medios_pago import enmascarar
 
@@ -12,6 +14,48 @@ class Paquete:
     alto_cm: Decimal
     ancho_cm: Decimal
     largo_cm: Decimal
+
+
+def clave_comuna(nombre) -> str:
+    """Para comparar comunas: sin tildes, con la Ñ como N, en mayúsculas y con un espacio entre palabras.
+
+    Los couriers escriben 'NUNOA' o 'MAIPU' y la tienda puede escribir 'Ñuñoa' o 'Maipú': son la misma comuna.
+    """
+    sin_tildes = unicodedata.normalize('NFKD', str(nombre or '')).encode('ascii', 'ignore').decode()
+    return ' '.join(sin_tildes.upper().split())
+
+
+@dataclass(frozen=True)
+class MedidasEnvio:
+    """Peso y medidas de una unidad de una variante, como las carga el admin; sin cargar, las del catálogo."""
+    peso_kg: Decimal = Decimal('1')
+    alto_cm: Decimal = Decimal('10')
+    ancho_cm: Decimal = Decimal('10')
+    largo_cm: Decimal = Decimal('10')
+
+
+# Lo mínimo que se declara si una variante tiene un valor vacío o en cero
+PESO_MINIMO_KG = Decimal('0.1')
+LADO_MINIMO_CM = 10
+
+
+def paquete_de_envio(unidades: list[tuple[MedidasEnvio, int]]) -> Paquete:
+    """RF-02.3: la caja con todo el pedido, que se cotiza y se despacha. La arma el servidor con las medidas del
+    catálogo, nunca con las del navegador: si no, se podría declarar menos peso para pagar menos envío.
+
+    Pesa la suma de los productos y es un cubo con su volumen total, de al menos el lado más largo de un producto
+    y 10 cm.
+    """
+    peso, volumen, lado_mas_largo = Decimal('0'), 0, 0
+    for medidas, cantidad in unidades:
+        peso += (medidas.peso_kg if medidas.peso_kg > 0 else PESO_MINIMO_KG) * cantidad
+        lados = [int(lado) if lado > 0 else LADO_MINIMO_CM
+                 for lado in (medidas.alto_cm, medidas.ancho_cm, medidas.largo_cm)]
+        volumen += math.prod(lados) * cantidad
+        lado_mas_largo = max(lado_mas_largo, *lados)
+    # La potencia 1/3 no es exacta: para 27.000 cm³ da 30,000000000000004, que sin redondear subiría a 31
+    lado = Decimal(max(LADO_MINIMO_CM, lado_mas_largo, math.ceil(round(volumen ** (1 / 3), 9))))
+    return Paquete(peso.quantize(Decimal('0.01'), ROUND_HALF_UP), lado, lado, lado)
 
 
 class ErrorOrdenTransporte(Exception):

@@ -58,6 +58,35 @@
   text-decoration: underline;
 }
 
+/* "Configurar": una casilla por categoría, desmarcada por defecto */
+.cookie-banner__categorias {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.cookie-banner__categoria {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.cookie-banner__categoria input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.cookie-banner__detalle {
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .cookie-banner__actions {
   display: flex;
   flex-wrap: wrap;

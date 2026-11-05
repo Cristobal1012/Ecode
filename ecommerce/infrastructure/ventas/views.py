@@ -16,12 +16,13 @@ from rest_framework.permissions import AllowAny
 
 from django.utils import timezone
 import logging
+import math
 import os
 import hmac
 import hashlib
 import json
 import base64
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import FileResponse, HttpResponseRedirect, HttpResponse
 from dataclasses import asdict
 from decimal import Decimal
 from math import ceil
@@ -31,7 +32,7 @@ from ecommerce.application.couriers import (
 )
 from ecommerce.domain.logistica import (
     ENTREGA_COORDINADA, ENTREGAS_DE_LA_TIENDA, ESTADO_NO_DISPONIBLE, NOMBRES_ENTREGAS_DE_LA_TIENDA, CourierNoDisponible,
-    CredencialesInvalidas, ErrorOrdenTransporte, Paquete, SinCobertura, aviso_entrega_coordinada,
+    CredencialesInvalidas, ErrorOrdenTransporte, SinCobertura, aviso_entrega_coordinada,
     es_entrega_con_courier, estado_entrega_de_la_tienda,
 )
 from ecommerce.infrastructure.usuarios.permissions import IsEmprendedor, IsAdministrador
@@ -50,6 +51,7 @@ from ecommerce.application.cotizaciones import (
 from ecommerce.application.documentos_tributarios import (
     PedidoNoEncontrado as PedidoParaDocumentarNoEncontrado, RegistrarFolio, SinDocumentoPorRegistrar,
 )
+from ecommerce.application.dashboard import ETIQUETAS_CAUSA_CANCELACION, ResumenDashboard, TareasPendientes
 from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.application.pagos import (
     AplicarResultadoPago, ConciliarPagoOrden, ErrorPasarelaPago, FirmaAvisoInvalida, ProcesarAvisoPago,
@@ -58,22 +60,30 @@ from ecommerce.application.resenas import (
     EnviarResena, ModerarResena, PedidoNoEncontrado, PrepararFormularioResena, ResenaNoEncontrada,
     ResenasDeLaTienda, ResenasDeProducto, ResenasDesactivadas,
 )
+from ecommerce.domain.dashboard import PeriodoInvalido, resolver_periodo
 from ecommerce.domain.documentos_tributarios import FolioInvalido
 from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalidos, EstadoPago
-from ecommerce.domain.ventas import ESTADOS_PAGADOS, EstadoPedido, OrdenTransporteNoPermitida, TransicionNoPermitida
+from ecommerce.domain.ventas import (
+    ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
+    TransicionNoPermitida,
+)
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
-from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoInventarioVariantes, MongoNombresProductos
+from ecommerce.infrastructure.catalogo.repositorio_variantes import (
+    MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo, fotos_de_variantes,
+)
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
 from .models import (
-    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, PaginaLegal,
-    Promocion, Publicacion, Resena,
+    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
+    PaginaLegal, Promocion, Publicacion, Resena,
 )
+from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
+from .repositorio_dashboard import DjangoMetricasVentas, DjangoPendientesTienda
 from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
@@ -90,6 +100,7 @@ from .serializers import (
     PaginaLegalSerializer,
     PaginaLegalDetalleSerializer,
     PaginaLegalAdminSerializer,
+    FotosCotizacionSerializer,
     FotosPublicacionSerializer,
     PublicacionAdminSerializer,
     PublicacionDetalleSerializer,
@@ -97,11 +108,17 @@ from .serializers import (
     PublicacionResumenSerializer,
     MedioPagoAdminSerializer,
     CredencialesCourierSerializer,
+    comuna_origen_tienda,
     couriers,
     courier_para_panel,
     medio_pago_para_panel,
     medios_pago,
+    mensaje_monto_minimo,
+    paquete_del_pedido,
+    promociones_automaticas_vigentes,
+    regla_de_promocion,
 )
+from ecommerce.domain.promociones import cumple_minimo, monto_descuento
 from .adapters.correo import CorreoNotificadorCotizaciones, CorreoNotificadorPedidos
 from .repositorio_cotizaciones import DjangoRepositorioCotizaciones
 from .repositorio_documentos import DjangoPedidosDocumentos, filtro_documento_pendiente, modelo_emision_tienda
@@ -200,8 +217,9 @@ class PaginacionPedidos(PageNumberPagination):
 
 
 class AdminOrdenCompraListView(generics.ListAPIView):
-    """GET ?estado=PAGADO&requiere_revision=true&documento=pendiente&pagina=N: los pedidos del panel, los más
-    recientes primero. documento=pendiente deja los que tienen boleta, factura o nota de crédito por emitir."""
+    """GET ?estado=PAGADO&requiere_revision=true&documento=pendiente&orden_transporte=error&pagina=N: los pedidos del
+    panel, los más recientes primero. documento=pendiente deja los que tienen boleta, factura o nota de crédito por
+    emitir; orden_transporte=error, los que esperan su orden de transporte y fallaron al generarla."""
     serializer_class = AdminOrdenCompraSerializer
     permission_classes = [IsAdministrador]
     pagination_class = PaginacionPedidos
@@ -222,6 +240,9 @@ class AdminOrdenCompraListView(generics.ListAPIView):
             ordenes = ordenes.filter(requiere_revision=True)
         if self.request.query_params.get('documento') == 'pendiente':
             ordenes = ordenes.filter(filtro_documento_pendiente(self.modelo_emision))
+        if self.request.query_params.get('orden_transporte') == 'error':
+            ordenes = ordenes.filter(estado__in=[e.value for e in ESTADOS_CON_ORDEN_TRANSPORTE]).exclude(
+                error_orden_transporte='')
         return ordenes
 
 
@@ -675,49 +696,36 @@ class VerificarEstadoPagoView(APIView):
 
 
 class CotizacionEnvioView(APIView):
-    """
-    Endpoint para cotizar despachos desde el frontend en React.
-    Espera un POST con los detalles del paquete y destino.
+    """POST {destino, items, proveedor?}: el costo del envío por courier que ve el comprador (RF-02.3).
+
+    Es la misma cotización que cobra el checkout: el paquete lo arma el servidor con las medidas del catálogo y el
+    origen es la comuna de la tienda. Peso, medidas u origen enviados por el navegador se ignoran.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        datos = request.data
-        
-        # Validamos que venga al menos el destino
-        destino = datos.get('destino')
+        destino = request.data.get('destino')
         if not destino:
             return Response(
-                {"error": "El código de comuna de destino es obligatorio."}, 
+                {"error": "El código de comuna de destino es obligatorio."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-        # Extraemos los datos enviados por React y forzamos el tipo de dato numérico
-        origen = datos.get('origen', 'SANTIAGO') 
+        # Los mismos productos que el carrito: hasta 100 líneas con su cantidad
+        entrada = RevisionCarritoSerializer(data=request.data)
+        if not entrada.is_valid():
+            return Response({"error": "Indica los productos del carrito que se van a enviar."},
+                            status=status.HTTP_400_BAD_REQUEST)
         try:
-            peso = float(datos.get('peso', 1.0))
-            alto = int(datos.get('alto', 15))
-            ancho = int(datos.get('ancho', 15))
-            largo = int(datos.get('largo', 15))
-        except (ValueError, TypeError):
-            return Response(
-                {"error": "Las dimensiones y el peso deben ser valores numéricos válidos."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if min(peso, alto, ancho, largo) <= 0:
-            return Response(
-                {"error": "Las dimensiones y el peso deben ser mayores a cero."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        paquete = Paquete(Decimal(str(peso)), Decimal(alto), Decimal(ancho), Decimal(largo))
+            paquete = paquete_del_pedido(entrada.validated_data['items'])
+        except ErrorPedido as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         # Con un proveedor cotiza ese; sin él, todos los couriers activos (el comprador elige)
-        proveedor = datos.get('proveedor') or None
+        proveedor = request.data.get('proveedor') or None
 
         # Comuna sin cobertura → 400; courier caído o tarifa inválida → 503
         try:
-            opciones = CotizarEnvio(couriers()).ejecutar(origen, destino, paquete, proveedor)
+            opciones = CotizarEnvio(couriers()).ejecutar(comuna_origen_tienda(), destino, paquete, proveedor)
         except CourierNoActivo:
             return Response({"error": "No hay envío por courier disponible en esta tienda."},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -810,7 +818,7 @@ class SeguimientoEnvioView(APIView):
 
     def post(self, request):
         numero_orden = request.data.get('numero_orden')
-        email = request.data.get('email')
+        email = str(request.data.get('email') or '').strip()
 
         if not numero_orden or not email:
             return Response(
@@ -820,7 +828,8 @@ class SeguimientoEnvioView(APIView):
 
         try:
             orden = OrdenCompra.objects.get(
-                Q(id=numero_orden) & (Q(email_invitado=email) | Q(usuario__email=email))
+                # El correo sin distinguir mayúsculas: el comprador no recuerda cómo lo escribió
+                Q(id=numero_orden) & (Q(email_invitado__iexact=email) | Q(usuario__email__iexact=email))
             )
         # Un número de orden no numérico recibe la misma respuesta genérica (RF-02.4)
         except (OrdenCompra.DoesNotExist, ValueError):
@@ -874,7 +883,11 @@ class HistorialPedidosAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        ordenes = OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+        ordenes = list(OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+                       .prefetch_related('detalles'))
+        # La foto de cada producto comprado, tal como está hoy en el catálogo (una consulta para todos los pedidos)
+        fotos = fotos_de_variantes({(d.producto_mongo_id, d.variante_sku) for orden in ordenes
+                                    for d in orden.detalles.all()}, request)
         # "Dejar reseña": el mismo enlace firmado del correo, solo para el dueño del pedido
         con_resenas = resenas_activas()
         resenados = set(Resena.objects.filter(orden__usuario=request.user).values_list('orden_id', flat=True))
@@ -886,7 +899,8 @@ class HistorialPedidosAPIView(APIView):
                 "variante_sku": d.variante_sku,
                 "nombre_producto": d.nombre_producto_snapshot,
                 "precio_unitario": d.precio_unitario_snapshot,
-                "cantidad": d.cantidad
+                "cantidad": d.cantidad,
+                **fotos.get((d.producto_mongo_id, d.variante_sku), {'imagen': None, 'variante': ''}),
             } for d in orden.detalles.all()]
 
             data.append({
@@ -985,16 +999,30 @@ class CotizacionCreateView(APIView):
     throttle_classes = [CotizacionThrottle]
 
     def post(self, request):
-        serializer = CotizacionSolicitudSerializer(data=request.data)
+        # Con fotos llega como multipart: los datos van como JSON en "datos" y las fotos en "fotos"
+        con_archivos = (request.content_type or '').startswith('multipart/')
+        if con_archivos:
+            try:
+                entrada = json.loads(request.data.get('datos') or '{}')
+            except ValueError:
+                entrada = None
+            if not isinstance(entrada, dict):
+                return Response({'detail': 'Los datos de la cotización no tienen un formato válido.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            entrada = request.data
+        serializer = CotizacionSolicitudSerializer(data=entrada)
         serializer.is_valid(raise_exception=True)
         datos = dict(serializer.validated_data)
         if datos.pop('sitio_web', ''):
             # Campo trampa lleno: lo envió un bot. Se responde como si nada para no darle pistas
             return Response({'mensaje': MENSAJE_COTIZACION_RECIBIDA}, status=status.HTTP_201_CREATED)
+        fotos = FotosCotizacionSerializer(data={'fotos': request.FILES.getlist('fotos') if con_archivos else []})
+        fotos.is_valid(raise_exception=True)
         config = ConfiguracionGlobal.objects.filter(pk=1).first()
         try:
             solicitar_cotizacion().ejecutar(datos, formulario_activo=bool(config and config.cotizaciones_activas),
-                                            hoy=timezone.localdate())
+                                            hoy=timezone.localdate(), fotos=fotos.validated_data.get('fotos', []))
         except FormularioCotizacionDesactivado as error:
             return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
         except CotizacionInvalida as error:
@@ -1013,7 +1041,31 @@ class AdminCotizacionListView(generics.ListAPIView):
     serializer_class = AdminCotizacionSerializer
     permission_classes = [IsAdministrador]
     pagination_class = PaginacionCotizaciones
-    queryset = Cotizacion.objects.all()
+    queryset = Cotizacion.objects.prefetch_related('fotos')
+
+
+# Las fotos se guardan con la extensión del formato que detectó ArchivoImagenField
+TIPOS_FOTO = {'.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+
+
+class AdminFotoCotizacionView(APIView):
+    """GET admin/cotizaciones/<id>/fotos/<foto>/: una foto que adjuntó el cliente. Solo el admin, con su sesión:
+    el archivo no está en media (que se publica) sino en ARCHIVOS_PRIVADOS_ROOT."""
+    permission_classes = [IsAdministrador]
+
+    def get(self, request, pk, foto_id):
+        foto = FotoCotizacion.objects.filter(id=foto_id, cotizacion_id=pk).first()
+        extension = os.path.splitext(foto.ruta)[1].lower() if foto else ''
+        almacen = almacen_privado()
+        if foto is None or extension not in TIPOS_FOTO or not almacen.exists(foto.ruta):
+            return Response({'detail': 'Foto no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+        respuesta = FileResponse(almacen.open(foto.ruta, 'rb'), content_type=TIPOS_FOTO[extension])
+        # Una imagen y nada más: sin ejecutar nada si alguien la abre directo, y sin quedar en cachés compartidas
+        respuesta['Content-Disposition'] = 'inline'
+        respuesta['X-Content-Type-Options'] = 'nosniff'
+        respuesta['Content-Security-Policy'] = "default-src 'none'; sandbox"
+        respuesta['Cache-Control'] = 'private, no-store'
+        return respuesta
 
 
 class AdminCotizacionEstadoView(APIView):
@@ -1222,114 +1274,75 @@ class DescargarEtiquetaView(APIView):
         response['Content-Disposition'] = f'attachment; filename="Etiqueta_OT_{numero_ot}.{extension}"'
         return response
 
-class DashboardMetricasView(APIView):
-    """
-    Endpoint para el dashboard operativo.
-    Retorna métricas de ventas (histórico y mensual),
-    ventas históricas agrupadas por día y las 5 órdenes más recientes.
+def _periodo_json(periodo):
+    return {'desde': periodo.desde, 'hasta': periodo.hasta} if periodo else None
 
-    Permite filtrar los datos mediante:
-    ?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
-    """
+
+def _nombre_cliente(orden):
+    if orden.usuario:
+        nombre = ' '.join(filter(None, [orden.usuario.nombre, orden.usuario.apellido_paterno]))
+        return nombre or orden.usuario.email
+    return orden.email_invitado
+
+
+def _variante_json(variante):
+    return {'producto_id': variante.producto_id, 'producto': variante.producto, 'sku': variante.sku,
+            'detalle': variante.detalle, 'stock': variante.stock}
+
+
+class DashboardMetricasView(APIView):
+    """RF-03.1: GET ?periodo=ESTE_MES (o PERSONALIZADO&desde=AAAA-MM-DD&hasta=AAAA-MM-DD). Las ventas del periodo
+    por la fecha del pago, contra el periodo anterior, su detalle y los 5 pedidos más recientes."""
     permission_classes = [IsEmprendedor]
 
     def get(self, request):
-        # 1. Capturar parámetros de fecha para filtrado (opcional)
-        fecha_inicio = request.query_params.get('fecha_inicio')
-        fecha_fin = request.query_params.get('fecha_fin')
+        parametros = request.query_params
+        try:
+            periodo = resolver_periodo(parametros.get('periodo'), timezone.localdate(),
+                                       parametros.get('desde'), parametros.get('hasta'))
+        except PeriodoInvalido as error:
+            return Response({'periodo': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        dashboard = ResumenDashboard(DjangoMetricasVentas()).ejecutar(periodo)
+        ultimas = OrdenCompra.objects.select_related('usuario').order_by('-fecha_creacion')[:5]
 
-        # 2. Base Queryset: solo las órdenes PAGADAS cuentan como ventas
-        ordenes_pagadas = OrdenCompra.objects.filter(estado='PAGADO')
-
-        # Aplicar filtros de fecha si vienen en la petición
-        if fecha_inicio:
-            ordenes_pagadas = ordenes_pagadas.filter(
-                fecha_creacion__gte=fecha_inicio
-            )
-
-        if fecha_fin:
-            ordenes_pagadas = ordenes_pagadas.filter(
-                fecha_creacion__lte=f"{fecha_fin} 23:59:59"
-            )
-
-        # 3. Calcular total histórico
-        total_historico = (
-            ordenes_pagadas.aggregate(total=Sum('total_final'))['total'] or 0
-        )
-
-        # 4. Calcular ventas del mes actual
-        hoy = timezone.now()
-
-        ventas_mes_actual = (
-            ordenes_pagadas
-            .filter(
-                fecha_creacion__year=hoy.year,
-                fecha_creacion__month=hoy.month
-            )
-            .aggregate(total=Sum('total_final'))['total'] or 0
-        )
-
-        # 5. Agrupar ventas PAGADAS por día
-        historico_ventas = (
-            ordenes_pagadas
-            .annotate(fecha=TruncDate('fecha_creacion'))
-            .values('fecha')
-            .annotate(
-                ventas=Sum('total_final'),
-                pedidos=Count('id')
-            )
-            .order_by('fecha')
-        )
-
-        historico_data = [
-            {
-                "fecha": registro["fecha"],
-                "ventas": float(registro["ventas"] or 0),
-                "pedidos": registro["pedidos"]
-            }
-            for registro in historico_ventas
-        ]
-
-        # 6. Obtener las 5 órdenes más recientes.
-        # Aquí incluimos todos los estados para mostrar la actividad reciente.
-        ultimas_ordenes = (
-            OrdenCompra.objects
-            .all()
-            .order_by('-fecha_creacion')[:5]
-        )
-
-        ordenes_data = []
-
-        for orden in ultimas_ordenes:
-            # Determinamos el nombre del cliente
-            cliente = orden.email_invitado
-
-            if orden.usuario:
-                cliente = getattr(
-                    orden.usuario,
-                    'get_full_name',
-                    lambda: orden.usuario.email
-                )()
-
-            ordenes_data.append({
-                "id": orden.id,
-                "fecha_creacion": orden.fecha_creacion,
-                "estado": orden.estado,
-                "total_final": orden.total_final,
-                "cliente": cliente,
-                "metodo_pago": orden.metodo_pago
-            })
-
-        # 7. Estructurar y retornar la respuesta
         return Response({
-            "metricas": {
-                "total_historico": float(total_historico),
-                "total_mensual": float(ventas_mes_actual)
+            'periodo': {**_periodo_json(periodo), 'clave': periodo.clave, 'agrupacion': periodo.agrupacion},
+            'anterior': _periodo_json(dashboard.anterior),
+            'tarjetas': asdict(dashboard.tarjetas),
+            'serie': [asdict(punto) for punto in dashboard.serie],
+            'mas_vendidos': [asdict(producto) for producto in dashboard.mas_vendidos],
+            'ultimas_ordenes': [{
+                'id': orden.id, 'fecha_creacion': orden.fecha_creacion, 'estado': orden.estado,
+                'total_final': round(orden.total_final), 'cliente': _nombre_cliente(orden),
+            } for orden in ultimas],
+            'detalles': {
+                'medios_pago': [asdict(barra) for barra in dashboard.medios_pago],
+                'entregas': [asdict(barra) for barra in dashboard.entregas],
+                'comunas': [asdict(barra) for barra in dashboard.comunas],
+                'cancelaciones': [{'causa': causa, 'nombre': ETIQUETAS_CAUSA_CANCELACION[causa], 'cantidad': cantidad}
+                                  for causa, cantidad in dashboard.cancelaciones],
+                'cupones': [asdict(cupon) for cupon in dashboard.cupones],
+                'clientes': asdict(dashboard.clientes),
+                'calificacion': asdict(dashboard.calificacion) if dashboard.calificacion else None,
             },
-            "historico": historico_data,
-            "ultimas_ordenes": ordenes_data
         }, status=status.HTTP_200_OK)
-    
+
+
+class DashboardPendientesView(APIView):
+    """RF-03.1: "Para hoy", lo que el admin tiene que atender. Solo trae lo que no está en cero."""
+    permission_classes = [IsEmprendedor]
+
+    def get(self, request):
+        para_hoy = TareasPendientes(DjangoPendientesTienda(modelo_emision_tienda()),
+                                    MongoStockCatalogo()).ejecutar(timezone.now())
+        return Response({
+            'al_dia': para_hoy.al_dia,
+            'tareas': [asdict(tarea) for tarea in para_hoy.tareas],
+            'agotadas': [_variante_json(variante) for variante in para_hoy.agotadas],
+            'stock_bajo': [_variante_json(variante) for variante in para_hoy.stock_bajo],
+        })
+
+
 class PaginaLegalListView(generics.ListAPIView):
     # RF-03.5: el footer solo enlaza las páginas publicadas
     queryset = PaginaLegal.objects.filter(publicada=True).only(
@@ -1598,36 +1611,59 @@ class ValidarPromocionAPIView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        codigo = request.data.get('codigo', '').strip().upper()
-        subtotal = float(request.data.get('subtotal', 0))
+        codigo = str(request.data.get('codigo') or '').strip().upper()
+        try:
+            subtotal = float(request.data.get('subtotal', 0))
+        except (TypeError, ValueError):
+            subtotal = -1.0
+        # "nan" o "inf" también se convierten a float
+        if not math.isfinite(subtotal) or subtotal < 0:
+            return Response({"error": "El subtotal no es válido."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not codigo:
             return Response({"error": "Debes ingresar un código."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            promo = Promocion.objects.get(codigo__iexact=codigo, is_active=True)
-        except Promocion.DoesNotExist:
+        # first(): si quedaron códigos antiguos que solo difieren en mayúsculas, get() fallaba con un error 500
+        promo = Promocion.objects.filter(codigo__iexact=codigo, is_active=True).order_by('id').first()
+        if promo is None:
             return Response({"error": "Código inválido o expirado."}, status=status.HTTP_404_NOT_FOUND)
 
         if not promo.esta_vigente:
             return Response({"error": "Código inválido o expirado."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if promo.tipo_descuento == 'PORCENTAJE':
-            descuento = subtotal * (promo.valor_descuento / 100.0)
-        else:  # MONTO_FIJO
-            descuento = promo.valor_descuento
-
-        # El descuento no puede superar el subtotal ni ser menor a cero
-        descuento = min(descuento, subtotal)
-        descuento = max(0.0, descuento)
+        # El mismo cálculo que el checkout (domain/promociones.py): nunca más que el subtotal ni bajo el mínimo
+        regla = regla_de_promocion(promo)
+        if not cumple_minimo(regla, Decimal(str(subtotal))):
+            return Response({"error": mensaje_monto_minimo(promo), "monto_minimo": promo.monto_minimo},
+                            status=status.HTTP_400_BAD_REQUEST)
+        descuento = monto_descuento(regla, Decimal(str(subtotal)))
 
         return Response({
             "codigo": promo.codigo,
             "tipo_descuento": promo.tipo_descuento,
             "valor_descuento": promo.valor_descuento,
             "descuento": round(descuento),
-            "umbral_envio_gratis": promo.umbral_envio_gratis
+            "umbral_envio_gratis": promo.umbral_envio_gratis,
+            "monto_minimo": promo.monto_minimo,
         }, status=status.HTTP_200_OK)
+
+
+class PromocionesAutomaticasAPIView(APIView):
+    """GET /api/ventas/promociones/automaticas/: los descuentos que se aplican solos desde un monto (RF-04.1).
+
+    Para la vista previa del checkout ("te faltan $X para el descuento"). Sin el código ni el id: un automático no
+    se escribe, y el cobro lo decide el servidor al pagar.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response([{
+            'tipo_descuento': promo.tipo_descuento,
+            'valor_descuento': promo.valor_descuento,
+            'monto_minimo': promo.monto_minimo,
+            'umbral_envio_gratis': promo.umbral_envio_gratis,
+        } for promo in promociones_automaticas_vigentes()])
 
 
 class LinkifyWebhookAPIView(APIView):

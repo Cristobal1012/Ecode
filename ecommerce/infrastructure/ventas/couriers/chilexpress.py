@@ -12,7 +12,7 @@ import requests
 from ecommerce.application.couriers import Courier
 from ecommerce.domain.logistica import (
     ESTADO_NO_DISPONIBLE, CampoCredencial, CotizacionEnvio, CourierNoDisponible, ErrorOrdenTransporte, SinCobertura,
-    Sucursal,
+    Sucursal, clave_comuna,
 )
 
 from ..models import ConfiguracionGlobal
@@ -112,6 +112,13 @@ class ChilexpressCourier(Courier):
 
     # ---------- Coberturas y comunas ----------
 
+    @staticmethod
+    def _codigo_comuna(catalogo, nombre):
+        """El código de cobertura de una comuna sin distinguir tildes ni mayúsculas ('Ñuñoa' es NUNOA); None si no
+        está."""
+        por_clave = {clave_comuna(nombre_catalogo): codigo for nombre_catalogo, codigo in catalogo.items()}
+        return por_clave.get(clave_comuna(nombre))
+
     def comunas(self):
         catalogo = self._obtener_catalogo_dinamico()
         if not catalogo:
@@ -126,8 +133,12 @@ class ChilexpressCourier(Courier):
             raise CourierNoDisponible('Servicio de coberturas no disponible temporalmente')
 
         # Del nombre legible (ej. MAIPU) al código de cobertura de Chilexpress (MIPU)
-        codigo_origen = catalogo.get(str(origen).strip().upper(), 'STGO')
-        codigo_destino = catalogo.get(str(destino).strip().upper())
+        codigo_origen = self._codigo_comuna(catalogo, origen)
+        if not codigo_origen:
+            # Antes se cotizaba desde Santiago sin avisar: el comprador pagaba el envío desde otra comuna
+            logger.error(f"La comuna de origen de la tienda ('{origen}') no está en la cobertura de Chilexpress.")
+            raise CourierNoDisponible('La comuna de origen de la tienda no está en la cobertura de Chilexpress.')
+        codigo_destino = self._codigo_comuna(catalogo, destino)
         if not codigo_destino:
             raise SinCobertura(f"La comuna '{destino}' no es válida o no tiene cobertura.")
 
@@ -177,7 +188,7 @@ class ChilexpressCourier(Courier):
     # ---------- Sucursales ----------
 
     def sucursales(self, comuna):
-        nombre_limpio = str(comuna).strip().upper()
+        nombre_limpio = clave_comuna(comuna)
         if not nombre_limpio:
             raise SinCobertura('Debe especificar una comuna válida.')
 
@@ -209,12 +220,16 @@ class ChilexpressCourier(Courier):
 
         config = ConfiguracionGlobal.objects.filter(pk=1).first()
         comuna_origen = config.comuna_origen if config and config.comuna_origen else 'SANTIAGO'
-        codigo_destino = catalogo.get(envio.comuna.upper())
+        codigo_destino = self._codigo_comuna(catalogo, envio.comuna)
         if not codigo_destino:
             raise ErrorOrdenTransporte(f'Chilexpress no tiene cobertura para la comuna {envio.comuna}.')
+        codigo_origen = self._codigo_comuna(catalogo, comuna_origen)
+        if not codigo_origen:
+            raise ErrorOrdenTransporte(f'La comuna de origen de la tienda ({comuna_origen}) no está en la cobertura '
+                                       'de Chilexpress: revísala en Configuración.')
 
         datos_envio = {
-            'origen_codigo': catalogo.get(comuna_origen.upper(), 'PUDA'),
+            'origen_codigo': codigo_origen,
             'destino_codigo': codigo_destino,
             'calle': envio.calle,
             'numero': envio.numero,

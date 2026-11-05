@@ -214,5 +214,9 @@ class CorreoNotificadorCotizaciones(NotificadorCotizaciones):
             filas.append(('Personalización', cotizacion.personalizacion))
         if cotizacion.fecha_requerida:
             filas.append(('Lo necesita para el', cotizacion.fecha_requerida.strftime('%d-%m-%Y')))
+        # Las fotos no van en el correo: son privadas y se ven solo en el panel de la tienda
+        cantidad_fotos = cotizacion.fotos.count()
+        if cantidad_fotos:
+            filas.append(('Fotos', f"{cantidad_fotos} {'adjunta' if cantidad_fotos == 1 else 'adjuntas'}"))
         filas += [('Nombre', cotizacion.nombre), ('Correo', cotizacion.correo), ('Teléfono', cotizacion.telefono)]
         return filas

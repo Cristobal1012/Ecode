@@ -4,6 +4,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import { aplicarPaleta } from '../constants/palettes';
 import Header from '../components/header/header';
 import Dialogo from '../components/Dialogo';
+import FotosPedido from '../components/FotosPedido';
 import { guardarTokensDeEnlace } from '../utils/enlacesConToken';
 import './HistorialPedidos.css';
 import { Cargando } from '../components/carga/Esqueleto';
@@ -145,7 +146,12 @@ const HistorialPedidos = () => {
                                 {pedidos.length > 0 ? (
                                     pedidos.map((orden) => (
                                         <tr key={orden.id}>
-                                            <td data-etiqueta="N° Orden" className="historial-orden">#{orden.id}</td>
+                                            <td data-etiqueta="N° Orden" className="historial-orden">
+                                                <span className="historial-orden-contenido">
+                                                    <FotosPedido pedido={orden} />
+                                                    #{orden.id}
+                                                </span>
+                                            </td>
                                             <td data-etiqueta="Fecha" className="historial-fecha">
                                                 {formatearFecha(orden.fecha || orden.fecha_creacion)}
                                             </td>

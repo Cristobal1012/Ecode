@@ -73,7 +73,7 @@ from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import (
-    MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo,
+    MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo, fotos_de_variantes,
 )
 from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploadHandler
 
@@ -883,7 +883,11 @@ class HistorialPedidosAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        ordenes = OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+        ordenes = list(OrdenCompra.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+                       .prefetch_related('detalles'))
+        # La foto de cada producto comprado, tal como está hoy en el catálogo (una consulta para todos los pedidos)
+        fotos = fotos_de_variantes({(d.producto_mongo_id, d.variante_sku) for orden in ordenes
+                                    for d in orden.detalles.all()}, request)
         # "Dejar reseña": el mismo enlace firmado del correo, solo para el dueño del pedido
         con_resenas = resenas_activas()
         resenados = set(Resena.objects.filter(orden__usuario=request.user).values_list('orden_id', flat=True))
@@ -895,7 +899,8 @@ class HistorialPedidosAPIView(APIView):
                 "variante_sku": d.variante_sku,
                 "nombre_producto": d.nombre_producto_snapshot,
                 "precio_unitario": d.precio_unitario_snapshot,
-                "cantidad": d.cantidad
+                "cantidad": d.cantidad,
+                **fotos.get((d.producto_mongo_id, d.variante_sku), {'imagen': None, 'variante': ''}),
             } for d in orden.detalles.all()]
 
             data.append({

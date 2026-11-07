@@ -279,11 +279,12 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
 
     def validate_tiktok_url(self, valor):
         return self._validar_red_social(valor, 'tiktok')
-        def validate_blog_nombre(self, valor):
-            try:
-                return normalizar_nombre_blog(valor)
-            except NombreBlogInvalido as error:
-                raise serializers.ValidationError(str(error))
+        
+    def validate_blog_nombre(self, valor):
+        try:
+            return normalizar_nombre_blog(valor)
+        except NombreBlogInvalido as error:
+            raise serializers.ValidationError(str(error))
 
     def validate_google_analytics_id(self, valor):
         if not valor:

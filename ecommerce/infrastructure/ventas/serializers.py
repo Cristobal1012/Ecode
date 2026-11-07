@@ -24,7 +24,7 @@ from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION
-from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
+from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram, validar_enlace_red_social, EnlaceRedSocialInvalido
 from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.promociones import (
@@ -132,6 +132,11 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'telefono_comercial',
+            'facebook_url',
+            'x_url',
+            'youtube_url',
+            'tiktok_url',
             'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
@@ -226,6 +231,11 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'telefono_comercial',
+            'facebook_url',
+            'x_url',
+            'youtube_url',
+            'tiktok_url',
             'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
@@ -239,12 +249,41 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         except UsuarioInstagramInvalido as error:
             raise serializers.ValidationError(str(error))
 
-    def validate_blog_nombre(self, valor):
+    def validate_telefono_comercial(self, valor):
+        if not valor or not valor.strip():
+            return ''
         try:
-            return normalizar_nombre_blog(valor)
-        except NombreBlogInvalido as error:
+            return normalizar_telefono_chile(valor)
+        except TelefonoInvalido as error:
             raise serializers.ValidationError(str(error))
 
+
+    def _validar_red_social(self, valor, red):
+        try:
+            return validar_enlace_red_social(valor, red)
+        except EnlaceRedSocialInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+
+    def validate_facebook_url(self, valor):
+        return self._validar_red_social(valor, 'facebook')
+
+
+    def validate_x_url(self, valor):
+        return self._validar_red_social(valor, 'x')
+
+
+    def validate_youtube_url(self, valor):
+        return self._validar_red_social(valor, 'youtube')
+
+
+    def validate_tiktok_url(self, valor):
+        return self._validar_red_social(valor, 'tiktok')
+        def validate_blog_nombre(self, valor):
+            try:
+                return normalizar_nombre_blog(valor)
+            except NombreBlogInvalido as error:
+                raise serializers.ValidationError(str(error))
 
     def validate_google_analytics_id(self, valor):
         if not valor:

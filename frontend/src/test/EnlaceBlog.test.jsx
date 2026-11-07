@@ -62,4 +62,66 @@ describe('Enlace al blog en el header y el footer', () => {
 
     expect(await within(await menu()).findByRole('link', { name: 'Nosotros' })).toHaveAttribute('href', '/blog');
   });
+
+  it('muestra el enlace independiente de Sobre mí cuando está activo', async () => {
+    responder({
+      ...CONFIGURACION,
+      blog_activo: true,
+      blog_nombre: 'Portafolio',
+      sobre_mi_activo: true,
+      sobre_mi_nombre: 'Mi historia'
+    });
+
+    await renderTienda();
+
+    const navegacion = within(await menu());
+
+    expect(
+      await navegacion.findByRole('link', { name: 'Mi historia' })
+    ).toHaveAttribute('href', '/sobre-mi');
+
+    expect(
+      navegacion.getByRole('link', { name: 'Portafolio' })
+    ).toHaveAttribute('href', '/blog');
+  });
+
+  it('oculta el enlace de Sobre mí cuando está desactivado', async () => {
+    responder({
+      ...CONFIGURACION,
+      sobre_mi_activo: false,
+      sobre_mi_nombre: 'Mi historia'
+    });
+
+    await renderTienda();
+
+    const navegacion = within(await menu());
+
+    await navegacion.findByRole('link', { name: 'Catálogo' });
+
+    expect(
+      navegacion.queryByRole('link', { name: 'Mi historia' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('muestra Sobre mí aunque el blog esté desactivado', async () => {
+    responder({
+      ...CONFIGURACION,
+      blog_activo: false,
+      sobre_mi_activo: true,
+      sobre_mi_nombre: 'Mi historia'
+    });
+
+    await renderTienda();
+
+    const navegacion = within(await menu());
+
+    expect(
+      await navegacion.findByRole('link', { name: 'Mi historia' })
+    ).toHaveAttribute('href', '/sobre-mi');
+
+    expect(
+      navegacion.getByRole('link', { name: 'Nosotros' })
+    ).toHaveAttribute('href', '/#nosotros');
+  });
+
 });

@@ -110,6 +110,72 @@ describe('LandingPage', () => {
     expect(screen.queryByRole('region', { name: 'Un taller familiar' })).not.toBeInTheDocument();
   });
 
+  it('muestra el botón de Sobre mí cuando la página está activada', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        sobre_mi_activo: true,
+        sobre_mi_nombre: 'Mi historia'
+      }
+    });
+
+    await renderLanding();
+
+    const seccion = await screen.findByRole('region', {
+      name: 'Un taller familiar'
+    });
+
+    expect(
+      within(seccion).getByRole('link', {
+        name: 'Conoce más sobre mí'
+      })
+    ).toHaveAttribute('href', '/sobre-mi');
+  });
+
+  it('oculta el botón de Sobre mí cuando la página está desactivada', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        sobre_mi_activo: false
+      }
+    });
+
+    await renderLanding();
+
+    const seccion = await screen.findByRole('region', {
+      name: 'Un taller familiar'
+    });
+
+    expect(
+      within(seccion).queryByRole('link', {
+        name: 'Conoce más sobre mí'
+      })
+    ).not.toBeInTheDocument();
+  });
+
+  it('muestra el botón de Sobre mí aunque la sección Nosotros no tenga texto', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        nosotros_texto: '',
+        sobre_mi_activo: true,
+        sobre_mi_nombre: 'Mi historia'
+      }
+    });
+
+    await renderLanding();
+
+    const seccion = await screen.findByRole('region', {
+      name: 'Un taller familiar'
+    });
+
+    expect(
+      within(seccion).getByRole('link', {
+        name: 'Conoce más sobre mí'
+      })
+    ).toHaveAttribute('href', '/sobre-mi');
+  });
+
   it('muestra la sección de Instagram solo con usuario, con sus fotos y el botón al perfil', async () => {
     responder({ configuracion: { ...CONFIGURACION, instagram_usuario: 'taller.mache',
       instagram_foto_1: 'http://localhost:8000/media/negocio/instagram/uno.jpg', instagram_foto_2: null } });

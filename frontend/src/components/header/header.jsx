@@ -20,9 +20,17 @@ function Header({ vistaPrevia }) {
       <div className="header-content">
         {/* RN-01: el logo de la Universidad va aquí junto al del negocio, o en el footer si el admin lo eligió; nunca se oculta */}
         <div className="header-marcas">
-          <Link to="/" className="header-marca-negocio" aria-label={`${nombreTienda}, ir al inicio`}>
+          <Link
+            to="/"
+            className="header-marca-negocio"
+            aria-label={`${nombreTienda}, ir al inicio`}
+          >
             {configuracion?.logo ? (
-              <img className="header-logo-negocio" src={configuracion.logo} alt="" />
+              <img
+                className="header-logo-negocio"
+                src={configuracion.logo}
+                alt=""
+              />
             ) : (
               <span className="header-nombre-tienda">{nombreTienda}</span>
             )}
@@ -41,18 +49,34 @@ function Header({ vistaPrevia }) {
 
         <nav className="header-nav" aria-label="Navegación de la tienda">
           <div className="header-links">
-            <NavLink to="/" end>Inicio</NavLink>
+            <NavLink to="/" end>
+              Inicio
+            </NavLink>
             <NavLink to="/catalogo">Catálogo</NavLink>
             {/* Con el blog activo, "Nosotros" (o el nombre que eligió el admin) lleva al blog; si no, a la landing */}
+            {/* El blog mantiene su enlace independiente de la página Sobre mí */}
             {configuracion?.blog_activo ? (
-              <NavLink to="/blog">{configuracion.blog_nombre || 'Nosotros'}</NavLink>
-            ) : configuracion?.nosotros_texto && <Link to="/#nosotros">Nosotros</Link>}
-            {configuracion?.cotizaciones_activas && <NavLink to="/cotizar">Cotizar</NavLink>}
+              <NavLink to="/blog">
+                {configuracion.blog_nombre || "Nosotros"}
+              </NavLink>
+            ) : (
+              configuracion?.nosotros_texto && (
+                <Link to="/#nosotros">Nosotros</Link>
+              )
+            )}
+
+            {/* Página Sobre mí: solo aparece cuando el emprendedor la activa */}
+            {configuracion?.sobre_mi_activo && (
+              <NavLink to="/sobre-mi">
+                {configuracion.sobre_mi_nombre || "Sobre mí"}
+              </NavLink>
+            )}
+            {configuracion?.cotizaciones_activas && (
+              <NavLink to="/cotizar">Cotizar</NavLink>
+            )}
 
             {/* Si es ADMIN, le damos un atajo rápido a su panel */}
-            {rol === 'ADMIN' && (
-              <NavLink to="/admin">Panel admin</NavLink>
-            )}
+            {rol === "ADMIN" && <NavLink to="/admin">Panel admin</NavLink>}
           </div>
 
           {/* Agrupamos el Menú de Usuario y el Carrito de Compras */}

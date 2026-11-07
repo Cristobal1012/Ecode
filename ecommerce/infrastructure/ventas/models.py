@@ -52,6 +52,10 @@ class ConfiguracionGlobal(models.Model):
     # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
     blog_activo = models.BooleanField(default=False)
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
+    # Página independiente "Sobre mí": desactivada por defecto.
+    sobre_mi_activo = models.BooleanField(default=False)
+    sobre_mi_nombre = models.CharField(max_length=30, default='Sobre mí')
+    sobre_mi_biografia = models.TextField(blank=True, default='')
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago
@@ -408,6 +412,32 @@ class FotoPublicacion(models.Model):
     def __str__(self):
         return f'Foto {self.orden} de {self.publicacion}'
 
+class ProyectoDestacadoSobreMi(models.Model):
+    """Publicación del blog seleccionada para la página Sobre mí."""
+
+    configuracion = models.ForeignKey(
+        ConfiguracionGlobal,
+        on_delete=models.CASCADE,
+        related_name='proyectos_sobre_mi'
+    )
+    publicacion = models.ForeignKey(
+        Publicacion,
+        on_delete=models.CASCADE,
+        related_name='selecciones_sobre_mi'
+    )
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['configuracion', 'publicacion'],
+                name='proyecto_sobre_mi_unico'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.publicacion.titulo} (orden {self.orden})'
 
 def _estrellas_validas(prefijo):
     return models.CheckConstraint(

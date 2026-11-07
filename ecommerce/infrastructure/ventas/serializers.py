@@ -116,6 +116,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
             'blog_activo',
             'blog_nombre',
+            'sobre_mi_activo',
+            'sobre_mi_nombre',
             # Reseñas: activas, la landing y la ficha muestran las aprobadas
             'resenas_activas',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
@@ -193,7 +195,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     costo_entrega_coordinada = serializers.IntegerField(min_value=0, max_value=1_000_000, required=False)
     # Se ordenan los espacios antes de medirlo; vacío vuelve a "Nosotros" (domain/blog.py)
     blog_nombre = serializers.CharField(max_length=200, required=False, allow_blank=True)
-
+    sobre_mi_nombre = serializers.CharField(max_length=200,required=False,allow_blank=True)
+    sobre_mi_biografia = serializers.CharField(max_length=100_000,required=False,allow_blank=True,trim_whitespace=False)
     class Meta:
         model = ConfiguracionGlobal
         fields = [
@@ -227,6 +230,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'cotizaciones_activas',
             'blog_activo',
             'blog_nombre',
+            'sobre_mi_activo',
+            'sobre_mi_nombre',
+            'sobre_mi_biografia',
             'resenas_activas',
             'correo_contacto',
             'horario_atencion',
@@ -243,6 +249,21 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'modelo_emision',
         ]
 
+    def validate_sobre_mi_nombre(self, valor):
+        nombre = ' '.join(valor.split())
+
+        if not nombre:
+            return 'Sobre mí'
+
+        if len(nombre) > 30:
+            raise serializers.ValidationError(
+                'El nombre no puede superar los 30 caracteres.'
+            )
+
+        return nombre
+
+    def validate_sobre_mi_biografia(self, valor):
+        return limpiar_html(valor)
     def validate_instagram_usuario(self, valor):
         try:
             return normalizar_usuario_instagram(valor)
@@ -415,7 +436,6 @@ class RevisionCarritoSerializer(serializers.Serializer):
                 'mensaje': linea.mensaje,
             } for linea in lineas],
         }
-
 
 class DatosEmpresaSerializer(serializers.Serializer):
     """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""

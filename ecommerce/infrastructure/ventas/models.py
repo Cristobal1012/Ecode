@@ -89,6 +89,13 @@ class ConfiguracionGlobal(models.Model):
     correo_contacto = models.EmailField(blank=True, default='')
     horario_atencion = models.TextField(blank=True, default='')
     mostrar_direccion_pie = models.BooleanField(default=False)
+    # Teléfono comercial y redes sociales del emprendedor.
+    # Todos son opcionales y no se muestran cuando están vacíos.
+    telefono_comercial = models.CharField(max_length=20, blank=True, default='')
+    facebook_url = models.URLField(max_length=500, blank=True, default='')
+    x_url = models.URLField(max_length=500, blank=True, default='')
+    youtube_url = models.URLField(max_length=500, blank=True, default='')
+    tiktok_url = models.URLField(max_length=500, blank=True, default='')
     # RN-01: dónde va el logo de la Universidad, header o footer; nunca se oculta (domain/contacto.py)
     ubicacion_logo_universidad = models.CharField(
         max_length=10, choices=[(u, u) for u in UBICACIONES_LOGO_UNIVERSIDAD], default=LOGO_UNIVERSIDAD_HEADER)

@@ -1,7 +1,7 @@
 """Datos de contacto de la tienda (pie de página e Instagram de la landing); independiente de Django."""
 
 import re
-
+from urllib.parse import urlparse
 # Reglas de Instagram: hasta 30 letras, números, puntos o guiones bajos; sin punto al inicio, al final ni dos seguidos
 _USUARIO_INSTAGRAM = re.compile(r'^(?!\.)(?!.*\.\.)[a-z0-9._]{1,30}(?<!\.)$')
 _PERFIL_INSTAGRAM = re.compile(r'^(https?://)?(www\.)?instagram\.com/', re.IGNORECASE)
@@ -43,3 +43,51 @@ def direccion_es_publica(retiro_en_local_activo, mostrar_direccion_pie):
 LOGO_UNIVERSIDAD_HEADER = 'HEADER'
 LOGO_UNIVERSIDAD_FOOTER = 'FOOTER'
 UBICACIONES_LOGO_UNIVERSIDAD = (LOGO_UNIVERSIDAD_HEADER, LOGO_UNIVERSIDAD_FOOTER)
+
+# Dominios permitidos para las redes sociales de la tienda.
+DOMINIOS_REDES = {
+    'facebook': {'facebook.com', 'www.facebook.com', 'm.facebook.com'},
+    'x': {'x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'},
+    'youtube': {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'},
+    'tiktok': {'tiktok.com', 'www.tiktok.com'},
+}
+
+
+class EnlaceRedSocialInvalido(ValueError):
+    def __init__(self, red):
+        super().__init__(
+            f'Ingresa un enlace válido de {red.capitalize()} que comience con https://.'
+        )
+
+
+def validar_enlace_red_social(texto, red):
+    """Valida que una URL HTTPS pertenezca a la red social indicada.
+
+    Devuelve una cadena vacía cuando el campo es opcional y no se completó.
+    """
+    valor = (texto or '').strip()
+
+    if not valor:
+        return ''
+
+    if red not in DOMINIOS_REDES:
+        raise ValueError('Red social no reconocida.')
+
+    try:
+        url = urlparse(valor)
+        dominio = (url.hostname or '').lower()
+
+        if (
+            url.scheme != 'https'
+            or dominio not in DOMINIOS_REDES[red]
+            or not url.path.strip('/')
+            or url.username is not None
+            or url.password is not None
+            or url.port is not None
+        ):
+            raise EnlaceRedSocialInvalido(red)
+
+    except ValueError:
+        raise EnlaceRedSocialInvalido(red) from None
+
+    return valor

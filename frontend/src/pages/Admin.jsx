@@ -19,6 +19,7 @@ import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
 import GestorBlog from '../components/GestorBlog';
+import GestorSobreMi from '../components/GestorSobreMi';
 import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
@@ -41,6 +42,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
+  { id: 'config-sobre-mi', titulo: 'Página Sobre mí' },
   { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   { id: 'config-analitica', titulo: 'Analítica y marketing' }
@@ -385,6 +387,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-blog" />
                   <GestorBlog />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-sobre-mi" />
+                  <GestorSobreMi />
                 </div>
 
                 <hr className="admin-separador" />

@@ -25,6 +25,11 @@ class ConfiguracionGlobal(models.Model):
         ('GRID_3', 'Cuadrícula de 3'),
         ('GRID_4', 'Cuadrícula de 4'),
     ]
+    orden_catalogo = models.CharField(max_length=20, default='destacados', choices=[
+        ('destacados', 'Orden actual'), ('recientes', 'Recientes primero'),
+        ('precio-desc', 'Mayor precio'), ('precio-asc', 'Menor precio'),
+    ])
+    orden_categorias = models.JSONField(default=list, blank=True)
     menu_principal = models.JSONField(default=dict, blank=True)
     nombre_tienda = models.CharField(max_length=255)
     

@@ -5,7 +5,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend_project.settings')
 django.setup()
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APIRequestFactory
 
 from ecommerce.infrastructure.catalogo.documents import Producto
@@ -62,7 +62,7 @@ class IndicesMongoCatalogoTests(SimpleTestCase):
         )
 
 
-class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
+class PaginacionYFiltrosCatalogoTests(TestCase):
     """
     Criterios de Aceptación 1, 2, 3 y 5 (SCRUM-179):
     - Paginación de 24 en servidor.
@@ -166,22 +166,22 @@ class PaginacionYFiltrosCatalogoTests(SimpleTestCase):
         # Precio ascendente (E01)
         request_asc = self.factory.get('/api/catalogo/productos/?orden=precio-asc')
         self.view(request_asc)
-        mock_qs.order_by.assert_called_with('precio_minimo_vigente')
+        mock_qs.order_by.assert_called_with('precio_minimo_vigente', 'id')
 
         # Precio descendente (E01)
         request_desc = self.factory.get('/api/catalogo/productos/?orden=precio-desc')
         self.view(request_desc)
-        mock_qs.order_by.assert_called_with('-precio_minimo_vigente')
+        mock_qs.order_by.assert_called_with('-precio_minimo_vigente', 'id')
 
         # Más nuevos
         request_recientes = self.factory.get('/api/catalogo/productos/?orden=recientes')
         self.view(request_recientes)
-        mock_qs.order_by.assert_called_with('-fecha_creacion')
+        mock_qs.order_by.assert_called_with('-fecha_creacion', 'id')
 
         # Nombre A-Z
         request_nombre = self.factory.get('/api/catalogo/productos/?orden=nombre')
         self.view(request_nombre)
-        mock_qs.order_by.assert_called_with('nombre')
+        mock_qs.order_by.assert_called_with('nombre', 'id')
 
     def test_calculo_precio_minimo_vigente_con_ofertas_y_variantes(self):
         """

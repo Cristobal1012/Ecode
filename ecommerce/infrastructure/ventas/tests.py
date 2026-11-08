@@ -61,7 +61,7 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
 
         self.assertEqual(
             set(data),
-            {'menu_principal', 'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
+            {'orden_catalogo', 'orden_categorias', 'menu_principal', 'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'tipografia_seleccionada', 'layout_catalogo',
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
@@ -113,6 +113,8 @@ class ConfiguracionGlobalAPITests(APITestCase):
         self.assertEqual(url, '/api/configuracion/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {
+            'orden_catalogo': 'destacados',
+            'orden_categorias': [],
             'menu_principal': {},
             'google_client_id': 'cliente-qa.apps.googleusercontent.com',
             'texto_bienvenida': 'Bienvenido a Tienda QA',

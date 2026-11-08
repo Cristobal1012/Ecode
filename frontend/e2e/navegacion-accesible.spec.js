@@ -1,5 +1,33 @@
 import { test, expect } from '@playwright/test';
 import { prepararTienda } from './soporte/tienda';
+import AxeBuilder from '@axe-core/playwright';
+
+for (const ancho of [320, 390, 1280]) {
+  test(`menú personalizado accesible sin desbordamiento a ${ancho}px`, async ({ page }) => {
+    await prepararTienda(page);
+    await page.setViewportSize({ width: ancho, height: 900 });
+    await page.route('**/api/configuracion/', route => route.fulfill({ json: {
+      nombre_tienda: 'Tienda QA', blog_activo: true, sobre_mi_activo: true, cotizaciones_activas: true,
+      menu_principal: { orden: ['cotizar', 'sobre_mi', 'nosotros', 'catalogo', 'inicio'], nombres: {
+        inicio: 'Inicio personalizado de tienda', catalogo: 'Catálogo personalizado extenso',
+        nosotros: 'Nuestros proyectos y trabajos', sobre_mi: 'Historia de nuestro negocio', cotizar: 'Cotizaciones personalizadas'
+      } }
+    } }));
+    await page.goto('/');
+    const enlaces = page.locator('.header-links a');
+    await expect(enlaces).toHaveText(['Cotizaciones personalizadas', 'Historia de nuestro negocio', 'Nuestros proyectos y trabajos', 'Catálogo personalizado extenso', 'Inicio personalizado de tienda']);
+    expect(await enlaces.evaluateAll(nodos => nodos.map(nodo => nodo.getAttribute('href')))).toEqual(['/cotizar', '/sobre-mi', '/blog', '/catalogo', '/']);
+    for (let indice = 0; indice < 5; indice++) {
+      const caja = await enlaces.nth(indice).boundingBox();
+      expect(caja.x).toBeGreaterThanOrEqual(0);
+      expect(caja.x + caja.width).toBeLessThanOrEqual(ancho);
+    }
+    await enlaces.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(enlaces.nth(1)).toBeFocused();
+    expect((await new AxeBuilder({ page }).include('header').analyze()).violations).toEqual([]);
+  });
+}
 
 test('el salto por teclado y los títulos acompañan la navegación sin repetir configuración', async ({ page }) => {
   const { inesperadas, llamadas } = await prepararTienda(page);

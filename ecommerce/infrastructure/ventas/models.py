@@ -25,6 +25,7 @@ class ConfiguracionGlobal(models.Model):
         ('GRID_3', 'Cuadrícula de 3'),
         ('GRID_4', 'Cuadrícula de 4'),
     ]
+    menu_principal = models.JSONField(default=dict, blank=True)
     nombre_tienda = models.CharField(max_length=255)
     
     # --- CAMPOS DE ORIGEN / RETIRO EN LOCAL ---

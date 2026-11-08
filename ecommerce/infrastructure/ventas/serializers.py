@@ -121,6 +121,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             # Reseñas: activas, la landing y la ficha muestran las aprobadas
             'resenas_activas',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
+            'orden_catalogo',
+            'orden_categorias',
             'menu_principal',
             'nombre_tienda',
             'logo',
@@ -201,6 +203,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'orden_catalogo',
+            'orden_categorias',
             'menu_principal',
             'nombre_tienda',
             'texto_bienvenida',
@@ -250,6 +254,19 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             # Solo el panel: qué pedidos piden boleta (no se publica en /api/configuracion/)
             'modelo_emision',
         ]
+
+    def validate_orden_categorias(self, valor):
+        if not isinstance(valor, list):
+            raise serializers.ValidationError('El orden de categorías debe ser una lista.')
+        resultado = []
+        for nombre in valor:
+            if not isinstance(nombre, str) or not nombre.strip() or len(nombre) > 100:
+                raise serializers.ValidationError('Cada categoría debe tener entre 1 y 100 caracteres.')
+            nombre = nombre.strip()
+            if nombre in resultado:
+                raise serializers.ValidationError('Las categorías no pueden repetirse.')
+            resultado.append(nombre)
+        return resultado
 
     def validate_menu_principal(self, valor):
         ids = {'inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar'}

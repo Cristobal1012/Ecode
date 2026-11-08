@@ -16,11 +16,72 @@
 .portada-velo {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: linear-gradient(90deg, rgb(0 0 0 / 62%) 0%, rgb(0 0 0 / 60%) 55%, rgb(0 0 0 / 60%) 100%);
+}
+
+/* Carrusel de portada con fundido suave (SCRUM-194) */
+.portada-carrusel {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.portada-diapositiva {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+  pointer-events: none;
+}
+
+.portada-diapositiva--activa {
+  opacity: 1;
+  z-index: 1;
+}
+
+/* WCAG 2.2.2 / prefers-reduced-motion: la transición no se anima */
+@media (prefers-reduced-motion: reduce) {
+  .portada-diapositiva {
+    transition: none !important;
+  }
 }
 
 .portada-contenido {
   position: relative;
+  z-index: 3;
+}
+
+/* Botón accesible para pausar y reanudar el carrusel (WCAG 2.2.2) */
+.portada-boton-pausa {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #FFFFFF;
+  background: rgb(0 0 0 / 60%);
+  border: 1px solid rgb(255 255 255 / 40%);
+  border-radius: 9999px;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.portada-boton-pausa:hover,
+.portada-boton-pausa:focus-visible {
+  background: rgb(0 0 0 / 85%);
+  border-color: #FFFFFF;
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
 }
 
 .portada-antetitulo {
@@ -386,6 +447,91 @@
   right: 0;
   display: flex;
   justify-content: flex-end;
+  z-index: 10;
+}
+
+.portada-editor-fotos-contenedor {
+  max-width: 100%;
+}
+
+.portada-editor-fotos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: rgb(0 0 0 / 70%);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 20%);
+}
+
+.portada-editor-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.portada-editor-fotos-lista {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  list-style: none;
+  padding: 0.25rem 0;
+  margin: 0;
+}
+
+.portada-editor-foto-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgb(0 0 0 / 50%);
+  padding: 0.4rem;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 15%);
+}
+
+.portada-editor-miniatura {
+  width: 60px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.portada-editor-acciones {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.portada-editor-boton-flecha {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.75rem;
+  background: rgb(255 255 255 / 15%);
+  color: #FFFFFF;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.portada-editor-boton-flecha:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.portada-editor-boton-quitar {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.75rem;
+  background: rgb(220 38 38 / 30%);
+  color: #ff9999;
+  border: 1px solid rgb(220 38 38 / 50%);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.portada-editor-boton-quitar:hover,
+.portada-editor-boton-quitar:focus-visible {
+  background: rgb(220 38 38 / 60%);
+  color: #FFFFFF;
 }
 
 .portada-boton--campo {

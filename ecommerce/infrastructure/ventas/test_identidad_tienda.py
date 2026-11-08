@@ -139,3 +139,49 @@ class IdentidadTiendaTests(APITestCase):
         self.client.force_authenticate(create_user('comprador-identidad@example.test'))
         self.assertEqual(self.subir(logo=imagen_png()).status_code, 403)
         self.assertFalse(self.archivo('logo'))
+
+    def test_sube_varias_fotos_del_banner_las_reordena_y_las_borra(self):
+        import json
+        from .models import FotoBanner
+
+        # Sube 3 fotos nuevas al banner
+        f1 = imagen_png('foto1.png', color='red')
+        f2 = imagen_png('foto2.png', color='blue')
+        f3 = imagen_png('foto3.png', color='yellow')
+        datos = {
+            'banner_fotos': [f1, f2, f3],
+            'banner_orden': json.dumps(['nuevo:0', 'nuevo:1', 'nuevo:2']),
+        }
+        resp = self.client.patch(self.url, datos, format='multipart')
+        self.assertEqual(resp.status_code, 200)
+
+        banners_resp = resp.data.get('banners', [])
+        self.assertEqual(len(banners_resp), 3)
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 3)
+
+        id1 = banners_resp[0]['id']
+        id2 = banners_resp[1]['id']
+        id3 = banners_resp[2]['id']
+
+        # Reordena e invierte el orden, y elimina la del medio (id2)
+        resp_reorden = self.client.patch(self.url, {
+            'banner_orden': json.dumps([f'id:{id3}', f'id:{id1}']),
+        }, format='json')
+        self.assertEqual(resp_reorden.status_code, 200)
+        banners_reorden = resp_reorden.data.get('banners', [])
+        self.assertEqual(len(banners_reorden), 2)
+        self.assertEqual(banners_reorden[0]['id'], id3)
+        self.assertEqual(banners_reorden[0]['orden'], 0)
+        self.assertEqual(banners_reorden[1]['id'], id1)
+        self.assertEqual(banners_reorden[1]['orden'], 1)
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 2)
+
+        # La vista pública también las entrega ordenadas
+        publica = self.client.get(reverse('configuracion-global')).data
+        self.assertEqual(len(publica['banners']), 2)
+        self.assertEqual(publica['banners'][0]['id'], id3)
+
+        # Borra todas las fotos del banner
+        resp_borrar = self.client.patch(self.url, {'banner_orden': json.dumps([])}, format='json')
+        self.assertEqual(resp_borrar.status_code, 200)
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 0)

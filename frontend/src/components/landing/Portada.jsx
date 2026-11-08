@@ -1,24 +1,68 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
-import { CampoEditable, SelectorImagen } from './ControlesEdicion';
+import { CampoEditable, EditorFotosBanner } from './ControlesEdicion';
 
-// RF-01.1: portada de la landing con los campos fijos que edita el admin (antetítulo, título, texto,
-// imagen y botón). La foto prioriza la subida desde el panel sobre la URL antigua (banner_url).
-// Con `edicion` (modo edición del admin) los textos se vuelven campos en su mismo lugar y estilo.
+// RF-01.1, SCRUM-194: portada de la landing con banner en carrusel de fundido suave y campos fijos que
+// edita el admin (antetítulo, título, texto, botón y fotos del carrusel).
+// Con 2+ fotos cambian solas con fundido y botón de pausa (WCAG 2.2.2). Con 1 foto queda fija.
+// Las fotos no son clickeables y el velo garantiza contraste AA sobre todas las fotos.
 export default function Portada({ configuracion, edicion }) {
-  const imagen = configuracion.banner || configuracion.banner_url?.trim() || PORTADA_POR_DEFECTO;
+  const listaFotos = (configuracion.banners && configuracion.banners.length > 0)
+    ? configuracion.banners
+    : (configuracion.banner || configuracion.banner_url?.trim()
+        ? [{ id: 'default', imagen: configuracion.banner || configuracion.banner_url.trim() }]
+        : [{ id: 'default', imagen: PORTADA_POR_DEFECTO }]);
+
   const editando = Boolean(edicion?.editando);
+  const [indiceActivo, setIndiceActivo] = useState(0);
+  const [pausado, setPausado] = useState(false);
+
+  const totalFotos = listaFotos.length;
+  const indiceSeguro = totalFotos > 0 ? indiceActivo % totalFotos : 0;
+  const imagenActual = listaFotos[indiceSeguro]?.imagen || PORTADA_POR_DEFECTO;
+
+  useEffect(() => {
+    if (totalFotos <= 1 || pausado || editando) return undefined;
+    const intervalo = setInterval(() => {
+      setIndiceActivo((actual) => (actual + 1) % totalFotos);
+    }, 5000);
+    return () => clearInterval(intervalo);
+  }, [totalFotos, pausado, editando]);
 
   return (
     <section className={`portada${editando ? ' portada--editando' : ''}`} aria-labelledby="portada-titulo"
-      style={{ backgroundImage: `url("${imagen}")` }}>
+      style={{ backgroundImage: `url("${imagenActual}")` }}>
+      {/* Carrusel de diapositivas con fundido suave (no clickeables) */}
+      <div className="portada-carrusel" aria-hidden="true">
+        {listaFotos.map((foto, index) => (
+          <div
+            key={foto.id ?? index}
+            className={`portada-diapositiva ${index === indiceSeguro ? 'portada-diapositiva--activa' : ''}`}
+            style={{ backgroundImage: `url("${foto.imagen}")` }}
+          />
+        ))}
+      </div>
+
       <div className="portada-velo" aria-hidden="true" />
 
       {editando && (
         <div className="contenedor portada-controles">
-          <SelectorImagen campo="banner" nombre="imagen de portada" tieneImagen={Boolean(configuracion.banner)}
-            edicion={edicion} claro />
+          <EditorFotosBanner banners={edicion?.banners || listaFotos} edicion={edicion} claro />
         </div>
+      )}
+
+      {/* Botón visible para pausar y reanudar con 2+ fotos (WCAG 2.2.2) */}
+      {totalFotos >= 2 && !editando && (
+        <button
+          type="button"
+          className="portada-boton-pausa"
+          onClick={() => setPausado((p) => !p)}
+          aria-label={pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}
+        >
+          <span aria-hidden="true">{pausado ? '▶' : '⏸'}</span>
+          <span>{pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}</span>
+        </button>
       )}
 
       <div className="contenedor portada-contenido">

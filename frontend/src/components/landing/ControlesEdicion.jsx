@@ -64,3 +64,79 @@ export function SelectorImagen({ campo, nombre, tieneImagen, edicion, claro = fa
     </div>
   );
 }
+
+// Editor de fotos del carrusel de la portada (SCRUM-194): sube varias fotos, las ordena y las borra
+export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
+  const id = useId();
+  const error = edicion?.errores?.banner;
+  const total = banners.length;
+
+  return (
+    <div className={`selector-imagen${claro ? ' selector-imagen--claro' : ''} portada-editor-fotos-contenedor`}>
+      <input
+        id={id}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp"
+        className="visualmente-oculto"
+        aria-label="Subir imagen de portada"
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            edicion.agregarFotosBanner(e.target.files);
+          }
+          e.target.value = '';
+        }}
+      />
+
+      <div className="portada-editor-fotos">
+        <div className="portada-editor-cabecera">
+          <label htmlFor={id} className="boton-edicion">
+            {total === 0 ? 'Subir imagen de portada' : 'Subir más fotos al banner'}
+          </label>
+        </div>
+
+        {total > 0 && (
+          <ul className="portada-editor-fotos-lista">
+            {banners.map((foto, idx) => (
+              <li key={foto.id || idx} className="portada-editor-foto-item">
+                <img src={foto.imagen} alt="" className="portada-editor-miniatura" />
+                <span className="visualmente-oculto">Foto {idx + 1} de {total}</span>
+                <div className="portada-editor-acciones">
+                  <button
+                    type="button"
+                    className="boton-edicion portada-editor-boton-flecha"
+                    aria-label={`Mover foto ${idx + 1} hacia la izquierda`}
+                    disabled={idx === 0}
+                    onClick={() => edicion.reordenarFotosBanner(idx, idx - 1)}
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    className="boton-edicion portada-editor-boton-flecha"
+                    aria-label={`Mover foto ${idx + 1} hacia la derecha`}
+                    disabled={idx === total - 1}
+                    onClick={() => edicion.reordenarFotosBanner(idx, idx + 1)}
+                  >
+                    →
+                  </button>
+                  <button
+                    type="button"
+                    className="boton-edicion portada-editor-boton-quitar"
+                    aria-label={`Quitar foto ${idx + 1} del banner`}
+                    onClick={() => edicion.eliminarFotoBanner(idx)}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {error && <span id={`${id}-error`} className="selector-imagen-error" role="alert">{error}</span>}
+    </div>
+  );
+}

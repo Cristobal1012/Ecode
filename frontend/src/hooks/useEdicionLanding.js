@@ -35,6 +35,16 @@ const sinCampo = (objeto, campo) => {
   return copia;
 };
 
+export const obtenerBannersIniciales = (conf) => {
+  if (conf?.banners && Array.isArray(conf.banners) && conf.banners.length > 0) {
+    return conf.banners.map((b, i) => ({ id: b.id, imagen: b.imagen, orden: b.orden ?? i }));
+  }
+  if (conf?.banner || conf?.banner_url?.trim()) {
+    return [{ id: 'legacy', imagen: conf.banner || conf.banner_url.trim(), orden: 0 }];
+  }
+  return [];
+};
+
 const textosDe = (configuracion) =>
   Object.fromEntries(Object.keys(CAMPOS_TEXTO).map((campo) => [campo, configuracion?.[campo] ?? '']));
 
@@ -53,6 +63,7 @@ const erroresDe = (error) => {
 export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
+  const [banners, setBanners] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [mensaje, setMensaje] = useState('');
@@ -63,7 +74,15 @@ export default function useEdicionLanding(configuracion) {
   const textosCambiados = editando
     ? Object.keys(CAMPOS_TEXTO).filter((campo) => textos[campo] !== original[campo])
     : [];
-  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0;
+
+  const bannersIniciales = obtenerBannersIniciales(configuracion);
+  const bannersCambiados = Boolean(
+    banners !== null &&
+    JSON.stringify(banners.map((b) => b.id || b.imagen)) !==
+      JSON.stringify(bannersIniciales.map((b) => b.id || b.imagen))
+  );
+
+  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || bannersCambiados;
 
   const liberarVistasPrevias = () => {
     vistasPrevias.current.forEach((url) => URL.revokeObjectURL(url));
@@ -75,6 +94,7 @@ export default function useEdicionLanding(configuracion) {
 
   const iniciar = () => {
     setTextos(textosDe(configuracion));
+    setBanners(obtenerBannersIniciales(configuracion));
     setErrores({});
     setMensaje('');
   };
@@ -97,7 +117,88 @@ export default function useEdicionLanding(configuracion) {
     const vistaPrevia = archivo ? URL.createObjectURL(archivo) : null;
     if (vistaPrevia) vistasPrevias.current.add(vistaPrevia);
     setImagenes((actual) => ({ ...actual, [campo]: { archivo, vistaPrevia } }));
+
+    if (campo === 'banner') {
+      if (archivo) {
+        setBanners([{ id: 'nuevo_banner', archivo, vistaPrevia, imagen: vistaPrevia }]);
+      } else {
+        setBanners([]);
+      }
+    }
+
     setErrores((actual) => sinCampo(actual, campo));
+    setMensaje('');
+  };
+
+  const agregarFotosBanner = (nuevosArchivos) => {
+    const lista = Array.from(nuevosArchivos || []);
+    if (!lista.length) return;
+
+    for (const archivo of lista) {
+      if (!TIPOS_IMAGEN.includes(archivo.type)) {
+        setErrores((actual) => ({ ...actual, banner: 'Solo se admiten imágenes JPEG, PNG o WebP.' }));
+        return;
+      }
+      if (archivo.size > MAXIMO_BYTES) {
+        setErrores((actual) => ({ ...actual, banner: 'La imagen pesa más de 5 MB.' }));
+        return;
+      }
+    }
+
+    const agregados = lista.map((archivo) => {
+      const vistaPrevia = URL.createObjectURL(archivo);
+      vistasPrevias.current.add(vistaPrevia);
+      return {
+        id: `nuevo_${Math.random().toString(36).slice(2, 9)}`,
+        archivo,
+        vistaPrevia,
+        imagen: vistaPrevia,
+      };
+    });
+
+    setBanners((actual) => {
+      const base = actual ?? obtenerBannersIniciales(configuracion);
+      const resultado = [...base, ...agregados];
+      if (resultado.length > 0 && resultado[0].archivo) {
+        setImagenes((prev) => ({ ...prev, banner: { archivo: resultado[0].archivo, vistaPrevia: resultado[0].vistaPrevia } }));
+      }
+      return resultado;
+    });
+    setErrores((actual) => sinCampo(actual, 'banner'));
+    setMensaje('');
+  };
+
+  const reordenarFotosBanner = (origen, destino) => {
+    setBanners((actual) => {
+      const base = [...(actual ?? obtenerBannersIniciales(configuracion))];
+      if (origen < 0 || origen >= base.length || destino < 0 || destino >= base.length) return base;
+      const [movido] = base.splice(origen, 1);
+      base.splice(destino, 0, movido);
+      if (base.length > 0 && base[0].archivo) {
+        setImagenes((prev) => ({ ...prev, banner: { archivo: base[0].archivo, vistaPrevia: base[0].vistaPrevia } }));
+      }
+      return base;
+    });
+    setMensaje('');
+  };
+
+  const eliminarFotoBanner = (indice) => {
+    setBanners((actual) => {
+      const base = [...(actual ?? obtenerBannersIniciales(configuracion))];
+      if (indice < 0 || indice >= base.length) return base;
+      const eliminado = base[indice];
+      if (eliminado?.vistaPrevia) {
+        URL.revokeObjectURL(eliminado.vistaPrevia);
+        vistasPrevias.current.delete(eliminado.vistaPrevia);
+      }
+      base.splice(indice, 1);
+      if (base.length === 0) {
+        setImagenes((prev) => ({ ...prev, banner: { archivo: null, vistaPrevia: null } }));
+      } else if (base[0].archivo) {
+        setImagenes((prev) => ({ ...prev, banner: { archivo: base[0].archivo, vistaPrevia: base[0].vistaPrevia } }));
+      }
+      return base;
+    });
     setMensaje('');
   };
 
@@ -105,6 +206,7 @@ export default function useEdicionLanding(configuracion) {
     liberarVistasPrevias();
     setImagenes({});
     setTextos(textosDe(configuracion));
+    setBanners(obtenerBannersIniciales(configuracion));
     setErrores({});
     setMensaje('');
   };
@@ -113,6 +215,7 @@ export default function useEdicionLanding(configuracion) {
     liberarVistasPrevias();
     setImagenes({});
     setTextos(null);
+    setBanners(null);
     setErrores({});
     setMensaje('');
   };
@@ -129,27 +232,48 @@ export default function useEdicionLanding(configuracion) {
     setGuardando(true);
     setErrores({});
     try {
-      // Las imágenes nuevas viajan en multipart junto con los textos (una sola petición: si falla, no queda
-      // publicada la mitad). Quitar una imagen es un null, que solo se puede enviar en JSON.
       const nuevas = Object.entries(imagenes).filter(([, { archivo }]) => archivo);
       const quitadas = Object.fromEntries(
         Object.entries(imagenes).filter(([, { archivo }]) => !archivo).map(([campo]) => [campo, null]));
       const textosNuevos = Object.fromEntries(textosCambiados.map((campo) => [campo, textos[campo]]));
 
-      if (nuevas.length) {
+      // Banners
+      const bannersActuales = banners ?? obtenerBannersIniciales(configuracion);
+      const nuevosArchivosBanner = bannersActuales.filter((b) => b.archivo).map((b) => b.archivo);
+      let manifestBanners = null;
+      if (bannersCambiados) {
+        manifestBanners = bannersActuales.map((b) => {
+          if (b.archivo) {
+            const idx = nuevosArchivosBanner.indexOf(b.archivo);
+            return `nuevo:${idx}`;
+          }
+          return `id:${b.id}`;
+        });
+      }
+
+      const hayArchivos = nuevas.length > 0 || nuevosArchivosBanner.length > 0;
+      if (hayArchivos) {
         const formulario = new FormData();
         Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, valor));
         nuevas.forEach(([campo, { archivo }]) => formulario.append(campo, archivo));
-        // Sin Content-Type fijo: el navegador pone multipart/form-data con su boundary (como GaleriaImagenes)
+        nuevosArchivosBanner.forEach((arch) => formulario.append('banner_fotos', arch));
+        if (manifestBanners !== null) {
+          formulario.append('banner_orden', JSON.stringify(manifestBanners));
+        }
         await clienteAxios.patch('configuracion/negocio/', formulario, { headers: { 'Content-Type': undefined } });
       }
-      const enJson = nuevas.length ? quitadas : { ...textosNuevos, ...quitadas };
+
+      const enJson = hayArchivos ? quitadas : { ...textosNuevos, ...quitadas };
+      if (manifestBanners !== null && !hayArchivos) {
+        enJson.banner_orden = JSON.stringify(manifestBanners);
+      }
       if (Object.keys(enJson).length) await clienteAxios.patch('configuracion/negocio/', enJson);
 
       const guardada = await recargarConfiguracion();
       liberarVistasPrevias();
       setImagenes({});
       setTextos(textosDe(guardada));
+      setBanners(obtenerBannersIniciales(guardada));
       setMensaje('Cambios guardados: ya están publicados en tu tienda.');
     } catch (error) {
       setErrores(erroresDe(error));
@@ -159,16 +283,24 @@ export default function useEdicionLanding(configuracion) {
   };
 
   // Lo que se dibuja: la configuración publicada con el borrador encima
+  const listaBannersVista = (banners ?? obtenerBannersIniciales(configuracion)).map((b) => ({
+    ...b,
+    imagen: b.vistaPrevia || b.imagen,
+  }));
+
   const vista = editando
     ? {
         ...configuracion,
         ...textos,
-        ...Object.fromEntries(Object.entries(imagenes).map(([campo, { vistaPrevia }]) => [campo, vistaPrevia]))
+        ...Object.fromEntries(Object.entries(imagenes).map(([campo, { vistaPrevia }]) => [campo, vistaPrevia])),
+        banners: listaBannersVista,
       }
     : configuracion;
 
   return {
     editando, vista, textos, hayCambios, guardando, errores, mensaje,
-    iniciar, cambiarTexto, cambiarImagen, descartar, salir, guardar
+    banners: listaBannersVista,
+    iniciar, cambiarTexto, cambiarImagen, agregarFotosBanner, reordenarFotosBanner, eliminarFotoBanner,
+    descartar, salir, guardar
   };
 }

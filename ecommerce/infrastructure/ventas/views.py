@@ -79,7 +79,7 @@ from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploa
 
 from .models import (
     ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
-    PaginaLegal, Promocion, Publicacion, Resena,
+    FotoBanner, PaginaLegal, Promocion, Publicacion, Resena,
 )
 from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
@@ -88,6 +88,7 @@ from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
+    ImagenNegocioField,
     OrdenCompraSerializer,
     RevisionCarritoSerializer,
     DireccionEnvioSerializer,
@@ -765,13 +766,72 @@ class ConfiguracionNegocioView(APIView):
         serializer = ConfiguracionNegocioSerializer(config, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def _procesar_banners(self, config, request):
+        if 'banner_orden' not in request.data:
+            return
+        raw_orden = request.data.get('banner_orden')
+        if isinstance(raw_orden, str):
+            try:
+                orden_list = json.loads(raw_orden)
+            except Exception:
+                orden_list = []
+        elif isinstance(raw_orden, list):
+            orden_list = raw_orden
+        else:
+            orden_list = []
+
+        nuevos_archivos = request.FILES.getlist('banner_fotos')
+        existentes = {f.id: f for f in config.fotos_banner.all()}
+
+        # Identificar IDs existentes a conservar
+        ids_a_mantener = set()
+        for item in orden_list:
+            if isinstance(item, str) and item.startswith('id:'):
+                try:
+                    ids_a_mantener.add(int(item.split(':')[1]))
+                except ValueError:
+                    pass
+            elif isinstance(item, int):
+                ids_a_mantener.add(item)
+
+        # Eliminar fotos quitadas
+        for foto_id, foto in existentes.items():
+            if foto_id not in ids_a_mantener:
+                foto.delete()
+
+        # Reordenar y crear fotos nuevas
+        campo_imagen = ImagenNegocioField()
+        for nuevo_orden, item in enumerate(orden_list):
+            if (isinstance(item, str) and item.startswith('id:')) or isinstance(item, int):
+                foto_id = int(item.split(':')[1]) if isinstance(item, str) else item
+                if foto_id in existentes:
+                    foto = existentes[foto_id]
+                    if foto.orden != nuevo_orden:
+                        foto.orden = nuevo_orden
+                        foto.save(update_fields=['orden'])
+            elif isinstance(item, str) and item.startswith('nuevo:'):
+                try:
+                    file_idx = int(item.split(':')[1])
+                    if file_idx < len(nuevos_archivos):
+                        archivo = nuevos_archivos[file_idx]
+                        archivo_procesado = campo_imagen.to_internal_value(archivo)
+                        FotoBanner.objects.create(
+                            configuracion=config,
+                            imagen=archivo_procesado,
+                            orden=nuevo_orden,
+                        )
+                except Exception as e:
+                    logger.error(f"Error procesando foto de banner: {e}")
+
     def put(self, request):
         config = self.get_object()
         serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
                                                     context={'request': request})
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            self._procesar_banners(config, request)
+            respuesta = ConfiguracionNegocioSerializer(config, context={'request': request})
+            return Response(respuesta.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):

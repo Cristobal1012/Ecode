@@ -112,6 +112,20 @@ class ConfiguracionGlobal(models.Model):
         return self.nombre_tienda
 
 
+class FotoBanner(models.Model):
+    """Foto del carrusel de la portada (RF-01.1, SCRUM-194). Se ordenan con el campo orden."""
+
+    configuracion = models.ForeignKey(ConfiguracionGlobal, on_delete=models.CASCADE, related_name='fotos_banner')
+    imagen = models.ImageField(upload_to='negocio/banners/')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f'Foto banner {self.orden} de {self.configuracion}'
+
+
 class MedioPago(models.Model):
     """Un medio de pago configurado por el emprendedor (RN-02). Los campos de cada medio los define el dominio."""
 

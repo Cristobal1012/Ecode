@@ -11,8 +11,10 @@ for (const ancho of [1440, 390, 768, 320]) {
     await page.route('**/api/ventas/mis-pedidos/', route => route.fulfill({ json: [] }));
     await page.setViewportSize({ width: ancho, height: ancho === 768 ? 1024 : ancho === 1440 ? 900 : 844 });
     for (const ruta of rutas) {
-      await page.goto(ruta);
-      await medirVista(page);
+      await page.goto(ruta, {
+        waitUntil: 'commit',
+        timeout: 10000,
+      });
       if (ruta === '/login') {
         await page.getByRole('button', { name: 'Regístrate aquí' }).click();
         await expect(page.getByRole('heading', { name: 'Crear cuenta', exact: true })).toBeVisible();

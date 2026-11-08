@@ -845,3 +845,10 @@
 .resena-acciones .boton {
   padding: 0.7rem 1.25rem;
 }
+.menu-editor-campos { border: 0; padding: 0; min-width: 0; }
+.menu-editor-lista { padding-left: 1.5rem; }
+.menu-editor-fila { margin-bottom: 20px; padding-left: 8px; }
+.menu-editor-fila .admin-campo { min-width: 0; }
+.menu-editor-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.menu-editor-acciones button { min-height: 44px; }
+.menu-editor-fila small { overflow-wrap: anywhere; }

@@ -852,3 +852,8 @@
 .menu-editor-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
 .menu-editor-acciones button { min-height: 44px; }
 .menu-editor-fila small { overflow-wrap: anywhere; }
+.orden-catalogo-campos { border: 0; padding: 0; min-width: 0; }
+.orden-catalogo-lista { padding-left: 1.5rem; }
+.orden-catalogo-lista li { margin: 16px 0; overflow-wrap: anywhere; }
+.orden-catalogo-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.orden-catalogo-acciones button { min-height: 44px; max-width: 100%; white-space: normal; }

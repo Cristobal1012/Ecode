@@ -1,5 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
 import "./header.css";
+import { resolverMenu } from "../../utils/menuPrincipal";
 import logoUniversidad from "./logoU.png";
 import MenuUsuario from "../MenuUsuario";
 import CarritoCompras from "../CarritoCompras";
@@ -49,30 +50,12 @@ function Header({ vistaPrevia }) {
 
         <nav className="header-nav" aria-label="Navegación de la tienda">
           <div className="header-links">
-            <NavLink to="/" end>
-              Inicio
-            </NavLink>
-            <NavLink to="/catalogo">Catálogo</NavLink>
-            {/* Con el blog activo, "Nosotros" (o el nombre que eligió el admin) lleva al blog; si no, a la landing */}
-            {/* El blog mantiene su enlace independiente de la página Sobre mí */}
-            {configuracion?.blog_activo ? (
-              <NavLink to="/blog">
-                {configuracion.blog_nombre || "Nosotros"}
-              </NavLink>
-            ) : (
-              configuracion?.nosotros_texto && (
-                <Link to="/#nosotros">Nosotros</Link>
+            {resolverMenu(configuracion).filter(enlace => enlace.visible).map(enlace =>
+              enlace.to === '/#nosotros' ? (
+                <Link key={enlace.id} to={enlace.to}>{enlace.nombre}</Link>
+              ) : (
+                <NavLink key={enlace.id} to={enlace.to} end={enlace.id === 'inicio'}>{enlace.nombre}</NavLink>
               )
-            )}
-
-            {/* Página Sobre mí: solo aparece cuando el emprendedor la activa */}
-            {configuracion?.sobre_mi_activo && (
-              <NavLink to="/sobre-mi">
-                {configuracion.sobre_mi_nombre || "Sobre mí"}
-              </NavLink>
-            )}
-            {configuracion?.cotizaciones_activas && (
-              <NavLink to="/cotizar">Cotizar</NavLink>
             )}
 
             {/* Si es ADMIN, le damos un atajo rápido a su panel */}

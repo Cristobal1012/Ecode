@@ -436,3 +436,4 @@
     display: none;
   }
 }
+.header-links a { max-width: 100%; overflow-wrap: anywhere; }

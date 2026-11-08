@@ -18,6 +18,7 @@ import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
+import GestorMenuPrincipal from '../components/GestorMenuPrincipal';
 import GestorBlog from '../components/GestorBlog';
 import GestorSobreMi from '../components/GestorSobreMi';
 import GestorPublicaciones from '../components/GestorPublicaciones';
@@ -31,6 +32,7 @@ import Spinner from '../components/carga/Spinner';
 // Secciones de la vista Configuración: alimentan los títulos y el índice lateral.
 // Para agregar una sección, súmala aquí y usa <TituloSeccion id="..." /> en su bloque.
 const SECCIONES_CONFIGURACION = [
+  { id: 'config-menu', titulo: 'Menú principal' },
   { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
@@ -241,6 +243,8 @@ export default function Admin() {
               </nav>
 
               <div className="config-secciones">
+                <div><TituloSeccion id="config-menu" /><GestorMenuPrincipal /></div>
+                <hr className="admin-separador" />
                 {/* RF-01.1: la landing, el logo y el favicon se editan en la misma página, viendo cómo quedan */}
                 <div>
                   <TituloSeccion id="config-landing" />

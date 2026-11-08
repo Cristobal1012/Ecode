@@ -27,6 +27,19 @@ const menu = () => screen.findByRole('navigation', { name: 'Navegación de la ti
 const columnaTienda = () => screen.findByRole('navigation', { name: 'Tienda' });
 
 describe('Enlace al blog en el header y el footer', () => {
+  it('personaliza el encabezado sin cambiar el pie ni el enlace administrativo', async () => {
+    localStorage.setItem('rol', 'ADMIN');
+    responder({ ...CONFIGURACION, blog_activo: true, blog_nombre: 'Portafolio', menu_principal: {
+      orden: ['nosotros', 'catalogo', 'inicio', 'cotizar', 'sobre_mi'], nombres: { nosotros: 'Proyectos' }
+    } });
+    await renderTienda();
+    const navegacion = within(await menu());
+    await navegacion.findByRole('link', { name: 'Proyectos' });
+    expect(navegacion.getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Proyectos', 'Catálogo', 'Inicio', 'Panel admin']);
+    expect(navegacion.getByRole('link', { name: 'Proyectos' })).toHaveAttribute('href', '/blog');
+    expect(within(await columnaTienda()).getByRole('link', { name: 'Portafolio' })).toBeInTheDocument();
+    localStorage.removeItem('rol');
+  });
   beforeEach(() => vi.clearAllMocks());
 
   afterEach(() => cleanup());

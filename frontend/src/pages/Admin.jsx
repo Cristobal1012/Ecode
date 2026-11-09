@@ -19,7 +19,6 @@ import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
 import GestorOrdenCatalogo from '../components/GestorOrdenCatalogo';
-import GestorMenuPrincipal from '../components/GestorMenuPrincipal';
 import GestorBlog from '../components/GestorBlog';
 import GestorSobreMi from '../components/GestorSobreMi';
 import GestorPublicaciones from '../components/GestorPublicaciones';
@@ -36,7 +35,6 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
-  { id: 'config-menu', titulo: 'Menú principal' },
   { id: 'config-orden-catalogo', titulo: 'Orden del catálogo y categorías' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
@@ -273,8 +271,6 @@ export default function Admin() {
 
                 <hr className="admin-separador" />
 
-                <div><TituloSeccion id="config-menu" /><GestorMenuPrincipal /></div>
-                <hr className="admin-separador" />
                 <div><TituloSeccion id="config-orden-catalogo" /><GestorOrdenCatalogo /></div>
                 <hr className="admin-separador" />
 

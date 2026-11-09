@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORDEN_MENU, resolverMenu } from '../utils/menuPrincipal';
+import { ORDEN_MENU, resolverMenu, textoBotonCatalogo } from '../utils/menuPrincipal';
 
 describe('menú principal', () => {
   it('conserva el orden, nombres y visibilidad heredados', () => {
@@ -10,11 +10,30 @@ describe('menú principal', () => {
   it('cambia nombres y orden conservando destinos y enlaces ocultos', () => {
     const config = { menu_principal: { orden: [...ORDEN_MENU].reverse(), nombres: { nosotros: 'Empresa', catalogo: 'Productos' } } };
     expect(resolverMenu(config)[0]).toMatchObject({ id: 'cotizar', visible: false, to: '/cotizar' });
-    expect(resolverMenu({ ...config, nosotros_texto: 'Texto' })[2]).toMatchObject({ nombre: 'Empresa', to: '/#nosotros', visible: true });
-    expect(resolverMenu({ ...config, blog_activo: true })[2]).toMatchObject({ nombre: 'Empresa', to: '/blog', visible: true });
+    expect(resolverMenu({ ...config, nosotros_texto: 'Texto' })[2]).toMatchObject({ nombre: 'Nosotros', to: '/#nosotros', visible: true });
+    expect(resolverMenu({ ...config, blog_activo: true })[2]).toMatchObject({ nombre: 'Nosotros', to: '/blog', visible: true });
     expect(resolverMenu({ ...config, sobre_mi_activo: true, cotizaciones_activas: true }).every(e => e.id === 'nosotros' || e.visible)).toBe(true);
   });
   it('recupera identificadores faltantes y descarta desconocidos sin duplicar', () => {
     expect(resolverMenu({ menu_principal: { orden: ['catalogo', 'catalogo', 'ajeno'] } }).map(e => e.id)).toEqual(['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar']);
+  });
+  it('prioriza los nombres de las secciones sobre personalizaciones antiguas', () => {
+    const config = { blog_activo: true, blog_nombre: 'Portafolio', sobre_mi_nombre: 'Mi historia',
+      menu_principal: { nombres: { nosotros: 'Antiguo blog', sobre_mi: 'Antigua historia', inicio: 'Portada', cotizar: 'Encargos' } } };
+    expect(resolverMenu(config).map(e => e.nombre)).toEqual(['Portada', 'Catálogo', 'Portafolio', 'Mi historia', 'Encargos']);
+  });
+  it('ignora visibilidad antigua y respeta exclusivamente la habilitación de secciones', () => {
+    const config = { blog_activo: true, sobre_mi_activo: true, cotizaciones_activas: true,
+      menu_principal: { ocultos: ['inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar'] } };
+    const anterior = structuredClone(config);
+    expect(resolverMenu(config).filter(e => e.visible).map(e => e.id)).toEqual(ORDEN_MENU);
+    expect(resolverMenu({ ...config, blog_activo: false, sobre_mi_activo: false, cotizaciones_activas: false })
+      .filter(e => e.visible).map(e => e.id)).toEqual(['inicio', 'catalogo']);
+    expect(resolverMenu({ ...config, blog_activo: false, nosotros_texto: 'Nuestra tienda' })
+      .find(e => e.id === 'nosotros')).toMatchObject({ to: '/#nosotros', visible: true });
+    expect(config).toEqual(anterior);
+  });
+  it.each([['Catálogo', 'Ver catálogo'], ['Productos', 'Ver productos'], ['Nuestra colección', 'Ver nuestra colección'], ['Artículos', 'Ver artículos'], ['   ', 'Ver catálogo']])('deriva el botón de portada desde %s', (nombre, texto) => {
+    expect(textoBotonCatalogo({ texto_boton_ingreso: 'Texto antiguo', menu_principal: { nombres: { catalogo: nombre } } })).toBe(texto);
   });
 });

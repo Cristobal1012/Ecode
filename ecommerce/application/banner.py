@@ -151,3 +151,4 @@ class ActualizarBanners:
 
             # Si la transacción confirma, se eliminan físicamente los archivos del disco (Point 7)
             _borrar_al_confirmar(archivos_a_borrar)
+

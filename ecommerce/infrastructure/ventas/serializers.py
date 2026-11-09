@@ -929,6 +929,7 @@ class PublicacionEntradaSerializer(serializers.Serializer):
     contenido = serializers.CharField(required=False, allow_blank=True, default='', max_length=100_000,
                                       trim_whitespace=False)
     estado = serializers.CharField(required=False, allow_blank=True, default='')
+    youtube = serializers.CharField(required=False, allow_blank=True, default='', max_length=500)
     # Sin portada ni quitar_portada, la portada queda como estaba
     portada = ArchivoImagenField(required=False)
     quitar_portada = serializers.BooleanField(required=False, default=False)
@@ -967,7 +968,7 @@ class PublicacionDetalleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Publicacion
-        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'fecha_publicacion']
+        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'youtube_id', 'fecha_publicacion']
 
 
 class PublicacionAdminSerializer(serializers.ModelSerializer):
@@ -975,8 +976,8 @@ class PublicacionAdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Publicacion
-        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'estado', 'fecha_publicacion',
-                  'actualizada']
+        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'youtube_id', 'estado',
+                  'fecha_publicacion', 'actualizada']
 
 class MedioPagoAdminSerializer(serializers.Serializer):
     """Entrada del panel: las credenciales pueden volver enmascaradas (se conservan) o vacías (se borran)."""

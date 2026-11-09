@@ -91,7 +91,14 @@ class BlogPublicoTests(BlogTestCase):
         self.assertEqual(respuesta.data['contenido'], '<p>Desde 2015.</p>')
         self.assertTrue(respuesta.data['portada'].startswith('http://testserver/media/blog/portadas/'))
         self.assertEqual(len(respuesta.data['fotos']), 2)
+        self.assertEqual(respuesta.data['youtube_id'], '')
         self.assertNotIn('estado', respuesta.data)
+
+    def test_detalle_con_video_de_youtube(self):
+        self.crear({**PUBLICADA, 'youtube': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'})
+        respuesta = self.client.get(reverse('blog-publicacion', args=['nuestro-taller']))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.data['youtube_id'], 'dQw4w9WgXcQ')
 
     def test_un_borrador_responde_igual_que_una_publicacion_inexistente(self):
         self.crear({'titulo': 'Idea a medias', 'estado': 'BORRADOR'})
@@ -192,6 +199,20 @@ class BlogPanelTests(BlogTestCase):
         respuesta = self.client.post(reverse('admin-blog'), {**PUBLICADA, 'portada': falso}, format='multipart')
         self.assertEqual(respuesta.status_code, 400)
         self.assertIn('portada', respuesta.data)
+
+    def test_guarda_video_de_youtube_solo_con_el_id(self):
+        respuesta = self.client.post(reverse('admin-blog'),
+                                     {**PUBLICADA, 'youtube': 'https://youtu.be/dQw4w9WgXcQ'}, format='json')
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(respuesta.data['youtube_id'], 'dQw4w9WgXcQ')
+        pub = Publicacion.objects.get(id=respuesta.data['id'])
+        self.assertEqual(pub.youtube_id, 'dQw4w9WgXcQ')
+
+    def test_rechaza_enlace_youtube_invalido(self):
+        respuesta = self.client.post(reverse('admin-blog'),
+                                     {**PUBLICADA, 'youtube': 'https://vimeo.com/12345678901'}, format='json')
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('youtube', respuesta.data)
 
     def test_galeria_de_hasta_10_fotos(self):
         publicacion = self.crear()

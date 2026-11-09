@@ -14,3 +14,4 @@ class EstructuraBannerInvalida(Exception):
 def validar_cantidad_fotos_banner(cantidad: int):
     if cantidad > MAX_FOTOS_BANNER:
         raise LimiteFotosBannerExcedido(f'El banner admite hasta {MAX_FOTOS_BANNER} fotos.')
+

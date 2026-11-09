@@ -388,6 +388,7 @@ class Publicacion(models.Model):
     # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
     contenido = models.TextField(blank=True, default='')
     portada = models.ImageField(upload_to='blog/portadas/', blank=True, null=True)
+    youtube_id = models.CharField(max_length=20, blank=True, default='')
     estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoPublicacion.BORRADOR.value)
     # Se fija la primera vez que se publica y ordena el blog; None si nunca salió de borrador
     fecha_publicacion = models.DateTimeField(null=True, blank=True)

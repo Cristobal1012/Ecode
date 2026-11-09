@@ -7,14 +7,15 @@ import Spinner from './carga/Spinner';
 // Igual que el backend (domain/blog.py)
 const MAX_FOTOS = 10;
 const FORMATOS = ['image/jpeg', 'image/png', 'image/webp'];
-const CAMPOS = ['titulo', 'resumen', 'contenido', 'estado', 'portada'];
+const CAMPOS = ['titulo', 'resumen', 'contenido', 'estado', 'portada', 'youtube'];
 // Multipart: sin Content-Type, el navegador lo pone con su separador
 const MULTIPART = { headers: { 'Content-Type': undefined } };
 
 const formularioDe = (publicacion) => ({
   titulo: publicacion?.titulo || '',
   resumen: publicacion?.resumen || '',
-  contenido: publicacion?.contenido || ''
+  contenido: publicacion?.contenido || '',
+  youtube: publicacion?.youtube ?? (publicacion?.youtube_id ? `https://www.youtube.com/watch?v=${publicacion.youtube_id}` : '')
 });
 
 // DRF responde ['mensaje'], 'mensaje' o, en una lista de archivos, { 0: ['mensaje'] }
@@ -217,6 +218,22 @@ export default function FormularioPublicacion({ publicacion: inicial, alVolver }
             )}
           </div>
           {errorCampo('portada')}
+        </div>
+
+        <div className="admin-campo">
+          <label htmlFor={`${id}-youtube`}>Video de YouTube</label>
+          <input
+            id={`${id}-youtube`}
+            type="text"
+            value={formulario.youtube}
+            placeholder="https://www.youtube.com/watch?v=..."
+            onChange={(e) => editar('youtube', e.target.value)}
+            {...describir('youtube', `${id}-youtube-ayuda`)}
+          />
+          <p id={`${id}-youtube-ayuda`} className="admin-ayuda">
+            Opcional. Pega el enlace de un video o Short de YouTube.
+          </p>
+          {errorCampo('youtube')}
         </div>
 
         <div className="admin-campo publicacion-editor">

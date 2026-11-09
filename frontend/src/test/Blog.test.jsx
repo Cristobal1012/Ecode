@@ -165,6 +165,23 @@ describe('Página de una publicación', () => {
     expect(screen.getByRole('link', { name: 'Ver Portafolio' })).toHaveAttribute('href', '/blog');
   });
 
+  it('muestra la miniatura del video de YouTube y carga el reproductor de youtube-nocookie al hacer click (RF-04.4, SCRUM-195)', async () => {
+    responder({
+      publicacion: () => Promise.resolve({ data: { ...PUBLICACION, youtube_id: 'dQw4w9WgXcQ' } })
+    });
+    await renderEn('/blog/nuestro-taller');
+
+    // Hasta el clic, no se carga ningún iframe de YouTube
+    expect(screen.queryByTitle(/Reproductor de video/i)).not.toBeInTheDocument();
+    const botonPlay = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
+    expect(botonPlay).toBeInTheDocument();
+
+    // Al hacer clic, se monta el iframe desde youtube-nocookie.com
+    fireEvent.click(botonPlay);
+    const iframe = screen.getByTitle('Reproductor de video: Nuestro taller');
+    expect(iframe).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1');
+  });
+
   it('con el blog apagado avisa que la página no está disponible', async () => {
     responder({ configuracion: { ...CONFIGURACION, blog_activo: false }, publicacion: noEncontrada });
     await renderEn('/blog/nuestro-taller');

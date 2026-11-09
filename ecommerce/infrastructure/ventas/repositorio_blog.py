@@ -47,6 +47,7 @@ class DjangoRepositorioPublicaciones(RepositorioPublicaciones):
         return PublicacionGuardada(
             slug=publicacion.slug, fecha_publicacion=publicacion.fecha_publicacion,
             tiene_portada=bool(publicacion.portada), cantidad_fotos=publicacion.cantidad_fotos,
+            youtube_id=publicacion.youtube_id,
         )
 
     def slugs_parecidos(self, base, excepto_id):
@@ -67,6 +68,7 @@ class DjangoRepositorioPublicaciones(RepositorioPublicaciones):
                 publicacion.estado = datos.estado.value
                 publicacion.slug = slug
                 publicacion.fecha_publicacion = fecha_publicacion
+                publicacion.youtube_id = datos.youtube_id
                 if portada is not SIN_CAMBIO:
                     _borrar_al_confirmar([publicacion.portada])
                     publicacion.portada = _archivo(portada) if portada is not None else None

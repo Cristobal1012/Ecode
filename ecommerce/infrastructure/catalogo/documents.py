@@ -4,6 +4,12 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from mongoengine import Document, EmbeddedDocument, fields
 
+from ecommerce.domain.catalogo import (
+    ColeccionPrivadaInvalida,
+    validar_obra_no_es_version_de_otra,
+    validar_version_a_la_venta,
+)
+
 class Variante(EmbeddedDocument):
     sku = fields.StringField(required=True, unique=True)
     precio = fields.DecimalField(required=True, precision=2)
@@ -95,26 +101,33 @@ class Producto(Document):
         super().clean()
         self.actualizar_precio_minimo_vigente()
 
-        # Validaciones de Colección privada (SCRUM-197)
+        # Validaciones de Colección privada en el dominio (SCRUM-197)
         if self.version_a_la_venta:
             version_id = str(self.version_a_la_venta).strip()
-            if self.id and str(self.id) == version_id:
-                raise MongoValidationError('Una obra no puede ser su propia versión a la venta.')
             try:
                 target = Producto.objects(id=version_id).first()
             except Exception:
                 raise MongoValidationError('El producto seleccionado como versión a la venta no es válido.')
-            if not target:
-                raise MongoValidationError('El producto seleccionado como versión a la venta no existe.')
-            if getattr(target, 'coleccion_privada', False):
-                raise MongoValidationError('No se puede enlazar a otra obra que es colección privada.')
+            try:
+                validar_version_a_la_venta(
+                    producto_id=str(self.id) if self.id else None,
+                    version_id=version_id,
+                    target_existe=bool(target),
+                    target_es_coleccion_privada=bool(getattr(target, 'coleccion_privada', False)) if target else False,
+                )
+            except ColeccionPrivadaInvalida as error:
+                raise MongoValidationError(str(error))
 
         if self.coleccion_privada and self.id:
             referenciador = Producto.objects(version_a_la_venta=str(self.id)).first()
-            if referenciador:
-                raise MongoValidationError(
-                    f'Este producto no puede ser colección privada porque está asignado como versión a la venta de "{referenciador.nombre}".'
+            try:
+                validar_obra_no_es_version_de_otra(
+                    producto_id=str(self.id),
+                    coleccion_privada=self.coleccion_privada,
+                    nombre_referenciador=referenciador.nombre if referenciador else None,
                 )
+            except ColeccionPrivadaInvalida as error:
+                raise MongoValidationError(str(error))
 
     def save(self, *args, **kwargs):
         self.actualizar_precio_minimo_vigente()

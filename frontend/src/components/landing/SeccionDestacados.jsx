@@ -58,8 +58,9 @@ export default function SeccionDestacados({
 function TarjetaDestacado({ destacado, nombreBlog }) {
   const [imagenRota, setImagenRota] = useState(false);
   const esProducto = destacado.tipo === 'PRODUCTO';
-  const precio = esProducto ? obtenerDatosPrecioYStock(destacado.variantes) : null;
-  const etiqueta = precio?.agotado ? 'Agotado' : precio?.tieneOferta ? 'Oferta' : null;
+  const esColeccionPrivada = esProducto && Boolean(destacado.coleccion_privada);
+  const precio = (esProducto && !esColeccionPrivada) ? obtenerDatosPrecioYStock(destacado.variantes) : null;
+  const etiqueta = esColeccionPrivada ? null : precio?.agotado ? 'Agotado' : precio?.tieneOferta ? 'Oferta' : null;
 
   return (
     <Link to={destacado.enlace} className="tarjeta-destacado">
@@ -73,7 +74,7 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
           <span className="tarjeta-destacado-sin-imagen" aria-hidden="true">{destacado.nombre?.charAt(0)}</span>
         )}
         {etiqueta && (
-          <span className={`tarjeta-producto-etiqueta${precio.agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
+          <span className={`tarjeta-producto-etiqueta${precio?.agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
             {etiqueta}
           </span>
         )}
@@ -87,12 +88,14 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
 
       {esProducto && (
         <p className="tarjeta-producto-precio">
-          {precio.agotado ? (
+          {esColeccionPrivada ? (
+            <span className="tarjeta-producto-coleccion-privada">Colección privada</span>
+          ) : precio?.agotado ? (
             <span className="texto-secundario">Sin stock</span>
           ) : (
             <>
-              <span>{precio.textoPrecio}</span>
-              {precio.tieneOferta && (
+              <span>{precio?.textoPrecio}</span>
+              {precio?.tieneOferta && (
                 <del className="tarjeta-producto-precio-anterior">
                   <span className="visualmente-oculto">Precio anterior: </span>{precio.precioTachado}
                 </del>

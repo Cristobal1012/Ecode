@@ -28,3 +28,39 @@ def ordenar_categorias(categorias, prioridades):
     disponibles = set(categorias)
     primeras = list(dict.fromkeys(nombre for nombre in prioridades if nombre in disponibles))
     return primeras + sorted(disponibles - set(primeras))
+
+
+# Reglas de Colección Privada y Versión a la Venta (SCRUM-197)
+
+class ColeccionPrivadaInvalida(ValueError):
+    """Reglas de negocio de colección privada y versión a la venta."""
+
+
+def validar_version_a_la_venta(
+    producto_id: str | None,
+    version_id: str | None,
+    target_existe: bool,
+    target_es_coleccion_privada: bool,
+) -> None:
+    """Valida la asignación de una versión a la venta para una obra."""
+    if not version_id:
+        return
+    version_str = str(version_id).strip()
+    if producto_id and str(producto_id).strip() == version_str:
+        raise ColeccionPrivadaInvalida('Una obra no puede ser su propia versión a la venta.')
+    if not target_existe:
+        raise ColeccionPrivadaInvalida('El producto seleccionado como versión a la venta no existe.')
+    if target_es_coleccion_privada:
+        raise ColeccionPrivadaInvalida('No se puede enlazar a otra obra que es colección privada.')
+
+
+def validar_obra_no_es_version_de_otra(
+    producto_id: str | None,
+    coleccion_privada: bool,
+    nombre_referenciador: str | None,
+) -> None:
+    """Una obra no puede marcarse como colección privada si es la versión a la venta de otro producto."""
+    if coleccion_privada and nombre_referenciador:
+        raise ColeccionPrivadaInvalida(
+            f'No se puede marcar como colección privada porque está asignada como versión a la venta de "{nombre_referenciador}".'
+        )

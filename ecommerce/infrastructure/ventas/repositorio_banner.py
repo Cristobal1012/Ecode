@@ -120,3 +120,4 @@ class DjangoRepositorioBanners(RepositorioBanners):
 
             # Borrar archivos del disco al confirmar
             _borrar_al_confirmar(archivos_a_borrar)
+

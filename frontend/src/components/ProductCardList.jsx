@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 
 // Layout de lista del catálogo (RF-01.4): foto a la izquierda y la descripción al costado. Toda la fila es un
 // enlace a la ficha del producto (igual que la tarjeta de grilla).
 export default function ProductCardList({ producto }) {
-  const navigate = useNavigate();
   const id = producto.id || producto._id;
   const imagen = producto.imagenes?.[0];
   const [imagenRota, setImagenRota] = useState(false);
@@ -13,6 +12,45 @@ export default function ProductCardList({ producto }) {
   const atributos = Object.entries(producto.atributos_globales || {});
   const esColeccionPrivada = Boolean(producto.coleccion_privada);
   const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
+
+  if (tieneVersionVenta) {
+    return (
+      <div className="fila-producto fila-producto--con-version">
+        <Link to={`/catalogo/producto/${id}`} className="fila-producto-cuerpo">
+          <div className="fila-producto-imagen">
+            {imagen && !imagenRota ? (
+              <img src={imagen} alt="" loading="lazy" onError={() => setImagenRota(true)} />
+            ) : (
+              <span className="tarjeta-producto-sin-imagen" aria-hidden="true">{producto.nombre?.charAt(0)}</span>
+            )}
+          </div>
+
+          <div className="fila-producto-info">
+            {producto.categoria && <span className="tarjeta-producto-categoria">{producto.categoria}</span>}
+            <h3 className="tarjeta-producto-nombre">{producto.nombre}</h3>
+            {producto.descripcion && <p className="fila-producto-descripcion texto-secundario">{producto.descripcion}</p>}
+            {atributos.length > 0 && (
+              <p className="fila-producto-atributos">
+                {atributos.map(([clave, valor]) => `${clave.replaceAll('_', ' ')}: ${valor}`).join(' · ')}
+              </p>
+            )}
+          </div>
+        </Link>
+
+        <div className="fila-producto-compra">
+          <p className="tarjeta-producto-precio">
+            <span className="tarjeta-producto-coleccion-privada">Colección privada</span>
+          </p>
+          <Link
+            to={`/catalogo/producto/${producto.version_a_la_venta}`}
+            className="tarjeta-producto-boton-version"
+          >
+            {producto.texto_boton_version || 'Disponible en print'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Link to={`/catalogo/producto/${id}`} className="fila-producto">
@@ -57,21 +95,7 @@ export default function ProductCardList({ producto }) {
             </>
           )}
         </p>
-        {tieneVersionVenta ? (
-          <button
-            type="button"
-            className="tarjeta-producto-boton-version"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigate(`/catalogo/producto/${producto.version_a_la_venta}`);
-            }}
-          >
-            {producto.texto_boton_version || 'Disponible en print'}
-          </button>
-        ) : (
-          <span className="enlace-flecha" aria-hidden="true">Ver producto →</span>
-        )}
+        <span className="enlace-flecha" aria-hidden="true">Ver producto →</span>
       </div>
     </Link>
   );

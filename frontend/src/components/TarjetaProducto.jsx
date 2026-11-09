@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import './TarjetaProducto.css';
 
 // Tarjeta de producto del estilo editorial: foto vertical, categoría, nombre y precio (con oferta tachada).
 // La usan las secciones de la landing; toda la tarjeta es un enlace a la ficha del producto.
 export default function TarjetaProducto({ producto, etiqueta }) {
-  const navigate = useNavigate();
   const id = producto.id || producto._id;
   const imagen = producto.imagenes?.[0];
   const [imagenRota, setImagenRota] = useState(false);
@@ -16,8 +15,8 @@ export default function TarjetaProducto({ producto, etiqueta }) {
   // Una sola etiqueta: si es colección privada no muestra "Agotado"; si no, "Agotado" manda sobre "Oferta"
   const textoEtiqueta = esColeccionPrivada ? null : (agotado ? 'Agotado' : tieneOferta ? 'Oferta' : etiqueta);
 
-  return (
-    <Link to={`/catalogo/producto/${id}`} className="tarjeta-producto">
+  const contenido = (
+    <>
       <div className="tarjeta-producto-imagen">
         {imagen && !imagenRota ? (
           // El nombre ya está en la tarjeta: la foto es decorativa para el lector de pantalla
@@ -51,20 +50,28 @@ export default function TarjetaProducto({ producto, etiqueta }) {
           </>
         )}
       </p>
+    </>
+  );
 
-      {tieneVersionVenta && (
-        <button
-          type="button"
+  if (tieneVersionVenta) {
+    return (
+      <div className="tarjeta-producto tarjeta-producto--con-version">
+        <Link to={`/catalogo/producto/${id}`} className="tarjeta-producto-enlace">
+          {contenido}
+        </Link>
+        <Link
+          to={`/catalogo/producto/${producto.version_a_la_venta}`}
           className="tarjeta-producto-boton-version"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            navigate(`/catalogo/producto/${producto.version_a_la_venta}`);
-          }}
         >
           {producto.texto_boton_version || 'Disponible en print'}
-        </button>
-      )}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <Link to={`/catalogo/producto/${id}`} className="tarjeta-producto">
+      {contenido}
     </Link>
   );
 }

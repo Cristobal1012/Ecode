@@ -1,6 +1,12 @@
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
+
+from ecommerce.domain.catalogo import (
+    ColeccionPrivadaInvalida,
+    validar_obra_no_es_version_de_otra,
+    validar_version_a_la_venta,
+)
 from .documents import Producto, Variante
 from .image_adapters import actualizar_producto
 from .images import (
@@ -112,7 +118,7 @@ class ProductoSerializer(serializers.Serializer):
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError({'variantes': 'Cada variante de un producto debe tener un código SKU único.'})
 
-        # Validaciones de Colección privada (SCRUM-197)
+        # Validaciones de Colección privada en el dominio (SCRUM-197)
         coleccion_privada = attrs.get('coleccion_privada', getattr(self.instance, 'coleccion_privada', False) if self.instance else False)
         version_a_la_venta = attrs.get('version_a_la_venta', getattr(self.instance, 'version_a_la_venta', None) if self.instance else None)
         texto_boton = attrs.get('texto_boton_version')
@@ -122,23 +128,30 @@ class ProductoSerializer(serializers.Serializer):
         if version_a_la_venta:
             version_str = str(version_a_la_venta).strip()
             attrs['version_a_la_venta'] = version_str
-            if self.instance and str(self.instance.id) == version_str:
-                raise serializers.ValidationError({'version_a_la_venta': 'Una obra no puede ser su propia versión a la venta.'})
             try:
                 target = Producto.objects(id=version_str).first()
-            except Exception as exc:
-                raise serializers.ValidationError({'version_a_la_venta': 'El producto seleccionado no es válido.'}) from exc
-            if not target:
-                raise serializers.ValidationError({'version_a_la_venta': 'El producto seleccionado como versión a la venta no existe.'})
-            if getattr(target, 'coleccion_privada', False):
-                raise serializers.ValidationError({'version_a_la_venta': 'No se puede enlazar a otra obra que es colección privada.'})
+            except Exception:
+                raise serializers.ValidationError({'version_a_la_venta': 'El producto seleccionado no es válido.'})
+            try:
+                validar_version_a_la_venta(
+                    producto_id=str(self.instance.id) if self.instance else None,
+                    version_id=version_str,
+                    target_existe=bool(target),
+                    target_es_coleccion_privada=bool(getattr(target, 'coleccion_privada', False)) if target else False,
+                )
+            except ColeccionPrivadaInvalida as error:
+                raise serializers.ValidationError({'version_a_la_venta': str(error)})
 
         if coleccion_privada and self.instance:
             referenciador = Producto.objects(version_a_la_venta=str(self.instance.id)).first()
-            if referenciador:
-                raise serializers.ValidationError({
-                    'coleccion_privada': f'No se puede marcar como colección privada porque está asignada como versión a la venta de "{referenciador.nombre}".'
-                })
+            try:
+                validar_obra_no_es_version_de_otra(
+                    producto_id=str(self.instance.id),
+                    coleccion_privada=coleccion_privada,
+                    nombre_referenciador=referenciador.nombre if referenciador else None,
+                )
+            except ColeccionPrivadaInvalida as error:
+                raise serializers.ValidationError({'coleccion_privada': str(error)})
 
         return attrs
 

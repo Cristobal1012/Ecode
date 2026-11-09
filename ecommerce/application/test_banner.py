@@ -48,3 +48,4 @@ class ActualizarBannersApplicationTests(TestCase):
     def test_rechaza_id_invalido(self):
         with self.assertRaises(EstructuraBannerInvalida):
             self.caso_de_uso.ejecutar(1, ['id:no-es-numero'], [])
+

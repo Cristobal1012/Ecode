@@ -71,6 +71,10 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
+from ecommerce.domain.sobre_mi import (
+    ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
+    exigir_sobre_mi_disponible, validar_ids_proyectos_sobre_mi,
+)
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
@@ -1427,8 +1431,10 @@ class SobreMiPublicoView(APIView):
     def get(self, request):
         configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
 
-        if not configuracion or not configuracion.sobre_mi_activo:
-            raise NotFound('La página Sobre mí no está disponible.')
+        try:
+            exigir_sobre_mi_disponible(configuracion.sobre_mi_activo if configuracion else False)
+        except SobreMiNoDisponible as error:
+            raise NotFound(str(error)) from error
 
         proyectos = (
             ProyectoDestacadoSobreMi.objects
@@ -1442,16 +1448,11 @@ class SobreMiPublicoView(APIView):
 
         publicaciones = [proyecto.publicacion for proyecto in proyectos]
 
-        contacto = {}
-
-        if configuracion.telefono_comercial:
-            contacto['telefono'] = configuracion.telefono_comercial
-
-        if configuracion.correo_contacto:
-            contacto['correo'] = configuracion.correo_contacto
-
-        if configuracion.instagram_usuario:
-            contacto['instagram'] = configuracion.instagram_usuario
+        contacto = construir_contacto_sobre_mi(
+            telefono=configuracion.telefono_comercial,
+            correo=configuracion.correo_contacto,
+            instagram=configuracion.instagram_usuario,
+        )
 
         return Response({
             'nombre': configuracion.sobre_mi_nombre,
@@ -1493,23 +1494,11 @@ class AdminSobreMiProyectosView(APIView):
         if not configuracion:
             raise NotFound('Configuración de la tienda no encontrada.')
 
-        ids = request.data.get('proyectos')
-
-        if not isinstance(ids, list):
+        try:
+            ids = validar_ids_proyectos_sobre_mi(request.data.get('proyectos'))
+        except ProyectosSobreMiInvalidos as error:
             return Response(
-                {'proyectos': ['Debes enviar una lista de IDs.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if any(type(pk) is not int or pk <= 0 for pk in ids):
-            return Response(
-                {'proyectos': ['Todos los IDs deben ser números enteros positivos.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if len(ids) != len(set(ids)):
-            return Response(
-                {'proyectos': ['No puedes seleccionar una publicación más de una vez.']},
+                {'proyectos': [str(error)]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

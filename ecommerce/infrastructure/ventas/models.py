@@ -7,6 +7,8 @@ from ecommerce.domain.blog import (
 )
 from ecommerce.domain.contacto import LOGO_UNIVERSIDAD_HEADER, UBICACIONES_LOGO_UNIVERSIDAD
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
+from ecommerce.domain.destacados import LARGO_TITULO as LARGO_TITULO_DESTACADOS
+from ecommerce.domain.destacados import TITULO_POR_DEFECTO as TITULO_DESTACADOS, ModoVitrina
 from ecommerce.domain.documentos_tributarios import ModeloEmision
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
@@ -52,6 +54,14 @@ class ConfiguracionGlobal(models.Model):
     # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
     blog_activo = models.BooleanField(default=False)
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
+    # Destacados de la landing (domain/destacados.py, pedido de un cliente): con DESTACADOS, la vitrina muestra los
+    # productos y publicaciones que eligió el admin en vez de "Más vendidos". Por defecto queda como antes
+    vitrina_modo = models.CharField(max_length=20, choices=[(modo.value, modo.value) for modo in ModoVitrina],
+                                    default=ModoVitrina.MAS_VENDIDOS.value)
+    destacados_titulo = models.CharField(max_length=LARGO_TITULO_DESTACADOS, default=TITULO_DESTACADOS)
+    # [{'tipo': 'PRODUCTO' | 'PUBLICACION', 'id': '...'}] en orden. Los productos viven en MongoDB y las
+    # publicaciones aquí, así que no hay clave foránea: lo borrado o despublicado se filtra al leer
+    destacados = models.JSONField(default=list, blank=True)
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago

@@ -22,7 +22,11 @@ from ecommerce.domain.logistica import (
 from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
+from ecommerce.application.vitrina import ValidarDestacados
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
+from ecommerce.domain.destacados import (
+    DestacadosInvalidos, TituloDestacadosInvalido, normalizar_titulo_destacados,
+)
 from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION
 from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
 from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
@@ -38,6 +42,7 @@ from ecommerce.domain.ventas import (
     paginas_legales_faltantes, plazo_pago, transiciones_desde, validar_generacion_orden_transporte,
 )
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
+from ecommerce.infrastructure.catalogo.repositorio_vitrina import MongoCatalogoVitrina
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
@@ -118,6 +123,10 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'blog_nombre',
             # Reseñas: activas, la landing y la ficha muestran las aprobadas
             'resenas_activas',
+            # Destacados de la landing: la selección del admin (la vitrina filtra lo que no se puede ver)
+            'vitrina_modo',
+            'destacados_titulo',
+            'destacados',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -188,6 +197,8 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     costo_entrega_coordinada = serializers.IntegerField(min_value=0, max_value=1_000_000, required=False)
     # Se ordenan los espacios antes de medirlo; vacío vuelve a "Nosotros" (domain/blog.py)
     blog_nombre = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    # Igual que el nombre del blog: vacío vuelve a "Destacados" (domain/destacados.py)
+    destacados_titulo = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
     class Meta:
         model = ConfiguracionGlobal
@@ -223,6 +234,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'blog_activo',
             'blog_nombre',
             'resenas_activas',
+            'vitrina_modo',
+            'destacados_titulo',
+            'destacados',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
@@ -243,6 +257,19 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         try:
             return normalizar_nombre_blog(valor)
         except NombreBlogInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_destacados_titulo(self, valor):
+        try:
+            return normalizar_titulo_destacados(valor)
+        except TituloDestacadosInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+    def validate_destacados(self, valor):
+        # Hasta 4, sin repetir y solo productos y publicaciones que existen (application/vitrina.py)
+        try:
+            return validar_destacados().ejecutar(valor)
+        except DestacadosInvalidos as error:
             raise serializers.ValidationError(str(error))
 
 
@@ -340,6 +367,12 @@ class ProveedorLogisticoNoDisponible(APIException):
 def catalogo_variantes():
     """Adaptador del catálogo que usa el checkout; las pruebas lo reemplazan por uno falso."""
     return MongoCatalogoVariantes()
+
+
+def validar_destacados():
+    """Caso de uso que valida los destacados de la landing con el catálogo (MongoDB) y el blog (PostgreSQL)."""
+    from .repositorio_blog import DjangoPublicacionesVitrina
+    return ValidarDestacados(MongoCatalogoVitrina(), DjangoPublicacionesVitrina())
 
 
 def notificador_pedidos():

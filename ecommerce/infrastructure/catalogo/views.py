@@ -18,7 +18,10 @@ from ecommerce.domain.imagenes import (
     LimiteGaleriaExcedido,
 )
 from ecommerce.application.vitrina import SeleccionarVitrina
+from ecommerce.domain.destacados import TITULO_POR_DEFECTO, ModoVitrina, TipoDestacado, ids_por_tipo
 from ecommerce.infrastructure.usuarios.permissions import IsAdministrador
+from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal, Publicacion
+from ecommerce.infrastructure.ventas.repositorio_blog import DjangoPublicacionesVitrina
 from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
 
 from .documents import ImagenPendienteBorrado, Producto
@@ -61,24 +64,60 @@ class CatalogoAPIView(APIView):
 
 def seleccionar_vitrina():
     """Las pruebas lo reemplazan para no depender de las ventas ni del catálogo reales."""
-    return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina())
+    return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina(),
+                              publicaciones=DjangoPublicacionesVitrina())
 
 
 class VitrinaView(CatalogoAPIView):
-    """RF-01.1: secciones de productos de la landing (pública)."""
+    """RF-01.1: secciones de la landing (pública): más vendidos o destacados, y últimos agregados.
+
+    Cada destacado sale como {tipo, id, nombre, imagen, enlace}; los productos agregan su categoría y sus variantes.
+    """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request):
-        vitrina = seleccionar_vitrina().ejecutar()
-        ids = set(vitrina.mas_vendidos) | set(vitrina.recientes)
-        productos = {str(p.id): p for p in Producto.objects(id__in=list(ids))}
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).values(
+            'vitrina_modo', 'destacados', 'destacados_titulo', 'blog_activo').first() or {}
+        vitrina = seleccionar_vitrina().ejecutar(
+            configuracion.get('vitrina_modo', ModoVitrina.MAS_VENDIDOS), configuracion.get('destacados') or [],
+            bool(configuracion.get('blog_activo')))
+
+        ids_destacados = ids_por_tipo(vitrina.destacados, TipoDestacado.PRODUCTO)
+        ids = set(vitrina.mas_vendidos) | set(vitrina.recientes) | set(ids_destacados)
+        productos = {str(p.id): p for p in Producto.objects(id__in=list(ids))} if ids else {}
+        id_publicaciones = ids_por_tipo(vitrina.destacados, TipoDestacado.PUBLICACION)
+        publicaciones = ({str(p.pk): p for p in Publicacion.objects.filter(pk__in=id_publicaciones)}
+                         if id_publicaciones else {})
 
         def serializar(lista):
             return ProductoSerializer([productos[i] for i in lista if i in productos], many=True,
                                       context={'request': request}).data
 
-        return Response({'mas_vendidos': serializar(vitrina.mas_vendidos), 'recientes': serializar(vitrina.recientes)})
+        def destacado(elegido):
+            if elegido['tipo'] == TipoDestacado.PRODUCTO:
+                producto = productos.get(elegido['id'])
+                if producto is None:
+                    return None
+                datos = ProductoSerializer(producto, context={'request': request}).data
+                return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': datos['nombre'],
+                        'categoria': datos.get('categoria') or '', 'imagen': (datos.get('imagenes') or [None])[0],
+                        'enlace': f'/catalogo/producto/{elegido["id"]}', 'variantes': datos.get('variantes', [])}
+            publicacion = publicaciones.get(elegido['id'])
+            if publicacion is None:
+                return None
+            portada = request.build_absolute_uri(publicacion.portada.url) if publicacion.portada else None
+            return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': publicacion.titulo, 'imagen': portada,
+                    'enlace': f'/blog/{publicacion.slug}'}
+
+        # Entre la selección y la lectura pudo despublicarse algo: se descarta sin romper la sección
+        destacados = [datos for datos in map(destacado, vitrina.destacados) if datos]
+        return Response({
+            'mas_vendidos': serializar(vitrina.mas_vendidos),
+            'recientes': serializar(vitrina.recientes),
+            'destacados': destacados,
+            'destacados_titulo': configuracion.get('destacados_titulo') or TITULO_POR_DEFECTO,
+        })
 
 
 def obtener_filtros_catalogo():

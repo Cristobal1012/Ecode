@@ -12,8 +12,14 @@ export const CAMPOS_TEXTO = {
   nosotros_titulo: { etiqueta: 'Título de Nosotros', maximo: 120 },
   nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 },
   // RN-01: dónde va el logo de la Universidad: 'HEADER' (o vacío) o 'FOOTER'; no hay opción para ocultarlo
-  ubicacion_logo_universidad: { etiqueta: 'Logo de la Universidad' }
+  ubicacion_logo_universidad: { etiqueta: 'Logo de la Universidad' },
+  // Vitrina: 'MAS_VENDIDOS' (o vacío) o 'DESTACADOS'; vacío el título vuelve a "Destacados" (domain/destacados.py)
+  vitrina_modo: { etiqueta: 'Vitrina' },
+  destacados_titulo: { etiqueta: 'Título de la sección', maximo: 60 }
 };
+
+// Destacados: hasta 4 productos y publicaciones del blog, en el orden que elige el admin (domain/destacados.py)
+export const MAX_DESTACADOS = 4;
 
 // Fotos de la sección de Instagram: 6 espacios fijos (el usuario se configura en el panel)
 export const CAMPOS_FOTOS_INSTAGRAM = [1, 2, 3, 4, 5, 6].map((numero) => `instagram_foto_${numero}`);
@@ -38,6 +44,11 @@ const sinCampo = (objeto, campo) => {
 const textosDe = (configuracion) =>
   Object.fromEntries(Object.keys(CAMPOS_TEXTO).map((campo) => [campo, configuracion?.[campo] ?? '']));
 
+// [{ tipo, id }]: el id siempre como texto, igual que lo guarda el backend
+const destacadosDe = (configuracion) => (Array.isArray(configuracion?.destacados) ? configuracion.destacados : [])
+  .map(({ tipo, id }) => ({ tipo, id: String(id) }));
+const mismaSeleccion = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 // Convierte los errores del backend ({campo: ['mensaje']}) en un texto por campo
 const erroresDe = (error) => {
   const datos = error?.response?.data;
@@ -49,10 +60,12 @@ const erroresDe = (error) => {
  * Borrador de la landing en modo edición. Nada se publica hasta guardar().
  * - textos: null fuera del modo edición.
  * - imagenes: { campo: { archivo: File | null, vistaPrevia } }; archivo null = quitar la imagen.
+ * - destacados: la selección de la vitrina en orden ([{ tipo, id }]); null fuera del modo edición.
  */
 export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
+  const [destacados, setDestacados] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [mensaje, setMensaje] = useState('');
@@ -63,7 +76,8 @@ export default function useEdicionLanding(configuracion) {
   const textosCambiados = editando
     ? Object.keys(CAMPOS_TEXTO).filter((campo) => textos[campo] !== original[campo])
     : [];
-  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0;
+  const destacadosCambiados = editando && destacados !== null && !mismaSeleccion(destacados, destacadosDe(configuracion));
+  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || destacadosCambiados;
 
   const liberarVistasPrevias = () => {
     vistasPrevias.current.forEach((url) => URL.revokeObjectURL(url));
@@ -75,6 +89,7 @@ export default function useEdicionLanding(configuracion) {
 
   const iniciar = () => {
     setTextos(textosDe(configuracion));
+    setDestacados(destacadosDe(configuracion));
     setErrores({});
     setMensaje('');
   };
@@ -101,10 +116,33 @@ export default function useEdicionLanding(configuracion) {
     setMensaje('');
   };
 
+  // Selección de destacados: agregar al final (hasta 4, sin repetir), mover un lugar y quitar
+  const cambiarDestacados = (cambio) => {
+    setDestacados((actual) => cambio([...(actual || [])]));
+    setErrores((actual) => sinCampo(actual, 'destacados'));
+    setMensaje('');
+  };
+
+  const agregarDestacado = ({ tipo, id }) => cambiarDestacados((lista) => {
+    const nuevo = { tipo, id: String(id) };
+    const repetido = lista.some((elegido) => elegido.tipo === nuevo.tipo && elegido.id === nuevo.id);
+    return repetido || lista.length >= MAX_DESTACADOS ? lista : [...lista, nuevo];
+  });
+
+  const moverDestacado = (indice, paso) => cambiarDestacados((lista) => {
+    const destino = indice + paso;
+    if (indice < 0 || destino < 0 || indice >= lista.length || destino >= lista.length) return lista;
+    [lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+    return lista;
+  });
+
+  const quitarDestacado = (indice) => cambiarDestacados((lista) => lista.filter((_, posicion) => posicion !== indice));
+
   const descartar = () => {
     liberarVistasPrevias();
     setImagenes({});
     setTextos(textosDe(configuracion));
+    setDestacados(destacadosDe(configuracion));
     setErrores({});
     setMensaje('');
   };
@@ -113,6 +151,7 @@ export default function useEdicionLanding(configuracion) {
     liberarVistasPrevias();
     setImagenes({});
     setTextos(null);
+    setDestacados(null);
     setErrores({});
     setMensaje('');
   };
@@ -140,16 +179,20 @@ export default function useEdicionLanding(configuracion) {
         const formulario = new FormData();
         Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, valor));
         nuevas.forEach(([campo, { archivo }]) => formulario.append(campo, archivo));
+        // La selección viaja en la misma petición, como JSON (el backend la valida antes de guardar nada)
+        if (destacadosCambiados) formulario.append('destacados', JSON.stringify(destacados));
         // Sin Content-Type fijo: el navegador pone multipart/form-data con su boundary (como GaleriaImagenes)
         await clienteAxios.patch('configuracion/negocio/', formulario, { headers: { 'Content-Type': undefined } });
       }
-      const enJson = nuevas.length ? quitadas : { ...textosNuevos, ...quitadas };
+      const enJson = nuevas.length ? quitadas
+        : { ...textosNuevos, ...quitadas, ...(destacadosCambiados ? { destacados } : {}) };
       if (Object.keys(enJson).length) await clienteAxios.patch('configuracion/negocio/', enJson);
 
       const guardada = await recargarConfiguracion();
       liberarVistasPrevias();
       setImagenes({});
       setTextos(textosDe(guardada));
+      setDestacados(destacadosDe(guardada));
       setMensaje('Cambios guardados: ya están publicados en tu tienda.');
     } catch (error) {
       setErrores(erroresDe(error));
@@ -168,7 +211,7 @@ export default function useEdicionLanding(configuracion) {
     : configuracion;
 
   return {
-    editando, vista, textos, hayCambios, guardando, errores, mensaje,
-    iniciar, cambiarTexto, cambiarImagen, descartar, salir, guardar
+    editando, vista, textos, destacados, hayCambios, guardando, errores, mensaje,
+    iniciar, cambiarTexto, cambiarImagen, agregarDestacado, moverDestacado, quitarDestacado, descartar, salir, guardar
   };
 }

@@ -102,8 +102,8 @@ class Producto(Document):
                 raise MongoValidationError('Una obra no puede ser su propia versión a la venta.')
             try:
                 target = Producto.objects(id=version_id).first()
-            except Exception as exc:
-                raise MongoValidationError(f'El producto para versión a la venta no es válido: {exc}')
+            except Exception:
+                raise MongoValidationError('El producto seleccionado como versión a la venta no es válido.')
             if not target:
                 raise MongoValidationError('El producto seleccionado como versión a la venta no existe.')
             if getattr(target, 'coleccion_privada', False):

@@ -6,11 +6,22 @@ from rest_framework.test import APITestCase
 from ecommerce.infrastructure.catalogo.documents import Producto, Variante
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
 from ecommerce.infrastructure.usuarios.models import Usuario
+from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
+from ecommerce.infrastructure.ventas.tests import habilitar_medios_pago
 
 
 class ColeccionPrivadaTests(APITestCase):
     def setUp(self):
         Producto.drop_collection()
+        habilitar_medios_pago('TRANSFERENCIA')
+        ConfiguracionGlobal.objects.update_or_create(
+            pk=1,
+            defaults={
+                'nombre_tienda': 'Tienda Arte',
+                'modo_autenticacion': 'MIXTO',
+                'retiro_en_local_activo': True,
+            }
+        )
         self.admin = Usuario.objects.create_user(
             email='admin@tienda.test', password='password123', rol='ADMIN'
         )
@@ -151,3 +162,62 @@ class ColeccionPrivadaTests(APITestCase):
         privada = self.crear_producto(nombre='Obra Privada', sku='PRIV-1', coleccion_privada=True)
         # Intento de reducir stock de producto privado
         self.assertFalse(Producto.reducir_stock_variante(privada['id'], 'PRIV-1', 1))
+
+    def test_adversario_checkout_directo_rechazado_para_coleccion_privada(self):
+        privada = self.crear_producto(nombre='Obra Privada', sku='PRIV-1', coleccion_privada=True)
+        self.client.force_authenticate(user=self.comprador)
+        payload = {
+            'items': [{'producto_mongo_id': privada['id'], 'variante_sku': 'PRIV-1', 'cantidad': 1}],
+            'email_invitado': 'hacker@test.com',
+            'metodo_pago': 'TRANSFERENCIA',
+            'direccion_envio_snapshot': {'calle': 'Av. 123', 'ciudad': 'Santiago', 'comuna': 'Santiago'},
+            'subtotal': 150000,
+            'proveedor_logistico': 'RETIRO_LOCAL',
+            'acepta_terminos': True,
+            'nombre_destinatario': 'Hacker Intento',
+            'telefono_destinatario': '+56912345678',
+        }
+        resp = self.client.post(reverse('checkout'), payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('items', resp.data)
+
+    def test_adversario_valores_maliciosos_o_invalidos_en_version_a_la_venta(self):
+        original = self.crear_producto(nombre='Obra Original', sku='ORIG-1', coleccion_privada=True)
+        self.autenticar_admin()
+
+        maliciosos = [
+            '<script>alert(1)</script>',
+            '{"$gt": ""}',
+            'invalid_hex_string',
+            '0',
+            'nonexistent0000000000000',
+        ]
+        for valor in maliciosos:
+            resp = self.client.patch(
+                reverse('detalle_producto', args=[original['id']]),
+                {'version_a_la_venta': valor},
+                format='json'
+            )
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('version_a_la_venta', resp.data)
+            self.assertNotIn('Traceback', str(resp.data))
+
+    def test_adversario_no_admin_no_puede_modificar_coleccion_privada(self):
+        privada = self.crear_producto(nombre='Obra Privada', sku='PRIV-1', coleccion_privada=True)
+        # Intentar modificar sin autenticar
+        self.client.logout()
+        resp_anon = self.client.patch(
+            reverse('detalle_producto', args=[privada['id']]),
+            {'coleccion_privada': False},
+            format='json'
+        )
+        self.assertIn(resp_anon.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+        # Intentar modificar autenticado como cliente normal
+        self.client.force_authenticate(user=self.comprador)
+        resp_cliente = self.client.patch(
+            reverse('detalle_producto', args=[privada['id']]),
+            {'coleccion_privada': False},
+            format='json'
+        )
+        self.assertEqual(resp_cliente.status_code, status.HTTP_403_FORBIDDEN)

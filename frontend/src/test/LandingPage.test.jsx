@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useState } from 'react';
@@ -7,6 +7,13 @@ const { getMock, patchMock } = vi.hoisted(() => ({ getMock: vi.fn(), patchMock: 
 vi.mock('../components/auth/axiosConfig', () => ({ default: { get: getMock, patch: patchMock } }));
 vi.mock('../components/MenuUsuario', () => ({ default: () => null }));
 vi.mock('../components/CarritoCompras', () => ({ default: () => null }));
+
+beforeAll(async () => {
+  await Promise.all([
+    import('../pages/LandingPage'),
+    import('../components/footer')
+  ]);
+});
 
 const producto = (id, nombre, extra = {}) => ({
   id, nombre, categoria: 'Arte', imagenes: [],

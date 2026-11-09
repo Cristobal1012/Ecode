@@ -31,6 +31,8 @@ describe('Enlace al blog en el header y el footer', () => {
     responder({
       ...CONFIGURACION,
       blog_activo: true,
+      blog_nombre: 'Proyectos',
+      sobre_mi_nombre: 'Mi historia',
       sobre_mi_activo: true,
       cotizaciones_activas: true,
       menu_principal: {
@@ -80,10 +82,10 @@ describe('Enlace al blog en el header y el footer', () => {
     } });
     await renderTienda();
     const navegacion = within(await menu());
-    await navegacion.findByRole('link', { name: 'Proyectos' });
-    expect(navegacion.getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Proyectos', 'Catálogo', 'Inicio', 'Panel admin']);
-    expect(navegacion.getByRole('link', { name: 'Proyectos' })).toHaveAttribute('href', '/blog');
-    expect(within(await columnaTienda()).getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Proyectos', 'Catálogo', 'Inicio', 'Seguimiento de pedido']);
+    await navegacion.findByRole('link', { name: 'Portafolio' });
+    expect(navegacion.getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Portafolio', 'Catálogo', 'Inicio', 'Panel admin']);
+    expect(navegacion.getByRole('link', { name: 'Portafolio' })).toHaveAttribute('href', '/blog');
+    expect(within(await columnaTienda()).getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Portafolio', 'Catálogo', 'Inicio', 'Seguimiento de pedido']);
     localStorage.removeItem('rol');
   });
   beforeEach(() => vi.clearAllMocks());

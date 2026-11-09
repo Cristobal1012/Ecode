@@ -52,12 +52,19 @@ DOMINIOS_REDES = {
     'tiktok': {'tiktok.com', 'www.tiktok.com'},
 }
 
-
 class EnlaceRedSocialInvalido(ValueError):
     def __init__(self, red):
+        nombres = {
+            'facebook': 'Facebook',
+            'x': 'X',
+            'youtube': 'YouTube',
+            'tiktok': 'TikTok',
+        }
+        nombre = nombres.get(red, red.capitalize())
         super().__init__(
-            f'Ingresa un enlace válido de {red.capitalize()} que comience con https://.'
+            f'Ingresa un enlace válido de {nombre} que comience con https://.'
         )
+
 
 
 def validar_enlace_red_social(texto, red):

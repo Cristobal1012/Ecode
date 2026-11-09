@@ -36,3 +36,22 @@ it('restablece en borrador y presenta los errores del servidor', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Categorías inválidas.');
   expect(patch).toHaveBeenCalledWith('configuracion/negocio/', { orden_catalogo: 'destacados', orden_categorias: [] });
 });
+
+it('describe los órdenes y mantiene sus valores internos y la ayuda de categorías', async () => {
+  render(<GestorOrdenCatalogo />);
+  const selector = await screen.findByLabelText('Orden inicial del catálogo');
+  expect([...selector.options].map(opcion => [opcion.value, opcion.text])).toEqual([
+    ['destacados', 'Por categorías priorizadas'], ['recientes', 'Recientes primero'],
+    ['precio-desc', 'Mayor precio'], ['precio-asc', 'Menor precio']
+  ]);
+  expect(selector).toHaveValue('destacados');
+  expect(selector).toHaveAccessibleDescription(
+    'Por categorías priorizadas: primero las categorías priorizadas, agrupando sus productos; dentro de cada categoría, los más recientes primero. ' +
+    'Sin categorías priorizadas, se muestran los productos más recientes. ' +
+    'Recientes primero: productos más nuevos globalmente, sin agruparlos por categoría.'
+  );
+  expect(screen.getByText(/Las categorías priorizadas aparecen primero; las demás, al final en orden alfabético/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar orden' }));
+  await screen.findByText('Orden del catálogo y categorías guardado.');
+  expect(patch).toHaveBeenCalledWith('configuracion/negocio/', { orden_catalogo: 'destacados', orden_categorias: [] });
+});

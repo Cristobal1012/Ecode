@@ -3,11 +3,12 @@ import "./header.css";
 import { resolverMenu } from "../../utils/menuPrincipal";
 import logoUniversidad from "./logoU.png";
 import MenuUsuario from "../MenuUsuario";
+import MenuEdicion from "./MenuEdicion";
 import CarritoCompras from "../CarritoCompras";
 import useConfiguracionTienda from "../../hooks/useConfiguracionTienda";
 
 // vistaPrevia: el modo edición de la landing muestra aquí el nombre y el logo antes de guardarlos
-function Header({ vistaPrevia }) {
+function Header({ vistaPrevia, edicion }) {
   // Solo conservamos el rol para saber si mostramos el atajo de admin
   const rol = localStorage.getItem("rol");
   const publicada = useConfiguracionTienda();
@@ -17,7 +18,7 @@ function Header({ vistaPrevia }) {
   const universidadEnHeader = configuracion?.ubicacion_logo_universidad !== "FOOTER";
 
   return (
-    <header className="header">
+    <header className={edicion?.editando ? "header header--editando" : "header"}>
       <div className="header-content">
         {/* RN-01: el logo de la Universidad va aquí junto al del negocio, o en el footer si el admin lo eligió; nunca se oculta */}
         <div className="header-marcas">
@@ -50,7 +51,7 @@ function Header({ vistaPrevia }) {
 
         <nav className="header-nav" aria-label="Navegación de la tienda">
           <div className="header-links">
-            {resolverMenu(configuracion).filter(enlace => enlace.visible).map(enlace =>
+            {edicion?.editando ? <MenuEdicion configuracion={configuracion} edicion={edicion} /> : resolverMenu(configuracion).filter(enlace => enlace.visible).map(enlace =>
               enlace.to === '/#nosotros' ? (
                 <Link key={enlace.id} to={enlace.to}>{enlace.nombre}</Link>
               ) : (

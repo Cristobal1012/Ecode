@@ -13,9 +13,10 @@ import './Blog.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
 
-// RF-04.4, SCRUM-195: video de YouTube bajo demanda con miniatura y botón accesible.
-// Hasta el clic no se carga nada de YouTube; al hacer clic se monta el reproductor desde youtube-nocookie.com
-export function VideoYouTube({ youtubeId, titulo }) {
+// RF-04.4, SCRUM-195: video de YouTube bajo demanda con botón accesible.
+// Hasta el clic no se carga nada de YouTube (ni siquiera miniaturas a img.youtube.com);
+// se muestra la portada de la publicación o un fondo neutro, y al hacer clic se monta el reproductor desde youtube-nocookie.com
+export function VideoYouTube({ youtubeId, titulo, portada }) {
   const [reproduciendo, setReproduciendo] = useState(false);
 
   if (!youtubeId) return null;
@@ -32,11 +33,15 @@ export function VideoYouTube({ youtubeId, titulo }) {
         />
       ) : (
         <div className="blog-video-facade">
-          <img
-            src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
-            alt=""
-            className="blog-video-miniatura"
-          />
+          {portada ? (
+            <img
+              src={portada}
+              alt=""
+              className="blog-video-miniatura"
+            />
+          ) : (
+            <div className="blog-video-miniatura blog-video-miniatura--neutra" aria-hidden="true" />
+          )}
           <button
             type="button"
             className="blog-video-reproducir"
@@ -102,7 +107,11 @@ export default function PublicacionBlog() {
                 <img className="blog-portada" src={publicacion.portada} alt={`Portada de "${publicacion.titulo}"`} />
               )}
               {publicacion.youtube_id && (
-                <VideoYouTube youtubeId={publicacion.youtube_id} titulo={publicacion.titulo} />
+                <VideoYouTube
+                  youtubeId={publicacion.youtube_id}
+                  titulo={publicacion.titulo}
+                  portada={publicacion.portada}
+                />
               )}
               {publicacion.contenido && (
                 <div className="legal-contenido ql-snow">

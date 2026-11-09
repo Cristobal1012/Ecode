@@ -139,6 +139,7 @@ from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioRese
 from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_blog import DjangoRepositorioPublicaciones
+from .repositorio_banner import DjangoRepositorioBanners
 from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
 from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -790,8 +791,8 @@ class ConfiguracionNegocioView(APIView):
             with transaction.atomic():
                 serializer.save()
                 if 'banner_orden' in request.data:
-                    ActualizarBanners().ejecutar(
-                        config,
+                    ActualizarBanners(DjangoRepositorioBanners()).ejecutar(
+                        config.id,
                         request.data.get('banner_orden'),
                         request.FILES.getlist('banner_fotos')
                     )

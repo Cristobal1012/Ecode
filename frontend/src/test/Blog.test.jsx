@@ -171,8 +171,9 @@ describe('Página de una publicación', () => {
     });
     await renderEn('/blog/nuestro-taller');
 
-    // Hasta el clic, no se carga ningún iframe de YouTube
+    // Hasta el clic, no se carga ningún iframe de YouTube ni conexión a img.youtube.com (RF-04.4)
     expect(screen.queryByTitle(/Reproductor de video/i)).not.toBeInTheDocument();
+    expect(document.querySelector('img[src*="youtube.com"]')).toBeNull();
     const botonPlay = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
     expect(botonPlay).toBeInTheDocument();
 

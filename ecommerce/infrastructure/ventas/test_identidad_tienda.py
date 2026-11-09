@@ -195,11 +195,16 @@ class IdentidadTiendaTests(APITestCase):
         config = ConfiguracionGlobal.objects.get(pk=1)
         self.assertTrue(bool(config.banner))
 
-        # El front manda la foto actual como 'id:legacy' y sube una segunda foto
+        # Obtenemos lo que la API entrega (como hace el front)
+        publica = self.client.get(reverse('configuracion-global')).data
+        banner_inicial = publica['banners'][0]
+        id_inicial = banner_inicial['id']
+
+        # El front manda la foto actual según el ID que le dio la API y sube una segunda foto
         f2 = imagen_png('foto2.png', color='blue')
         datos = {
             'banner_fotos': [f2],
-            'banner_orden': json.dumps(['id:legacy', 'nuevo:0']),
+            'banner_orden': json.dumps([f'id:{id_inicial}', 'nuevo:0']),
         }
         resp = self.client.patch(self.url, datos, format='multipart')
         self.assertEqual(resp.status_code, 200)
@@ -210,6 +215,23 @@ class IdentidadTiendaTests(APITestCase):
         # Se limpió config.banner para no tener dos fuentes de verdad
         config.refresh_from_db()
         self.assertFalse(bool(config.banner))
+
+    def test_quitar_banner_antiguo_lo_elimina_y_borra_su_archivo(self):
+        import json
+
+        self.subir(banner=imagen_png('banner_antiguo.png'))
+        config = ConfiguracionGlobal.objects.get(pk=1)
+        ruta_archivo = Path(config.banner.path)
+        self.assertTrue(ruta_archivo.is_file())
+
+        # El admin quita la foto antigua dejando el carrusel vacío
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.patch(self.url, {'banner_orden': json.dumps([])}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+        config.refresh_from_db()
+        self.assertFalse(bool(config.banner))
+        self.assertFalse(ruta_archivo.is_file())
 
     def test_banner_orden_mal_formado_responde_400_y_no_borra_fotos(self):
         import json

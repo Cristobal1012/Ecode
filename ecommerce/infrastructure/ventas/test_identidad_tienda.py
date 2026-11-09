@@ -185,3 +185,89 @@ class IdentidadTiendaTests(APITestCase):
         resp_borrar = self.client.patch(self.url, {'banner_orden': json.dumps([])}, format='json')
         self.assertEqual(resp_borrar.status_code, 200)
         self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 0)
+
+    def test_migra_banner_existente_cuando_recibe_id_legacy_y_agrega_segunda_foto(self):
+        import json
+        from .models import FotoBanner
+
+        # Caso de Alan y Daniela: la tienda ya tenía un banner antiguo
+        self.subir(banner=imagen_png('banner_existente.png'))
+        config = ConfiguracionGlobal.objects.get(pk=1)
+        self.assertTrue(bool(config.banner))
+
+        # El front manda la foto actual como 'id:legacy' y sube una segunda foto
+        f2 = imagen_png('foto2.png', color='blue')
+        datos = {
+            'banner_fotos': [f2],
+            'banner_orden': json.dumps(['id:legacy', 'nuevo:0']),
+        }
+        resp = self.client.patch(self.url, datos, format='multipart')
+        self.assertEqual(resp.status_code, 200)
+
+        banners = resp.data.get('banners', [])
+        self.assertEqual(len(banners), 2)
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 2)
+        # Se limpió config.banner para no tener dos fuentes de verdad
+        config.refresh_from_db()
+        self.assertFalse(bool(config.banner))
+
+    def test_banner_orden_mal_formado_responde_400_y_no_borra_fotos(self):
+        import json
+        from .models import FotoBanner
+
+        # Sube 1 foto
+        f1 = imagen_png('foto1.png')
+        self.client.patch(self.url, {'banner_fotos': [f1], 'banner_orden': json.dumps(['nuevo:0'])}, format='multipart')
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 1)
+
+        # Manda banner_orden corrupto
+        resp = self.client.patch(self.url, {'banner_orden': '{bad-json'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('banner_orden', resp.data)
+        # No se borraron las fotos existentes
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 1)
+
+    def test_archivo_invalido_en_banner_responde_400_y_no_guarda_a_medias(self):
+        import json
+        from .models import FotoBanner
+
+        falso = SimpleUploadedFile('malicioso.png', b'<svg onload="alert(1)"></svg>', content_type='image/png')
+        resp = self.client.patch(self.url, {
+            'banner_fotos': [falso],
+            'banner_orden': json.dumps(['nuevo:0']),
+            'texto_bienvenida': 'Nuevo Titulo',
+        }, format='multipart')
+
+        self.assertEqual(resp.status_code, 400)
+        # La transacción atómica revirtió también el cambio de texto
+        config = ConfiguracionGlobal.objects.get(pk=1)
+        self.assertNotEqual(config.texto_bienvenida, 'Nuevo Titulo')
+        self.assertEqual(FotoBanner.objects.filter(configuracion_id=1).count(), 0)
+
+    def test_limite_maximo_10_fotos_en_banner(self):
+        import json
+
+        # Intenta pasar 11 fotos en banner_orden
+        orden_excedido = [f'nuevo:{i}' for i in range(11)]
+        resp = self.client.patch(self.url, {'banner_orden': json.dumps(orden_excedido)}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('banner_fotos', resp.data)
+
+    def test_al_quitar_fotos_se_borran_del_disco(self):
+        import json
+        from .models import FotoBanner
+
+        f1 = imagen_png('foto_a_borrar.png')
+        resp = self.client.patch(self.url, {'banner_fotos': [f1], 'banner_orden': json.dumps(['nuevo:0'])}, format='multipart')
+        self.assertEqual(resp.status_code, 200)
+
+        foto = FotoBanner.objects.filter(configuracion_id=1).first()
+        ruta_archivo = Path(foto.imagen.path)
+        self.assertTrue(ruta_archivo.is_file())
+
+        # Quita la foto
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.patch(self.url, {'banner_orden': json.dumps([])}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        # El archivo físico se borró del disco al confirmar la transacción
+        self.assertFalse(ruta_archivo.is_file())

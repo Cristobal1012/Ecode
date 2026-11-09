@@ -313,9 +313,11 @@
   cursor: pointer;
 }
 
-.boton-edicion:disabled {
+.boton-edicion:disabled,
+.boton-edicion--deshabilitado {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .barra-edicion .boton-edicion,

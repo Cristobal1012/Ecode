@@ -1,4 +1,4 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -8,6 +8,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
+from django.db import transaction
 from django.db.models import F, Q, Sum, Count
 from django.db.models.functions import TruncDate
 from .models import Promocion
@@ -41,6 +42,7 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
+from ecommerce.application.banner import ActualizarBanners
 from ecommerce.application.blog import (
     SIN_CAMBIO, AgregarFotos, BlogDesactivado, EliminarPublicacion, FotoNoEncontrada, GuardarPublicacion,
     PublicacionNoEncontrada, QuitarFoto, VerBlog, VerPublicacion,
@@ -67,6 +69,7 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
+from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
@@ -745,7 +748,7 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     authentication_classes = []
 
     def get_object(self):
-        configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
+        configuracion = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
         if configuracion is None:
             raise NotFound('No existe una configuración de tienda.')
         return configuracion
@@ -757,7 +760,9 @@ class ConfiguracionNegocioView(APIView):
     permission_classes = [IsEmprendedor]
 
     def get_object(self):
-        obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
+        obj = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
+        if obj is None:
+            obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
         return obj
 
     def get(self, request):
@@ -766,73 +771,32 @@ class ConfiguracionNegocioView(APIView):
         serializer = ConfiguracionNegocioSerializer(config, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def _procesar_banners(self, config, request):
-        if 'banner_orden' not in request.data:
-            return
-        raw_orden = request.data.get('banner_orden')
-        if isinstance(raw_orden, str):
-            try:
-                orden_list = json.loads(raw_orden)
-            except Exception:
-                orden_list = []
-        elif isinstance(raw_orden, list):
-            orden_list = raw_orden
-        else:
-            orden_list = []
-
-        nuevos_archivos = request.FILES.getlist('banner_fotos')
-        existentes = {f.id: f for f in config.fotos_banner.all()}
-
-        # Identificar IDs existentes a conservar
-        ids_a_mantener = set()
-        for item in orden_list:
-            if isinstance(item, str) and item.startswith('id:'):
-                try:
-                    ids_a_mantener.add(int(item.split(':')[1]))
-                except ValueError:
-                    pass
-            elif isinstance(item, int):
-                ids_a_mantener.add(item)
-
-        # Eliminar fotos quitadas
-        for foto_id, foto in existentes.items():
-            if foto_id not in ids_a_mantener:
-                foto.delete()
-
-        # Reordenar y crear fotos nuevas
-        campo_imagen = ImagenNegocioField()
-        for nuevo_orden, item in enumerate(orden_list):
-            if (isinstance(item, str) and item.startswith('id:')) or isinstance(item, int):
-                foto_id = int(item.split(':')[1]) if isinstance(item, str) else item
-                if foto_id in existentes:
-                    foto = existentes[foto_id]
-                    if foto.orden != nuevo_orden:
-                        foto.orden = nuevo_orden
-                        foto.save(update_fields=['orden'])
-            elif isinstance(item, str) and item.startswith('nuevo:'):
-                try:
-                    file_idx = int(item.split(':')[1])
-                    if file_idx < len(nuevos_archivos):
-                        archivo = nuevos_archivos[file_idx]
-                        archivo_procesado = campo_imagen.to_internal_value(archivo)
-                        FotoBanner.objects.create(
-                            configuracion=config,
-                            imagen=archivo_procesado,
-                            orden=nuevo_orden,
-                        )
-                except Exception as e:
-                    logger.error(f"Error procesando foto de banner: {e}")
-
     def put(self, request):
         config = self.get_object()
         serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
                                                     context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            self._procesar_banners(config, request)
-            respuesta = ConfiguracionNegocioSerializer(config, context={'request': request})
-            return Response(respuesta.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                serializer.save()
+                if 'banner_orden' in request.data:
+                    ActualizarBanners().ejecutar(
+                        config,
+                        request.data.get('banner_orden'),
+                        request.FILES.getlist('banner_fotos')
+                    )
+        except EstructuraBannerInvalida as exc:
+            return Response({'banner_orden': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except LimiteFotosBannerExcedido as exc:
+            return Response({'banner_fotos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        config = self.get_object()
+        respuesta = ConfiguracionNegocioSerializer(config, context={'request': request})
+        return Response(respuesta.data, status=status.HTTP_200_OK)
 
     def patch(self, request):
         return self.put(request)

@@ -285,7 +285,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await waitFor(() => expect(patchMock).toHaveBeenCalledTimes(2));
     const [, formulario, opciones] = patchMock.mock.calls[0];
     expect(formulario).toBeInstanceOf(FormData);
-    expect(formulario.get('banner')).toBe(archivo);
+    expect(formulario.get('banner_fotos')).toBe(archivo);
     expect(formulario.get('texto_boton_ingreso')).toBe('Ver obras');
     // El navegador pone el multipart con su boundary (axios fija JSON por defecto)
     expect(opciones).toEqual({ headers: { 'Content-Type': undefined } });

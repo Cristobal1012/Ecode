@@ -116,23 +116,40 @@ export default function useEdicionLanding(configuracion) {
     }
     const vistaPrevia = archivo ? URL.createObjectURL(archivo) : null;
     if (vistaPrevia) vistasPrevias.current.add(vistaPrevia);
-    setImagenes((actual) => ({ ...actual, [campo]: { archivo, vistaPrevia } }));
-
     if (campo === 'banner') {
       if (archivo) {
         setBanners([{ id: 'nuevo_banner', archivo, vistaPrevia, imagen: vistaPrevia }]);
       } else {
         setBanners([]);
       }
+      setErrores((actual) => sinCampo(actual, campo));
+      setMensaje('');
+      return;
     }
+    setImagenes((actual) => ({ ...actual, [campo]: { archivo, vistaPrevia } }));
 
     setErrores((actual) => sinCampo(actual, campo));
     setMensaje('');
   };
 
+  const MAX_FOTOS_BANNER = 10;
+
   const agregarFotosBanner = (nuevosArchivos) => {
     const lista = Array.from(nuevosArchivos || []);
     if (!lista.length) return;
+
+    const base = banners ?? obtenerBannersIniciales(configuracion);
+    if (base.length >= MAX_FOTOS_BANNER) {
+      setErrores((actual) => ({ ...actual, banner: `No puedes subir más de ${MAX_FOTOS_BANNER} fotos al banner.` }));
+      return;
+    }
+    if (base.length + lista.length > MAX_FOTOS_BANNER) {
+      setErrores((actual) => ({
+        ...actual,
+        banner: `Solo puedes agregar ${MAX_FOTOS_BANNER - base.length} foto(s) más (máximo ${MAX_FOTOS_BANNER}).`,
+      }));
+      return;
+    }
 
     for (const archivo of lista) {
       if (!TIPOS_IMAGEN.includes(archivo.type)) {
@@ -157,12 +174,8 @@ export default function useEdicionLanding(configuracion) {
     });
 
     setBanners((actual) => {
-      const base = actual ?? obtenerBannersIniciales(configuracion);
-      const resultado = [...base, ...agregados];
-      if (resultado.length > 0 && resultado[0].archivo) {
-        setImagenes((prev) => ({ ...prev, banner: { archivo: resultado[0].archivo, vistaPrevia: resultado[0].vistaPrevia } }));
-      }
-      return resultado;
+      const baseActual = actual ?? obtenerBannersIniciales(configuracion);
+      return [...baseActual, ...agregados];
     });
     setErrores((actual) => sinCampo(actual, 'banner'));
     setMensaje('');
@@ -174,9 +187,6 @@ export default function useEdicionLanding(configuracion) {
       if (origen < 0 || origen >= base.length || destino < 0 || destino >= base.length) return base;
       const [movido] = base.splice(origen, 1);
       base.splice(destino, 0, movido);
-      if (base.length > 0 && base[0].archivo) {
-        setImagenes((prev) => ({ ...prev, banner: { archivo: base[0].archivo, vistaPrevia: base[0].vistaPrevia } }));
-      }
       return base;
     });
     setMensaje('');
@@ -192,11 +202,6 @@ export default function useEdicionLanding(configuracion) {
         vistasPrevias.current.delete(eliminado.vistaPrevia);
       }
       base.splice(indice, 1);
-      if (base.length === 0) {
-        setImagenes((prev) => ({ ...prev, banner: { archivo: null, vistaPrevia: null } }));
-      } else if (base[0].archivo) {
-        setImagenes((prev) => ({ ...prev, banner: { archivo: base[0].archivo, vistaPrevia: base[0].vistaPrevia } }));
-      }
       return base;
     });
     setMensaje('');
@@ -232,9 +237,9 @@ export default function useEdicionLanding(configuracion) {
     setGuardando(true);
     setErrores({});
     try {
-      const nuevas = Object.entries(imagenes).filter(([, { archivo }]) => archivo);
+      const nuevas = Object.entries(imagenes).filter(([campo, { archivo }]) => campo !== 'banner' && archivo);
       const quitadas = Object.fromEntries(
-        Object.entries(imagenes).filter(([, { archivo }]) => !archivo).map(([campo]) => [campo, null]));
+        Object.entries(imagenes).filter(([campo, { archivo }]) => campo !== 'banner' && !archivo).map(([campo]) => [campo, null]));
       const textosNuevos = Object.fromEntries(textosCambiados.map((campo) => [campo, textos[campo]]));
 
       // Banners

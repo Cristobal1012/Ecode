@@ -1,4 +1,4 @@
-﻿from dataclasses import asdict
+from dataclasses import asdict
 from decimal import Decimal
 import uuid
 

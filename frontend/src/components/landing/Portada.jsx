@@ -22,10 +22,24 @@ export default function Portada({ configuracion, edicion }) {
   const indiceSeguro = totalFotos > 0 ? indiceActivo % totalFotos : 0;
   const imagenActual = listaFotos[indiceSeguro]?.imagen || PORTADA_POR_DEFECTO;
 
+  // Rendimiento (Point 12): Carga solo la diapositiva activa y precarga la siguiente, evitando descargar todas de golpe
+  const [fotosCargadas, setFotosCargadas] = useState(() => new Set([0, 1]));
+
   useEffect(() => {
     if (totalFotos <= 1 || pausado || editando) return undefined;
     const intervalo = setInterval(() => {
-      setIndiceActivo((actual) => (actual + 1) % totalFotos);
+      setIndiceActivo((actual) => {
+        const siguiente = (actual + 1) % totalFotos;
+        const subsiguiente = (siguiente + 1) % totalFotos;
+        setFotosCargadas((cargadas) => {
+          if (cargadas.has(siguiente) && cargadas.has(subsiguiente)) return cargadas;
+          const nuevo = new Set(cargadas);
+          nuevo.add(siguiente);
+          nuevo.add(subsiguiente);
+          return nuevo;
+        });
+        return siguiente;
+      });
     }, 5000);
     return () => clearInterval(intervalo);
   }, [totalFotos, pausado, editando]);
@@ -35,13 +49,16 @@ export default function Portada({ configuracion, edicion }) {
       style={{ backgroundImage: `url("${imagenActual}")` }}>
       {/* Carrusel de diapositivas con fundido suave (no clickeables) */}
       <div className="portada-carrusel" aria-hidden="true">
-        {listaFotos.map((foto, index) => (
-          <div
-            key={foto.id ?? index}
-            className={`portada-diapositiva ${index === indiceSeguro ? 'portada-diapositiva--activa' : ''}`}
-            style={{ backgroundImage: `url("${foto.imagen}")` }}
-          />
-        ))}
+        {listaFotos.map((foto, index) => {
+          const debeCargar = fotosCargadas.has(index) || editando;
+          return (
+            <div
+              key={foto.id ?? index}
+              className={`portada-diapositiva ${index === indiceSeguro ? 'portada-diapositiva--activa' : ''}`}
+              style={debeCargar ? { backgroundImage: `url("${foto.imagen}")` } : undefined}
+            />
+          );
+        })}
       </div>
 
       <div className="portada-velo" aria-hidden="true" />

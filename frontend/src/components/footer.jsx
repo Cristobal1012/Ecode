@@ -5,6 +5,7 @@ import { isAdminRoute } from "../hooks/useCookieConsent";
 import useConfiguracionTienda from "../hooks/useConfiguracionTienda";
 import logoUniversidad from "./header/logoU.png";
 import "./footer.css";
+import { resolverMenu } from "../utils/menuPrincipal";
 
 // Dirección del local en dos líneas; solo si el admin eligió mostrarla (la API no la entrega si no se usa)
 const lineasDireccion = (configuracion) => {
@@ -113,27 +114,14 @@ export const Footer = ({ onOpenCookiePreferences, marcaTemporal = null }) => {
             Tienda
           </h2>
           <ul>
-            <li>
-              <Link to="/">Inicio</Link>
-            </li>
-            <li>
-              <Link to="/catalogo">Catálogo</Link>
-            </li>
-            {configuracion?.blog_activo && (
-              <li>
-                <Link to="/blog">
-                  {configuracion.blog_nombre || "Nosotros"}
-                </Link>
+            {resolverMenu(configuracion).filter(enlace => enlace.visible).map(enlace => (
+              <li key={enlace.id}>
+                <Link to={enlace.to}>{enlace.nombre}</Link>
               </li>
-            )}
+            ))}
             <li>
               <Link to="/seguimiento">Seguimiento de pedido</Link>
             </li>
-            {configuracion?.cotizaciones_activas && (
-              <li>
-                <Link to="/cotizar">Cotizar un encargo</Link>
-              </li>
-            )}
           </ul>
         </nav>
 

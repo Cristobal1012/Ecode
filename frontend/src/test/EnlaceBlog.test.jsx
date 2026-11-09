@@ -9,8 +9,8 @@ vi.mock('../components/CarritoCompras', () => ({ default: () => null }));
 
 const CONFIGURACION = { nombre_tienda: 'Taller Maché', nosotros_texto: 'Desde 2015 en Valparaíso.' };
 
-function responder(configuracion) {
-  getMock.mockImplementation((url) => Promise.resolve({ data: url === 'configuracion/' ? configuracion : [] }));
+function responder(configuracion, paginas = []) {
+  getMock.mockImplementation((url) => Promise.resolve({ data: url === 'configuracion/' ? configuracion : paginas }));
 }
 
 async function renderTienda() {
@@ -27,7 +27,53 @@ const menu = () => screen.findByRole('navigation', { name: 'Navegación de la ti
 const columnaTienda = () => screen.findByRole('navigation', { name: 'Tienda' });
 
 describe('Enlace al blog en el header y el footer', () => {
-  it('personaliza el encabezado sin cambiar el pie ni el enlace administrativo', async () => {
+  it('comparte todos los nombres y el orden visibles sin duplicados y deja seguimiento al final', async () => {
+    responder({
+      ...CONFIGURACION,
+      blog_activo: true,
+      sobre_mi_activo: true,
+      cotizaciones_activas: true,
+      menu_principal: {
+        orden: ['cotizar', 'sobre_mi', 'catalogo', 'nosotros', 'inicio', 'cotizar'],
+        nombres: { inicio: 'Portada', catalogo: 'Productos', nosotros: 'Proyectos', sobre_mi: 'Mi historia', cotizar: 'Encargos' }
+      }
+    });
+    await renderTienda();
+    const pie = within(await columnaTienda());
+    await pie.findByRole('link', { name: 'Encargos' });
+    const enlaces = pie.getAllByRole('link');
+    expect(enlaces.map(enlace => enlace.textContent)).toEqual(['Encargos', 'Mi historia', 'Productos', 'Proyectos', 'Portada', 'Seguimiento de pedido']);
+    expect(enlaces.map(enlace => enlace.getAttribute('href'))).toEqual(['/cotizar', '/sobre-mi', '/catalogo', '/blog', '/', '/seguimiento']);
+    expect(new Set(enlaces.map(enlace => enlace.getAttribute('href'))).size).toBe(enlaces.length);
+    expect(enlaces.slice(0, -1).map(enlace => enlace.textContent)).toEqual(within(await menu()).getAllByRole('link').map(enlace => enlace.textContent));
+  });
+
+  it.each([
+    [{}, ['/', '/catalogo', '/#nosotros', '/seguimiento']],
+    [{ nosotros_texto: '', sobre_mi_activo: false, cotizaciones_activas: false }, ['/', '/catalogo', '/seguimiento']],
+    [{ sobre_mi_activo: true }, ['/', '/catalogo', '/#nosotros', '/sobre-mi', '/seguimiento']]
+  ])('respeta visibilidad y valores heredados en el pie: %j', async (config, destinos) => {
+    responder({ ...CONFIGURACION, ...config });
+    await renderTienda();
+    const pie = within(await columnaTienda());
+    await within(await menu()).findByRole('link', { name: 'Catálogo' });
+    expect(pie.getAllByRole('link').map(enlace => enlace.getAttribute('href'))).toEqual(destinos);
+    expect(pie.getAllByRole('link').at(-1)).toHaveTextContent('Seguimiento de pedido');
+  });
+
+  it('conserva las secciones legales y de contacto', async () => {
+    responder({ ...CONFIGURACION, correo_contacto: 'contacto@example.test', facebook_url: 'https://www.facebook.com/tienda' }, [
+      { tipo_pagina: 'TERMINOS', titulo: 'Condiciones de compra' }
+    ]);
+    await renderTienda();
+    const legal = within(screen.getByRole('navigation', { name: 'Información legal' }));
+    expect(await legal.findByRole('link', { name: 'Condiciones de compra' })).toHaveAttribute('href', '/legal/terminos');
+    const contacto = within(screen.getByRole('region', { name: 'Contacto' }));
+    expect(contacto.getByRole('link', { name: 'contacto@example.test' })).toHaveAttribute('href', 'mailto:contacto@example.test');
+    expect(contacto.getByRole('link', { name: /Facebook de Taller Maché/ })).toHaveAttribute('href', 'https://www.facebook.com/tienda');
+  });
+
+  it('personaliza el encabezado y el pie sin cambiar el enlace administrativo', async () => {
     localStorage.setItem('rol', 'ADMIN');
     responder({ ...CONFIGURACION, blog_activo: true, blog_nombre: 'Portafolio', menu_principal: {
       orden: ['nosotros', 'catalogo', 'inicio', 'cotizar', 'sobre_mi'], nombres: { nosotros: 'Proyectos' }
@@ -37,7 +83,7 @@ describe('Enlace al blog en el header y el footer', () => {
     await navegacion.findByRole('link', { name: 'Proyectos' });
     expect(navegacion.getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Proyectos', 'Catálogo', 'Inicio', 'Panel admin']);
     expect(navegacion.getByRole('link', { name: 'Proyectos' })).toHaveAttribute('href', '/blog');
-    expect(within(await columnaTienda()).getByRole('link', { name: 'Portafolio' })).toBeInTheDocument();
+    expect(within(await columnaTienda()).getAllByRole('link').map(enlace => enlace.textContent)).toEqual(['Proyectos', 'Catálogo', 'Inicio', 'Seguimiento de pedido']);
     localStorage.removeItem('rol');
   });
   beforeEach(() => vi.clearAllMocks());

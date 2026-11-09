@@ -22,7 +22,7 @@ from ecommerce.infrastructure.usuarios.permissions import IsAdministrador
 from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
 
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
-from .orden import ordenar_categorias
+from ecommerce.domain.catalogo import ordenar_categorias
 
 from .documents import ImagenPendienteBorrado, Producto
 from .image_adapters import eliminar_producto, servicio_galeria

@@ -436,3 +436,41 @@
     display: none;
   }
 }
+
+/* Logo grande (opción del admin, pedido de un cliente): solo en el computador; en la tablet y el celular queda
+   igual. RN-01: el logo de la Universidad mantiene la misma altura que el del negocio */
+@media (min-width: 1024px) {
+  :root[data-logo='grande'] .header-logo-negocio {
+    height: 72px;
+    max-width: 260px;
+  }
+
+  :root[data-logo='grande'] .header-logo-universidad {
+    height: 72px;
+    max-width: 220px;
+  }
+
+  :root[data-logo='grande'] .header-separador {
+    height: 56px;
+  }
+
+  /* Sin logo, el nombre de la tienda crece en la misma medida */
+  :root[data-logo='grande'] .header-nombre-tienda {
+    font-size: 2.25rem;
+  }
+}
+
+.header-links a { max-width: 100%; overflow-wrap: anywhere; }
+
+.header--editando { position: static; }
+.menu-edicion-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; padding: 10px; border: 1px dashed var(--color-border); border-radius: var(--radio); }
+.menu-edicion-item .campo-editable { margin: 0; max-width: 220px; }
+.menu-edicion-nombre { font: inherit; min-height: 44px; }
+.menu-edicion-texto { overflow-wrap: anywhere; }
+.menu-edicion-movimientos { display: flex; gap: 8px; }
+.menu-edicion-movimientos button { min-width: 44px; min-height: 44px; border: 1px solid var(--color-border); border-radius: var(--radio); background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.menu-edicion-movimientos button:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 767px) {
+  .header--editando .header-links { align-items: stretch; }
+  .menu-edicion-item { flex: 1 1 150px; }
+}

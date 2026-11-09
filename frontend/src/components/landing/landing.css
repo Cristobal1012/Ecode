@@ -471,6 +471,10 @@
     bottom: 16px;
   }
 
+  .portada--editando {
+    flex-wrap: wrap;
+  }
+
   .portada-controles {
     position: static;
     justify-content: flex-start;
@@ -583,4 +587,228 @@ a.instagram-foto:hover img {
 
 .resenas-landing-nota {
   text-align: center;
+}
+
+/* Destacados (pedido de un cliente): tarjetas del doble de tamaño que las de "Más vendidos", con la foto apaisada:
+   dos por fila en el computador y la tablet, una en el celular */
+.grilla-destacados {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(20px, 3vw, 40px);
+}
+
+@media (max-width: 639px) {
+  .grilla-destacados {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tarjeta-destacado {
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.tarjeta-destacado-imagen {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--color-accent);
+  margin-bottom: 18px;
+}
+
+.tarjeta-destacado-imagen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.tarjeta-destacado:hover .tarjeta-destacado-imagen img {
+  transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta-destacado-imagen img {
+    transition: none;
+  }
+
+  .tarjeta-destacado:hover .tarjeta-destacado-imagen img {
+    transform: none;
+  }
+}
+
+/* Sin foto: la inicial sobre el color de acento, como en las tarjetas de productos */
+.tarjeta-destacado-sin-imagen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--fuente-titulos);
+  font-size: 5rem;
+  color: var(--color-muted);
+}
+
+.tarjeta-destacado-nombre {
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  margin: 0 0 8px;
+}
+
+.tarjeta-destacado:hover .tarjeta-destacado-nombre {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+.tarjeta-destacado:focus-visible {
+  outline-offset: 6px;
+}
+
+/* Modo edición: qué muestra la vitrina y la selección de destacados */
+.editor-vitrina {
+  padding-block: clamp(24px, 4vw, 40px);
+}
+
+.editor-vitrina-modo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0;
+  padding: 16px 20px;
+  border: 1px dashed var(--color-control-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+}
+
+.editor-vitrina-modo legend {
+  padding: 0 6px;
+}
+
+.editor-vitrina-opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 28rem;
+  cursor: pointer;
+}
+
+.editor-vitrina-opcion input {
+  margin-top: 0.3em;
+  accent-color: var(--color-primary);
+}
+
+.destacados-titulo-campo {
+  font-family: var(--fuente-titulos);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.editor-destacados {
+  margin-bottom: 32px;
+  padding: 20px;
+  border: 1px dashed var(--color-control-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+}
+
+.editor-destacados-titulo {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+}
+
+.editor-destacados-lista {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.editor-destacados-fila {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-destacados-miniatura {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--color-accent);
+  color: var(--color-muted);
+  font-family: var(--fuente-titulos);
+}
+
+.editor-destacados-miniatura img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.editor-destacados-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor-destacados-texto .texto-secundario,
+.editor-destacados-aviso,
+.editor-destacados-ayuda {
+  font-size: 0.85rem;
+}
+
+.editor-destacados-aviso {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.editor-destacados-acciones,
+.editor-destacados-agregar-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-destacados-agregar-controles select {
+  flex: 1 1 14rem;
+  min-height: 40px;
+  min-width: 0;
+}
+
+.editor-destacados-ayuda {
+  margin: 8px 0 0;
+}
+
+.editor-destacados-error {
+  color: var(--color-text);
+  font-weight: 600;
+  border-left: 3px solid var(--color-primary);
+  padding-left: 10px;
+}
+
+.editor-destacados-nota {
+  margin: 16px 0 0;
+}
+
+/* En el celular los botones bajan a su propia fila, bajo el nombre */
+@media (max-width: 639px) {
+  .editor-destacados-fila {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .editor-destacados-acciones {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Fotos completas (opción del admin, pedido de un cliente): la obra se ve entera dentro del mismo marco, sin
+   recortarla; los bordes que sobran quedan con el color de acento del tema */
+:root[data-fotos='completas'] .tarjeta-destacado-imagen img {
+  object-fit: contain;
 }

@@ -114,3 +114,9 @@
     font-size: 1.1rem;
   }
 }
+
+/* Fotos completas (opción del admin, pedido de un cliente): la obra se ve entera dentro del mismo marco, sin
+   recortarla; los bordes que sobran quedan con el color de acento del tema */
+:root[data-fotos='completas'] .tarjeta-producto-imagen img {
+  object-fit: contain;
+}

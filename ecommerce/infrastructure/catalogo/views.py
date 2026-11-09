@@ -18,8 +18,14 @@ from ecommerce.domain.imagenes import (
     LimiteGaleriaExcedido,
 )
 from ecommerce.application.vitrina import SeleccionarVitrina
+from ecommerce.domain.destacados import TITULO_POR_DEFECTO, ModoVitrina, TipoDestacado, ids_por_tipo
 from ecommerce.infrastructure.usuarios.permissions import IsAdministrador
+from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal, Publicacion
+from ecommerce.infrastructure.ventas.repositorio_blog import DjangoPublicacionesVitrina
 from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
+
+from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
+from ecommerce.domain.catalogo import ordenar_categorias
 
 from .documents import ImagenPendienteBorrado, Producto
 from .image_adapters import eliminar_producto, servicio_galeria
@@ -61,27 +67,63 @@ class CatalogoAPIView(APIView):
 
 def seleccionar_vitrina():
     """Las pruebas lo reemplazan para no depender de las ventas ni del catálogo reales."""
-    return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina())
+    return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina(),
+                              publicaciones=DjangoPublicacionesVitrina())
 
 
 class VitrinaView(CatalogoAPIView):
-    """RF-01.1: secciones de productos de la landing (pública)."""
+    """RF-01.1: secciones de la landing (pública): más vendidos o destacados, y últimos agregados.
+
+    Cada destacado sale como {tipo, id, nombre, imagen, enlace}; los productos agregan su categoría y sus variantes.
+    """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request):
-        vitrina = seleccionar_vitrina().ejecutar()
-        ids = set(vitrina.mas_vendidos) | set(vitrina.recientes)
-        productos = {str(p.id): p for p in Producto.objects(id__in=list(ids))}
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).values(
+            'vitrina_modo', 'destacados', 'destacados_titulo', 'blog_activo').first() or {}
+        vitrina = seleccionar_vitrina().ejecutar(
+            configuracion.get('vitrina_modo', ModoVitrina.MAS_VENDIDOS), configuracion.get('destacados') or [],
+            bool(configuracion.get('blog_activo')))
+
+        ids_destacados = ids_por_tipo(vitrina.destacados, TipoDestacado.PRODUCTO)
+        ids = set(vitrina.mas_vendidos) | set(vitrina.recientes) | set(ids_destacados)
+        productos = {str(p.id): p for p in Producto.objects(id__in=list(ids))} if ids else {}
+        id_publicaciones = ids_por_tipo(vitrina.destacados, TipoDestacado.PUBLICACION)
+        publicaciones = ({str(p.pk): p for p in Publicacion.objects.filter(pk__in=id_publicaciones)}
+                         if id_publicaciones else {})
 
         def serializar(lista):
             return ProductoSerializer([productos[i] for i in lista if i in productos], many=True,
                                       context={'request': request}).data
 
-        return Response({'mas_vendidos': serializar(vitrina.mas_vendidos), 'recientes': serializar(vitrina.recientes)})
+        def destacado(elegido):
+            if elegido['tipo'] == TipoDestacado.PRODUCTO:
+                producto = productos.get(elegido['id'])
+                if producto is None:
+                    return None
+                datos = ProductoSerializer(producto, context={'request': request}).data
+                return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': datos['nombre'],
+                        'categoria': datos.get('categoria') or '', 'imagen': (datos.get('imagenes') or [None])[0],
+                        'enlace': f'/catalogo/producto/{elegido["id"]}', 'variantes': datos.get('variantes', [])}
+            publicacion = publicaciones.get(elegido['id'])
+            if publicacion is None:
+                return None
+            portada = request.build_absolute_uri(publicacion.portada.url) if publicacion.portada else None
+            return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': publicacion.titulo, 'imagen': portada,
+                    'enlace': f'/blog/{publicacion.slug}'}
+
+        # Entre la selección y la lectura pudo despublicarse algo: se descarta sin romper la sección
+        destacados = [datos for datos in map(destacado, vitrina.destacados) if datos]
+        return Response({
+            'mas_vendidos': serializar(vitrina.mas_vendidos),
+            'recientes': serializar(vitrina.recientes),
+            'destacados': destacados,
+            'destacados_titulo': configuracion.get('destacados_titulo') or TITULO_POR_DEFECTO,
+        })
 
 
-def obtener_filtros_catalogo():
+def obtener_filtros_catalogo(orden_categorias=None):
     """RF-01.3: extrae las categorías y valores de atributos disponibles de productos activos y publicados."""
     try:
         # Una lectura proyectada conserva las opciones de todas las páginas sin
@@ -101,7 +143,9 @@ def obtener_filtros_catalogo():
                     opciones.setdefault(clave, set())
                     if valor is not None and str(valor).strip():
                         opciones[clave].add(str(valor))
-        categorias = sorted(atributos)
+        if orden_categorias is None:
+            orden_categorias = ConfiguracionGlobal.objects.filter(pk=1).values_list('orden_categorias', flat=True).first() or []
+        categorias = ordenar_categorias(atributos, orden_categorias)
         atributos = {cat: {clave: sorted(valores) for clave, valores in atributos[cat].items()}
                      for cat in categorias}
         return {'categorias': categorias, 'atributos': atributos}
@@ -172,7 +216,10 @@ class ProductoListCreateView(CatalogoAPIView):
                 productos = productos.filter(**{f"atributos_globales__{nombre_atributo}__in": valores_posibles})
 
         # 3. Paginación y orden en servidor (SCRUM-179)
-        orden = request.query_params.get('orden', 'destacados').strip()
+        config = ConfiguracionGlobal.objects.filter(pk=1).values('orden_catalogo', 'orden_categorias').first() or {}
+        orden = request.query_params.get('orden', config.get('orden_catalogo', 'destacados')).strip()
+        if orden not in ('destacados', 'recientes', 'precio-asc', 'precio-desc', 'nombre'):
+            orden = config.get('orden_catalogo', 'destacados')
         try:
             page = max(1, int(request.query_params.get('page', 1)))
         except (ValueError, TypeError):
@@ -246,19 +293,41 @@ class ProductoListCreateView(CatalogoAPIView):
 
             if productos_pagina is None:
                 try:
-                    productos = productos.order_by('precio_minimo_vigente' if orden == 'precio-asc' else '-precio_minimo_vigente')
+                    productos = productos.order_by('precio_minimo_vigente' if orden == 'precio-asc' else '-precio_minimo_vigente', 'id')
                 except Exception:
                     try:
-                        productos = productos.order_by('variantes.precio' if orden == 'precio-asc' else '-variantes.precio')
+                        productos = productos.order_by('variantes.precio' if orden == 'precio-asc' else '-variantes.precio', 'id')
                     except Exception:
                         pass
 
+        elif orden == 'destacados' and config.get('orden_categorias'):
+            prioridades = config['orden_categorias']
+            pipeline = [
+                {'$match': productos._query},
+                {'$addFields': {'_orden_categoria': {
+                    '$let': {
+                        'vars': {'posicion': {'$indexOfArray': [{'$literal': prioridades}, '$categoria']}},
+                        'in': {'$cond': [{'$gte': ['$$posicion', 0]}, '$$posicion', len(prioridades)]},
+                    },
+                }}},
+                {'$sort': {'_orden_categoria': 1, 'categoria': 1, 'fecha_creacion': -1, '_id': 1}},
+                {'$facet': {
+                    'total': [{'$count': 'count'}],
+                    'results': [{'$skip': (page - 1) * page_size}, {'$limit': page_size}],
+                }},
+            ]
+            info = next(Producto._get_collection().aggregate(pipeline, allowDiskUse=True))
+            total_count = info['total'][0]['count'] if info['total'] else 0
+            total_pages = max(1, math.ceil(total_count / page_size))
+            for documento in info['results']:
+                documento.pop('_orden_categoria', None)
+            productos_pagina = [Producto._from_son(documento) for documento in info['results']]
         elif orden == 'recientes':
-            productos = productos.order_by('-fecha_creacion')
+            productos = productos.order_by('-fecha_creacion', 'id')
         elif orden == 'nombre':
-            productos = productos.order_by('nombre')
+            productos = productos.order_by('nombre', 'id')
         else:
-            productos = productos.order_by('-fecha_creacion')
+            productos = productos.order_by('-fecha_creacion', 'id')
 
         if productos_pagina is None:
             total_count = productos.count()
@@ -273,7 +342,8 @@ class ProductoListCreateView(CatalogoAPIView):
             'current_page': page,
             'page_size': page_size,
             'results': serializer.data,
-            'filtros': obtener_filtros_catalogo(),
+            'filtros': obtener_filtros_catalogo(config.get('orden_categorias', [])),
+            'orden': orden,
         })
 
     def post(self, request):

@@ -9,8 +9,12 @@ from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
 from django.db.models import F, Q, Sum, Count
+from django.db import transaction
 from django.db.models.functions import TruncDate
-from .models import Promocion
+from .models import (
+    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
+    PaginaLegal, Promocion, Publicacion, ProyectoDestacadoSobreMi, Resena,
+)
 from .serializers import PromocionSerializer
 from rest_framework.permissions import AllowAny
 
@@ -66,6 +70,10 @@ from ecommerce.domain.medios_pago import CodigoMedioPago, DatosMedioPagoInvalido
 from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
+)
+from ecommerce.domain.sobre_mi import (
+    ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
+    exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
 )
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
@@ -1414,6 +1422,113 @@ def publicacion_para_panel(publicacion_id, request):
     publicacion = Publicacion.objects.prefetch_related('fotos').get(id=publicacion_id)
     return PublicacionAdminSerializer(publicacion, context={'request': request}).data
 
+class SobreMiPublicoView(APIView):
+    """Información pública de la página Sobre mí. Responde 404 si está desactivada."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        try:
+            exigir_sobre_mi_disponible(configuracion.sobre_mi_activo if configuracion else False)
+        except SobreMiNoDisponible as error:
+            raise NotFound(str(error)) from error
+
+        publicaciones = []
+        # Con el blog apagado los proyectos no se muestran (domain/sobre_mi.py)
+        if muestra_proyectos_sobre_mi(configuracion.blog_activo):
+            proyectos = (
+                ProyectoDestacadoSobreMi.objects
+                .filter(
+                    configuracion=configuracion,
+                    publicacion__estado='PUBLICADA',
+                )
+                .select_related('publicacion')
+                .order_by('orden', 'id')
+            )
+            publicaciones = [proyecto.publicacion for proyecto in proyectos]
+
+        contacto = construir_contacto_sobre_mi(
+            telefono=configuracion.telefono_comercial,
+            correo=configuracion.correo_contacto,
+            instagram=configuracion.instagram_usuario,
+        )
+
+        return Response({
+            'nombre': configuracion.sobre_mi_nombre,
+            'biografia': configuracion.sobre_mi_biografia,
+            'proyectos': PublicacionResumenSerializer(
+                publicaciones,
+                many=True,
+                context={'request': request},
+            ).data,
+            'contacto': contacto,
+        })
+
+
+class AdminSobreMiProyectosView(APIView):
+    """Consultar y guardar los proyectos destacados de Sobre mí."""
+
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        if not configuracion:
+            return Response({'proyectos': []})
+
+        proyectos = (
+            ProyectoDestacadoSobreMi.objects
+            .filter(configuracion=configuracion)
+            .order_by('orden', 'id')
+        )
+
+        return Response({
+            'proyectos': list(proyectos.values_list('publicacion_id', flat=True))
+        })
+
+    @transaction.atomic
+    def put(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        if not configuracion:
+            raise NotFound('Configuración de la tienda no encontrada.')
+
+        try:
+            ids = validar_ids_proyectos_sobre_mi(request.data.get('proyectos'))
+        except ProyectosSobreMiInvalidos as error:
+            return Response(
+                {'proyectos': [str(error)]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existentes = set(
+            Publicacion.objects.filter(id__in=ids)
+            .values_list('id', flat=True)
+        )
+
+        if existentes != set(ids):
+            return Response(
+                {'proyectos': ['Una o más publicaciones no existen.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ProyectoDestacadoSobreMi.objects.filter(
+            configuracion=configuracion
+        ).delete()
+
+        ProyectoDestacadoSobreMi.objects.bulk_create([
+            ProyectoDestacadoSobreMi(
+                configuracion=configuracion,
+                publicacion_id=pk,
+                orden=indice,
+            )
+            for indice, pk in enumerate(ids)
+        ])
+
+        return Response({'proyectos': ids})
 
 class BlogPublicoView(APIView):
     """GET /api/ventas/blog/?pagina=N: las publicaciones del blog, si el admin lo activó (RF-01.1)."""

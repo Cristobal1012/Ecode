@@ -25,6 +25,7 @@ import Cotizacion from './pages/Cotizacion';
 import Resena from './pages/Resena';
 import Blog from './pages/Blog';
 import PublicacionBlog from './pages/PublicacionBlog';
+import SobreMi from './pages/SobreMi';
 import TrackingScripts from './components/TrackingScripts';
 import CookieBanner from './components/CookieBanner';
 import useCookieConsent from './hooks/useCookieConsent';
@@ -132,6 +133,8 @@ function App() {
             {/* Blog o portafolio (si el admin lo activó; si no, las páginas avisan que no está disponible) */}
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<PublicacionBlog />} />
+            {/* Página independiente Sobre mí */}
+            <Route path="/sobre-mi" element={<SobreMi />} />
             <Route path="/variantes" element={<main id="contenido" tabIndex={-1} className="contenedor"><h1>Selección de variantes</h1><VariantSelector /></main>} />
             <Route path="/catalogo" element={<Catalogo />} />
             <Route path="/catalogo/producto/:id" element={<DetalleProducto />} />

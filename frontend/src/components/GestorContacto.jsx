@@ -6,13 +6,20 @@ import { recargarConfiguracion } from '../hooks/useConfiguracionTienda';
 import Spinner from './carga/Spinner';
 
 // Correo, horario e Instagram de la tienda: van en el pie de página y en la sección de Instagram de la landing
-const CAMPOS = ['correo_contacto', 'horario_atencion', 'instagram_usuario', 'mostrar_direccion_pie'];
+const CAMPOS = ['correo_contacto', 'horario_atencion', 'instagram_usuario', 'mostrar_direccion_pie',
+  'telefono_comercial', 'facebook_url', 'x_url', 'youtube_url', 'tiktok_url'
+];
 
 const formularioDe = (configuracion) => ({
   correo_contacto: configuracion?.correo_contacto || '',
   horario_atencion: configuracion?.horario_atencion || '',
   instagram_usuario: configuracion?.instagram_usuario || '',
-  mostrar_direccion_pie: Boolean(configuracion?.mostrar_direccion_pie)
+  mostrar_direccion_pie: Boolean(configuracion?.mostrar_direccion_pie),
+  telefono_comercial: configuracion?.telefono_comercial || '',
+  facebook_url: configuracion?.facebook_url || '',
+  x_url: configuracion?.x_url || '',
+  youtube_url: configuracion?.youtube_url || '',
+  tiktok_url: configuracion?.tiktok_url || '',
 });
 
 // El backend responde { campo: [mensajes] }
@@ -132,6 +139,61 @@ export default function GestorContacto() {
           {errorCampo('instagram_usuario')}
         </div>
 
+        {/* Teléfono comercial del emprendedor */}
+        <div className="admin-campo">
+          <label htmlFor="contacto-telefono">Teléfono comercial</label>
+          <input
+            id="contacto-telefono"
+            type="tel"
+            value={formulario.telefono_comercial}
+            onChange={(e) => editar('telefono_comercial', e.target.value)}
+            placeholder="Ej: +56 9 1234 5678"
+            autoComplete="tel"
+            {...describir('telefono_comercial', 'contacto-telefono-ayuda')}
+          />
+          <p id="contacto-telefono-ayuda" className="admin-ayuda">
+            Número de contacto de tu negocio. Se mostrará en el pie de página.
+          </p>
+          {errorCampo('telefono_comercial')}
+        </div>
+
+        {/* Enlaces a redes sociales del emprendedor */}
+        {[
+          {
+            campo: 'facebook_url',
+            nombre: 'Facebook',
+            ejemplo: 'https://www.facebook.com/mitienda'
+          },
+          {
+            campo: 'x_url',
+            nombre: 'X (Twitter)',
+            ejemplo: 'https://x.com/mitienda'
+          },
+          {
+            campo: 'youtube_url',
+            nombre: 'YouTube',
+            ejemplo: 'https://www.youtube.com/@mitienda'
+          },
+          {
+            campo: 'tiktok_url',
+            nombre: 'TikTok',
+            ejemplo: 'https://www.tiktok.com/@mitienda'
+          }
+        ].map(({ campo, nombre, ejemplo }) => (
+          <div className="admin-campo" key={campo}>
+            <label htmlFor={`contacto-${campo}`}>{nombre}</label>
+            <input
+              id={`contacto-${campo}`}
+              type="url"
+              value={formulario[campo]}
+              onChange={(e) => editar(campo, e.target.value)}
+              placeholder={ejemplo}
+              {...describir(campo)}
+            />
+            {errorCampo(campo)}
+          </div>
+        ))}
+        
         <div>
           <label className="admin-casilla">
             <input

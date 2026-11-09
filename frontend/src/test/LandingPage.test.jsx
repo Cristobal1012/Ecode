@@ -589,7 +589,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await waitFor(() => expect(patchMock).toHaveBeenCalledTimes(2));
     const [, formulario, opciones] = patchMock.mock.calls[0];
     expect(formulario).toBeInstanceOf(FormData);
-    expect(formulario.get('banner')).toBe(archivo);
+    expect(formulario.get('banner_fotos')).toBe(archivo);
     expect(JSON.parse(formulario.get('menu_principal'))).toEqual({ nombres: { catalogo: 'Obras' } });
     // El navegador pone el multipart con su boundary (axios fija JSON por defecto)
     expect(opciones).toEqual({ headers: { 'Content-Type': undefined } });
@@ -637,6 +637,69 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
 
     expect(screen.getByLabelText('Título')).toHaveValue('Objetos con alma');
     expect(screen.getByText('Sin cambios')).toBeInTheDocument();
+  });
+
+  it('con dos o más fotos, el banner tiene carrusel y botón para pausar y reanudar (WCAG 2.2.2)', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        banners: [
+          { id: 1, imagen: 'http://localhost:8000/media/negocio/banners/obra1.webp', orden: 0 },
+          { id: 2, imagen: 'http://localhost:8000/media/negocio/banners/obra2.webp', orden: 1 },
+        ],
+      },
+    });
+    await renderLanding();
+
+    const botonPausa = await screen.findByRole('button', { name: /pausar carrusel/i });
+    expect(botonPausa).toBeInTheDocument();
+
+    fireEvent.click(botonPausa);
+    const botonReanudar = await screen.findByRole('button', { name: /reanudar carrusel/i });
+    expect(botonReanudar).toBeInTheDocument();
+
+    fireEvent.click(botonReanudar);
+    expect(await screen.findByRole('button', { name: /pausar carrusel/i })).toBeInTheDocument();
+  });
+
+  it('con una sola foto o por defecto, el banner queda fijo y no muestra botón de pausa', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        banner: 'http://localhost:8000/media/negocio/banners/unica.webp',
+      },
+    });
+    await renderLanding();
+
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('button', { name: /pausar carrusel/i })).not.toBeInTheDocument();
+  });
+
+  it('el admin sube varias fotos al banner en modo edición, las reordena, las borra y las guarda', async () => {
+    await entrarComoAdmin();
+    const foto1 = new File(['1'], 'foto1.png', { type: 'image/png' });
+    const foto2 = new File(['2'], 'foto2.png', { type: 'image/png' });
+
+    // Sube dos fotos al banner
+    fireEvent.change(screen.getByLabelText('Subir imagen de portada'), { target: { files: [foto1, foto2] } });
+
+    // Espera que aparezcan en la lista del editor
+    expect(await screen.findByRole('button', { name: /mover foto 2 hacia la izquierda/i })).toBeInTheDocument();
+
+    // Reordena: mueve la segunda foto a la izquierda (primera posición)
+    fireEvent.click(screen.getByRole('button', { name: /mover foto 2 hacia la izquierda/i }));
+
+    // Borra la foto que ahora quedó en la segunda posición
+    fireEvent.click(screen.getByRole('button', { name: /quitar foto 2 del banner/i }));
+
+    // Guarda los cambios
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    const [, formulario] = patchMock.mock.calls[0];
+    expect(formulario).toBeInstanceOf(FormData);
+    expect(formulario.getAll('banner_fotos')).toHaveLength(1);
+    expect(formulario.get('banner_orden')).toBeDefined();
   });
 });
 

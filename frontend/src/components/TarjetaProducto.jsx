@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import './TarjetaProducto.css';
 
 // Tarjeta de producto del estilo editorial: foto vertical, categoría, nombre y precio (con oferta tachada).
 // La usan las secciones de la landing; toda la tarjeta es un enlace a la ficha del producto.
 export default function TarjetaProducto({ producto, etiqueta }) {
+  const navigate = useNavigate();
   const id = producto.id || producto._id;
   const imagen = producto.imagenes?.[0];
   const [imagenRota, setImagenRota] = useState(false);
   const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
-  // Una sola etiqueta: "Agotado" manda sobre "Oferta" y sobre la de la sección
-  const textoEtiqueta = agotado ? 'Agotado' : tieneOferta ? 'Oferta' : etiqueta;
+  const esColeccionPrivada = Boolean(producto.coleccion_privada);
+  const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
+  // Una sola etiqueta: si es colección privada no muestra "Agotado"; si no, "Agotado" manda sobre "Oferta"
+  const textoEtiqueta = esColeccionPrivada ? null : (agotado ? 'Agotado' : tieneOferta ? 'Oferta' : etiqueta);
 
   return (
     <Link to={`/catalogo/producto/${id}`} className="tarjeta-producto">
@@ -33,7 +36,9 @@ export default function TarjetaProducto({ producto, etiqueta }) {
       <h3 className="tarjeta-producto-nombre">{producto.nombre}</h3>
 
       <p className="tarjeta-producto-precio">
-        {agotado ? (
+        {esColeccionPrivada ? (
+          <span className="tarjeta-producto-coleccion-privada">Colección privada</span>
+        ) : agotado ? (
           <span className="texto-secundario">Sin stock</span>
         ) : (
           <>
@@ -46,6 +51,20 @@ export default function TarjetaProducto({ producto, etiqueta }) {
           </>
         )}
       </p>
+
+      {tieneVersionVenta && (
+        <button
+          type="button"
+          className="tarjeta-producto-boton-version"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            navigate(`/catalogo/producto/${producto.version_a_la_venta}`);
+          }}
+        >
+          {producto.texto_boton_version || 'Disponible en print'}
+        </button>
+      )}
     </Link>
   );
 }

@@ -99,6 +99,24 @@ describe('GestorPublicaciones', () => {
     expect(titulo).toHaveAccessibleDescription('Este dato es obligatorio.');
   });
 
+  it('permite ingresar un video de YouTube y lo envía al guardar (SCRUM-195)', async () => {
+    clienteAxios.post.mockResolvedValueOnce({
+      data: { ...PUBLICADA, id: 4, titulo: 'Video demo', youtube_id: 'dQw4w9WgXcQ' }
+    });
+    render(<GestorPublicaciones />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '+ Nueva publicación' }));
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Video demo' } });
+    fireEvent.change(screen.getByLabelText('Video de YouTube'), {
+      target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+
+    await waitFor(() => expect(clienteAxios.post).toHaveBeenCalled());
+    const [, datos] = clienteAxios.post.mock.calls[0];
+    expect(datos.get('youtube')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  });
+
   it('una publicada se puede quitar la portada y pasar a borrador', async () => {
     clienteAxios.put.mockResolvedValue({ data: { ...PUBLICADA, portada: null, estado: 'BORRADOR' } });
     render(<GestorPublicaciones />);

@@ -146,6 +146,20 @@ class ConfiguracionGlobal(models.Model):
         return self.nombre_tienda
 
 
+class FotoBanner(models.Model):
+    """Foto del carrusel de la portada (RF-01.1, SCRUM-194). Se ordenan con el campo orden."""
+
+    configuracion = models.ForeignKey(ConfiguracionGlobal, on_delete=models.CASCADE, related_name='fotos_banner')
+    imagen = models.ImageField(upload_to='negocio/banners/')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f'Foto banner {self.orden} de {self.configuracion}'
+
+
 class MedioPago(models.Model):
     """Un medio de pago configurado por el emprendedor (RN-02). Los campos de cada medio los define el dominio."""
 
@@ -408,6 +422,7 @@ class Publicacion(models.Model):
     # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
     contenido = models.TextField(blank=True, default='')
     portada = models.ImageField(upload_to='blog/portadas/', blank=True, null=True)
+    youtube_id = models.CharField(max_length=20, blank=True, default='')
     estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoPublicacion.BORRADOR.value)
     # Se fija la primera vez que se publica y ordena el blog; None si nunca salió de borrador
     fecha_publicacion = models.DateTimeField(null=True, blank=True)

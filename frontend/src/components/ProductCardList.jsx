@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 
 // Layout de lista del catálogo (RF-01.4): foto a la izquierda y la descripción al costado. Toda la fila es un
 // enlace a la ficha del producto (igual que la tarjeta de grilla).
 export default function ProductCardList({ producto }) {
+  const navigate = useNavigate();
   const id = producto.id || producto._id;
   const imagen = producto.imagenes?.[0];
   const [imagenRota, setImagenRota] = useState(false);
   const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
   const atributos = Object.entries(producto.atributos_globales || {});
+  const esColeccionPrivada = Boolean(producto.coleccion_privada);
+  const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
 
   return (
     <Link to={`/catalogo/producto/${id}`} className="fila-producto">
@@ -19,7 +22,7 @@ export default function ProductCardList({ producto }) {
         ) : (
           <span className="tarjeta-producto-sin-imagen" aria-hidden="true">{producto.nombre?.charAt(0)}</span>
         )}
-        {(agotado || tieneOferta) && (
+        {!esColeccionPrivada && (agotado || tieneOferta) && (
           <span className={`tarjeta-producto-etiqueta${agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
             {agotado ? 'Agotado' : 'Oferta'}
           </span>
@@ -39,7 +42,9 @@ export default function ProductCardList({ producto }) {
 
       <div className="fila-producto-compra">
         <p className="tarjeta-producto-precio">
-          {agotado ? (
+          {esColeccionPrivada ? (
+            <span className="tarjeta-producto-coleccion-privada">Colección privada</span>
+          ) : agotado ? (
             <span className="texto-secundario">Sin stock</span>
           ) : (
             <>
@@ -52,7 +57,21 @@ export default function ProductCardList({ producto }) {
             </>
           )}
         </p>
-        <span className="enlace-flecha" aria-hidden="true">Ver producto →</span>
+        {tieneVersionVenta ? (
+          <button
+            type="button"
+            className="tarjeta-producto-boton-version"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/catalogo/producto/${producto.version_a_la_venta}`);
+            }}
+          >
+            {producto.texto_boton_version || 'Disponible en print'}
+          </button>
+        ) : (
+          <span className="enlace-flecha" aria-hidden="true">Ver producto →</span>
+        )}
       </div>
     </Link>
   );

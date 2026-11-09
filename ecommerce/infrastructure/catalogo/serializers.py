@@ -55,7 +55,28 @@ class ProductoSerializer(serializers.Serializer):
     publicado = serializers.BooleanField(default=False)
     atributos_globales = serializers.DictField(required=False, default=dict)
     
+    # Colección privada (SCRUM-197)
+    coleccion_privada = serializers.BooleanField(default=False, required=False)
+    version_a_la_venta = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    texto_boton_version = serializers.CharField(default='Disponible en print', required=False, allow_blank=True, max_length=100)
+    version_a_la_venta_disponible = serializers.SerializerMethodField()
+
     variantes = VarianteSerializer(many=True, required=False)
+
+    def get_version_a_la_venta_disponible(self, obj):
+        version_id = getattr(obj, 'version_a_la_venta', None)
+        if not version_id:
+            return False
+        versiones_publicadas = self.context.get('versiones_publicadas')
+        if versiones_publicadas is not None:
+            return str(version_id) in versiones_publicadas
+        try:
+            target = Producto.objects(
+                id=version_id, activo=True, publicado=True, coleccion_privada__ne=True
+            ).only('id').first()
+            return target is not None
+        except Exception:
+            return False
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -90,6 +111,34 @@ class ProductoSerializer(serializers.Serializer):
         skus = [str(v.get('sku', '')).strip() for v in variantes if v.get('sku')]
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError({'variantes': 'Cada variante de un producto debe tener un código SKU único.'})
+
+        # Validaciones de Colección privada (SCRUM-197)
+        coleccion_privada = attrs.get('coleccion_privada', getattr(self.instance, 'coleccion_privada', False) if self.instance else False)
+        version_a_la_venta = attrs.get('version_a_la_venta', getattr(self.instance, 'version_a_la_venta', None) if self.instance else None)
+        texto_boton = attrs.get('texto_boton_version')
+        if texto_boton is not None and not str(texto_boton).strip():
+            attrs['texto_boton_version'] = 'Disponible en print'
+
+        if version_a_la_venta:
+            version_str = str(version_a_la_venta).strip()
+            attrs['version_a_la_venta'] = version_str
+            if self.instance and str(self.instance.id) == version_str:
+                raise serializers.ValidationError({'version_a_la_venta': 'Una obra no puede ser su propia versión a la venta.'})
+            try:
+                target = Producto.objects(id=version_str).first()
+            except Exception as exc:
+                raise serializers.ValidationError({'version_a_la_venta': 'El producto seleccionado no es válido.'}) from exc
+            if not target:
+                raise serializers.ValidationError({'version_a_la_venta': 'El producto seleccionado como versión a la venta no existe.'})
+            if getattr(target, 'coleccion_privada', False):
+                raise serializers.ValidationError({'version_a_la_venta': 'No se puede enlazar a otra obra que es colección privada.'})
+
+        if coleccion_privada and self.instance:
+            referenciador = Producto.objects(version_a_la_venta=str(self.instance.id)).first()
+            if referenciador:
+                raise serializers.ValidationError({
+                    'coleccion_privada': f'No se puede marcar como colección privada porque está asignada como versión a la venta de "{referenciador.nombre}".'
+                })
 
         return attrs
 

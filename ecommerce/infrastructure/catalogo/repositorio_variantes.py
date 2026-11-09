@@ -43,7 +43,7 @@ class MongoCatalogoVariantes(CatalogoVariantes):
             nombre=f'{producto.nombre} - {variante.sku}',
             precio=Decimal(precio_vigente),
             stock=int(variante.stock),
-            disponible=bool(producto.activo and producto.publicado),
+            disponible=bool(producto.activo and producto.publicado and not getattr(producto, 'coleccion_privada', False)),
             medidas=MedidasEnvio(*(Decimal(str(getattr(variante, campo) or 0))
                                    for campo in ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm'))),
         )

@@ -14,7 +14,13 @@ export function resolverMenu(config = {}) {
     cotizar: { base: 'Cotizar', to: '/cotizar', visible: Boolean(config.cotizaciones_activas) },
   };
   return orden.map(id => {
-    const personalizado = menu.nombres?.[id];
-    return { id, ...enlaces[id], nombre: typeof personalizado === 'string' && personalizado.trim() ? personalizado : enlaces[id].base };
+    const personalizado = ['nosotros', 'sobre_mi'].includes(id) ? undefined : menu.nombres?.[id];
+    return { id, ...enlaces[id],
+      nombre: typeof personalizado === 'string' && personalizado.trim() ? personalizado.trim().replace(/\s+/g, ' ') : enlaces[id].base };
   });
+}
+
+export function textoBotonCatalogo(configuracion) {
+  const catalogo = resolverMenu(configuracion).find(enlace => enlace.id === 'catalogo');
+  return `Ver ${catalogo.nombre.toLocaleLowerCase('es')}`;
 }

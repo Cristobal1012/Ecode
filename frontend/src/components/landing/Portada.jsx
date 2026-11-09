@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom';
+import { textoBotonCatalogo } from '../../utils/menuPrincipal';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
 import { CampoEditable, SelectorImagen } from './ControlesEdicion';
 
 // RF-01.1: portada de la landing con los campos fijos que edita el admin (antetítulo, título, texto,
-// imagen y botón). La foto prioriza la subida desde el panel sobre la URL antigua (banner_url).
+// imagen). El botón toma el nombre del catálogo; la foto prioriza la subida sobre banner_url.
 // Con `edicion` (modo edición del admin) los textos se vuelven campos en su mismo lugar y estilo.
 export default function Portada({ configuracion, edicion }) {
   const imagen = configuracion.banner || configuracion.banner_url?.trim() || PORTADA_POR_DEFECTO;
   const editando = Boolean(edicion?.editando);
+  const textoBoton = textoBotonCatalogo(configuracion);
 
   return (
     <section className={`portada${editando ? ' portada--editando' : ''}`} aria-labelledby="portada-titulo"
@@ -31,9 +33,7 @@ export default function Portada({ configuracion, edicion }) {
               className="portada-titulo portada-titulo--campo" />
             <CampoEditable campo="texto_landing" edicion={edicion} claro multilinea filas={3}
               ancho="campo-ancho-medio" className="portada-texto" />
-            <div className="boton boton-primario portada-boton portada-boton--campo">
-              <CampoEditable campo="texto_boton_ingreso" edicion={edicion} claro className="portada-boton-campo" />
-            </div>
+            <span className="boton boton-primario portada-boton">{textoBoton}</span>
           </>
         ) : (
           <>
@@ -45,7 +45,7 @@ export default function Portada({ configuracion, edicion }) {
             </h1>
             {configuracion.texto_landing && <p className="portada-texto">{configuracion.texto_landing}</p>}
             <Link to="/catalogo" className="boton boton-primario portada-boton">
-              {configuracion.texto_boton_ingreso || TEXTOS_POR_DEFECTO.texto_boton_ingreso}
+              {textoBoton}
               <span aria-hidden="true">→</span>
             </Link>
           </>

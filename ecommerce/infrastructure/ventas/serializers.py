@@ -127,6 +127,10 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'vitrina_modo',
             'destacados_titulo',
             'destacados',
+            # Presentación: fotos sin recorte, ficha con la foto horizontal y logo más grande en el computador
+            'fotos_completas',
+            'ficha_horizontal',
+            'logo_grande',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
             'nombre_tienda',
             'logo',
@@ -237,6 +241,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'vitrina_modo',
             'destacados_titulo',
             'destacados',
+            'fotos_completas',
+            'ficha_horizontal',
+            'logo_grande',
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',

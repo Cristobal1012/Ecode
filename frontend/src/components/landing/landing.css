@@ -802,3 +802,9 @@ a.instagram-foto:hover img {
     grid-column: 1 / -1;
   }
 }
+
+/* Fotos completas (opción del admin, pedido de un cliente): la obra se ve entera dentro del mismo marco, sin
+   recortarla; los bordes que sobran quedan con el color de acento del tema */
+:root[data-fotos='completas'] .tarjeta-destacado-imagen img {
+  object-fit: contain;
+}

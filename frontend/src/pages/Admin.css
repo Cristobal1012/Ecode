@@ -845,3 +845,8 @@
 .resena-acciones .boton {
   padding: 0.7rem 1.25rem;
 }
+
+/* Fotos y logo: la ayuda de cada opción queda alineada con el texto de su casilla */
+.presentacion-ayuda {
+  margin: 4px 0 0 28px;
+}

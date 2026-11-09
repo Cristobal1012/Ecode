@@ -436,3 +436,26 @@
     display: none;
   }
 }
+
+/* Logo grande (opción del admin, pedido de un cliente): solo en el computador; en la tablet y el celular queda
+   igual. RN-01: el logo de la Universidad mantiene la misma altura que el del negocio */
+@media (min-width: 1024px) {
+  :root[data-logo='grande'] .header-logo-negocio {
+    height: 72px;
+    max-width: 260px;
+  }
+
+  :root[data-logo='grande'] .header-logo-universidad {
+    height: 72px;
+    max-width: 220px;
+  }
+
+  :root[data-logo='grande'] .header-separador {
+    height: 56px;
+  }
+
+  /* Sin logo, el nombre de la tienda crece en la misma medida */
+  :root[data-logo='grande'] .header-nombre-tienda {
+    font-size: 2.25rem;
+  }
+}

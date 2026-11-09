@@ -62,6 +62,13 @@ class ConfiguracionGlobal(models.Model):
     # [{'tipo': 'PRODUCTO' | 'PUBLICACION', 'id': '...'}] en orden. Los productos viven en MongoDB y las
     # publicaciones aquí, así que no hay clave foránea: lo borrado o despublicado se filtra al leer
     destacados = models.JSONField(default=list, blank=True)
+    # Presentación de las fotos y del logo (pedido de un cliente, 2026-11-09). Apagadas, la tienda se ve como antes:
+    # - fotos_completas: las fotos de productos se ven enteras dentro de su marco, sin recortarlas
+    # - ficha_horizontal: la ficha del producto muestra la foto en un marco apaisado y más grande, con textos más chicos
+    # - logo_grande: el logo del header se ve más grande en el computador (en el celular queda igual)
+    fotos_completas = models.BooleanField(default=False)
+    ficha_horizontal = models.BooleanField(default=False)
+    logo_grande = models.BooleanField(default=False)
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago

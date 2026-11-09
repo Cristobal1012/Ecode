@@ -127,9 +127,25 @@ describe('LandingPage', () => {
 
     expect(
       within(seccion).getByRole('link', {
-        name: 'Conoce más sobre mí'
+        name: 'Conoce más: Mi historia'
       })
     ).toHaveAttribute('href', '/sobre-mi');
+  });
+
+  it.each([
+    [{ sobre_mi_nombre: 'Nosotros' }, 'Nosotros'],
+    [{ sobre_mi_nombre: 'Mi historia', menu_principal: { nombres: { sobre_mi: 'Nosotros' } } }, 'Nosotros'],
+    [{ menu_principal: { nombres: { sobre_mi: '   ' } } }, 'Sobre mí'],
+    [{ sobre_mi_nombre: '', menu_principal: { nombres: { sobre_mi: '' } } }, 'Sobre mí'],
+    [{}, 'Sobre mí']
+  ])('el botón comparte el nombre del menú y conserva su destino: %j', async (config, nombre) => {
+    responder({ configuracion: { ...CONFIGURACION, sobre_mi_activo: true, ...config } });
+    await renderLanding();
+    const seccion = await screen.findByRole('region', { name: 'Un taller familiar' });
+    expect(within(seccion).getByRole('link', { name: 'Conoce más: ' + nombre })).toHaveAttribute('href', '/sobre-mi');
+    const menu = screen.getByRole('navigation', { name: 'Navegación de la tienda' });
+    expect(within(menu).getAllByRole('link', { name: nombre })
+      .filter(enlace => enlace.getAttribute('href') === '/sobre-mi')).toHaveLength(1);
   });
 
   it('oculta el botón de Sobre mí cuando la página está desactivada', async () => {
@@ -148,7 +164,7 @@ describe('LandingPage', () => {
 
     expect(
       within(seccion).queryByRole('link', {
-        name: 'Conoce más sobre mí'
+        name: /Conoce más:/
       })
     ).not.toBeInTheDocument();
   });
@@ -171,7 +187,7 @@ describe('LandingPage', () => {
 
     expect(
       within(seccion).getByRole('link', {
-        name: 'Conoce más sobre mí'
+        name: 'Conoce más: Mi historia'
       })
     ).toHaveAttribute('href', '/sobre-mi');
   });

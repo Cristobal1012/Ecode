@@ -90,8 +90,9 @@ function LandingPage({ onMarcaTemporal }) {
     onMarcaTemporal?.(edicion.editando ? {
       nombre_tienda: vista?.nombre_tienda ?? '', logo: vista?.logo,
       ubicacion_logo_universidad: vista?.ubicacion_logo_universidad,
+      menu_principal: vista?.menu_principal,
     } : null);
-  }, [edicion.editando, vista?.nombre_tienda, vista?.logo, vista?.ubicacion_logo_universidad, onMarcaTemporal]);
+  }, [edicion.editando, vista?.nombre_tienda, vista?.logo, vista?.ubicacion_logo_universidad, vista?.menu_principal, onMarcaTemporal]);
 
   useEffect(() => {
     return () => onMarcaTemporal?.(null);
@@ -101,7 +102,8 @@ function LandingPage({ onMarcaTemporal }) {
     <>
       <Header vistaPrevia={edicion.editando ? {
         nombre_tienda: vista.nombre_tienda, logo: vista.logo, ubicacion_logo_universidad: vista.ubicacion_logo_universidad,
-      } : undefined} />
+        menu_principal: vista.menu_principal,
+      } : undefined} edicion={edicion} />
       <main tabIndex={-1} id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
         {configuracion ? (
           <>

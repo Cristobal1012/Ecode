@@ -31,6 +31,8 @@ from ecommerce.domain.promociones import (
     PromocionInvalida, ReglaDescuento, cumple_minimo, da_envio_gratis, elegir_promocion, monto_descuento,
     validar_promocion,
 )
+from ecommerce.domain.menu import MenuInvalido, normalizar_menu_principal
+from ecommerce.domain.sobre_mi import NombreSobreMiInvalido, normalizar_nombre_sobre_mi
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -269,44 +271,17 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         return resultado
 
     def validate_menu_principal(self, valor):
-        ids = {'inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar'}
-        if not isinstance(valor, dict) or set(valor) - {'orden', 'nombres'}:
-            raise serializers.ValidationError('La configuración debe contener solo orden y nombres.')
-        resultado = {}
-        if 'orden' in valor:
-            orden = valor['orden']
-            if (not isinstance(orden, list) or len(orden) != len(ids)
-                    or any(not isinstance(item, str) for item in orden)
-                    or set(orden) != ids):
-                raise serializers.ValidationError('El orden debe incluir los cinco enlaces, sin duplicados.')
-            resultado['orden'] = orden
-        if 'nombres' in valor:
-            nombres = valor['nombres']
-            if not isinstance(nombres, dict) or set(nombres) - ids:
-                raise serializers.ValidationError('Los nombres contienen enlaces desconocidos.')
-            resultado['nombres'] = {}
-            for clave, nombre in nombres.items():
-                if not isinstance(nombre, str):
-                    raise serializers.ValidationError('Cada nombre debe ser texto.')
-                nombre = ' '.join(nombre.split())
-                if len(nombre) > 30:
-                    raise serializers.ValidationError('Los nombres no pueden superar los 30 caracteres.')
-                if nombre:
-                    resultado['nombres'][clave] = nombre
-        return resultado
+        menu_anterior = self.instance.menu_principal if self.instance else None
+        try:
+            return normalizar_menu_principal(valor, menu_anterior)
+        except MenuInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
 
     def validate_sobre_mi_nombre(self, valor):
-        nombre = ' '.join(valor.split())
-
-        if not nombre:
-            return 'Sobre mí'
-
-        if len(nombre) > 30:
-            raise serializers.ValidationError(
-                'El nombre no puede superar los 30 caracteres.'
-            )
-
-        return nombre
+        try:
+            return normalizar_nombre_sobre_mi(valor)
+        except NombreSobreMiInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
 
     def validate_sobre_mi_biografia(self, valor):
         return limpiar_html(valor)

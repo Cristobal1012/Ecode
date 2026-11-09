@@ -471,6 +471,10 @@
     bottom: 16px;
   }
 
+  .portada--editando {
+    flex-wrap: wrap;
+  }
+
   .portada-controles {
     position: static;
     justify-content: flex-start;

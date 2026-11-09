@@ -64,13 +64,16 @@ function calcularRangoPaginacion(paginaActual, total) {
 
 export default function Catalogo() {
   const configuracion = useConfiguracionTienda({ refrescar: true });
+  const configuracionDisponible = Boolean(configuracion);
   const temaConfigurado = Number(configuracion?.tema_seleccionado)
     || Number(localStorage.getItem('ecommerce_palette')) || TEMA_PREDETERMINADO;
 
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [filtrosActivos, setFiltrosActivos] = useState({});
-  const [orden, setOrden] = useState('destacados');
+  const [ordenElegido, setOrden] = useState(null);
+  const orden = ordenElegido ?? (ORDENES[configuracion?.orden_catalogo] ? configuracion.orden_catalogo : 'destacados');
+  const [respuestaPaginada, setRespuestaPaginada] = useState(false);
   const layoutCatalogo = configuracion?.layout_catalogo || 'GRID_3';
 
   // Estado de paginación y filtros del servidor (SCRUM-179)
@@ -89,6 +92,7 @@ export default function Catalogo() {
 
   // FETCH DE PRODUCTOS PAGINADOS Y FILTRADOS DESDE EL SERVIDOR (SCRUM-179)
   useEffect(() => {
+    if (!configuracionDisponible) return;
     const controller = new AbortController();
     const clave = claveConsulta(pagina, categoriaSeleccionada, filtrosActivos, orden);
 
@@ -114,6 +118,7 @@ export default function Catalogo() {
         );
 
         setProductos(productosPublicados);
+        setRespuestaPaginada(!Array.isArray(data) && Array.isArray(data?.results));
 
         if (data && !Array.isArray(data) && typeof data === 'object') {
           setTotalPaginas(data.total_pages || 1);
@@ -135,19 +140,21 @@ export default function Catalogo() {
       });
 
     return () => controller.abort();
-  }, [pagina, categoriaSeleccionada, filtrosActivos, orden]);
+  }, [pagina, categoriaSeleccionada, filtrosActivos, orden, configuracionDisponible]);
 
   // LÓGICA DE FILTROS: Opciones que vienen del servidor o fallback local
   const categoriasUnicas = useMemo(() => {
     if (filtrosServidor?.categorias?.length > 0) {
       return filtrosServidor.categorias;
     }
-    return [...new Set(productos.map((producto) => producto.categoria).filter(Boolean))];
-  }, [filtrosServidor, productos]);
+    const categorias = [...new Set(productos.map((producto) => producto.categoria).filter(Boolean))].sort();
+    const prioridades = (configuracion?.orden_categorias || []).filter(categoria => categorias.includes(categoria));
+    return [...prioridades, ...categorias.filter(categoria => !prioridades.includes(categoria))];
+  }, [filtrosServidor, productos, configuracion?.orden_categorias]);
 
   const productosFiltrados = useMemo(() => {
     // Si el backend ya devolvió resultados paginados o filtrados por servidor
-    if (totalPaginas > 1 || (totalProductos > 0 && totalProductos !== productos.length)) {
+    if (respuestaPaginada) {
       return productos;
     }
     return productos.filter((producto) => {
@@ -159,7 +166,7 @@ export default function Catalogo() {
         return mostrarValor(valorAtributo) === valor;
       });
     });
-  }, [productos, categoriaSeleccionada, filtrosActivos, totalPaginas, totalProductos]);
+  }, [productos, categoriaSeleccionada, filtrosActivos, respuestaPaginada]);
 
   const atributosDinamicos = useMemo(() => {
     if (!categoriaSeleccionada) return [];
@@ -207,12 +214,12 @@ export default function Catalogo() {
   };
 
   const productosOrdenados = useMemo(() => {
-    if (totalPaginas > 1 || (totalProductos > 0 && totalProductos !== productos.length)) {
+    if (respuestaPaginada) {
       return productosFiltrados;
     }
     const { comparar } = ORDENES[orden];
     return comparar ? [...productosFiltrados].sort(comparar) : productosFiltrados;
-  }, [productosFiltrados, productos.length, orden, totalPaginas, totalProductos]);
+  }, [productosFiltrados, orden, respuestaPaginada]);
 
   const rangoPaginacion = useMemo(
     () => calcularRangoPaginacion(pagina, totalPaginas),

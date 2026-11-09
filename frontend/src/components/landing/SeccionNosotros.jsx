@@ -1,12 +1,15 @@
 import { TEXTOS_POR_DEFECTO } from './textosPorDefecto';
 import { CampoEditable, SelectorImagen } from './ControlesEdicion';
+import { Link } from 'react-router-dom';
+import { resolverMenu } from '../../utils/menuPrincipal';
 
 // Sección "Nosotros" de la landing: foto a un lado y el texto del emprendedor al otro. Sin texto no se muestra,
 // salvo en modo edición, donde aparece para que el admin pueda llenarla.
 export default function SeccionNosotros({ configuracion, edicion }) {
   const editando = Boolean(edicion?.editando);
-  if (!configuracion.nosotros_texto && !editando) return null;
+  if (!configuracion.nosotros_texto && !configuracion.sobre_mi_activo && !editando) return null;
   const imagen = configuracion.nosotros_imagen;
+  const nombreSobreMi = resolverMenu(configuracion).find(enlace => enlace.id === 'sobre_mi').nombre;
 
   return (
     <section id="nosotros" className={`seccion-landing nosotros${imagen ? '' : ' nosotros--sin-imagen'}`}
@@ -40,7 +43,15 @@ export default function SeccionNosotros({ configuracion, edicion }) {
             <>
               <h2 id="nosotros-titulo">{configuracion.nosotros_titulo || TEXTOS_POR_DEFECTO.nosotros_titulo}</h2>
               {/* Los saltos de línea que escribe el admin se respetan */}
-              <p className="texto-secundario nosotros-parrafo">{configuracion.nosotros_texto}</p>
+              {configuracion.nosotros_texto && (
+                <p className="texto-secundario nosotros-parrafo">{configuracion.nosotros_texto}</p>
+              )}
+              {/* Enlace a la página independiente Sobre mí */}
+              {configuracion.sobre_mi_activo && (
+                <div>
+                  <Link to="/sobre-mi" className="boton boton-contorno">Conoce más: {nombreSobreMi}</Link>
+                </div>
+              )}
             </>
           )}
         </div>

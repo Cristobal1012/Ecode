@@ -24,17 +24,20 @@ from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.application.vitrina import ValidarDestacados
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
+from ecommerce.domain.catalogo import OrdenCategoriasInvalido, normalizar_orden_categorias
 from ecommerce.domain.destacados import (
     DestacadosInvalidos, TituloDestacadosInvalido, normalizar_titulo_destacados,
 )
 from ecommerce.domain.cotizaciones import MAX_FOTOS_COTIZACION
-from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram
+from ecommerce.domain.contacto import UsuarioInstagramInvalido, direccion_es_publica, normalizar_usuario_instagram, validar_enlace_red_social, EnlaceRedSocialInvalido
 from ecommerce.domain.documentos_tributarios import ModeloEmision, documento_por_emitir, documento_requerido
 from ecommerce.domain.empresa import DatosEmpresa, DatosEmpresaInvalidos
 from ecommerce.domain.promociones import (
     PromocionInvalida, ReglaDescuento, cumple_minimo, da_envio_gratis, elegir_promocion, monto_descuento,
     validar_promocion,
 )
+from ecommerce.domain.menu import MenuInvalido, normalizar_menu_principal
+from ecommerce.domain.sobre_mi import NombreSobreMiInvalido, normalizar_nombre_sobre_mi
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -121,6 +124,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
             'blog_activo',
             'blog_nombre',
+            'sobre_mi_activo',
+            'sobre_mi_nombre',
             # Reseñas: activas, la landing y la ficha muestran las aprobadas
             'resenas_activas',
             # Destacados de la landing: la selección del admin (la vitrina filtra lo que no se puede ver)
@@ -132,6 +137,9 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'ficha_horizontal',
             'logo_grande',
             # Identidad y landing (RF-01.1, RF-01.2): las imágenes salen como URL
+            'orden_catalogo',
+            'orden_categorias',
+            'menu_principal',
             'nombre_tienda',
             'logo',
             'favicon',
@@ -145,6 +153,11 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'telefono_comercial',
+            'facebook_url',
+            'x_url',
+            'youtube_url',
+            'tiktok_url',
             'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
@@ -204,9 +217,14 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     # Igual que el nombre del blog: vacío vuelve a "Destacados" (domain/destacados.py)
     destacados_titulo = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
+    sobre_mi_nombre = serializers.CharField(max_length=200,required=False,allow_blank=True)
+    sobre_mi_biografia = serializers.CharField(max_length=100_000,required=False,allow_blank=True,trim_whitespace=False)
     class Meta:
         model = ConfiguracionGlobal
         fields = [
+            'orden_catalogo',
+            'orden_categorias',
+            'menu_principal',
             'nombre_tienda',
             'texto_bienvenida',
             'subtitulo_bienvenida',
@@ -237,6 +255,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'cotizaciones_activas',
             'blog_activo',
             'blog_nombre',
+            'sobre_mi_activo',
+            'sobre_mi_nombre',
+            'sobre_mi_biografia',
             'resenas_activas',
             'vitrina_modo',
             'destacados_titulo',
@@ -247,6 +268,11 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'correo_contacto',
             'horario_atencion',
             'mostrar_direccion_pie',
+            'telefono_comercial',
+            'facebook_url',
+            'x_url',
+            'youtube_url',
+            'tiktok_url',
             'ubicacion_logo_universidad',
             'instagram_usuario',
             *CAMPOS_FOTOS_INSTAGRAM,
@@ -254,12 +280,65 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'modelo_emision',
         ]
 
+    def validate_orden_categorias(self, valor):
+        # Las reglas viven en domain/catalogo.py
+        try:
+            return normalizar_orden_categorias(valor)
+        except OrdenCategoriasInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
+
+    def validate_menu_principal(self, valor):
+        menu_anterior = self.instance.menu_principal if self.instance else None
+        try:
+            return normalizar_menu_principal(valor, menu_anterior)
+        except MenuInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
+
+    def validate_sobre_mi_nombre(self, valor):
+        try:
+            return normalizar_nombre_sobre_mi(valor)
+        except NombreSobreMiInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
+
+    def validate_sobre_mi_biografia(self, valor):
+        return limpiar_html(valor)
     def validate_instagram_usuario(self, valor):
         try:
             return normalizar_usuario_instagram(valor)
         except UsuarioInstagramInvalido as error:
             raise serializers.ValidationError(str(error))
 
+    def validate_telefono_comercial(self, valor):
+        if not valor or not valor.strip():
+            return ''
+        try:
+            return normalizar_telefono_chile(valor)
+        except TelefonoInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+
+    def _validar_red_social(self, valor, red):
+        try:
+            return validar_enlace_red_social(valor, red)
+        except EnlaceRedSocialInvalido as error:
+            raise serializers.ValidationError(str(error))
+
+
+    def validate_facebook_url(self, valor):
+        return self._validar_red_social(valor, 'facebook')
+
+
+    def validate_x_url(self, valor):
+        return self._validar_red_social(valor, 'x')
+
+
+    def validate_youtube_url(self, valor):
+        return self._validar_red_social(valor, 'youtube')
+
+
+    def validate_tiktok_url(self, valor):
+        return self._validar_red_social(valor, 'tiktok')
+        
     def validate_blog_nombre(self, valor):
         try:
             return normalizar_nombre_blog(valor)
@@ -415,7 +494,6 @@ class RevisionCarritoSerializer(serializers.Serializer):
                 'mensaje': linea.mensaje,
             } for linea in lineas],
         }
-
 
 class DatosEmpresaSerializer(serializers.Serializer):
     """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""

@@ -8,7 +8,6 @@ export const CAMPOS_TEXTO = {
   subtitulo_bienvenida: { etiqueta: 'Antetítulo', maximo: 200 },
   texto_bienvenida: { etiqueta: 'Título', maximo: 300, obligatorio: true },
   texto_landing: { etiqueta: 'Texto de la portada', maximo: 1000 },
-  texto_boton_ingreso: { etiqueta: 'Texto del botón', maximo: 100, obligatorio: true },
   nosotros_titulo: { etiqueta: 'Título de Nosotros', maximo: 120 },
   nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 },
   // RN-01: dónde va el logo de la Universidad: 'HEADER' (o vacío) o 'FOOTER'; no hay opción para ocultarlo
@@ -66,6 +65,7 @@ export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
   const [destacados, setDestacados] = useState(null);
+  const [menu, setMenu] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [mensaje, setMensaje] = useState('');
@@ -77,7 +77,9 @@ export default function useEdicionLanding(configuracion) {
     ? Object.keys(CAMPOS_TEXTO).filter((campo) => textos[campo] !== original[campo])
     : [];
   const destacadosCambiados = editando && destacados !== null && !mismaSeleccion(destacados, destacadosDe(configuracion));
-  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || destacadosCambiados;
+  const menuCambiado = editando && JSON.stringify(menu) !== JSON.stringify(configuracion?.menu_principal || {});
+  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || destacadosCambiados
+    || menuCambiado;
 
   const liberarVistasPrevias = () => {
     vistasPrevias.current.forEach((url) => URL.revokeObjectURL(url));
@@ -90,6 +92,7 @@ export default function useEdicionLanding(configuracion) {
   const iniciar = () => {
     setTextos(textosDe(configuracion));
     setDestacados(destacadosDe(configuracion));
+    setMenu(configuracion?.menu_principal || {});
     setErrores({});
     setMensaje('');
   };
@@ -97,6 +100,12 @@ export default function useEdicionLanding(configuracion) {
   const cambiarTexto = (campo, valor) => {
     setTextos((actual) => ({ ...actual, [campo]: valor }));
     setErrores((actual) => sinCampo(actual, campo));
+    setMensaje('');
+  };
+
+  const cambiarMenu = (valor) => {
+    setMenu(valor);
+    setErrores((actual) => sinCampo(actual, 'menu_principal'));
     setMensaje('');
   };
 
@@ -143,6 +152,7 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(textosDe(configuracion));
     setDestacados(destacadosDe(configuracion));
+    setMenu(configuracion?.menu_principal || {});
     setErrores({});
     setMensaje('');
   };
@@ -152,6 +162,7 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(null);
     setDestacados(null);
+    setMenu(null);
     setErrores({});
     setMensaje('');
   };
@@ -174,10 +185,11 @@ export default function useEdicionLanding(configuracion) {
       const quitadas = Object.fromEntries(
         Object.entries(imagenes).filter(([, { archivo }]) => !archivo).map(([campo]) => [campo, null]));
       const textosNuevos = Object.fromEntries(textosCambiados.map((campo) => [campo, textos[campo]]));
+      if (menuCambiado) textosNuevos.menu_principal = menu;
 
       if (nuevas.length) {
         const formulario = new FormData();
-        Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, valor));
+        Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, typeof valor === 'object' ? JSON.stringify(valor) : valor));
         nuevas.forEach(([campo, { archivo }]) => formulario.append(campo, archivo));
         // La selección viaja en la misma petición, como JSON (el backend la valida antes de guardar nada)
         if (destacadosCambiados) formulario.append('destacados', JSON.stringify(destacados));
@@ -193,6 +205,7 @@ export default function useEdicionLanding(configuracion) {
       setImagenes({});
       setTextos(textosDe(guardada));
       setDestacados(destacadosDe(guardada));
+      setMenu(guardada?.menu_principal || {});
       setMensaje('Cambios guardados: ya están publicados en tu tienda.');
     } catch (error) {
       setErrores(erroresDe(error));
@@ -206,12 +219,14 @@ export default function useEdicionLanding(configuracion) {
     ? {
         ...configuracion,
         ...textos,
+        menu_principal: menu,
         ...Object.fromEntries(Object.entries(imagenes).map(([campo, { vistaPrevia }]) => [campo, vistaPrevia]))
       }
     : configuracion;
 
   return {
     editando, vista, textos, destacados, hayCambios, guardando, errores, mensaje,
-    iniciar, cambiarTexto, cambiarImagen, agregarDestacado, moverDestacado, quitarDestacado, descartar, salir, guardar
+    iniciar, cambiarTexto, cambiarImagen, agregarDestacado, moverDestacado, quitarDestacado, cambiarMenu,
+    descartar, salir, guardar
   };
 }

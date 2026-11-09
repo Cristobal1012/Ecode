@@ -850,3 +850,9 @@
 .presentacion-ayuda {
   margin: 4px 0 0 28px;
 }
+
+.orden-catalogo-campos { border: 0; padding: 0; min-width: 0; }
+.orden-catalogo-lista { padding-left: 1.5rem; }
+.orden-catalogo-lista li { margin: 16px 0; overflow-wrap: anywhere; }
+.orden-catalogo-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.orden-catalogo-acciones button { min-height: 44px; max-width: 100%; white-space: normal; }

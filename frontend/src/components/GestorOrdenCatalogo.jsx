@@ -59,10 +59,15 @@ export default function GestorOrdenCatalogo() {
         <legend>Preferencias del catálogo</legend>
         <div className="admin-campo">
           <label htmlFor="orden-catalogo-inicial">Orden inicial del catálogo</label>
-          <select id="orden-catalogo-inicial" value={config.orden_catalogo} onChange={e => { setConfig({ ...config, orden_catalogo: e.target.value }); setAviso(''); }}>
-            <option value="destacados">Orden actual</option><option value="recientes">Recientes primero</option>
+          <select id="orden-catalogo-inicial" aria-describedby="orden-catalogo-ayuda" value={config.orden_catalogo} onChange={e => { setConfig({ ...config, orden_catalogo: e.target.value }); setAviso(''); }}>
+            <option value="destacados">Por categorías priorizadas</option><option value="recientes">Recientes primero</option>
             <option value="precio-desc">Mayor precio</option><option value="precio-asc">Menor precio</option>
           </select>
+          <p id="orden-catalogo-ayuda" className="texto-secundario">
+            Por categorías priorizadas: primero las categorías priorizadas, agrupando sus productos; dentro de cada categoría, los más recientes primero.
+            Sin categorías priorizadas, se muestran los productos más recientes.
+            Recientes primero: productos más nuevos globalmente, sin agruparlos por categoría.
+          </p>
         </div>
         <ol className="orden-catalogo-lista">{lista.map((categoria, indice) => <li key={categoria}>
           <span>{categoria} <small>({prioridades.includes(categoria) ? 'Priorizada' : 'Alfabética'})</small></span>

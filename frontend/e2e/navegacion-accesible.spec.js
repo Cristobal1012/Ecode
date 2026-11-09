@@ -8,6 +8,7 @@ for (const ancho of [320, 390, 1280]) {
     await page.setViewportSize({ width: ancho, height: 900 });
     await page.route('**/api/configuracion/', route => route.fulfill({ json: {
       nombre_tienda: 'Tienda QA', blog_activo: true, sobre_mi_activo: true, cotizaciones_activas: true,
+      blog_nombre: 'Nuestros proyectos y trabajos', sobre_mi_nombre: 'Historia de nuestro negocio',
       menu_principal: { orden: ['cotizar', 'sobre_mi', 'nosotros', 'catalogo', 'inicio'], nombres: {
         inicio: 'Inicio personalizado de tienda', catalogo: 'Catálogo personalizado extenso',
         nosotros: 'Nuestros proyectos y trabajos', sobre_mi: 'Historia de nuestro negocio', cotizar: 'Cotizaciones personalizadas'

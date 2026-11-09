@@ -214,6 +214,33 @@ class BlogPanelTests(BlogTestCase):
         self.assertEqual(respuesta.status_code, 400)
         self.assertIn('youtube', respuesta.data)
 
+    def test_seguridad_ataques_en_campo_youtube_devuelven_400(self):
+        self.como_admin()
+        ataques = [
+            '<script>alert("xss")</script>',
+            'javascript:alert(1)',
+            'https://youtube.com@attacker.com/watch?v=dQw4w9WgXcQ',
+            'https://notyoutube.com/watch?v=dQw4w9WgXcQ',
+            'https://youtube.com.attacker.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ"><script>alert(1)</script>',
+            'https://www.youtube.com/watch?v=123',
+            'https://www.youtube.com/embed/dQw4w9WgXcQ" onload="alert(1)',
+        ]
+        for payload in ataques:
+            respuesta = self.client.post(reverse('admin-blog'),
+                                         {**PUBLICADA, 'youtube': payload}, format='json')
+            self.assertEqual(respuesta.status_code, 400, f'Payload no bloqueado: {payload}')
+            self.assertIn('youtube', respuesta.data)
+
+    def test_contenido_limpia_etiquetas_iframe_peligrosas(self):
+        self.como_admin()
+        payload = '<p>Texto</p><iframe src="https://malicious.com"></iframe>'
+        respuesta = self.client.post(reverse('admin-blog'),
+                                     {**PUBLICADA, 'contenido': payload}, format='json')
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertNotIn('<iframe', respuesta.data['contenido'])
+        self.assertIn('<p>Texto</p>', respuesta.data['contenido'])
+
     def test_galeria_de_hasta_10_fotos(self):
         publicacion = self.crear()
         self.como_admin()

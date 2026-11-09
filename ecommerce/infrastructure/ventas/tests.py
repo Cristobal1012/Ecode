@@ -156,7 +156,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'logo': None,
             'favicon': None,
             'banner': None,
-            'banners': [{'id': 0, 'imagen': 'https://example.com/hero.jpg', 'orden': 0}],
+            'banners': [{'id': 'legacy', 'imagen': 'https://example.com/hero.jpg', 'orden': 0}],
             'subtitulo_bienvenida': '',
             'texto_landing': '',
             'nosotros_titulo': '',

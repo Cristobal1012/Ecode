@@ -94,8 +94,20 @@ class VitrinaView(CatalogoAPIView):
                          if id_publicaciones else {})
 
         def serializar(lista):
-            return ProductoSerializer([productos[i] for i in lista if i in productos], many=True,
-                                      context={'request': request}).data
+            prods = [productos[i] for i in lista if i in productos]
+            versiones_ids = [str(p.version_a_la_venta) for p in prods if getattr(p, 'version_a_la_venta', None)]
+            versiones_publicadas = set()
+            if versiones_ids:
+                try:
+                    versiones_publicadas = {
+                        str(p.id) for p in Producto.objects(
+                            id__in=versiones_ids, activo=True, publicado=True, coleccion_privada__ne=True
+                        ).only('id')
+                    }
+                except Exception:
+                    pass
+            return ProductoSerializer(prods, many=True,
+                                      context={'request': request, 'versiones_publicadas': versiones_publicadas}).data
 
         def destacado(elegido):
             if elegido['tipo'] == TipoDestacado.PRODUCTO:
@@ -175,7 +187,19 @@ class ProductoListCreateView(CatalogoAPIView):
         # Si se solicita la lista completa sin paginar (ej. TablaInventario o FormularioProducto)
         sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
         if sin_paginar:
-            serializer = ProductoSerializer(productos, many=True, context={'request': request})
+            prods = list(productos)
+            versiones_ids = [str(p.version_a_la_venta) for p in prods if getattr(p, 'version_a_la_venta', None)]
+            versiones_publicadas = set()
+            if versiones_ids:
+                try:
+                    versiones_publicadas = {
+                        str(p.id) for p in Producto.objects(
+                            id__in=versiones_ids, activo=True, publicado=True, coleccion_privada__ne=True
+                        ).only('id')
+                    }
+                except Exception:
+                    pass
+            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
             return Response(serializer.data)
 
         # 1. Filtro por categoría en servidor (SCRUM-179, RF-01.3)
@@ -335,7 +359,19 @@ class ProductoListCreateView(CatalogoAPIView):
             offset = (page - 1) * page_size
             productos_pagina = list(productos[offset:offset + page_size])
 
-        serializer = ProductoSerializer(productos_pagina, many=True, context={'request': request})
+        versiones_ids = [str(p.version_a_la_venta) for p in productos_pagina if getattr(p, 'version_a_la_venta', None)]
+        versiones_publicadas = set()
+        if versiones_ids:
+            try:
+                versiones_publicadas = {
+                    str(p.id) for p in Producto.objects(
+                        id__in=versiones_ids, activo=True, publicado=True, coleccion_privada__ne=True
+                    ).only('id')
+                }
+            except Exception:
+                pass
+
+        serializer = ProductoSerializer(productos_pagina, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
         return Response({
             'count': total_count,
             'total_pages': total_pages,

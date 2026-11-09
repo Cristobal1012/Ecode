@@ -56,6 +56,11 @@ class Producto(Document):
     publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
     
+    # Colección privada y enlace a versión disponible en print (SCRUM-197)
+    coleccion_privada = fields.BooleanField(default=False)
+    version_a_la_venta = fields.StringField(null=True, blank=True)
+    texto_boton_version = fields.StringField(default='Disponible en print', max_length=100)
+
     # Campo calculado para ordenamiento O(1) de precio vigente (SCRUM-179 / E01)
     precio_minimo_vigente = fields.DecimalField(null=True, precision=2)
 
@@ -90,6 +95,27 @@ class Producto(Document):
         super().clean()
         self.actualizar_precio_minimo_vigente()
 
+        # Validaciones de Colección privada (SCRUM-197)
+        if self.version_a_la_venta:
+            version_id = str(self.version_a_la_venta).strip()
+            if self.id and str(self.id) == version_id:
+                raise MongoValidationError('Una obra no puede ser su propia versión a la venta.')
+            try:
+                target = Producto.objects(id=version_id).first()
+            except Exception as exc:
+                raise MongoValidationError(f'El producto para versión a la venta no es válido: {exc}')
+            if not target:
+                raise MongoValidationError('El producto seleccionado como versión a la venta no existe.')
+            if getattr(target, 'coleccion_privada', False):
+                raise MongoValidationError('No se puede enlazar a otra obra que es colección privada.')
+
+        if self.coleccion_privada and self.id:
+            referenciador = Producto.objects(version_a_la_venta=str(self.id)).first()
+            if referenciador:
+                raise MongoValidationError(
+                    f'Este producto no puede ser colección privada porque está asignado como versión a la venta de "{referenciador.nombre}".'
+                )
+
     def save(self, *args, **kwargs):
         self.actualizar_precio_minimo_vigente()
         return super().save(*args, **kwargs)
@@ -103,6 +129,7 @@ class Producto(Document):
 
         Un único update filtra por stock suficiente, así dos compras simultáneas de la última
         unidad producen una sola venta. Devuelve False si no hay stock o no existe el SKU.
+        Un producto de colección privada nunca descuenta stock (rechazado).
         """
         cantidad = int(cantidad)
         if cantidad < 1:
@@ -113,6 +140,7 @@ class Producto(Document):
             return False
         resultado = cls._get_collection().update_one(
             {'_id': id_producto,
+             'coleccion_privada': {'$ne': True},
              'variantes': {'$elemMatch': {'sku': str(sku), 'stock': {'$gte': cantidad}}}},
             {'$inc': {'variantes.$.stock': -cantidad}},
         )

@@ -83,6 +83,7 @@ from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
+from ecommerce.infrastructure.catalogo.documents import Producto
 from ecommerce.infrastructure.catalogo.repositorio_variantes import (
     MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo, fotos_de_variantes,
 )
@@ -409,6 +410,18 @@ class CarritoAPIView(APIView):
     def post(self, request):
         carrito, created = Carrito.objects.get_or_create(usuario=request.user)
         items = request.data.get('items', [])
+        for item in items:
+            p_id = item.get('producto_mongo_id') or item.get('producto_id') or item.get('id')
+            if p_id:
+                try:
+                    p = Producto.objects(id=p_id).only('coleccion_privada').first()
+                    if p and getattr(p, 'coleccion_privada', False):
+                        return Response(
+                            {"items": ["No se pueden agregar productos de colección privada al carrito."]},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                except Exception:
+                    pass
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})

@@ -18,7 +18,10 @@ import GestorContacto from '../components/GestorContacto';
 import GestorEntregaCoordinada from '../components/GestorEntregaCoordinada';
 import GestorCotizaciones from '../components/GestorCotizaciones';
 import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion';
+import GestorOrdenCatalogo from '../components/GestorOrdenCatalogo';
 import GestorBlog from '../components/GestorBlog';
+import GestorPresentacion from '../components/GestorPresentacion';
+import GestorSobreMi from '../components/GestorSobreMi';
 import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
@@ -33,6 +36,8 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-landing', titulo: 'Página de Inicio e Identidad' },
   { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
   { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
+  { id: 'config-orden-catalogo', titulo: 'Orden del catálogo y categorías' },
+  { id: 'config-presentacion', titulo: 'Fotos y logo' },
   { id: 'config-local', titulo: 'Dirección del Local y Retiro en Tienda' },
   { id: 'config-entrega-coordinada', titulo: 'Entrega Coordinada' },
   { id: 'config-contacto', titulo: 'Contacto y Redes' },
@@ -41,6 +46,7 @@ const SECCIONES_CONFIGURACION = [
   { id: 'config-documentos', titulo: 'Boletas y Facturas (SII)' },
   { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
   { id: 'config-blog', titulo: 'Blog o Portafolio' },
+  { id: 'config-sobre-mi', titulo: 'Página Sobre mí' },
   { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
   { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   { id: 'config-analitica', titulo: 'Analítica y marketing' }
@@ -267,6 +273,16 @@ export default function Admin() {
 
                 <hr className="admin-separador" />
 
+                <div><TituloSeccion id="config-orden-catalogo" /><GestorOrdenCatalogo /></div>
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-presentacion" />
+                  <GestorPresentacion />
+                </div>
+
+                <hr className="admin-separador" />
+
                 <div>
                   <TituloSeccion id="config-local" />
                   {mensajeLocal && (
@@ -385,6 +401,13 @@ export default function Admin() {
                 <div>
                   <TituloSeccion id="config-blog" />
                   <GestorBlog />
+                </div>
+
+                <hr className="admin-separador" />
+
+                <div>
+                  <TituloSeccion id="config-sobre-mi" />
+                  <GestorSobreMi />
                 </div>
 
                 <hr className="admin-separador" />

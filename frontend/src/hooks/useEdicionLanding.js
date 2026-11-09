@@ -8,12 +8,17 @@ export const CAMPOS_TEXTO = {
   subtitulo_bienvenida: { etiqueta: 'Antetítulo', maximo: 200 },
   texto_bienvenida: { etiqueta: 'Título', maximo: 300, obligatorio: true },
   texto_landing: { etiqueta: 'Texto de la portada', maximo: 1000 },
-  texto_boton_ingreso: { etiqueta: 'Texto del botón', maximo: 100, obligatorio: true },
   nosotros_titulo: { etiqueta: 'Título de Nosotros', maximo: 120 },
   nosotros_texto: { etiqueta: 'Texto de Nosotros', maximo: 2000 },
   // RN-01: dónde va el logo de la Universidad: 'HEADER' (o vacío) o 'FOOTER'; no hay opción para ocultarlo
-  ubicacion_logo_universidad: { etiqueta: 'Logo de la Universidad' }
+  ubicacion_logo_universidad: { etiqueta: 'Logo de la Universidad' },
+  // Vitrina: 'MAS_VENDIDOS' (o vacío) o 'DESTACADOS'; vacío el título vuelve a "Destacados" (domain/destacados.py)
+  vitrina_modo: { etiqueta: 'Vitrina' },
+  destacados_titulo: { etiqueta: 'Título de la sección', maximo: 60 }
 };
+
+// Destacados: hasta 4 productos y publicaciones del blog, en el orden que elige el admin (domain/destacados.py)
+export const MAX_DESTACADOS = 4;
 
 // Fotos de la sección de Instagram: 6 espacios fijos (el usuario se configura en el panel)
 export const CAMPOS_FOTOS_INSTAGRAM = [1, 2, 3, 4, 5, 6].map((numero) => `instagram_foto_${numero}`);
@@ -48,6 +53,11 @@ export const obtenerBannersIniciales = (conf) => {
 const textosDe = (configuracion) =>
   Object.fromEntries(Object.keys(CAMPOS_TEXTO).map((campo) => [campo, configuracion?.[campo] ?? '']));
 
+// [{ tipo, id }]: el id siempre como texto, igual que lo guarda el backend
+const destacadosDe = (configuracion) => (Array.isArray(configuracion?.destacados) ? configuracion.destacados : [])
+  .map(({ tipo, id }) => ({ tipo, id: String(id) }));
+const mismaSeleccion = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 // Convierte los errores del backend ({campo: ['mensaje']}) en un texto por campo
 const erroresDe = (error) => {
   const datos = error?.response?.data;
@@ -59,11 +69,14 @@ const erroresDe = (error) => {
  * Borrador de la landing en modo edición. Nada se publica hasta guardar().
  * - textos: null fuera del modo edición.
  * - imagenes: { campo: { archivo: File | null, vistaPrevia } }; archivo null = quitar la imagen.
+ * - destacados: la selección de la vitrina en orden ([{ tipo, id }]); null fuera del modo edición.
  */
 export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
   const [banners, setBanners] = useState(null);
+  const [destacados, setDestacados] = useState(null);
+  const [menu, setMenu] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [mensaje, setMensaje] = useState('');
@@ -74,7 +87,6 @@ export default function useEdicionLanding(configuracion) {
   const textosCambiados = editando
     ? Object.keys(CAMPOS_TEXTO).filter((campo) => textos[campo] !== original[campo])
     : [];
-
   const bannersIniciales = obtenerBannersIniciales(configuracion);
   const bannersCambiados = Boolean(
     banners !== null &&
@@ -82,7 +94,9 @@ export default function useEdicionLanding(configuracion) {
       JSON.stringify(bannersIniciales.map((b) => b.id || b.imagen))
   );
 
-  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || bannersCambiados;
+  const destacadosCambiados = editando && destacados !== null && !mismaSeleccion(destacados, destacadosDe(configuracion));
+  const menuCambiado = editando && JSON.stringify(menu) !== JSON.stringify(configuracion?.menu_principal || {});
+  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || bannersCambiados || destacadosCambiados || menuCambiado;
 
   const liberarVistasPrevias = () => {
     vistasPrevias.current.forEach((url) => URL.revokeObjectURL(url));
@@ -95,6 +109,8 @@ export default function useEdicionLanding(configuracion) {
   const iniciar = () => {
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setDestacados(destacadosDe(configuracion));
+    setMenu(configuracion?.menu_principal || {});
     setErrores({});
     setMensaje('');
   };
@@ -102,6 +118,12 @@ export default function useEdicionLanding(configuracion) {
   const cambiarTexto = (campo, valor) => {
     setTextos((actual) => ({ ...actual, [campo]: valor }));
     setErrores((actual) => sinCampo(actual, campo));
+    setMensaje('');
+  };
+
+  const cambiarMenu = (valor) => {
+    setMenu(valor);
+    setErrores((actual) => sinCampo(actual, 'menu_principal'));
     setMensaje('');
   };
 
@@ -207,11 +229,35 @@ export default function useEdicionLanding(configuracion) {
     setMensaje('');
   };
 
+  // Selección de destacados: agregar al final (hasta 4, sin repetir), mover un lugar y quitar
+  const cambiarDestacados = (cambio) => {
+    setDestacados((actual) => cambio([...(actual || [])]));
+    setErrores((actual) => sinCampo(actual, 'destacados'));
+    setMensaje('');
+  };
+
+  const agregarDestacado = ({ tipo, id }) => cambiarDestacados((lista) => {
+    const nuevo = { tipo, id: String(id) };
+    const repetido = lista.some((elegido) => elegido.tipo === nuevo.tipo && elegido.id === nuevo.id);
+    return repetido || lista.length >= MAX_DESTACADOS ? lista : [...lista, nuevo];
+  });
+
+  const moverDestacado = (indice, paso) => cambiarDestacados((lista) => {
+    const destino = indice + paso;
+    if (indice < 0 || destino < 0 || indice >= lista.length || destino >= lista.length) return lista;
+    [lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+    return lista;
+  });
+
+  const quitarDestacado = (indice) => cambiarDestacados((lista) => lista.filter((_, posicion) => posicion !== indice));
+
   const descartar = () => {
     liberarVistasPrevias();
     setImagenes({});
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setDestacados(destacadosDe(configuracion));
+    setMenu(configuracion?.menu_principal || {});
     setErrores({});
     setMensaje('');
   };
@@ -221,6 +267,8 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(null);
     setBanners(null);
+    setDestacados(null);
+    setMenu(null);
     setErrores({});
     setMensaje('');
   };
@@ -241,6 +289,7 @@ export default function useEdicionLanding(configuracion) {
       const quitadas = Object.fromEntries(
         Object.entries(imagenes).filter(([campo, { archivo }]) => campo !== 'banner' && !archivo).map(([campo]) => [campo, null]));
       const textosNuevos = Object.fromEntries(textosCambiados.map((campo) => [campo, textos[campo]]));
+      if (menuCambiado) textosNuevos.menu_principal = menu;
 
       // Banners
       const bannersActuales = banners ?? obtenerBannersIniciales(configuracion);
@@ -259,8 +308,9 @@ export default function useEdicionLanding(configuracion) {
       const hayArchivos = nuevas.length > 0 || nuevosArchivosBanner.length > 0;
       if (hayArchivos) {
         const formulario = new FormData();
-        Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, valor));
+        Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, typeof valor === 'object' ? JSON.stringify(valor) : valor));
         nuevas.forEach(([campo, { archivo }]) => formulario.append(campo, archivo));
+        if (destacadosCambiados) formulario.append('destacados', JSON.stringify(destacados));
         nuevosArchivosBanner.forEach((arch) => formulario.append('banner_fotos', arch));
         if (manifestBanners !== null) {
           formulario.append('banner_orden', JSON.stringify(manifestBanners));
@@ -268,7 +318,7 @@ export default function useEdicionLanding(configuracion) {
         await clienteAxios.patch('configuracion/negocio/', formulario, { headers: { 'Content-Type': undefined } });
       }
 
-      const enJson = hayArchivos ? quitadas : { ...textosNuevos, ...quitadas };
+      const enJson = hayArchivos ? quitadas : { ...textosNuevos, ...quitadas, ...(destacadosCambiados ? { destacados } : {}) };
       if (manifestBanners !== null && !hayArchivos) {
         enJson.banner_orden = JSON.stringify(manifestBanners);
       }
@@ -279,6 +329,8 @@ export default function useEdicionLanding(configuracion) {
       setImagenes({});
       setTextos(textosDe(guardada));
       setBanners(obtenerBannersIniciales(guardada));
+      setDestacados(destacadosDe(guardada));
+      setMenu(guardada?.menu_principal || {});
       setMensaje('Cambios guardados: ya están publicados en tu tienda.');
     } catch (error) {
       setErrores(erroresDe(error));
@@ -297,15 +349,17 @@ export default function useEdicionLanding(configuracion) {
     ? {
         ...configuracion,
         ...textos,
+        menu_principal: menu,
         ...Object.fromEntries(Object.entries(imagenes).map(([campo, { vistaPrevia }]) => [campo, vistaPrevia])),
         banners: listaBannersVista,
       }
     : configuracion;
 
   return {
-    editando, vista, textos, hayCambios, guardando, errores, mensaje,
+    editando, vista, textos, destacados, menu, hayCambios, guardando, errores, mensaje,
     banners: listaBannersVista,
     iniciar, cambiarTexto, cambiarImagen, agregarFotosBanner, reordenarFotosBanner, eliminarFotoBanner,
+    agregarDestacado, moverDestacado, quitarDestacado, cambiarMenu,
     descartar, salir, guardar
   };
 }

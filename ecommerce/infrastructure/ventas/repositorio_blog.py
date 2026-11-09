@@ -12,6 +12,7 @@ from django.db import transaction
 from django.db.models import Count, Max
 
 from ecommerce.application.blog import SIN_CAMBIO, PaginaBlog, PublicacionGuardada, RepositorioPublicaciones
+from ecommerce.application.vitrina import PublicacionesVitrina
 from ecommerce.domain.blog import EstadoPublicacion
 
 from .models import FotoPublicacion, Publicacion
@@ -123,3 +124,22 @@ class DjangoRepositorioPublicaciones(RepositorioPublicaciones):
     def id_publicada(self, slug):
         return (Publicacion.objects.filter(slug=slug, estado=EstadoPublicacion.PUBLICADA.value)
                 .values_list('id', flat=True).first())
+
+
+class DjangoPublicacionesVitrina(PublicacionesVitrina):
+    """Publicaciones elegidas como destacados de la landing (application/vitrina.py); los ids llegan como texto."""
+
+    def visibles(self, ids):
+        return self._en_orden(ids, Publicacion.objects.filter(estado=EstadoPublicacion.PUBLICADA.value))
+
+    def existentes(self, ids):
+        return self._en_orden(ids, Publicacion.objects.all())
+
+    @staticmethod
+    def _en_orden(ids, consulta):
+        # Un id que no es un número (o no cabe en la columna) no existe: no se le pregunta a la base
+        numeros = [int(i) for i in ids if i.isascii() and i.isdigit() and len(i) <= 18]
+        if not numeros:
+            return []
+        encontrados = {str(pk) for pk in consulta.filter(pk__in=numeros).values_list('pk', flat=True)}
+        return [i for i in ids if i in encontrados]

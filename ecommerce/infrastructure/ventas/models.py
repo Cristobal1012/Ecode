@@ -7,6 +7,8 @@ from ecommerce.domain.blog import (
 )
 from ecommerce.domain.contacto import LOGO_UNIVERSIDAD_HEADER, UBICACIONES_LOGO_UNIVERSIDAD
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
+from ecommerce.domain.destacados import LARGO_TITULO as LARGO_TITULO_DESTACADOS
+from ecommerce.domain.destacados import TITULO_POR_DEFECTO as TITULO_DESTACADOS, ModoVitrina
 from ecommerce.domain.documentos_tributarios import ModeloEmision
 from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
@@ -25,6 +27,12 @@ class ConfiguracionGlobal(models.Model):
         ('GRID_3', 'Cuadrícula de 3'),
         ('GRID_4', 'Cuadrícula de 4'),
     ]
+    orden_catalogo = models.CharField(max_length=20, default='destacados', choices=[
+        ('destacados', 'Orden actual'), ('recientes', 'Recientes primero'),
+        ('precio-desc', 'Mayor precio'), ('precio-asc', 'Menor precio'),
+    ])
+    orden_categorias = models.JSONField(default=list, blank=True)
+    menu_principal = models.JSONField(default=dict, blank=True)
     nombre_tienda = models.CharField(max_length=255)
     
     # --- CAMPOS DE ORIGEN / RETIRO EN LOCAL ---
@@ -52,6 +60,25 @@ class ConfiguracionGlobal(models.Model):
     # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
     blog_activo = models.BooleanField(default=False)
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
+    # Destacados de la landing (domain/destacados.py, pedido de un cliente): con DESTACADOS, la vitrina muestra los
+    # productos y publicaciones que eligió el admin en vez de "Más vendidos". Por defecto queda como antes
+    vitrina_modo = models.CharField(max_length=20, choices=[(modo.value, modo.value) for modo in ModoVitrina],
+                                    default=ModoVitrina.MAS_VENDIDOS.value)
+    destacados_titulo = models.CharField(max_length=LARGO_TITULO_DESTACADOS, default=TITULO_DESTACADOS)
+    # [{'tipo': 'PRODUCTO' | 'PUBLICACION', 'id': '...'}] en orden. Los productos viven en MongoDB y las
+    # publicaciones aquí, así que no hay clave foránea: lo borrado o despublicado se filtra al leer
+    destacados = models.JSONField(default=list, blank=True)
+    # Presentación de las fotos y del logo (pedido de un cliente, 2026-11-09). Apagadas, la tienda se ve como antes:
+    # - fotos_completas: las fotos de productos se ven enteras dentro de su marco, sin recortarlas
+    # - ficha_horizontal: la ficha del producto muestra la foto en un marco apaisado y más grande, con textos más chicos
+    # - logo_grande: el logo del header se ve más grande en el computador (en el celular queda igual)
+    fotos_completas = models.BooleanField(default=False)
+    ficha_horizontal = models.BooleanField(default=False)
+    logo_grande = models.BooleanField(default=False)
+    # Página independiente "Sobre mí": desactivada por defecto.
+    sobre_mi_activo = models.BooleanField(default=False)
+    sobre_mi_nombre = models.CharField(max_length=30, default='Sobre mí')
+    sobre_mi_biografia = models.TextField(blank=True, default='')
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago
@@ -89,6 +116,13 @@ class ConfiguracionGlobal(models.Model):
     correo_contacto = models.EmailField(blank=True, default='')
     horario_atencion = models.TextField(blank=True, default='')
     mostrar_direccion_pie = models.BooleanField(default=False)
+    # Teléfono comercial y redes sociales del emprendedor.
+    # Todos son opcionales y no se muestran cuando están vacíos.
+    telefono_comercial = models.CharField(max_length=20, blank=True, default='')
+    facebook_url = models.URLField(max_length=500, blank=True, default='')
+    x_url = models.URLField(max_length=500, blank=True, default='')
+    youtube_url = models.URLField(max_length=500, blank=True, default='')
+    tiktok_url = models.URLField(max_length=500, blank=True, default='')
     # RN-01: dónde va el logo de la Universidad, header o footer; nunca se oculta (domain/contacto.py)
     ubicacion_logo_universidad = models.CharField(
         max_length=10, choices=[(u, u) for u in UBICACIONES_LOGO_UNIVERSIDAD], default=LOGO_UNIVERSIDAD_HEADER)
@@ -416,6 +450,32 @@ class FotoPublicacion(models.Model):
     def __str__(self):
         return f'Foto {self.orden} de {self.publicacion}'
 
+class ProyectoDestacadoSobreMi(models.Model):
+    """Publicación del blog seleccionada para la página Sobre mí."""
+
+    configuracion = models.ForeignKey(
+        ConfiguracionGlobal,
+        on_delete=models.CASCADE,
+        related_name='proyectos_sobre_mi'
+    )
+    publicacion = models.ForeignKey(
+        Publicacion,
+        on_delete=models.CASCADE,
+        related_name='selecciones_sobre_mi'
+    )
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['configuracion', 'publicacion'],
+                name='proyecto_sobre_mi_unico'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.publicacion.titulo} (orden {self.orden})'
 
 def _estrellas_validas(prefijo):
     return models.CheckConstraint(

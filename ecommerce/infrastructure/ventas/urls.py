@@ -101,6 +101,13 @@ ventas_urlpatterns = [
     # Rutas del editor del admin: GET la lista y PUT /api/ventas/admin/paginas-legales/<tipo>/
     path('admin/paginas-legales/', views.AdminPaginasLegalesView.as_view(), name='admin-paginas-legales'),
     path('admin/paginas-legales/<str:tipo>/', views.AdminPaginaLegalView.as_view(), name='admin-pagina-legal'),
+    # Página independiente Sobre mí
+    path('sobre-mi/', views.SobreMiPublicoView.as_view(), name='sobre-mi-publico'),
+    path(
+        'admin/sobre-mi/proyectos/',
+        views.AdminSobreMiProyectosView.as_view(),
+        name='admin-sobre-mi-proyectos',
+    ),
     # Blog o portafolio (si el admin lo activó): GET /api/ventas/blog/?pagina=N y GET /api/ventas/blog/<slug>/
     path('blog/', views.BlogPublicoView.as_view(), name='blog'),
     path('blog/<slug:slug>/', views.BlogPublicacionView.as_view(), name='blog-publicacion'),

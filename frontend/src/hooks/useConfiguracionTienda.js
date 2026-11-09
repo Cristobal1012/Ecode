@@ -37,9 +37,27 @@ export function recargarConfiguracion() {
   return cargar();
 }
 
-// Favicon del negocio (RF-01.2); cada vista conserva su título descriptivo.
+// Presentación que elige el admin (pedido de un cliente, apagada por defecto): marcas en <html> que el CSS usa en
+// toda la tienda. data-fotos="completas" (fotos sin recortar), data-ficha="horizontal" (ficha con la foto apaisada)
+// y data-logo="grande" (logo más grande en el computador). Apagada, la marca se quita
+const MARCAS_PRESENTACION = {
+  fotos: ['fotos_completas', 'completas'],
+  ficha: ['ficha_horizontal', 'horizontal'],
+  logo: ['logo_grande', 'grande'],
+};
+
+function aplicarPresentacion(config) {
+  const raiz = document.documentElement;
+  Object.entries(MARCAS_PRESENTACION).forEach(([marca, [campo, valor]]) => {
+    if (config[campo]) raiz.dataset[marca] = valor;
+    else delete raiz.dataset[marca];
+  });
+}
+
+// Favicon del negocio (RF-01.2) y presentación; cada vista conserva su título descriptivo.
 function aplicarIdentidad(config) {
   if (!config) return;
+  aplicarPresentacion(config);
   if (config.favicon) {
     let icono = document.querySelector('link[rel="icon"]');
     if (!icono) {

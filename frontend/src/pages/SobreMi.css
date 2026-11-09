@@ -1,0 +1,65 @@
+
+.sobre-mi-main {
+  padding-bottom: 4rem;
+}
+
+.sobre-mi-biografia {
+  max-width: 850px;
+  margin: 0 auto 3rem;
+}
+
+.sobre-mi-contenido {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.sobre-mi-contenido p {
+  margin-bottom: 1rem;
+}
+
+.sobre-mi-contenido h2,
+.sobre-mi-contenido h3 {
+  margin: 1.5rem 0 0.75rem;
+}
+
+.sobre-mi-contenido ul,
+.sobre-mi-contenido ol {
+  padding-left: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.sobre-mi-contenido a,
+.sobre-mi-contactos a {
+  color: var(--color-primario, inherit);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sobre-mi-seccion {
+  margin-top: 3rem;
+}
+
+.sobre-mi-seccion > h2 {
+  margin-bottom: 1.5rem;
+}
+
+.sobre-mi-contactos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding-left: 1.25rem;
+}
+
+.sobre-mi-contactos a {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .sobre-mi-main {
+    padding-bottom: 2.5rem;
+  }
+
+  .sobre-mi-seccion {
+    margin-top: 2rem;
+  }
+}

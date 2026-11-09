@@ -4,9 +4,9 @@ import { CAMPOS_TEXTO } from '../../hooks/useEdicionLanding';
 // Texto de la landing editable en su lugar: hereda el estilo del elemento que reemplaza (clase) y tiene una
 // etiqueta visible, para que se sepa qué se está editando
 // ancho: clase del contenedor para que la etiqueta y el contador queden alineados con el campo
-export function CampoEditable({ campo, edicion, multilinea = false, filas = 2, className = '', claro = false, ancho = '' }) {
+export function CampoEditable({ campo, edicion, multilinea = false, filas = 2, className = '', claro = false, ancho = '', definicion = CAMPOS_TEXTO[campo], deshabilitado = false }) {
   const id = useId();
-  const { etiqueta, maximo } = CAMPOS_TEXTO[campo];
+  const { etiqueta, maximo } = definicion;
   const valor = edicion.textos[campo];
   const error = edicion.errores[campo];
   const Control = multilinea ? 'textarea' : 'input';
@@ -19,6 +19,7 @@ export function CampoEditable({ campo, edicion, multilinea = false, filas = 2, c
         className={`campo-editable-control ${className}`}
         value={valor}
         maxLength={maximo}
+        disabled={deshabilitado}
         rows={multilinea ? filas : undefined}
         onChange={(e) => edicion.cambiarTexto(campo, e.target.value)}
         aria-invalid={Boolean(error)}

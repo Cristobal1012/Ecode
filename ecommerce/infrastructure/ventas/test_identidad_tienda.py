@@ -271,3 +271,35 @@ class IdentidadTiendaTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         # El archivo físico se borró del disco al confirmar la transacción
         self.assertFalse(ruta_archivo.is_file())
+
+
+class PresentacionTiendaTests(APITestCase):
+    """Pedido de un cliente: fotos sin recorte, ficha con la foto horizontal y logo más grande. Apagadas por defecto."""
+
+    def setUp(self):
+        ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='Tienda QA')
+        self.url = reverse('configuracion-negocio')
+        self.opciones = {'fotos_completas': True, 'ficha_horizontal': True, 'logo_grande': True}
+
+    def publica(self):
+        datos = self.client.get(reverse('configuracion-global')).data
+        return {campo: datos[campo] for campo in self.opciones}
+
+    def test_por_defecto_la_tienda_se_ve_como_antes(self):
+        self.assertEqual(self.publica(), {campo: False for campo in self.opciones})
+
+    def test_el_admin_activa_cada_opcion_por_separado_y_la_tienda_la_recibe(self):
+        self.client.force_authenticate(create_user('admin-presentacion@example.test', rol='ADMIN'))
+
+        respuesta = self.client.patch(self.url, {'ficha_horizontal': True}, format='json')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.publica(), {'fotos_completas': False, 'ficha_horizontal': True, 'logo_grande': False})
+
+        self.assertEqual(self.client.patch(self.url, self.opciones, format='json').status_code, 200)
+        self.assertEqual(self.publica(), self.opciones)
+
+    def test_solo_el_admin_puede_cambiarlas(self):
+        self.assertEqual(self.client.patch(self.url, self.opciones, format='json').status_code, 401)
+        self.client.force_authenticate(create_user('comprador-presentacion@example.test'))
+        self.assertEqual(self.client.patch(self.url, self.opciones, format='json').status_code, 403)
+        self.assertEqual(self.publica(), {campo: False for campo in self.opciones})

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { textoBotonCatalogo } from '../../utils/menuPrincipal';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
 import { CampoEditable, EditorFotosBanner } from './ControlesEdicion';
 
 // RF-01.1, SCRUM-194: portada de la landing con banner en carrusel de fundido suave y campos fijos que
 // edita el admin (antetítulo, título, texto, botón y fotos del carrusel).
 // Con 2+ fotos cambian solas con fundido y botón de pausa (WCAG 2.2.2). Con 1 foto queda fija.
+// El botón toma el nombre del catálogo (Ver <nombre del catálogo>); la foto prioriza la subida sobre banner_url.
 // Las fotos no son clickeables y el velo garantiza contraste AA sobre todas las fotos.
 export default function Portada({ configuracion, edicion }) {
   const listaFotos = (configuracion.banners && configuracion.banners.length > 0)
@@ -43,6 +45,9 @@ export default function Portada({ configuracion, edicion }) {
     }, 5000);
     return () => clearInterval(intervalo);
   }, [totalFotos, pausado, editando]);
+
+  const textoBoton = textoBotonCatalogo(configuracion);
+
 
   return (
     <section className={`portada${editando ? ' portada--editando' : ''}`} aria-labelledby="portada-titulo"
@@ -92,9 +97,7 @@ export default function Portada({ configuracion, edicion }) {
               className="portada-titulo portada-titulo--campo" />
             <CampoEditable campo="texto_landing" edicion={edicion} claro multilinea filas={3}
               ancho="campo-ancho-medio" className="portada-texto" />
-            <div className="boton boton-primario portada-boton portada-boton--campo">
-              <CampoEditable campo="texto_boton_ingreso" edicion={edicion} claro className="portada-boton-campo" />
-            </div>
+            <span className="boton boton-primario portada-boton">{textoBoton}</span>
           </>
         ) : (
           <>
@@ -106,7 +109,7 @@ export default function Portada({ configuracion, edicion }) {
             </h1>
             {configuracion.texto_landing && <p className="portada-texto">{configuracion.texto_landing}</p>}
             <Link to="/catalogo" className="boton boton-primario portada-boton">
-              {configuracion.texto_boton_ingreso || TEXTOS_POR_DEFECTO.texto_boton_ingreso}
+              {textoBoton}
               <span aria-hidden="true">→</span>
             </Link>
           </>

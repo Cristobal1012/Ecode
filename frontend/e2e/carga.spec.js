@@ -57,7 +57,8 @@ test('el panel se ve entero mientras se verifica la sesión y el dashboard mient
   await sinViolaciones(page);
 
   soltarMetricas();
-  await expect(page.getByText('Ventas históricas')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ventas del periodo' })).toBeVisible();
+  await expect(page.getByText(/Todo al día/)).toBeVisible();
   await expect(page.locator('.esqueleto')).toHaveCount(0);
   expect(inesperadas).toEqual([]);
 });

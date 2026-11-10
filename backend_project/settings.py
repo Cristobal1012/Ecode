@@ -202,6 +202,9 @@ warnings.filterwarnings('ignore', message='No directory at', category=UserWarnin
 # and static assets; production must serve MEDIA_URL through its media server.
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
 MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+# Archivos que solo ve el admin (las fotos de las cotizaciones): fuera de MEDIA_ROOT, que se publica, y sin URL.
+# Se entregan por la API con la sesión del admin. Tiene que estar en un disco persistente y en los respaldos
+ARCHIVOS_PRIVADOS_ROOT = Path(os.environ.get('ARCHIVOS_PRIVADOS_ROOT', BASE_DIR / 'privado'))
 CATALOGO_IMAGEN_MAX_BYTES = int(os.environ.get('CATALOGO_IMAGEN_MAX_BYTES', 5 * 1024 * 1024))
 CATALOGO_IMAGEN_MAX_ARCHIVOS = int(os.environ.get('CATALOGO_IMAGEN_MAX_ARCHIVOS', 10))
 CATALOGO_IMAGEN_MAX_GALERIA = int(os.environ.get('CATALOGO_IMAGEN_MAX_GALERIA', 20))

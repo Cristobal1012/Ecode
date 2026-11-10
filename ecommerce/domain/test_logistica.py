@@ -4,7 +4,8 @@ from django.test import SimpleTestCase
 
 from ecommerce.domain.logistica import (
     AVISO_ENTREGA_COORDINADA, ENTREGA_COORDINADA, RETIRO_LOCAL, EntregaNoHabilitada, EntregasDeLaTienda,
-    aviso_entrega_coordinada, error_direccion_entrega, estado_entrega_de_la_tienda,
+    MedidasEnvio, Paquete, aviso_entrega_coordinada, error_direccion_entrega, estado_entrega_de_la_tienda,
+    clave_comuna, paquete_de_envio,
 )
 from ecommerce.domain.ventas import EstadoPedido
 
@@ -77,3 +78,33 @@ class DireccionEntregaTests(SimpleTestCase):
         for direccion in ({}, None, 'Ñuñoa', {'calle': 'Los Aromos'}):
             with self.subTest(direccion=direccion):
                 self.assertEqual(error_direccion_entrega('CHILEXPRESS', direccion), 'Se requiere la comuna de destino.')
+
+
+class PaqueteDeEnvioTests(SimpleTestCase):
+    """RF-02.3: la caja que se cotiza y se despacha, armada con las medidas del catálogo."""
+
+    def test_suma_los_pesos_y_el_lado_es_el_mayor_entre_el_cubo_del_volumen_y_el_lado_mas_largo(self):
+        polera = MedidasEnvio(Decimal('0.3'), Decimal('5'), Decimal('25'), Decimal('30'))
+        taza = MedidasEnvio(Decimal('0.45'), Decimal('12'), Decimal('12'), Decimal('12'))
+        # Volumen 2 x 3.750 + 3 x 1.728 = 12.684 cm³: un cubo de 24 cm, menor que el lado de 30 de la polera
+        self.assertEqual(paquete_de_envio([(polera, 2), (taza, 3)]),
+                         Paquete(Decimal('1.95'), Decimal('30'), Decimal('30'), Decimal('30')))
+
+    def test_muchas_unidades_chicas_forman_un_cubo_mayor_que_cada_una(self):
+        caja = MedidasEnvio(Decimal('1'), Decimal('10'), Decimal('10'), Decimal('10'))
+        # 27 cajas de 1.000 cm³ = un cubo exacto de 30 cm (sin el error de la potencia 1/3, que daría 31)
+        paquete = paquete_de_envio([(caja, 27)])
+        self.assertEqual((paquete.peso_kg, paquete.alto_cm), (Decimal('27.00'), Decimal('30')))
+
+    def test_valores_vacios_o_en_cero_usan_el_minimo(self):
+        sin_datos = MedidasEnvio(Decimal('0'), Decimal('0'), Decimal('0'), Decimal('-5'))
+        self.assertEqual(paquete_de_envio([(sin_datos, 1)]),
+                         Paquete(Decimal('0.10'), Decimal('10'), Decimal('10'), Decimal('10')))
+
+
+class ClaveComunaTests(SimpleTestCase):
+    def test_la_misma_comuna_escrita_de_distintas_formas_tiene_la_misma_clave(self):
+        for escrita, esperada in (('Ñuñoa', 'NUNOA'), ('  maipú ', 'MAIPU'), ('San  José de Maipo', 'SAN JOSE DE MAIPO'),
+                                  ('CONCEPCIÓN', 'CONCEPCION'), (None, '')):
+            with self.subTest(escrita=escrita):
+                self.assertEqual(clave_comuna(escrita), esperada)

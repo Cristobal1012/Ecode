@@ -173,17 +173,17 @@ const MisDirecciones = () => {
                                 <div className="direcciones-fila">
                                     <div className="direcciones-campo direcciones-campo--ancho">
                                         <label htmlFor="direccion-calle">Calle</label>
-                                        <input id="direccion-calle" type="text" name="calle" autoComplete="address-line1" value={nuevaDireccion.calle} onChange={handleChange} required placeholder="Ej: Av. Providencia" />
+                                        <input id="direccion-calle" maxLength={255} type="text" name="calle" autoComplete="address-line1" value={nuevaDireccion.calle} onChange={handleChange} required placeholder="Ej: Av. Providencia" />
                                     </div>
                                     <div className="direcciones-campo">
                                         <label htmlFor="direccion-numero">Número</label>
-                                        <input id="direccion-numero" type="text" name="calle_numero" value={nuevaDireccion.calle_numero} onChange={handleChange} required placeholder="Ej: 1234" />
+                                        <input id="direccion-numero" maxLength={50} type="text" name="calle_numero" value={nuevaDireccion.calle_numero} onChange={handleChange} required placeholder="Ej: 1234" />
                                     </div>
                                 </div>
 
                                 <div className="direcciones-campo">
                                     <label htmlFor="direccion-dpto">Dpto, casa o referencia (opcional)</label>
-                                    <input id="direccion-dpto" type="text" name="dpto_casa" autoComplete="address-line2" value={nuevaDireccion.dpto_casa} onChange={handleChange} placeholder="Ej: Depto 505 / Casa 12 / Condominio Las Rosas" />
+                                    <input id="direccion-dpto" maxLength={100} type="text" name="dpto_casa" autoComplete="address-line2" value={nuevaDireccion.dpto_casa} onChange={handleChange} placeholder="Ej: Depto 505 / Casa 12 / Condominio Las Rosas" />
                                 </div>
 
                                 <div className="direcciones-fila">
@@ -200,13 +200,13 @@ const MisDirecciones = () => {
                                     </div>
                                     <div className="direcciones-campo">
                                         <label htmlFor="direccion-ciudad">Ciudad</label>
-                                        <input id="direccion-ciudad" type="text" name="ciudad" autoComplete="address-level2" value={nuevaDireccion.ciudad} onChange={handleChange} required placeholder="Ej: Santiago" />
+                                        <input id="direccion-ciudad" maxLength={100} type="text" name="ciudad" autoComplete="address-level2" value={nuevaDireccion.ciudad} onChange={handleChange} required placeholder="Ej: Santiago" />
                                     </div>
                                 </div>
 
                                 <div className="direcciones-campo">
                                     <label htmlFor="direccion-region">Región (opcional)</label>
-                                    <input id="direccion-region" type="text" name="region" autoComplete="address-level1" value={nuevaDireccion.region} onChange={handleChange} placeholder="Ej: Metropolitana" />
+                                    <input id="direccion-region" maxLength={100} type="text" name="region" autoComplete="address-level1" value={nuevaDireccion.region} onChange={handleChange} placeholder="Ej: Metropolitana" />
                                 </div>
 
                                 <label className="direcciones-casilla">

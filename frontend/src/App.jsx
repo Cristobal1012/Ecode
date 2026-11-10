@@ -62,13 +62,14 @@ function AuthPage({ googleHabilitado }) {
 
 function App() {
   const {
-    consent, isBannerOpen, storageError,
-    acceptCookies, rejectCookies, openPreferences, closePreferences,
+    consent, preferences, isBannerOpen, storageError,
+    acceptCookies, rejectCookies, savePreferences, openPreferences, closePreferences,
   } = useCookieConsent();
   // RN-04: lo informa el backend (GOOGLE_CLIENT_ID del .env); vacío = la tienda no ofrece Google
   const configuracion = useConfiguracionTienda();
   const googleClientId = configuracion?.google_client_id || '';
-  const [nombreTiendaTemporal, setNombreTiendaTemporal] = useState(null);
+  // Borrador del nombre y los logos mientras el admin edita la landing (el footer está fuera de la página)
+  const [marcaTemporal, setMarcaTemporal] = useState(null);
   useEffect(() => {
     if (configuracion?.tema_seleccionado !== undefined) {
       const serverId = Number(configuracion.tema_seleccionado);
@@ -114,13 +115,14 @@ function App() {
       <TrackingScripts
         googleAnalyticsId={configuracion?.google_analytics_id || ''}
         metaPixelId={configuracion?.meta_pixel_id || ''}
-        consent={consent}
+        analitica={preferences.analitica}
+        marketing={preferences.marketing}
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <div style={{ flex: 1 }}>
           <Routes>
             {/* Vistas públicas */}
-            <Route path="/" element={<LandingPage onNombreTiendaTemporal = {setNombreTiendaTemporal} />} />
+            <Route path="/" element={<LandingPage onMarcaTemporal={setMarcaTemporal} />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/seguimiento" element={<SeguimientoEnvio />} />
             {/* Encargos, personalizados y compras en cantidad (si el admin activó el formulario) */}
@@ -166,13 +168,15 @@ function App() {
         </div>
         
         {/* Footer inyectado dinámicamente en toda la aplicación */}
-        <Footer onOpenCookiePreferences={openPreferences} nombreTiendaTemporal = {nombreTiendaTemporal}/>
+        <Footer onOpenCookiePreferences={openPreferences} marcaTemporal={marcaTemporal} />
         <CookieBanner
           consent={consent}
+          preferences={preferences}
           isOpen={isBannerOpen}
           storageError={storageError}
           onAccept={acceptCookies}
           onReject={rejectCookies}
+          onSave={savePreferences}
           onClose={closePreferences}
         />
       </div>

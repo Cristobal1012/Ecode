@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
+import re
+
+from .logistica import MedidasEnvio
 
 
 class ErrorPedido(Exception):
@@ -63,6 +66,26 @@ def normalizar_telefono_chile(texto: str) -> str:
     return f'+56{digitos}'
 
 
+class NombreInvalido(ErrorPedido):
+    def __init__(self):
+        super().__init__('Escribe un nombre con letras (puede llevar espacios, guiones, apóstrofos o puntos).')
+
+
+# Letras de cualquier idioma (con tildes y ñ), separadas por espacios, guiones, apóstrofos o puntos
+_NOMBRE_PERSONA = re.compile(r"[^\W\d_]+(?:[\s'’.\-]+[^\W\d_]*)*")
+
+
+def normalizar_nombre_persona(texto: str) -> str:
+    """Nombre o apellido de una persona: 'María José', "O'Higgins" o 'Juan P.'; sin números ni símbolos.
+
+    Devuelve el texto con los espacios repetidos juntados; NombreInvalido si no sirve.
+    """
+    nombre = ' '.join(str(texto or '').split())
+    if not _NOMBRE_PERSONA.fullmatch(nombre):
+        raise NombreInvalido()
+    return nombre
+
+
 @dataclass(frozen=True)
 class ItemSolicitado:
     producto_id: str
@@ -81,6 +104,8 @@ class VarianteCatalogo:
     stock: int
     # El producto padre está activo y publicado
     disponible: bool
+    # Para armar el paquete del envío (RF-02.3)
+    medidas: MedidasEnvio = MedidasEnvio()
 
 
 @dataclass(frozen=True)

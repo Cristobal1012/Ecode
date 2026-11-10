@@ -57,6 +57,25 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
     expect(clienteAxios.get).toHaveBeenLastCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, estado: 'ENVIADO' } });
   });
 
+  it('abre con el filtro que pide el dashboard: órdenes de transporte con error', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(0, []));
+
+    render(<GestorPedidos filtroInicial={{ ordenTransporte: true }} />);
+
+    expect(await screen.findByText('No hay órdenes de transporte con error.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Con error en la orden de transporte')).toBeChecked();
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, orden_transporte: 'error' } });
+  });
+
+  it('abre con el estado que pide el dashboard: pagados por preparar', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(1));
+
+    render(<GestorPedidos filtroInicial={{ estado: 'PAGADO' }} />);
+
+    expect(await screen.findByRole('combobox', { name: 'Estado' })).toHaveValue('PAGADO');
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/admin/ordenes/', { params: { pagina: 1, estado: 'PAGADO' } });
+  });
+
   it('una entrega coordinada sin dirección avisa que se acuerda con el comprador', async () => {
     clienteAxios.get.mockResolvedValueOnce(pagina(2, [
       { id: 1, estado: 'PAGADO', transiciones_permitidas: [], proveedor_logistico: 'ENTREGA_COORDINADA',

@@ -47,3 +47,75 @@ describe('Mis pedidos: reseñas', () => {
     expect(within(enCamino).queryByText('Reseña enviada')).not.toBeInTheDocument();
   });
 });
+
+describe('Mis pedidos: foto de cada pedido', () => {
+  const linea = (nombre, imagen, extra = {}) => ({
+    producto_mongo_id: nombre, variante_sku: `${nombre}-1`, nombre_producto: nombre, precio_unitario: 5000,
+    cantidad: 1, imagen, variante: '', ...extra,
+  });
+
+  function mostrar(pedidos) {
+    clienteAxios.get.mockImplementation((url) => Promise.resolve({ data: url === 'ventas/mis-pedidos/' ? pedidos : {} }));
+    render(<MemoryRouter><HistorialPedidos /></MemoryRouter>);
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
+
+  it('la miniatura es la foto del primer producto, con "+2" si hay más', async () => {
+    mostrar([pedido(7, 'ENTREGADO', { detalles: [
+      linea('Polerón', 'https://cdn.test/poleron.jpg'), linea('Gorro', 'https://cdn.test/gorro.jpg'), linea('Taza', null),
+    ] })]);
+
+    const miniatura = await screen.findByRole('button', { name: 'Ver las fotos del pedido #7, 3 productos' });
+
+    expect(miniatura.querySelector('img')).toHaveAttribute('src', 'https://cdn.test/poleron.jpg');
+    expect(miniatura).toHaveTextContent('+2');
+  });
+
+  it('el visor recorre los productos con los botones y las flechas, y un producto sin foto lo dice', async () => {
+    mostrar([pedido(7, 'ENTREGADO', { detalles: [
+      linea('Polerón', 'https://cdn.test/poleron.jpg', { variante: 'Talla: M', cantidad: 2 }), linea('Taza', null),
+    ] })]);
+    fireEvent.click(await screen.findByRole('button', { name: /Ver las fotos del pedido #7/ }));
+
+    const visor = screen.getByRole('dialog', { name: 'Pedido #7' });
+    expect(within(visor).getByRole('img', { name: 'Polerón' })).toHaveAttribute('src', 'https://cdn.test/poleron.jpg');
+    expect(visor).toHaveTextContent('Talla: M');
+    expect(visor).toHaveTextContent('2 unidades');
+    expect(visor).toHaveTextContent('1 de 2');
+
+    fireEvent.click(within(visor).getByRole('button', { name: /Siguiente/ }));
+    expect(visor).toHaveTextContent('Taza');
+    expect(visor).toHaveTextContent('Este producto ya no tiene foto en la tienda.');
+    expect(visor).toHaveTextContent('2 de 2');
+
+    fireEvent.keyDown(within(visor).getByRole('heading', { name: 'Pedido #7' }), { key: 'ArrowRight' });
+    expect(visor).toHaveTextContent('1 de 2');
+    fireEvent.keyDown(within(visor).getByRole('heading', { name: 'Pedido #7' }), { key: 'ArrowLeft' });
+    expect(visor).toHaveTextContent('2 de 2');
+  });
+
+  it('al cerrar el visor el foco vuelve a la miniatura', async () => {
+    mostrar([pedido(7, 'ENTREGADO', { detalles: [linea('Polerón', 'https://cdn.test/poleron.jpg')] })]);
+    const miniatura = await screen.findByRole('button', { name: 'Ver las fotos del pedido #7, 1 producto' });
+    miniatura.focus();
+    fireEvent.click(miniatura);
+
+    const visor = screen.getByRole('dialog', { name: 'Pedido #7' });
+    // Con un solo producto no hay "Anterior" ni "Siguiente"
+    expect(within(visor).queryByRole('button', { name: /Siguiente/ })).not.toBeInTheDocument();
+    fireEvent(visor, new Event('cancel', { cancelable: true }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(miniatura).toHaveFocus();
+  });
+
+  it('sin ninguna foto se ve el ícono, sin nada que abrir', async () => {
+    mostrar([pedido(7, 'ENTREGADO', { detalles: [linea('Taza', null)] })]);
+
+    expect(await screen.findByText('#7', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ver las fotos/ })).not.toBeInTheDocument();
+    expect(document.querySelector('.pedido-miniatura--vacia')).toBeInTheDocument();
+  });
+});

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const { configuracion } = vi.hoisted(() => ({ configuracion: { actual: null } }));
@@ -85,6 +85,56 @@ describe('Formulario de cotización', () => {
     expect(screen.getByLabelText('Nombre')).toHaveValue('');
   });
 
+  describe('fotos de la idea', () => {
+    const foto = (nombre = 'idea.jpg', tipo = 'image/jpeg', bytes = 10) => new File(['x'.repeat(bytes)], nombre, { type: tipo });
+    const adjuntar = (...archivos) => fireEvent.change(screen.getByLabelText(/fotos de tu idea/i), { target: { files: archivos } });
+    const miniaturas = () => within(screen.getByRole('list', { name: 'Fotos adjuntas' })).getAllByRole('img');
+    const sinMiniaturas = () => expect(screen.queryByRole('list', { name: 'Fotos adjuntas' })).not.toBeInTheDocument();
+
+    beforeEach(() => {
+      let numero = 0;
+      URL.createObjectURL = vi.fn(() => `blob:vista-${numero++}`);
+      URL.revokeObjectURL = vi.fn();
+    });
+
+    it('se envían con los datos como multipart y se pueden quitar antes', async () => {
+      renderCotizacion('/cotizar?producto=taza');
+      adjuntar(foto('idea.jpg'), foto('referencia.png', 'image/png'));
+      expect(miniaturas()).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Quitar la foto 2' }));
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:vista-1');
+      completarContacto();
+      enviar();
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Recibimos tu solicitud.');
+      const [, cuerpo] = clienteAxios.post.mock.calls[0];
+      expect(cuerpo).toBeInstanceOf(FormData);
+      expect(JSON.parse(cuerpo.get('datos'))).toEqual(expect.objectContaining({ producto_id: 'taza', nombre: 'Ana Pérez' }));
+      expect(cuerpo.getAll('fotos').map(archivo => archivo.name)).toEqual(['idea.jpg']);
+      sinMiniaturas();
+    });
+
+    it('no acepta más de tres, ni otros formatos ni archivos de más de 5 MB', () => {
+      renderCotizacion();
+      adjuntar(foto('a.jpg'), foto('b.jpg'), foto('c.jpg'), foto('d.jpg'));
+      expect(screen.getByRole('alert')).toHaveTextContent('hasta 3 fotos');
+
+      adjuntar(foto('idea.gif', 'image/gif'));
+      expect(screen.getByRole('alert')).toHaveTextContent('"idea.gif" no sirve');
+
+      adjuntar(foto('enorme.jpg', 'image/jpeg', 5 * 1024 * 1024 + 1));
+      expect(screen.getByRole('alert')).toHaveTextContent('"enorme.jpg" no sirve');
+      sinMiniaturas();
+    });
+
+    it('con tres fotos ya no ofrece agregar más', () => {
+      renderCotizacion();
+      adjuntar(foto('a.jpg'), foto('b.jpg'), foto('c.jpg'));
+      expect(miniaturas()).toHaveLength(3);
+      expect(screen.queryByLabelText(/fotos de tu idea/i, { selector: 'input' })).not.toBeInTheDocument();
+    });
+  });
+
   it('una empresa con un RUT inválido ve el error junto al campo y no se envía', async () => {
     renderCotizacion('/cotizar?producto=taza');
     completarContacto();
@@ -149,6 +199,22 @@ describe('Panel: cotizaciones', () => {
     expect(screen.getByText('05-11-2026')).toBeInTheDocument();
     expect(screen.getByText(/RUT 76.123.456-0/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'ana@example.test' })).toHaveAttribute('href', 'mailto:ana@example.test');
+  });
+
+  it('las fotos de la idea se piden con la sesión del admin y se ven en la tarjeta', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:foto-11');
+    URL.revokeObjectURL = vi.fn();
+    clienteAxios.get.mockImplementation((url) => Promise.resolve(url === 'ventas/admin/cotizaciones/7/fotos/11/'
+      ? { data: new Blob(['jpg'], { type: 'image/jpeg' }) }
+      : { data: { count: 1, results: [{ ...COTIZACION, fotos: [11] }] } }));
+    const { unmount } = render(<GestorCotizaciones />);
+
+    const foto = await screen.findByRole('img', { name: /Foto 1 de la cotización #7/ });
+    expect(foto).toHaveAttribute('src', 'blob:foto-11');
+    // Por la API (con el token), no por una URL pública de /media/
+    expect(clienteAxios.get).toHaveBeenCalledWith('ventas/admin/cotizaciones/7/fotos/11/', { responseType: 'blob' });
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:foto-11');
   });
 
   it('la tienda cambia el estado y lo ve confirmado', async () => {

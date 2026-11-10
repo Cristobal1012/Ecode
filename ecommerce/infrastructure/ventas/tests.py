@@ -71,7 +71,8 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
              'google_analytics_id', 'meta_pixel_id',
              'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
-             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'instagram_usuario',
+             'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'ubicacion_logo_universidad',
+             'instagram_usuario',
              *(f'instagram_foto_{numero}' for numero in range(1, 7))}
         )
 
@@ -151,6 +152,7 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'correo_contacto': '',
             'horario_atencion': '',
             'mostrar_direccion_pie': False,
+            'ubicacion_logo_universidad': 'HEADER',
             'instagram_usuario': '',
             **{f'instagram_foto_{numero}': None for numero in range(1, 7)},
         })
@@ -292,7 +294,6 @@ class CheckoutAccessTests(APITestCase):
             },
             'subtotal': 10000,
             'proveedor_logistico': 'CHILEXPRESS',
-            'paquete': {'peso_kg': '1', 'alto_cm': '10', 'ancho_cm': '10', 'largo_cm': '10'},
             'acepta_terminos': True,
             **DESTINATARIO,
         }
@@ -321,6 +322,35 @@ class CheckoutAccessTests(APITestCase):
                 self.assertEqual(order.email_invitado,
                                  self.payload['email_invitado'])
                 self.assertEqual((order.costo_envio, order.total_final), (1000, 11000))
+
+    def test_el_pedido_tiene_hasta_100_lineas_como_el_carrito(self):
+        lineas = [{**self.payload['items'][0], 'variante_sku': f'SKU-{numero}'} for numero in range(101)]
+        respuesta = self.checkout({**self.payload, 'items': lineas})
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('items', respuesta.data)
+
+    def test_la_direccion_solo_guarda_sus_campos_con_largo_maximo(self):
+        for direccion in ({'calle': 'x' * 100_000, 'comuna': 'Santiago'}, 'Santiago', ['Santiago']):
+            with self.subTest(direccion=str(direccion)[:30]):
+                respuesta = self.checkout({**self.payload, 'direccion_envio_snapshot': direccion})
+                self.assertEqual(respuesta.status_code, 400)
+                self.assertIn('direccion_envio_snapshot', respuesta.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        direccion = {**self.payload['direccion_envio_snapshot'], 'dpto_casa': None, 'script': '<script>x</script>'}
+        self.assertEqual(self.checkout({**self.payload, 'direccion_envio_snapshot': direccion}).status_code, 201)
+        guardada = OrdenCompra.objects.get().direccion_envio_snapshot
+        self.assertNotIn('script', guardada)
+        self.assertEqual(guardada['dpto_casa'], '')
+
+    def test_el_correo_del_invitado_se_valida_y_se_guarda_en_minusculas(self):
+        respuesta = self.checkout({**self.payload, 'email_invitado': 'no-es-un-correo'})
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('email_invitado', respuesta.data)
+        self.assertFalse(OrdenCompra.objects.exists())
+
+        self.assertEqual(self.checkout({**self.payload, 'email_invitado': ' Ana.Perez@Example.TEST '}).status_code, 201)
+        self.assertEqual(OrdenCompra.objects.get().email_invitado, 'ana.perez@example.test')
 
     def test_la_respuesta_trae_el_token_para_consultar_el_pago_de_esa_orden(self):
         response = self.checkout()
@@ -381,8 +411,9 @@ class CheckoutAccessTests(APITestCase):
 
     def test_destinatario_es_obligatorio_y_el_telefono_se_normaliza(self):
         self.configure('INVITADO')
-        for campo, valor in (('nombre_destinatario', ''), ('telefono_destinatario', ''),
-                             ('telefono_destinatario', '+1 555 123 4567')):
+        for campo, valor in (('nombre_destinatario', ''), ('nombre_destinatario', '12345'),
+                             ('telefono_destinatario', ''), ('telefono_destinatario', '+1 555 123 4567'),
+                             ('telefono_destinatario', 'llamame')):
             with self.subTest(campo=campo, valor=valor):
                 response = self.checkout({**self.payload, campo: valor})
                 self.assertEqual(response.status_code, 400)
@@ -533,6 +564,9 @@ class SeguimientoEnvioTests(APITestCase):
         self.assertEqual(response.data['codigo_seguimiento'], '712678903156')
         consultar_estado.assert_called_once_with('CHILEXPRESS', '712678903156')
 
+    def test_el_correo_no_distingue_mayusculas_ni_espacios(self, consultar_estado):
+        self.assertEqual(self.consultar(self.orden.id, '  Invitado@Example.TEST ').status_code, 200)
+
     def test_mismatch_gets_same_generic_response_as_missing_order(self, consultar_estado):
         esperado = self.consultar(999999)
         self.assertEqual(esperado.status_code, 404)
@@ -600,14 +634,14 @@ class SeguimientoEnvioTests(APITestCase):
 
 
     def test_sin_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
-        self.orden.numero_seguimiento_tracking = ''
-        self.orden.save(update_fields=['numero_seguimiento_tracking'])
-        response = self.consultar(self.orden.id)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data['estado_actual'],
-            'Pendiente de despacho',
-        )
+        # Vacío o nulo (el campo admite los dos): todavía no hay orden de transporte que consultar
+        for numero in ('', None):
+            with self.subTest(numero=numero):
+                self.orden.numero_seguimiento_tracking = numero
+                self.orden.save(update_fields=['numero_seguimiento_tracking'])
+                response = self.consultar(self.orden.id)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data['estado_actual'], 'Pendiente de despacho')
         consultar_estado.assert_not_called()
 
 
@@ -625,18 +659,6 @@ class SeguimientoEnvioTests(APITestCase):
         self.assertEqual(
             response.data['estado_actual'],
             'Esperando el pago',
-        )
-        consultar_estado.assert_not_called()
-
-
-    def test_none_en_numero_seguimiento_queda_pendiente_de_despacho(self, consultar_estado):
-        self.orden.numero_seguimiento_tracking = None
-        self.orden.save(update_fields=['numero_seguimiento_tracking'])
-        response = self.consultar(self.orden.id)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data['estado_actual'],
-            'Pendiente de despacho',
         )
         consultar_estado.assert_not_called()
 

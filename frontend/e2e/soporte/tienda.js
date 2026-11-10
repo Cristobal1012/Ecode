@@ -6,6 +6,17 @@ export const producto = {
   variantes: [{ sku: 'QA-1', precio: 1000, stock: 5, atributos_variables: { talla: 'M' } }],
 };
 
+// Dashboard del admin sin ventas ni pendientes (RF-03.1); un test puede reemplazar partes con page.route
+export const metricasDashboard = {
+  periodo: { clave: 'ESTE_MES', desde: '2026-11-01', hasta: '2026-11-05', agrupacion: 'DIA' },
+  anterior: { desde: '2026-10-01', hasta: '2026-10-05' },
+  tarjetas: { ventas: 0, variacion_ventas: null, pedidos: 0, diferencia_pedidos: 0, ticket_promedio: 0,
+    variacion_ticket: null, clientes_nuevos: 0 },
+  serie: [], mas_vendidos: [], ultimas_ordenes: [],
+  detalles: { medios_pago: [], entregas: [], comunas: [], cancelaciones: [], cupones: [],
+    clientes: { nuevos: 0, recurrentes: 0, registrados: 0, invitados: 0 }, calificacion: null },
+};
+
 // Toda llamada API queda resuelta aquí o bloqueada. Esta suite no utiliza backend ni credenciales.
 export async function prepararTienda(page, { sesion = false, tema = 1, tipografia = 1 } = {}) {
   const inesperadas = [];
@@ -32,12 +43,15 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
     const respuestas = {
       'configuracion/': configuracion,
       'configuracion/negocio/': configuracion,
-      'ventas/dashboard/metricas/': { metricas: {}, historico: [], ultimas_ordenes: [] },
+      'ventas/dashboard/metricas/': metricasDashboard,
+      'ventas/dashboard/pendientes/': { al_dia: true, tareas: [], agotadas: [], stock_bajo: [] },
       'ventas/admin/ordenes/': { count: 0, next: null, previous: null, results: [] },
       'ventas/admin/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos QA', contenido: '<p>Texto legal QA.</p>', publicada: true }],
       'ventas/admin/medios-pago/': [],
       'ventas/admin/couriers/': [{ codigo: 'CHILEXPRESS', nombre: 'Chilexpress', ayuda: '', campos: [], datos: {}, faltantes: [], configuradas: false }],
       'ventas/promociones/': [],
+      // Sin descuentos automáticos: el checkout los pide para la vista previa
+      'ventas/promociones/automaticas/': [],
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
       'ventas/checkout/reglas/': { modo_autenticacion: 'INVITADO' },
       'ventas/logistica/comunas/': { comunas: ['Santiago'] },

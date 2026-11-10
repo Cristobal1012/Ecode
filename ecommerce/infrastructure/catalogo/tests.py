@@ -679,6 +679,28 @@ class CatalogoPublicoTests(APITestCase):
         self.assertEqual(self.detalle('Borrador').status_code, 200)
 
 
+class VarianteDatosImposiblesTests(SimpleTestCase):
+    """RN-03 y RF-02.3: stock, precio, peso y medidas que no pueden existir no se guardan."""
+
+    def test_rechaza_cada_valor_imposible_en_su_campo(self):
+        from .serializers import VarianteSerializer
+        base = {'sku': 'QA-1', 'precio': '10000', 'stock': 5, 'peso_kg': 0.5,
+                'alto_cm': 10, 'ancho_cm': 10, 'largo_cm': 10}
+        for campo, valor in (('stock', -5), ('peso_kg', 0), ('peso_kg', -1), ('alto_cm', 0), ('ancho_cm', -3),
+                             ('largo_cm', 5000), ('precio', '990.75'), ('precio_oferta', '8000.50'),
+                             ('sku', 'X' * 65)):
+            with self.subTest(campo=campo, valor=valor):
+                serializer = VarianteSerializer(data={**base, campo: valor})
+                self.assertFalse(serializer.is_valid())
+                self.assertIn(campo, serializer.errors)
+
+    def test_acepta_stock_cero_y_precios_enteros_con_ceros_decimales(self):
+        from .serializers import VarianteSerializer
+        serializer = VarianteSerializer(data={'sku': 'QA-2', 'precio': '19990.00', 'precio_oferta': '15990',
+                                              'stock': 0})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+
 class VariantePrecioOfertaTests(SimpleTestCase):
     """Pruebas para E01 de SCRUM-136: validación de límites de precio_oferta."""
 

@@ -136,7 +136,8 @@
    Modo edición (solo admin): los textos se vuelven campos en su lugar
    ====================================================================== */
 
-.boton-editar-pagina {
+.boton-editar-pagina,
+.aviso-edicion-no-disponible {
   position: fixed;
   right: 24px;
   bottom: 24px;
@@ -144,11 +145,19 @@
   box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
 }
 
-/* La barra fija no tapa el final de la página */
-.landing--editando {
-  padding-bottom: 140px;
+/* Sin la configuración no se puede editar: el borrador partiría vacío y guardarlo pisaría la tienda */
+.aviso-edicion-no-disponible {
+  max-width: min(360px, calc(100% - 48px));
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radio);
+  background: var(--color-text);
+  color: var(--color-background);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
+/* Fija abajo; reserva su alto al final de la página (BarraEdicion.jsx) para no tapar el footer */
 .barra-edicion {
   position: fixed;
   left: 0;
@@ -158,6 +167,8 @@
   background: var(--color-text);
   color: var(--color-background);
   box-shadow: 0 -8px 24px rgb(0 0 0 / 18%);
+  /* Se distingue del footer, que también es oscuro */
+  border-top: 1px solid rgb(255 255 255 / 22%);
 }
 
 .barra-edicion-contenido {
@@ -188,6 +199,25 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+/* RN-01: dónde va el logo de la Universidad (siempre junto al de la tienda) */
+.barra-edicion-ubicacion {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 0.85rem;
+}
+
+.barra-edicion-ubicacion select {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
 }
 
 .barra-edicion .boton-primario {
@@ -435,7 +465,8 @@
 }
 
 @media (max-width: 767px) {
-  .boton-editar-pagina {
+  .boton-editar-pagina,
+  .aviso-edicion-no-disponible {
     right: 16px;
     bottom: 16px;
   }
@@ -444,10 +475,6 @@
     position: static;
     justify-content: flex-start;
     margin-bottom: 24px;
-  }
-
-  .landing--editando {
-    padding-bottom: 240px;
   }
 }
 

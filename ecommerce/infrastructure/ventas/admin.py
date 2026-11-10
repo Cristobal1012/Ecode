@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .forms import MedioPagoAdminForm
+from .forms import MedioPagoAdminForm, PromocionAdminForm
 from .models import OrdenCompra, ConfiguracionGlobal, MedioPago, Promocion
 
 
@@ -41,4 +41,10 @@ class MedioPagoAdmin(admin.ModelAdmin):
             super().save_model(request, obj, form, change)
 
 
-admin.site.register(Promocion)
+@admin.register(Promocion)
+class PromocionAdmin(admin.ModelAdmin):
+    form = PromocionAdminForm
+    # Los usos los cuenta el checkout: editarlos a mano rompería el límite
+    readonly_fields = ('usos',)
+    list_display = ('codigo', 'tipo_descuento', 'valor_descuento', 'monto_minimo', 'automatica', 'usos',
+                    'usos_maximos', 'is_active')

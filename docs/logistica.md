@@ -66,12 +66,19 @@ está activa y cuánto cuesta vive en `domain/logistica.py` (`EntregasDeLaTienda
 
 ### `POST /api/ventas/logistica/cotizar/`
 
-Solicitud (`destino` es el nombre de la comuna; peso en kg, medidas en cm, todos mayores a cero). Sin `proveedor`
-cotizan todos los couriers activos; con él, solo ese:
+Solicitud: `destino` es el nombre de la comuna e `items`, los productos del carrito (hasta 100 líneas). Sin
+`proveedor` cotizan todos los couriers activos; con él, solo ese:
 
 ```json
-{"destino": "SANTIAGO", "peso": 1.5, "alto": 10, "ancho": 20, "largo": 30, "proveedor": "CHILEXPRESS"}
+{"destino": "SANTIAGO", "items": [{"producto_mongo_id": "6630...", "variante_sku": "POLERA-M", "cantidad": 2}], "proveedor": "CHILEXPRESS"}
 ```
+
+El paquete lo arma el servidor con el peso y las medidas de cada variante del catálogo (`paquete_de_envio` en
+`domain/logistica.py`): pesa la suma de los productos y es un cubo con su volumen total, de al menos el lado más
+largo de un producto y 10 cm. El origen es la comuna de la tienda (Configuración). Peso, medidas u origen enviados
+por el navegador se ignoran: así nadie puede declarar menos peso para pagar menos envío. Las comunas se comparan sin
+tildes ni mayúsculas (`clave_comuna`: 'Ñuñoa' es NUNOA); si la comuna de origen no está en la cobertura del
+courier, no se cotiza (`503`), en vez de cotizar desde otra comuna.
 
 Respuesta exitosa (`200`), una opción por courier que pudo cotizar:
 
@@ -81,8 +88,8 @@ Respuesta exitosa (`200`), una opción por courier que pudo cotizar:
 
 Errores, siempre con el cuerpo `{"error": "..."}`:
 
-- `400`: falta `destino`, medidas no numéricas o no positivas, comuna sin cobertura en todos los couriers, o la
-  tienda no tiene couriers activos.
+- `400`: falta `destino`, faltan los `items` o alguno no está disponible, comuna sin cobertura en todos los
+  couriers, o la tienda no tiene couriers activos.
 - `503`: ningún courier respondió con una tarifa válida (caído, sin servicios, tarifa negativa o no numérica).
   Nunca se convierte en costo cero. Un courier caído no tapa a los demás.
 
@@ -94,9 +101,10 @@ Las oficinas del courier (sin `proveedor`, del primero activo que tiene oficinas
 ### Checkout (`POST /api/ventas/checkout/`)
 
 Recibe `proveedor_logistico` (el código de un courier activo, `RETIRO_LOCAL` o `ENTREGA_COORDINADA`) y, para
-despacho, `paquete` con `peso_kg`, `alto_cm`, `ancho_cm`, `largo_cm` más la `comuna` en `direccion_envio_snapshot`.
-El backend cotiza con ese courier y recalcula el total, ignorando `costo_envio`/`total_final` enviados por el
-cliente. Un courier que no está activo se rechaza con `400`. `RETIRO_LOCAL` cuesta cero y se rechaza con `400` si
+despacho, la `comuna` en `direccion_envio_snapshot` (solo `calle`, `numero`, `dpto_casa`, `comuna`, `ciudad`,
+`region` y `codigo_sucursal`, como texto y con largo máximo). El backend arma el paquete con el catálogo, como en la
+cotización, lo guarda para la orden de transporte, cotiza con ese courier y recalcula el total, ignorando
+`paquete`, `costo_envio` y `total_final` enviados por el cliente. Un courier que no está activo se rechaza con `400`. `RETIRO_LOCAL` cuesta cero y se rechaza con `400` si
 `retiro_en_local_activo` está desactivado. `ENTREGA_COORDINADA` cobra `costo_entrega_coordinada`, no se cotiza ni
 lleva paquete, y se rechaza con `400` si está desactivada; el envío gratis sobre un monto también la cubre. Si el
 courier falla, responde `503` y no se crea la orden.

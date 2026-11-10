@@ -12,11 +12,13 @@ function Header({ vistaPrevia }) {
   const publicada = useConfiguracionTienda();
   const configuracion = vistaPrevia ? { ...publicada, ...vistaPrevia } : publicada;
   const nombreTienda = configuracion?.nombre_tienda || "Tienda";
+  // RN-01: si el admin lo llevó al pie de página, se muestra allá, más grande (footer.jsx)
+  const universidadEnHeader = configuracion?.ubicacion_logo_universidad !== "FOOTER";
 
   return (
     <header className="header">
       <div className="header-content">
-        {/* RN-01: el logo de la Universidad va siempre junto al del negocio; no hay opción para ocultarlo */}
+        {/* RN-01: el logo de la Universidad va aquí junto al del negocio, o en el footer si el admin lo eligió; nunca se oculta */}
         <div className="header-marcas">
           <Link to="/" className="header-marca-negocio" aria-label={`${nombreTienda}, ir al inicio`}>
             {configuracion?.logo ? (
@@ -25,12 +27,16 @@ function Header({ vistaPrevia }) {
               <span className="header-nombre-tienda">{nombreTienda}</span>
             )}
           </Link>
-          <span className="header-separador" aria-hidden="true" />
-          <img
-            className="header-logo-universidad"
-            src={logoUniversidad}
-            alt="Logo de la Universidad Autónoma"
-          />
+          {universidadEnHeader && (
+            <>
+              <span className="header-separador" aria-hidden="true" />
+              <img
+                className="header-logo-universidad"
+                src={logoUniversidad}
+                alt="Logo de la Universidad Autónoma"
+              />
+            </>
+          )}
         </div>
 
         <nav className="header-nav" aria-label="Navegación de la tienda">

@@ -100,11 +100,25 @@ class IdentidadTiendaTests(APITestCase):
         self.assertEqual({campo: publica[campo] for campo in datos}, datos)
 
     def test_los_textos_largos_de_la_landing_tienen_un_maximo(self):
-        for campo, maximo in (('texto_landing', 1000), ('nosotros_texto', 2000)):
+        for campo, maximo in (('texto_bienvenida', 300), ('texto_landing', 1000), ('nosotros_texto', 2000)):
             with self.subTest(campo=campo):
                 response = self.client.patch(self.url, {campo: 'x' * (maximo + 1)}, format='json')
                 self.assertEqual(response.status_code, 400)
                 self.assertIn(campo, response.data)
+
+    def test_rn01_el_admin_elige_donde_va_el_logo_de_la_universidad_pero_no_puede_ocultarlo(self):
+        # Por defecto en el header, junto al del negocio
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['ubicacion_logo_universidad'], 'HEADER')
+
+        self.assertEqual(self.client.patch(self.url, {'ubicacion_logo_universidad': 'FOOTER'}, format='json').status_code, 200)
+        self.assertEqual(self.client.get(reverse('configuracion-global')).data['ubicacion_logo_universidad'], 'FOOTER')
+
+        # Solo esas dos ubicaciones: ningún valor lo oculta
+        for valor in ('OCULTO', 'NINGUNO', '', None):
+            with self.subTest(valor=valor):
+                response = self.client.patch(self.url, {'ubicacion_logo_universidad': valor}, format='json')
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('ubicacion_logo_universidad', response.data)
 
     def test_el_admin_elige_la_tipografia_y_la_tienda_la_recibe(self):
         self.assertEqual(self.client.get(reverse('configuracion-global')).data['tipografia_seleccionada'], 1)

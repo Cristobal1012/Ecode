@@ -674,6 +674,7 @@ export default function FormularioProducto({
           <input
             type="text"
             id={`${idFormulario}-nombre`}
+            maxLength={255}
             name="nombre"
             value={producto.nombre}
             onChange={handleChangeProducto}
@@ -759,6 +760,7 @@ export default function FormularioProducto({
                 <input
                   type="text"
                   id={`${idFormulario}-categoria`}
+                  maxLength={100}
                   name="categoria"
                   value={producto.categoria}
                   onChange={handleChangeProducto}
@@ -1125,6 +1127,7 @@ export default function FormularioProducto({
                 <input
                   type="text"
                   id={`${idFormulario}-variante-${varIndex}-sku`}
+                  maxLength={64}
                   value={variante.sku}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1153,6 +1156,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-precio`}
+                  min={1} step={1}
                   value={variante.precio}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1183,6 +1187,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-precio_oferta`}
+                  min={1} step={1}
                   value={variante.precio_oferta || ''}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1212,6 +1217,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-stock`}
+                  min={0} step={1}
                   value={variante.stock}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1274,6 +1280,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-peso_kg`}
+                  min={0.01} step={0.01}
                   value={variante.peso_kg}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1309,6 +1316,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-alto_cm`}
+                  min={1} step={1}
                   value={variante.alto_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1344,6 +1352,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-ancho_cm`}
+                  min={1} step={1}
                   value={variante.ancho_cm}
                   onChange={(e) =>
                     actualizarVariante(
@@ -1379,6 +1388,7 @@ export default function FormularioProducto({
                 <input
                   type="number"
                   id={`${idFormulario}-variante-${varIndex}-largo_cm`}
+                  min={1} step={1}
                   value={variante.largo_cm}
                   onChange={(e) =>
                     actualizarVariante(

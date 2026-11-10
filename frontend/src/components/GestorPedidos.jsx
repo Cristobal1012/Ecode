@@ -38,17 +38,28 @@ const PLURAL_ESTADO = {
   CANCELADO: 'cancelados'
 };
 
-const mensajeVacio = ({ estado, revision, documento }) => {
+const mensajeVacio = ({ estado, revision, documento, ordenTransporte }) => {
   if (revision) return 'No hay pedidos que requieran revisión.';
+  if (ordenTransporte) return 'No hay órdenes de transporte con error.';
   if (documento) return 'No hay boletas, facturas ni notas de crédito pendientes.';
   if (estado) return `No hay pedidos ${PLURAL_ESTADO[estado]} en este momento.`;
   return 'No hay pedidos registrados en la tienda.';
 };
 
-export default function GestorPedidos() {
+// `filtroInicial`: con qué filtro se abre (ej. desde un "Ver" del dashboard): { estado, revision, documento,
+// ordenTransporte }
+export default function GestorPedidos({ filtroInicial = {} }) {
   // `estado` vacío muestra todos. `version` vuelve a pedir la misma página después de una acción
   // `documento`: solo los que tienen boleta, factura o nota de crédito por emitir
-  const [consulta, setConsulta] = useState({ estado: '', revision: false, documento: false, pagina: 1, version: 0 });
+  // `ordenTransporte`: solo los que esperan su orden de transporte y fallaron al generarla
+  const [consulta, setConsulta] = useState(() => ({
+    estado: filtroInicial.estado || '',
+    revision: Boolean(filtroInicial.revision),
+    documento: Boolean(filtroInicial.documento),
+    ordenTransporte: Boolean(filtroInicial.ordenTransporte),
+    pagina: 1,
+    version: 0,
+  }));
   // A qué consulta corresponde lo cargado: si no coincide con la pedida, aún está cargando
   const [cargada, setCargada] = useState({ consulta: null, pedidos: [], total: 0 });
   // { tipo: 'error' | 'exito', texto }
@@ -62,6 +73,7 @@ export default function GestorPedidos() {
     if (consulta.estado) params.estado = consulta.estado;
     if (consulta.revision) params.requiere_revision = 'true';
     if (consulta.documento) params.documento = 'pendiente';
+    if (consulta.ordenTransporte) params.orden_transporte = 'error';
     clienteAxios.get('ventas/admin/ordenes/', { params })
       .then(({ data }) => {
         if (vigente) setCargada({ consulta, pedidos: data.results, total: data.count });
@@ -92,6 +104,7 @@ export default function GestorPedidos() {
   const recargando = cargada.consulta !== consulta;
   const cargando = primeraCarga || cargada.consulta.estado !== consulta.estado
     || cargada.consulta.revision !== consulta.revision || cargada.consulta.documento !== consulta.documento
+    || cargada.consulta.ordenTransporte !== consulta.ordenTransporte
     || cargada.consulta.pagina !== consulta.pagina;
   const ocupado = (pedido) => recargando || enCurso === pedido.id;
   const paginas = Math.ceil(cargada.total / POR_PAGINA);
@@ -283,6 +296,15 @@ export default function GestorPedidos() {
             onChange={(e) => filtrar({ documento: e.target.checked })}
           />
           Solo con boleta o factura pendiente
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={consulta.ordenTransporte}
+            onChange={(e) => filtrar({ ordenTransporte: e.target.checked })}
+          />
+          Con error en la orden de transporte
         </label>
 
         {!cargando && (

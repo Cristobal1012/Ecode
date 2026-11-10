@@ -174,7 +174,10 @@ export default function GestorMediosPago() {
                   ) : (
                     <input
                       id={id}
-                      type="text"
+                      type={campo.formato === 'correo' ? 'email' : 'text'}
+                      // Teclado numérico para la cuenta en el celular; el servidor valida el formato
+                      inputMode={campo.formato === 'numero_cuenta' ? 'numeric' : undefined}
+                      maxLength={500}
                       value={valor}
                       autoComplete="off"
                       spellCheck={false}

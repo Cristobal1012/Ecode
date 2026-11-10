@@ -95,8 +95,10 @@ function SeguimientoContenido() {
                             id="seguimiento-orden"
                             type="text"
                             inputMode="numeric"
+                            maxLength={12}
                             value={numeroOrden}
-                            onChange={(e) => setNumeroOrden(e.target.value)}
+                            // Solo los dígitos: si pega "#148" o "Pedido 148", queda 148
+                            onChange={(e) => setNumeroOrden(e.target.value.replace(/\D/g, ''))}
                             required
                             {...camposConError}
                         />

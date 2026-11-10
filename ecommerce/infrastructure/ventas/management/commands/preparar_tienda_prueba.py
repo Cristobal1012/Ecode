@@ -19,9 +19,10 @@ MEDIOS_DE_PRUEBA = {
     CodigoMedioPago.TRANSBANK: {'ambiente': AMBIENTE_INTEGRACION},
     # Datos claramente ficticios, para probar el flujo de la transferencia sin que nadie pague de verdad
     CodigoMedioPago.TRANSFERENCIA: {
-        'banco': 'Banco de prueba',
+        # El número tiene que ser de cuenta (domain/medios_pago.py): el aviso va en el banco, que también se ve
+        'banco': 'Banco de PRUEBA, no transferir',
         'tipo_cuenta': 'Cuenta corriente',
-        'numero_cuenta': 'Cuenta de PRUEBA, no transferir',
+        'numero_cuenta': '00000000',
         'rut_titular': '11.111.111-1',
         'nombre_titular': 'Tienda de prueba',
         'email': 'comprobantes@example.com',

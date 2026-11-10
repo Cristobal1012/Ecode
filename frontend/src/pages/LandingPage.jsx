@@ -18,7 +18,7 @@ const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados
 
 // RF-01.1: la raíz del dominio muestra la landing (nunca el catálogo directo). El admin la edita en su mismo
 // lugar (modo edición); los productos salen de la vitrina (más vendidos y últimos agregados).
-function LandingPage({ onNombreTiendaTemporal }) {
+function LandingPage({ onMarcaTemporal }) {
   const configuracion = useConfiguracionTienda();
   const edicion = useEdicionLanding(configuracion);
   // null mientras carga: así se sabe cuándo ya están dibujadas las secciones de productos
@@ -29,6 +29,9 @@ function LandingPage({ onNombreTiendaTemporal }) {
   const [parametros, setParametros] = useSearchParams();
   // El rol solo decide si se ofrece el botón; quien de verdad autoriza los cambios es el backend
   const esAdmin = localStorage.getItem("rol") === "ADMIN";
+  // Si la configuración no cargó (ej. el servidor responde con error), llega {}: el editor partiría vacío y
+  // guardarlo pisaría los textos reales de la tienda. La configuración real siempre trae nombre_tienda
+  const configuracionCargada = Boolean(configuracion) && "nombre_tienda" in configuracion;
 
   useEffect(() => {
     clienteAxios.get("catalogo/vitrina/")
@@ -51,7 +54,7 @@ function LandingPage({ onNombreTiendaTemporal }) {
   const [abrirEdicion, setAbrirEdicion] = useState(() => parametros.get("editar") === "1");
   if (abrirEdicion && configuracion) {
     setAbrirEdicion(false);
-    if (esAdmin) edicion.iniciar();
+    if (esAdmin && configuracionCargada) edicion.iniciar();
   }
 
   // Se quita ?editar=1 de la URL, para que recargar la página no vuelva a abrir el modo edición
@@ -82,19 +85,23 @@ function LandingPage({ onNombreTiendaTemporal }) {
   }, [edicion.hayCambios]);
 
   const vista = edicion.vista;
+  // El footer está fuera de la landing (App.jsx): en modo edición recibe el borrador del nombre y de los logos
   useEffect(() => {
-    onNombreTiendaTemporal?.(
-      edicion.editando ? (vista?.nombre_tienda ?? '') : null
-    );
-  }, [edicion.editando, vista?.nombre_tienda, onNombreTiendaTemporal]);
+    onMarcaTemporal?.(edicion.editando ? {
+      nombre_tienda: vista?.nombre_tienda ?? '', logo: vista?.logo,
+      ubicacion_logo_universidad: vista?.ubicacion_logo_universidad,
+    } : null);
+  }, [edicion.editando, vista?.nombre_tienda, vista?.logo, vista?.ubicacion_logo_universidad, onMarcaTemporal]);
 
   useEffect(() => {
-    return () => onNombreTiendaTemporal?.(null);
-  }, [onNombreTiendaTemporal]);
+    return () => onMarcaTemporal?.(null);
+  }, [onMarcaTemporal]);
 
   return (
     <>
-      <Header vistaPrevia={edicion.editando ? { nombre_tienda: vista.nombre_tienda, logo: vista.logo } : undefined} />
+      <Header vistaPrevia={edicion.editando ? {
+        nombre_tienda: vista.nombre_tienda, logo: vista.logo, ubicacion_logo_universidad: vista.ubicacion_logo_universidad,
+      } : undefined} />
       <main tabIndex={-1} id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
         {configuracion ? (
           <>
@@ -124,10 +131,15 @@ function LandingPage({ onNombreTiendaTemporal }) {
 
       {esAdmin && configuracion && (edicion.editando ? (
         <BarraEdicion edicion={edicion} />
-      ) : (
+      ) : configuracionCargada ? (
         <button type="button" className="boton boton-primario boton-editar-pagina" onClick={edicion.iniciar}>
           Editar página
         </button>
+      ) : (
+        <p role="alert" className="aviso-edicion-no-disponible">
+          No se pudo cargar la configuración de la tienda, así que por ahora no se puede editar la página.
+          Recarga en un momento; si sigue igual, revisa que el servidor esté funcionando.
+        </p>
       ))}
     </>
   );

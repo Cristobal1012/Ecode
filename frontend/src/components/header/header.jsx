@@ -14,8 +14,10 @@ function Header({ vistaPrevia, edicion }) {
   const publicada = useConfiguracionTienda();
   const configuracion = vistaPrevia ? { ...publicada, ...vistaPrevia } : publicada;
   const nombreTienda = configuracion?.nombre_tienda || "Tienda";
-  // RN-01: si el admin lo llevó al pie de página, se muestra allá, más grande (footer.jsx)
-  const universidadEnHeader = configuracion?.ubicacion_logo_universidad !== "FOOTER";
+  // RN-01: si el admin lo llevó al pie de página, se muestra allá, más grande (footer.jsx). Mientras la
+  // configuración carga (null) todavía no se sabe dónde va: no se muestra, para que no aparezca un instante arriba
+  // en una tienda que lo tiene abajo. Si la carga falla llega {} y queda en el header, el lugar por defecto
+  const universidadEnHeader = configuracion !== null && configuracion?.ubicacion_logo_universidad !== "FOOTER";
 
   return (
     <header className={edicion?.editando ? "header header--editando" : "header"}>

@@ -23,9 +23,8 @@ class ConsultasInicialesPostgresTests(APITestCase):
         repo.guardar(MedioPagoConfigurado(CodigoMedioPago.TRANSBANK, True, {'ambiente': 'INTEGRACION'}))
         repo.guardar(MedioPagoConfigurado(CodigoMedioPago.MERCADO_PAGO, True,
                                         {'access_token': 'qa149-ficticio', 'webhook_secret': 'qa149-firma'}))
-        # Configuración, medios de pago en lote y disponibilidad de Chilexpress.
-        # La tercera lectura corresponde al campo público añadido en sprint-6.
-        with self.assertNumQueries(3):
+        # Configuración, medios de pago en lote, disponibilidad de Chilexpress y carrusel de banner (SCRUM-194).
+        with self.assertNumQueries(4):
             response = self.client.get(reverse('configuracion-global'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['pasarelas_activas'], ['TRANSBANK', 'MERCADO_PAGO'])
@@ -58,7 +57,7 @@ class ConsultasInicialesPostgresTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.client.patch(reverse('configuracion-negocio'), {'nombre_tienda': 'Editada QA149'}, format='json')
         self.client.force_authenticate(None)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(4):
             response = self.client.get(reverse('configuracion-global'))
         self.assertEqual(response.data['nombre_tienda'], 'Editada QA149')
         self.assertEqual(response.data['pasarelas_activas'], ['TRANSBANK'])

@@ -397,4 +397,77 @@ describe('DetalleProducto', () => {
     expect(guardarMock).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
+
+  describe('Colección privada (SCRUM-197)', () => {
+    it('muestra "Colección privada", no muestra "Sin stock" ni el selector de variantes', async () => {
+      getMock.mockResolvedValueOnce({
+        data: {
+          id: 'obra-privada-1',
+          nombre: 'Escultura Singular',
+          categoria: 'Escultura',
+          descripcion: 'Pieza exclusiva.',
+          coleccion_privada: true,
+          version_a_la_venta: null,
+          version_a_la_venta_disponible: false,
+          variantes: [{ sku: 'ESC-01', precio: 800000, stock: 0 }],
+        },
+      });
+
+      renderDetalle();
+
+      await screen.findByRole('heading', { name: 'Escultura Singular' });
+
+      expect(screen.getByText('Colección privada')).toBeInTheDocument();
+      expect(screen.queryByText('Sin stock')).not.toBeInTheDocument();
+      expect(screen.queryByText('Agotado')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('selector-variantes')).not.toBeInTheDocument();
+    });
+
+    it('muestra enlace a la versión a la venta cuando está disponible', async () => {
+      getMock.mockResolvedValueOnce({
+        data: {
+          id: 'obra-privada-1',
+          nombre: 'Escultura Singular',
+          categoria: 'Escultura',
+          descripcion: 'Pieza exclusiva.',
+          coleccion_privada: true,
+          version_a_la_venta: 'replica-print-1',
+          version_a_la_venta_disponible: true,
+          texto_boton_version: 'Comprar réplica 3D',
+          variantes: [{ sku: 'ESC-01', precio: 800000, stock: 0 }],
+        },
+      });
+
+      renderDetalle();
+
+      await screen.findByRole('heading', { name: 'Escultura Singular' });
+
+      const enlaceVersion = screen.getByRole('link', { name: 'Comprar réplica 3D' });
+      expect(enlaceVersion).toBeInTheDocument();
+      expect(enlaceVersion).toHaveAttribute('href', '/catalogo/producto/replica-print-1');
+    });
+
+    it('oculta el botón si la versión a la venta está despublicada o no disponible', async () => {
+      getMock.mockResolvedValueOnce({
+        data: {
+          id: 'obra-privada-1',
+          nombre: 'Escultura Singular',
+          categoria: 'Escultura',
+          descripcion: 'Pieza exclusiva.',
+          coleccion_privada: true,
+          version_a_la_venta: 'replica-print-1',
+          version_a_la_venta_disponible: false,
+          texto_boton_version: 'Comprar réplica 3D',
+          variantes: [{ sku: 'ESC-01', precio: 800000, stock: 0 }],
+        },
+      });
+
+      renderDetalle();
+
+      await screen.findByRole('heading', { name: 'Escultura Singular' });
+
+      expect(screen.queryByRole('link', { name: 'Comprar réplica 3D' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('selector-variantes')).not.toBeInTheDocument();
+    });
+  });
 });

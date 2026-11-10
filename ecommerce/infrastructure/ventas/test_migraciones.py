@@ -68,3 +68,36 @@ class MigracionPlazoPagoTests(TransactionTestCase):
         self.assertEqual(transferencia.fecha_recordatorio_pago, transferencia.fecha_creacion + timedelta(hours=24))
         webpay = OrdenCompra.objects.get(id=ids['TRANSBANK'])
         self.assertIsNone(webpay.fecha_limite_pago)
+
+
+class MigracionTextosFotoBannerTests(TransactionTestCase):
+    """0050 copia los textos de la portada a las fotos del carrusel que ya existían (SCRUM-194)."""
+
+    migrar = MigracionRevisionYStockTests.migrar
+    tearDown = MigracionRevisionYStockTests.tearDown
+
+    def test_las_fotos_existentes_toman_los_textos_de_la_portada(self):
+        apps = self.migrar([('ventas', '0049_publicacion_youtube_id')])
+        ConfiguracionGlobal = apps.get_model('ventas', 'ConfiguracionGlobal')
+        FotoBanner = apps.get_model('ventas', 'FotoBanner')
+        config = ConfiguracionGlobal.objects.create(
+            pk=1, nombre_tienda='Tienda', subtitulo_bienvenida='  Hecho a mano ', texto_bienvenida='Murales',
+            texto_landing='x' * 1200,
+        )
+        ids = [FotoBanner.objects.create(configuracion=config, imagen=f'negocio/banners/{i}.png', orden=i).id
+               for i in range(2)]
+
+        FotoBanner = self.migrar([('ventas', '0050_fotobanner_textos')]).get_model('ventas', 'FotoBanner')
+
+        for foto in FotoBanner.objects.filter(id__in=ids):
+            self.assertEqual((foto.antetitulo, foto.titulo, foto.destino), ('Hecho a mano', 'Murales', 'CATALOGO'))
+            self.assertEqual(foto.texto, 'x' * 1000)
+
+    def test_sin_titulo_en_la_portada_usa_el_titulo_por_defecto(self):
+        apps = self.migrar([('ventas', '0049_publicacion_youtube_id')])
+        config = apps.get_model('ventas', 'ConfiguracionGlobal').objects.create(pk=1, texto_bienvenida='   ')
+        foto = apps.get_model('ventas', 'FotoBanner').objects.create(configuracion=config, imagen='a.png')
+
+        FotoBanner = self.migrar([('ventas', '0050_fotobanner_textos')]).get_model('ventas', 'FotoBanner')
+
+        self.assertEqual(FotoBanner.objects.get(id=foto.id).titulo, 'Bienvenido a nuestra tienda')

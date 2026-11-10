@@ -4,6 +4,12 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from mongoengine import Document, EmbeddedDocument, fields
 
+from ecommerce.domain.catalogo import (
+    ColeccionPrivadaInvalida,
+    validar_obra_no_es_version_de_otra,
+    validar_version_a_la_venta,
+)
+
 class Variante(EmbeddedDocument):
     sku = fields.StringField(required=True, unique=True)
     precio = fields.DecimalField(required=True, precision=2)
@@ -56,6 +62,11 @@ class Producto(Document):
     publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
     
+    # Colección privada y enlace a versión disponible en print (SCRUM-197)
+    coleccion_privada = fields.BooleanField(default=False)
+    version_a_la_venta = fields.StringField(null=True, blank=True)
+    texto_boton_version = fields.StringField(default='Disponible en print', max_length=100)
+
     # Campo calculado para ordenamiento O(1) de precio vigente (SCRUM-179 / E01)
     precio_minimo_vigente = fields.DecimalField(null=True, precision=2)
 
@@ -90,6 +101,34 @@ class Producto(Document):
         super().clean()
         self.actualizar_precio_minimo_vigente()
 
+        # Validaciones de Colección privada en el dominio (SCRUM-197)
+        if self.version_a_la_venta:
+            version_id = str(self.version_a_la_venta).strip()
+            try:
+                target = Producto.objects(id=version_id).first()
+            except Exception:
+                raise MongoValidationError('El producto seleccionado como versión a la venta no es válido.')
+            try:
+                validar_version_a_la_venta(
+                    producto_id=str(self.id) if self.id else None,
+                    version_id=version_id,
+                    target_existe=bool(target),
+                    target_es_coleccion_privada=bool(getattr(target, 'coleccion_privada', False)) if target else False,
+                )
+            except ColeccionPrivadaInvalida as error:
+                raise MongoValidationError(str(error))
+
+        if self.coleccion_privada and self.id:
+            referenciador = Producto.objects(version_a_la_venta=str(self.id)).first()
+            try:
+                validar_obra_no_es_version_de_otra(
+                    producto_id=str(self.id),
+                    coleccion_privada=self.coleccion_privada,
+                    nombre_referenciador=referenciador.nombre if referenciador else None,
+                )
+            except ColeccionPrivadaInvalida as error:
+                raise MongoValidationError(str(error))
+
     def save(self, *args, **kwargs):
         self.actualizar_precio_minimo_vigente()
         return super().save(*args, **kwargs)
@@ -103,6 +142,7 @@ class Producto(Document):
 
         Un único update filtra por stock suficiente, así dos compras simultáneas de la última
         unidad producen una sola venta. Devuelve False si no hay stock o no existe el SKU.
+        Un producto de colección privada nunca descuenta stock (rechazado).
         """
         cantidad = int(cantidad)
         if cantidad < 1:
@@ -113,6 +153,7 @@ class Producto(Document):
             return False
         resultado = cls._get_collection().update_one(
             {'_id': id_producto,
+             'coleccion_privada': {'$ne': True},
              'variantes': {'$elemMatch': {'sku': str(sku), 'stock': {'$gte': cantidad}}}},
             {'$inc': {'variantes.$.stock': -cantidad}},
         )

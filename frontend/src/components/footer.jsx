@@ -4,7 +4,16 @@ import clienteAxios from './auth/axiosConfig';
 import { isAdminRoute } from '../hooks/useCookieConsent';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import logoUniversidad from './header/logoU.png';
+import { resolverMenu } from '../utils/menuPrincipal';
 import './footer.css';
+
+// Redes sociales del pie: solo se muestran las que el admin cargó (Configuración > Contacto y Redes)
+const REDES_SOCIALES = [
+  { campo: 'facebook_url', nombre: 'Facebook', icono: 'M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.23.19 2.23.19v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99A10 10 0 0 0 22 12z' },
+  { campo: 'x_url', nombre: 'X', icono: 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932 6.064-6.933zm-1.29 19.49h2.039L6.486 3.24H4.298z' },
+  { campo: 'youtube_url', nombre: 'YouTube', icono: 'M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.2 3.6z' },
+  { campo: 'tiktok_url', nombre: 'TikTok', icono: 'M16.7 0h-4.1v16.5a3.5 3.5 0 1 1-3-3.5V8.8a7.7 7.7 0 1 0 7.1 7.7V8.1a10 10 0 0 0 5.8 1.9V5.9A5.9 5.9 0 0 1 16.7 0z' },
+];
 
 // Dirección del local en dos líneas; solo si el admin eligió mostrarla (la API no la entrega si no se usa)
 const lineasDireccion = (configuracion) => {
@@ -30,7 +39,9 @@ export const Footer = ({ onOpenCookiePreferences, marcaTemporal = null }) => {
   const correo = configuracion?.correo_contacto;
   const horario = configuracion?.horario_atencion?.trim();
   const instagram = configuracion?.instagram_usuario;
-  const hayContacto = direccion.length > 0 || correo || horario || instagram;
+  const telefono = configuracion?.telefono_comercial;
+  const redesSociales = REDES_SOCIALES.filter((red) => configuracion?.[red.campo]);
+  const hayContacto = Boolean(direccion.length > 0 || correo || horario || instagram || telefono || redesSociales.length > 0);
   const [paginas, setPaginas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [errorConexion, setErrorConexion] = useState(false);
@@ -69,11 +80,11 @@ export const Footer = ({ onOpenCookiePreferences, marcaTemporal = null }) => {
         <nav className="footer-columna" aria-labelledby="footer-titulo-tienda">
           <h2 id="footer-titulo-tienda" className="footer-titulo">Tienda</h2>
           <ul>
-            <li><Link to="/">Inicio</Link></li>
-            <li><Link to="/catalogo">Catálogo</Link></li>
-            {configuracion?.blog_activo && <li><Link to="/blog">{configuracion.blog_nombre || 'Nosotros'}</Link></li>}
+            {/* El mismo orden y los mismos nombres del menú; el seguimiento va siempre al final */}
+            {resolverMenu(configuracion).filter((enlace) => enlace.visible).map((enlace) => (
+              <li key={enlace.id}><Link to={enlace.to}>{enlace.nombre}</Link></li>
+            ))}
             <li><Link to="/seguimiento">Seguimiento de pedido</Link></li>
-            {configuracion?.cotizaciones_activas && <li><Link to="/cotizar">Cotizar un encargo</Link></li>}
           </ul>
         </nav>
 
@@ -137,6 +148,28 @@ export const Footer = ({ onOpenCookiePreferences, marcaTemporal = null }) => {
                   </a>
                 </p>
               )}
+              {/* Teléfono comercial: permite llamar directamente desde dispositivos compatibles */}
+              {telefono && (
+                <p className="footer-dato">
+                  <a href={`tel:${telefono}`} aria-label={`Llamar a ${nombreTienda} al ${telefono}`}>
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.19 18a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 1.09 3.18 2 2 0 0 1 3.08 1h3a2 2 0 0 1 2 1.72c.12.96.35 1.9.68 2.81a2 2 0 0 1-.45 2.11L7.04 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.33 1.85.56 2.81.68A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                    {telefono}
+                  </a>
+                </p>
+              )}
+              {redesSociales.map((red) => (
+                <p className="footer-dato" key={red.campo}>
+                  <a href={configuracion[red.campo]} target="_blank" rel="noopener noreferrer"
+                    aria-label={`${red.nombre} de ${nombreTienda} (se abre en una pestaña nueva)`}>
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d={red.icono} />
+                    </svg>
+                    {red.nombre}
+                  </a>
+                </p>
+              ))}
             </address>
           </section>
         )}

@@ -211,14 +211,6 @@ class ProductoListCreateView(CatalogoAPIView):
             # El público solo ve lo publicado; el admin también ve los borradores (inventario)
             productos = productos.filter(publicado=True)
 
-        # Si se solicita la lista completa sin paginar (ej. TablaInventario o FormularioProducto)
-        sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
-        if sin_paginar:
-            prods = list(productos)
-            versiones_publicadas = obtener_versiones_publicadas(prods)
-            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
-            return Response(serializer.data)
-
         # 1. Filtro por categoría en servidor (SCRUM-179, RF-01.3)
         categoria = request.query_params.get('categoria', '').strip()
         if categoria:
@@ -259,6 +251,14 @@ class ProductoListCreateView(CatalogoAPIView):
                 productos = productos.filter(**{f"atributos_globales__{nombre_atributo}": val_str})
             else:
                 productos = productos.filter(**{f"atributos_globales__{nombre_atributo}__in": valores_posibles})
+
+        # La lista completa conserva su formato y orden, pero respeta los filtros.
+        sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
+        if sin_paginar:
+            prods = list(productos)
+            versiones_publicadas = obtener_versiones_publicadas(prods)
+            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
+            return Response(serializer.data)
 
         # 3. Paginación y orden en servidor (SCRUM-179)
         config = ConfiguracionGlobal.objects.filter(pk=1).values('orden_catalogo', 'orden_categorias').first() or {}

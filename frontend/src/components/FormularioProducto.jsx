@@ -852,7 +852,7 @@ export default function FormularioProducto({
           </label>
           <div style={{ marginTop: '5px' }}>
             <CreatableSelect
-              id={`${idFormulario}-colecciones`}
+              inputId={`${idFormulario}-colecciones`}
               isMulti
               isClearable
               placeholder="Ej: Cyber, Navidad..."
@@ -862,10 +862,10 @@ export default function FormularioProducto({
               noOptionsMessage={() => "Escribe para crear una nueva colección"}
               formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
               styles={{
-                control: (base) => ({ ...base, borderColor: '#ccc' }),
+                control: (base) => ({ ...base, borderColor: 'var(--color-border)' }),
               }}
             />
-            <small style={{ color: '#666', display: 'block', marginTop: '4px' }}>
+            <small style={{ color: 'var(--color-muted)', display: 'block', marginTop: '4px' }}>
               Agrupa productos en campañas sin cambiar su categoría principal.
             </small>
           </div>
@@ -1238,8 +1238,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
                   required
                 />
               </div>
@@ -1269,8 +1267,7 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
+                  required
                 />
               </div>
 
@@ -1299,7 +1296,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
                   required
                 />
               </div>
@@ -1366,8 +1362,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="0.1"
-                  step="0.1"
                   required
                 />
               </div>
@@ -1402,8 +1396,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1438,8 +1430,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1474,8 +1464,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>

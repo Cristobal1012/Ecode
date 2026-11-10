@@ -47,7 +47,7 @@ function mostrarValor(valor) {
 }
 
 // Identifica una consulta al servidor: si la cargada no es la pedida, el catálogo aún está cargando
-const claveConsulta = (pagina, categoria, filtros, orden) => JSON.stringify([pagina, categoria, filtros, orden]);
+const claveConsulta = (pagina, categoria, coleccion, filtros, orden) => JSON.stringify([pagina, categoria, coleccion, filtros, orden]);
 
 function calcularRangoPaginacion(paginaActual, total) {
   if (total <= 7) {
@@ -236,7 +236,7 @@ export default function Catalogo() {
   );
 
   const esLista = layoutCatalogo === 'LISTA';
-  console.log("Filtros que llegan del backend:", filtrosServidor);
+  
 
   return (
     <div className="catalogo-page">
@@ -262,25 +262,25 @@ export default function Catalogo() {
               </select>
             </div>
 
-            {/* BLOQUE DE COLECCIÓN */}
-            <div className="catalogo__campo">
-              <label htmlFor="coleccion">Colección</label>
-              <select 
-                id="coleccion" 
-                value={coleccionSeleccionada} 
-                onChange={cambiarColeccion}
-              >
-                <option value="">Cualquier colección</option>
-                
-                {/* Iteramos sobre las colecciones que envía el backend. 
-                    Si el backend las manda en filtrosServidor, usamos eso. */}
-                {(filtrosServidor?.colecciones || []).map((coleccion) => (
-                  <option key={coleccion} value={coleccion}>
-                    {coleccion.charAt(0).toUpperCase() + coleccion.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {(filtrosServidor?.colecciones && filtrosServidor.colecciones.length > 0) && (
+              <div className="catalogo__campo" data-testid="selector-colecciones">
+                <label htmlFor="coleccion">Colección</label>
+                <select
+                  id="coleccion"
+                  value={coleccionSeleccionada}
+                  onChange={cambiarColeccion}
+                >
+                  <option value="">Cualquier colección</option>
+                  
+                  
+                  {filtrosServidor.colecciones.map((coleccion) => (
+                    <option key={coleccion} value={coleccion}>
+                      {coleccion}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
 
             {categoriaSeleccionada && atributosDinamicos.map((atributo) => (

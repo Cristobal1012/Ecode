@@ -27,6 +27,7 @@ from ecommerce.infrastructure.usuarios.tests.factories import create_user
 from .documents import ImagenPendienteBorrado, Producto, Variante
 from .image_adapters import RepositorioGaleriaMongo, servicio_galeria
 from .images import GaleriaUploadSerializer, es_imagen_gestionada
+from .permissions import LecturaPublicaEscrituraAdmin
 from .serializers import ProductoSerializer
 from .views import ProductoListCreateView
 
@@ -782,10 +783,25 @@ class ColeccionesBackendTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         Producto._get_collection().delete_many({})
-        ProductoListCreateView.permission_classes = []
-        self.admin = create_user(is_staff=True, is_superuser=True)
+        self.comprobar_permisos_originales()
+        self.addCleanup(self.comprobar_permisos_originales)
+        self.admin = create_user(rol='ADMIN')
         refresh = RefreshToken.for_user(self.admin)
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def comprobar_permisos_originales(self):
+        self.assertEqual(ProductoListCreateView.permission_classes, [LecturaPublicaEscrituraAdmin])
+
+    def test_comprador_no_puede_crear_productos(self):
+        comprador = create_user('colecciones-comprador@example.test', rol='COMPRADOR')
+        refresh = RefreshToken.for_user(comprador)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        response = self.client.post('/api/catalogo/productos/', {
+            'nombre': 'Producto no autorizado', 'categoria': 'Electronica',
+            'colecciones': ['Cyber'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Producto.objects.count(), 0)
 
     def test_guardar_colecciones_normalizadas(self):
         """Verifica que se eliminen espacios extra y duplicados case-insensitive al guardar."""

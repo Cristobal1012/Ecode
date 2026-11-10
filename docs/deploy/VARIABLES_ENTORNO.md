@@ -75,7 +75,7 @@ stack: no van en el archivo.
 | Variable | Descripción |
 | :--- | :--- |
 | `ARCHIVO_TIENDA` | Ruta del mismo archivo de la tienda: de ahí el backend lee todas sus variables. |
-| `DIRECCION_SITIO` | `:80` detrás de un proxy que termina el HTTPS, o el dominio de la tienda para que su Caddy obtenga el certificado. |
+| `DIRECCION_SITIO` | `:80` detrás de un proxy que termina el HTTPS, o el dominio de la tienda para que su Caddy obtenga el certificado. Con `"mitienda.cl, www.mitienda.cl"` también atiende `www`, que redirige al dominio principal. |
 | `IP_WEB`, `PUERTO_WEB`, `PUERTO_WEB_HTTPS` | Dónde publica la tienda. Detrás de un proxy: `127.0.0.1` y puertos distintos por tienda. Con dominio propio: `0.0.0.0`, `80` y `443`. |
 | `MONGO_USUARIO`, `MONGO_CLAVE`, `MONGO_BASE` | Usuario, contraseña y base de MongoDB del stack. La contraseña, solo con letras y números. |
 | `MONGO_CACHE_GB` | Caché de MongoDB en GB (por defecto `0.5`), para que varias tiendas compartan un servidor. |
@@ -85,6 +85,8 @@ stack: no van en el archivo.
 Las credenciales de los medios de pago (Transbank, Mercado Pago, transferencia) y de los couriers (Chilexpress) **no
 van en el `.env`**: el emprendedor las carga desde el panel (Configuración > Medios de pago y Configuración > Envíos
 por courier) y se guardan cifradas con `CLAVE_CIFRADO_CREDENCIALES`. Nunca se escriben en archivos de configuración.
+Lo mismo pasa con el ambiente de pruebas o de producción de cada uno y con los datos del contrato con Chilexpress
+(la TCC y el RUT de la empresa): ver "6. Envíos" en `README.md`.
 
 Las antiguas `TRANSBANK_ENVIRONMENT`, `TRANSBANK_WEBPAY_*` y `CHILEXPRESS_API_KEY_*` solo se leen una vez, al migrar,
 para conservar la configuración de instalaciones anteriores. En un despliegue nuevo no se usan.

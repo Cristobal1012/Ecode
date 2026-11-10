@@ -1152,8 +1152,19 @@ def courier_para_panel(courier):
         'ayuda': courier.ayuda,
         'configuradas': credenciales.configuradas,
         'faltantes': credenciales.faltantes,
-        'campos': [{'nombre': campo.nombre, 'etiqueta': campo.etiqueta, 'obligatorio': campo.obligatorio}
-                   for campo in credenciales.campos],
+        # Igual que los campos de un medio de pago (medio_pago_para_panel)
+        'campos': [{
+            'nombre': campo.nombre,
+            'etiqueta': campo.etiqueta,
+            # True: llave de API, llega enmascarada
+            'secreto': campo.secreto,
+            'opciones': list(campo.opciones),
+            'obligatorio': campo.obligatorio,
+            # Ej. ['ambiente', 'PRODUCCION']: obligatorio solo con ese valor
+            'obligatorio_si': list(campo.obligatorio_si) if campo.obligatorio_si else None,
+            # 'rut' o 'digitos' (lo valida el servidor); el panel elige el teclado
+            'formato': campo.formato,
+        } for campo in credenciales.campos],
         'datos': credenciales.visibles(),
     }
 

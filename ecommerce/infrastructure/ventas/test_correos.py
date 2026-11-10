@@ -83,6 +83,18 @@ class CorreoPedidoRecibidoTests(APITestCase):
         # El texto plano no se escapa: no es HTML
         self.assertIn('Camisa <b>azul</b>', correo.body)
 
+    def test_si_el_comprador_responde_le_llega_al_correo_de_contacto_de_la_tienda(self):
+        # Con Resend el remitente (ej. ventas@mitienda.cl) puede no tener buzón: la respuesta va al de contacto
+        ConfiguracionGlobal.objects.filter(id=1).update(correo_contacto=' hola@tienda.test ')
+        self.checkout()
+        correo, = mail.outbox
+        self.assertEqual(correo.reply_to, ['hola@tienda.test'])
+
+    def test_sin_correo_de_contacto_la_respuesta_va_al_remitente_como_antes(self):
+        self.checkout()
+        correo, = mail.outbox
+        self.assertEqual(correo.reply_to, [])
+
     def test_usuario_registrado_lo_recibe_en_su_correo(self):
         comprador = create_user('registrado@example.test')
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {Token.objects.create(user=comprador).key}')

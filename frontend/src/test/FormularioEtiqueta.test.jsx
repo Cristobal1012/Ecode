@@ -60,7 +60,7 @@ describe('Formulario de etiqueta del producto', () => {
       expect.objectContaining({ etiqueta: '', etiqueta_color: 'secondary' })));
   });
 
-  it('incluye la etiqueta al crear el producto', async () => {
+  it('crea el producto y actualiza su etiqueta sin volver a crearlo', async () => {
     const { container } = mostrar(null);
     await waitFor(() => expect(clienteAxios.get).toHaveBeenCalled());
     fireEvent.change(screen.getByRole('textbox', { name: 'Nombre del Producto' }), { target: { value: 'Nueva obra' } });
@@ -71,6 +71,13 @@ describe('Formulario de etiqueta del producto', () => {
     fireEvent.submit(container.querySelector('form'));
     await waitFor(() => expect(clienteAxios.post).toHaveBeenCalledWith('catalogo/productos/',
       expect.objectContaining({ etiqueta: 'Único', etiqueta_color: 'primary' })));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios del producto' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Etiqueta' }), { target: { value: 'Nueva edición' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Oscuro' }));
+    fireEvent.submit(container.querySelector('form'));
+    await waitFor(() => expect(clienteAxios.put).toHaveBeenCalledWith('catalogo/productos/producto-198/',
+      expect.objectContaining({ etiqueta: 'Nueva edición', etiqueta_color: 'text' })));
+    expect(clienteAxios.post).toHaveBeenCalledTimes(1);
   });
 
   it('muestra el rechazo del servidor sin perder el texto del formulario', async () => {

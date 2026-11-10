@@ -453,10 +453,11 @@ export default function FormularioProducto({
       // EDITAR PRODUCTO
       // ========================================================
 
-      if (productoAEditar) {
+      if (productoAEditar || productoGuardadoId) {
         idProducto =
-          productoAEditar.id ||
-          productoAEditar._id;
+          productoGuardadoId ||
+          productoAEditar?.id ||
+          productoAEditar?._id;
 
         if (!idProducto) {
           throw new Error(

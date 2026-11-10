@@ -8,6 +8,7 @@ import ListaResenas, { PromedioResenas } from '../components/ListaResenas';
 import useResenas from '../hooks/useResenas';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
+import EtiquetaProducto from '../components/EtiquetaProducto';
 import './DetalleProducto.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoDetalle } from '../components/carga/EsqueletosTienda';
@@ -264,6 +265,7 @@ export default function DetalleProducto() {
 
           {/* Información y compra */}
           <div className="detalle-info">
+            <EtiquetaProducto producto={producto} enFicha />
             {producto.categoria && <span className="antetitulo">{producto.categoria}</span>}
             <h1 className="detalle-nombre">{producto.nombre}</h1>
             {resenas?.total > 0 && (

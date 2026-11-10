@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
+import EtiquetaProducto from './EtiquetaProducto';
 
 // Layout de lista del catálogo (RF-01.4): foto a la izquierda y la descripción al costado. Toda la fila es un
 // enlace a la ficha del producto (igual que la tarjeta de grilla).
@@ -18,6 +19,7 @@ export default function ProductCardList({ producto }) {
       <div className="fila-producto fila-producto--con-version">
         <Link to={`/catalogo/producto/${id}`} className="fila-producto-cuerpo">
           <div className="fila-producto-imagen">
+            <EtiquetaProducto producto={producto} />
             {imagen && !imagenRota ? (
               <img src={imagen} alt="" loading="lazy" onError={() => setImagenRota(true)} />
             ) : (
@@ -60,11 +62,7 @@ export default function ProductCardList({ producto }) {
         ) : (
           <span className="tarjeta-producto-sin-imagen" aria-hidden="true">{producto.nombre?.charAt(0)}</span>
         )}
-        {!esColeccionPrivada && (agotado || tieneOferta) && (
-          <span className={`tarjeta-producto-etiqueta${agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
-            {agotado ? 'Agotado' : 'Oferta'}
-          </span>
-        )}
+        <EtiquetaProducto producto={producto} />
       </div>
 
       <div className="fila-producto-info">

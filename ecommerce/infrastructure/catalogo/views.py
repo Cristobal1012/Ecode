@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 
 from bson.errors import InvalidId
 from django.conf import settings
@@ -224,7 +225,7 @@ class ProductoListCreateView(CatalogoAPIView):
 
         coleccion = request.query_params.get('coleccion', '').strip()
         if coleccion:
-            productos = productos.filter(colecciones__iregex=f"^{coleccion}$")
+            productos = productos.filter(colecciones__iregex=f"^{re.escape(coleccion)}$")
 
         # 2. Filtros por atributos globales en servidor (SCRUM-179, RF-01.3 / E02)
         param_reservados = {'page', 'page_size', 'limite', 'categoria','coleccion', 'orden', 'todos', 'sin_paginar', 'format'}

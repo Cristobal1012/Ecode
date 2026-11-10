@@ -62,3 +62,31 @@ describe('consumo compartido de configuración', () => {
     expect(clienteAxios.get).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('presentación que elige el admin (fotos, ficha y logo)', () => {
+  const marcas = () => ({ ...document.documentElement.dataset });
+
+  it('marca <html> con las opciones activas y las quita al apagarlas', async () => {
+    clienteAxios.get.mockResolvedValueOnce({ data: { nombre_tienda: 'Taller', fotos_completas: true,
+      ficha_horizontal: true, logo_grande: true } })
+      .mockResolvedValueOnce({ data: { nombre_tienda: 'Taller', fotos_completas: false, ficha_horizontal: true,
+        logo_grande: false } });
+    const tienda = renderHook(() => useConfiguracionTienda());
+    await waitFor(() => expect(tienda.result.current?.nombre_tienda).toBe('Taller'));
+    expect(marcas()).toMatchObject({ fotos: 'completas', ficha: 'horizontal', logo: 'grande' });
+
+    await act(async () => { await recargarConfiguracion(); });
+    expect(marcas()).toEqual(expect.objectContaining({ ficha: 'horizontal' }));
+    expect(marcas()).not.toHaveProperty('fotos');
+    expect(marcas()).not.toHaveProperty('logo');
+  });
+
+  it('por defecto no marca nada: la tienda se ve como antes', async () => {
+    clienteAxios.get.mockResolvedValue({ data: { nombre_tienda: 'Otra tienda' } });
+    const tienda = renderHook(() => useConfiguracionTienda());
+    await waitFor(() => expect(tienda.result.current?.nombre_tienda).toBe('Otra tienda'));
+    expect(marcas()).not.toHaveProperty('fotos');
+    expect(marcas()).not.toHaveProperty('ficha');
+    expect(marcas()).not.toHaveProperty('logo');
+  });
+});

@@ -61,20 +61,21 @@ class ConfiguracionGlobalSerializerTests(APITestCase):
 
         self.assertEqual(
             set(data),
-            {'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
+            {'orden_catalogo', 'orden_categorias', 'menu_principal', 'google_client_id', 'texto_bienvenida', 'texto_boton_ingreso', 'banner_url',
              'tema_seleccionado', 'tipografia_seleccionada', 'layout_catalogo',
              'pasarelas_activas', 'google_analytics_id', 'meta_pixel_id', 'modo_autenticacion',
              'comuna_origen', 'region_origen', 'calle_origen',
              'numero_origen', 'dpto_casa_origen', 'retiro_en_local_activo',
              'entrega_coordinada_activa', 'costo_entrega_coordinada', 'instrucciones_entrega_coordinada',
              'couriers', 'cotizaciones_activas', 'blog_activo', 'blog_nombre', 'resenas_activas',
+             'vitrina_modo', 'destacados_titulo', 'destacados', 'fotos_completas', 'ficha_horizontal', 'logo_grande',
              'google_analytics_id', 'meta_pixel_id',
-             'nombre_tienda', 'logo', 'favicon', 'banner', 'subtitulo_bienvenida', 'texto_landing',
+             'nombre_tienda', 'logo', 'favicon', 'banner', 'banners', 'subtitulo_bienvenida', 'texto_landing',
              'nosotros_titulo', 'nosotros_texto', 'nosotros_imagen',
              'correo_contacto', 'horario_atencion', 'mostrar_direccion_pie', 'ubicacion_logo_universidad',
              'instagram_usuario',
-             *(f'instagram_foto_{numero}' for numero in range(1, 7))}
-        )
+             *(f'instagram_foto_{numero}' for numero in range(1, 7)), 'sobre_mi_activo','sobre_mi_nombre',
+            'telefono_comercial','facebook_url','x_url','youtube_url','tiktok_url',})
 
     def test_validates_url_and_button_length(self):
         serializer = ConfiguracionGlobalSerializer(data={
@@ -113,6 +114,9 @@ class ConfiguracionGlobalAPITests(APITestCase):
         self.assertEqual(url, '/api/configuracion/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {
+            'orden_catalogo': 'destacados',
+            'orden_categorias': [],
+            'menu_principal': {},
             'google_client_id': 'cliente-qa.apps.googleusercontent.com',
             'texto_bienvenida': 'Bienvenido a Tienda QA',
             'texto_boton_ingreso': 'Ver productos',
@@ -137,13 +141,23 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'cotizaciones_activas': False,
             'blog_activo': False,
             'blog_nombre': 'Nosotros',
+            'sobre_mi_activo': False,
+            'sobre_mi_nombre': 'Sobre mí',
             'resenas_activas': False,
+            'vitrina_modo': 'MAS_VENDIDOS',
+            'destacados_titulo': 'Destacados',
+            'destacados': [],
+            'fotos_completas': False,
+            'ficha_horizontal': False,
+            'logo_grande': False,
             'google_analytics_id': None,
             'meta_pixel_id': None,
             'nombre_tienda': 'Tienda QA',
             'logo': None,
             'favicon': None,
             'banner': None,
+            'banners': [{'id': 'legacy', 'imagen': 'https://example.com/hero.jpg', 'orden': 0, 'antetitulo': '',
+                         'titulo': 'Bienvenido a Tienda QA', 'texto': '', 'destino': 'CATALOGO'}],
             'subtitulo_bienvenida': '',
             'texto_landing': '',
             'nosotros_titulo': '',
@@ -152,6 +166,11 @@ class ConfiguracionGlobalAPITests(APITestCase):
             'correo_contacto': '',
             'horario_atencion': '',
             'mostrar_direccion_pie': False,
+            'telefono_comercial': '',
+            'facebook_url': '',
+            'x_url': '',
+            'youtube_url': '',
+            'tiktok_url': '',
             'ubicacion_logo_universidad': 'HEADER',
             'instagram_usuario': '',
             **{f'instagram_foto_{numero}': None for numero in range(1, 7)},

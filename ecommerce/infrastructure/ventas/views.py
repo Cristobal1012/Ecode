@@ -1,4 +1,4 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -8,9 +8,14 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
+from django.db import transaction
 from django.db.models import F, Q, Sum, Count
+from django.db import transaction
 from django.db.models.functions import TruncDate
-from .models import Promocion
+from .models import (
+    ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
+    PaginaLegal, Promocion, Publicacion, ProyectoDestacadoSobreMi, Resena,
+)
 from .serializers import PromocionSerializer
 from rest_framework.permissions import AllowAny
 
@@ -41,6 +46,7 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
+from ecommerce.application.banner import ActualizarBanners
 from ecommerce.application.blog import (
     SIN_CAMBIO, AgregarFotos, BlogDesactivado, EliminarPublicacion, FotoNoEncontrada, GuardarPublicacion,
     PublicacionNoEncontrada, QuitarFoto, VerBlog, VerPublicacion,
@@ -67,11 +73,19 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
+from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
+from ecommerce.domain.sobre_mi import (
+    ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
+    exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
+)
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
+from bson.errors import InvalidId
+from mongoengine.errors import ValidationError as MongoValidationError
+from ecommerce.infrastructure.catalogo.documents import Producto
 from ecommerce.infrastructure.catalogo.repositorio_variantes import (
     MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo, fotos_de_variantes,
 )
@@ -79,7 +93,7 @@ from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploa
 
 from .models import (
     ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
-    PaginaLegal, Promocion, Publicacion, Resena,
+    FotoBanner, PaginaLegal, Promocion, Publicacion, Resena,
 )
 from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
@@ -88,6 +102,7 @@ from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
+    ImagenNegocioField,
     OrdenCompraSerializer,
     RevisionCarritoSerializer,
     DireccionEnvioSerializer,
@@ -127,6 +142,7 @@ from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioRese
 from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_blog import DjangoRepositorioPublicaciones
+from .repositorio_banner import DjangoRepositorioBanners
 from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
 from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -396,6 +412,18 @@ class CarritoAPIView(APIView):
     def post(self, request):
         carrito, created = Carrito.objects.get_or_create(usuario=request.user)
         items = request.data.get('items', [])
+        for item in items:
+            p_id = item.get('producto_mongo_id') or item.get('producto_id') or item.get('id')
+            if p_id:
+                try:
+                    p = Producto.objects(id=p_id).only('coleccion_privada').first()
+                except (MongoValidationError, InvalidId):
+                    p = None
+                if p and getattr(p, 'coleccion_privada', False):
+                    return Response(
+                        {"items": ["No se pueden agregar productos de colección privada al carrito."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})
@@ -744,7 +772,7 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     authentication_classes = []
 
     def get_object(self):
-        configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
+        configuracion = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
         if configuracion is None:
             raise NotFound('No existe una configuración de tienda.')
         return configuracion
@@ -756,7 +784,9 @@ class ConfiguracionNegocioView(APIView):
     permission_classes = [IsEmprendedor]
 
     def get_object(self):
-        obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
+        obj = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
+        if obj is None:
+            obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
         return obj
 
     def get(self, request):
@@ -769,10 +799,28 @@ class ConfiguracionNegocioView(APIView):
         config = self.get_object()
         serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
                                                     context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                serializer.save()
+                if 'banner_orden' in request.data:
+                    ActualizarBanners(DjangoRepositorioBanners()).ejecutar(
+                        config.id,
+                        request.data.get('banner_orden'),
+                        request.FILES.getlist('banner_fotos')
+                    )
+        except (EstructuraBannerInvalida, TextosFotoInvalidos) as exc:
+            return Response({'banner_orden': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except LimiteFotosBannerExcedido as exc:
+            return Response({'banner_fotos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        config = self.get_object()
+        respuesta = ConfiguracionNegocioSerializer(config, context={'request': request})
+        return Response(respuesta.data, status=status.HTTP_200_OK)
 
     def patch(self, request):
         return self.put(request)
@@ -1414,6 +1462,113 @@ def publicacion_para_panel(publicacion_id, request):
     publicacion = Publicacion.objects.prefetch_related('fotos').get(id=publicacion_id)
     return PublicacionAdminSerializer(publicacion, context={'request': request}).data
 
+class SobreMiPublicoView(APIView):
+    """Información pública de la página Sobre mí. Responde 404 si está desactivada."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        try:
+            exigir_sobre_mi_disponible(configuracion.sobre_mi_activo if configuracion else False)
+        except SobreMiNoDisponible as error:
+            raise NotFound(str(error)) from error
+
+        publicaciones = []
+        # Con el blog apagado los proyectos no se muestran (domain/sobre_mi.py)
+        if muestra_proyectos_sobre_mi(configuracion.blog_activo):
+            proyectos = (
+                ProyectoDestacadoSobreMi.objects
+                .filter(
+                    configuracion=configuracion,
+                    publicacion__estado='PUBLICADA',
+                )
+                .select_related('publicacion')
+                .order_by('orden', 'id')
+            )
+            publicaciones = [proyecto.publicacion for proyecto in proyectos]
+
+        contacto = construir_contacto_sobre_mi(
+            telefono=configuracion.telefono_comercial,
+            correo=configuracion.correo_contacto,
+            instagram=configuracion.instagram_usuario,
+        )
+
+        return Response({
+            'nombre': configuracion.sobre_mi_nombre,
+            'biografia': configuracion.sobre_mi_biografia,
+            'proyectos': PublicacionResumenSerializer(
+                publicaciones,
+                many=True,
+                context={'request': request},
+            ).data,
+            'contacto': contacto,
+        })
+
+
+class AdminSobreMiProyectosView(APIView):
+    """Consultar y guardar los proyectos destacados de Sobre mí."""
+
+    permission_classes = [IsAdministrador]
+
+    def get(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        if not configuracion:
+            return Response({'proyectos': []})
+
+        proyectos = (
+            ProyectoDestacadoSobreMi.objects
+            .filter(configuracion=configuracion)
+            .order_by('orden', 'id')
+        )
+
+        return Response({
+            'proyectos': list(proyectos.values_list('publicacion_id', flat=True))
+        })
+
+    @transaction.atomic
+    def put(self, request):
+        configuracion = ConfiguracionGlobal.objects.filter(pk=1).first()
+
+        if not configuracion:
+            raise NotFound('Configuración de la tienda no encontrada.')
+
+        try:
+            ids = validar_ids_proyectos_sobre_mi(request.data.get('proyectos'))
+        except ProyectosSobreMiInvalidos as error:
+            return Response(
+                {'proyectos': [str(error)]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existentes = set(
+            Publicacion.objects.filter(id__in=ids)
+            .values_list('id', flat=True)
+        )
+
+        if existentes != set(ids):
+            return Response(
+                {'proyectos': ['Una o más publicaciones no existen.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ProyectoDestacadoSobreMi.objects.filter(
+            configuracion=configuracion
+        ).delete()
+
+        ProyectoDestacadoSobreMi.objects.bulk_create([
+            ProyectoDestacadoSobreMi(
+                configuracion=configuracion,
+                publicacion_id=pk,
+                orden=indice,
+            )
+            for indice, pk in enumerate(ids)
+        ])
+
+        return Response({'proyectos': ids})
 
 class BlogPublicoView(APIView):
     """GET /api/ventas/blog/?pagina=N: las publicaciones del blog, si el admin lo activó (RF-01.1)."""

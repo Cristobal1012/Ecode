@@ -31,6 +31,7 @@ class RepositorioPublicacionesFalso(RepositorioPublicaciones):
             slug=guardada['slug'], fecha_publicacion=guardada['fecha_publicacion'],
             tiene_portada=guardada['portada'] is not None,
             cantidad_fotos=sum(1 for de_publicacion in self.fotos.values() if de_publicacion == publicacion_id),
+            youtube_id=guardada['datos'].youtube_id,
         )
 
     def slugs_parecidos(self, base, excepto_id):
@@ -107,6 +108,13 @@ class GuardarPublicacionTests(SimpleTestCase):
         publicacion_id = self.guardar(PUBLICADA)
         self.guardar({**PUBLICADA, 'titulo': 'Otro', 'estado': 'BORRADOR'}, publicacion_id)
         self.assertEqual(self.repositorio.publicaciones[publicacion_id]['slug'], 'nuestro-taller')
+
+    def test_guarda_publicacion_con_video_de_youtube(self):
+        pub_id = self.guardar({**PUBLICADA, 'youtube': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'})
+        guardada = self.repositorio.publicaciones[pub_id]
+        self.assertEqual(guardada['datos'].youtube_id, 'dQw4w9WgXcQ')
+        obtenida = self.repositorio.obtener(pub_id)
+        self.assertEqual(obtenida.youtube_id, 'dQw4w9WgXcQ')
 
     def test_un_titulo_repetido_no_repite_el_slug(self):
         self.guardar(PUBLICADA)

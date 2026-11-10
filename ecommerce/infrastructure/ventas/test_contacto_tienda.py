@@ -113,3 +113,66 @@ class ContactoTiendaTests(APITestCase):
 
         self.assertIn(self.editar(correo_contacto='falso@example.test').status_code, (401, 403))
         self.assertEqual(ConfiguracionGlobal.objects.get(pk=1).correo_contacto, '')
+
+    def test_el_admin_guarda_telefono_y_redes_sociales(self):
+        respuesta = self.editar(
+            telefono_comercial='9 1234 5678',
+            facebook_url='https://www.facebook.com/mitienda',
+            x_url='https://x.com/mitienda',
+            youtube_url='https://www.youtube.com/@mitienda',
+            tiktok_url='https://www.tiktok.com/@mitienda',
+        )
+
+        self.assertEqual(respuesta.status_code, 200, respuesta.data)
+
+        publica = self.publica()
+
+        self.assertEqual(publica['telefono_comercial'], '+56912345678')
+        self.assertEqual(publica['facebook_url'], 'https://www.facebook.com/mitienda')
+        self.assertEqual(publica['x_url'], 'https://x.com/mitienda')
+        self.assertEqual(publica['youtube_url'], 'https://www.youtube.com/@mitienda')
+        self.assertEqual(publica['tiktok_url'], 'https://www.tiktok.com/@mitienda')
+
+    def test_rechaza_telefono_comercial_invalido(self):
+        respuesta = self.editar(telefono_comercial='123')
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('telefono_comercial', respuesta.data)
+
+    def test_rechaza_enlaces_de_redes_sociales_incorrectos(self):
+        casos = {
+            'facebook_url': 'https://www.tiktok.com/@mitienda',
+            'x_url': 'https://www.facebook.com/mitienda',
+            'youtube_url': 'https://youtube.com.ejemplo.cl/@mitienda',
+            'tiktok_url': 'http://www.tiktok.com/@mitienda',
+        }
+
+        for campo, enlace in casos.items():
+            with self.subTest(campo=campo):
+                respuesta = self.editar(**{campo: enlace})
+
+                self.assertEqual(respuesta.status_code, 400)
+                self.assertIn(campo, respuesta.data)
+
+    def test_los_nuevos_campos_son_opcionales(self):
+        respuesta = self.editar(
+            telefono_comercial='',
+            facebook_url='',
+            x_url='',
+            youtube_url='',
+            tiktok_url='',
+        )
+
+        self.assertEqual(respuesta.status_code, 200, respuesta.data)
+
+        publica = self.publica()
+
+        for campo in (
+            'telefono_comercial',
+            'facebook_url',
+            'x_url',
+            'youtube_url',
+            'tiktok_url',
+        ):
+            with self.subTest(campo=campo):
+                self.assertEqual(publica[campo], '')

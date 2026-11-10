@@ -147,10 +147,16 @@ def obtener_filtros_catalogo(orden_categorias=None):
         # Una lectura proyectada conserva las opciones de todas las páginas sin
         # consultar e hidratar de nuevo los productos de cada categoría.
         prods = Producto.objects.filter(activo=True, publicado=True).only(
-            'categoria', 'atributos_globales',
+            'categoria', 'atributos_globales', 'colecciones'
         ).as_pymongo()
         atributos = {}
+        colecciones_activas = set()
         for producto in prods:
+            cols = producto.get('colecciones', [])
+            if isinstance(cols, list):
+                for c in cols:
+                    if c and str(c).strip():
+                        colecciones_activas.add(str(c).strip())
             cat = producto.get('categoria')
             if not cat:
                 continue
@@ -166,10 +172,10 @@ def obtener_filtros_catalogo(orden_categorias=None):
         categorias = ordenar_categorias(atributos, orden_categorias)
         atributos = {cat: {clave: sorted(valores) for clave, valores in atributos[cat].items()}
                      for cat in categorias}
-        return {'categorias': categorias, 'atributos': atributos}
+        return {'categorias': categorias, 'atributos': atributos, 'colecciones': sorted(list(colecciones_activas))}
     except Exception as exc:
         logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)
-        return {'categorias': [], 'atributos': {}}
+        return {'categorias': [], 'atributos': {}, 'colecciones': []}
 
 
 class FiltrosCatalogoView(CatalogoAPIView):
@@ -203,8 +209,12 @@ class ProductoListCreateView(CatalogoAPIView):
         if categoria:
             productos = productos.filter(categoria=categoria)
 
+        coleccion = request.query_params.get('coleccion', '').strip()
+        if coleccion:
+            productos = productos.filter(colecciones=coleccion)
+
         # 2. Filtros por atributos globales en servidor (SCRUM-179, RF-01.3 / E02)
-        param_reservados = {'page', 'page_size', 'limite', 'categoria', 'orden', 'todos', 'sin_paginar', 'format'}
+        param_reservados = {'page', 'page_size', 'limite', 'categoria','coleccion', 'orden', 'todos', 'sin_paginar', 'format'}
         for clave, valor in request.query_params.items():
             if clave in param_reservados or not valor:
                 continue

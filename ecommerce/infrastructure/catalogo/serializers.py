@@ -60,6 +60,7 @@ class ProductoSerializer(serializers.Serializer):
     activo = serializers.BooleanField(default=True)
     publicado = serializers.BooleanField(default=False)
     atributos_globales = serializers.DictField(required=False, default=dict)
+    colecciones = serializers.ListField(child=serializers.CharField(max_length=100), required=False, default=list)
     
     # Colección privada (SCRUM-197)
     coleccion_privada = serializers.BooleanField(default=False, required=False)

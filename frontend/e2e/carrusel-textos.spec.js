@@ -10,12 +10,12 @@ const FOTOS = [
   { id: 2, imagen: foto('1e293b'), orden: 1, antetitulo: '', titulo: 'Encargos', texto: '', destino: 'COTIZAR' },
 ];
 
-async function prepararCarrusel(page) {
+async function prepararCarrusel(page, banners = FOTOS) {
   await prepararTienda(page, { sesion: true });
   const guardados = [];
   const config = {
     nombre_tienda: 'Tienda QA', texto_bienvenida: 'Murales', subtitulo_bienvenida: 'Hecho a mano',
-    texto_landing: 'Para tu casa', cotizaciones_activas: true, banners: FOTOS,
+    texto_landing: 'Para tu casa', cotizaciones_activas: true, banners,
   };
   await page.route('**/api/configuracion/**', async route => {
     if (route.request().method() === 'PATCH') guardados.push(route.request().postDataJSON());
@@ -88,3 +88,26 @@ for (const ancho of [390, 1280]) {
     ]);
   });
 }
+
+test('con las 10 fotos, el panel del carrusel cabe en un celular y las miniaturas se recorren por dentro (390px)', async ({ page }) => {
+  const diez = Array.from({ length: 10 }, (_, i) => ({
+    id: i + 1, imagen: foto('2a2622'), orden: i, antetitulo: '', titulo: `Foto ${i + 1}`, texto: '', destino: 'CATALOGO',
+  }));
+  await prepararCarrusel(page, diez);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editar página', exact: true }).click();
+
+  const panel = page.locator('.portada-editor-fotos');
+  const caja = await panel.boundingBox();
+  expect(caja.x).toBeGreaterThanOrEqual(0);
+  expect(caja.x + caja.width).toBeLessThanOrEqual(390);
+  // Ni el panel ni los textos ocultos de cada foto estiran la página hacia el costado
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  // La última foto se alcanza con el teclado: la lista se desplaza hasta ella
+  const quitarUltima = page.getByRole('button', { name: 'Quitar foto 10 del banner', exact: true });
+  await quitarUltima.focus();
+  await expect(quitarUltima).toBeInViewport();
+  expect((await new AxeBuilder({ page }).include('.portada-editor-fotos').analyze()).violations).toEqual([]);
+});

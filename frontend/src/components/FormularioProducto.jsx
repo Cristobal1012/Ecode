@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
+import CreatableSelect from 'react-select/creatable';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -25,6 +26,7 @@ const leerProductoAEditar = (productoAEditar) => {
         nombre: '',
         descripcion: '',
         categoria: '',
+        colecciones: [],
         publicado: false,
         coleccion_privada: false,
         version_a_la_venta: '',
@@ -74,6 +76,7 @@ const leerProductoAEditar = (productoAEditar) => {
       nombre: productoAEditar.nombre || '',
       descripcion: productoAEditar.descripcion || '',
       categoria: productoAEditar.categoria || '',
+      colecciones: productoAEditar.colecciones || [],
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
       coleccion_privada: Boolean(productoAEditar.coleccion_privada),
       version_a_la_venta: productoAEditar.version_a_la_venta || '',
@@ -118,6 +121,7 @@ export default function FormularioProducto({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
+  const [coleccionesExistentes, setColeccionesExistentes] = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
 
@@ -144,6 +148,17 @@ export default function FormularioProducto({
           ];
 
           setCategoriasExistentes(categoriasUnicas);
+          const coleccionesUnicas = [
+            ...new Set(
+              lista
+                .flatMap((p) => p.colecciones || []) // Extrae todos los arrays de colecciones y los aplana
+                .filter(Boolean)
+            )
+          ];
+          // Formatear para react-select: [{ value: 'Cyber', label: 'Cyber' }, ...]
+          setColeccionesExistentes(
+            coleccionesUnicas.map(col => ({ value: col, label: col }))
+          );
 
           if (
             categoriasUnicas.length === 0 &&
@@ -166,6 +181,14 @@ export default function FormularioProducto({
 
     cargarCategorias();
   }, [productoAEditar]);
+
+  const handleColeccionesChange = (valoresSeleccionados) => {
+    setProducto({
+      ...producto,
+      // extraemos solo los 'value' de los objetos seleccionados
+      colecciones: valoresSeleccionados ? valoresSeleccionados.map(op => op.value) : []
+    });
+  };
 
   // ============================================================
   // CAMBIOS DEL PRODUCTO
@@ -425,6 +448,7 @@ export default function FormularioProducto({
         nombre: producto.nombre.trim(),
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
+        colecciones: producto.colecciones || [],
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
 
@@ -810,6 +834,32 @@ export default function FormularioProducto({
                 )}
               </>
             )}
+          </div>
+        </div>
+
+        {/* COLECCIONES */}
+        <div style={{ marginTop: '15px' }}>
+          <label htmlFor={`${idFormulario}-colecciones`} style={{ fontWeight: 'bold' }}>
+            Colecciones (Opcional)
+          </label>
+          <div style={{ marginTop: '5px' }}>
+            <CreatableSelect
+              id={`${idFormulario}-colecciones`}
+              isMulti
+              isClearable
+              placeholder="Ej: Cyber, Navidad..."
+              options={coleccionesExistentes}
+              value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
+              onChange={handleColeccionesChange}
+              noOptionsMessage={() => "Escribe para crear una nueva colección"}
+              formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
+              styles={{
+                control: (base) => ({ ...base, borderColor: '#ccc' }),
+              }}
+            />
+            <small style={{ color: '#666', display: 'block', marginTop: '4px' }}>
+              Agrupa productos en campañas sin cambiar su categoría principal.
+            </small>
           </div>
         </div>
 

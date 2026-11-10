@@ -1,6 +1,9 @@
 """Reglas de ordenamiento del catálogo, independientes de Django."""
 
 LARGO_NOMBRE_CATEGORIA = 100
+LARGO_ETIQUETA_PRODUCTO = 20
+# Se guardan roles de la paleta, nunca colores libres; al cambiar el tema se conservan.
+COLORES_ETIQUETA_PRODUCTO = ('primary', 'secondary', 'accent', 'text')
 
 
 class OrdenCategoriasInvalido(ValueError):

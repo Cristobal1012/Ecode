@@ -18,6 +18,50 @@
   border-left: 2px solid #e5e7eb;
 }
 
+/* Índice agrupado: el título de cada grupo sobre la lista de sus secciones */
+.config-indice ul.config-indice-grupos {
+  border-left: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.config-indice-grupo {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* En la página, cada grupo abre con su título y queda separado del siguiente */
+.config-grupo + .config-grupo {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 2px solid var(--color-border);
+}
+
+/* Subtítulos dentro de una sección (h5, bajo el h4 de la sección): el mismo aspecto que tenían como h4 */
+.config-secciones h5 {
+  font-family: var(--fuente-titulos);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--color-text);
+  margin: 0 0 0.5em;
+}
+
+.config-grupo-titulo {
+  margin: 0 0 24px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
 .config-indice button {
   display: block;
   width: 100%;

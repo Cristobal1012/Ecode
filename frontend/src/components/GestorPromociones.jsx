@@ -121,7 +121,7 @@ export default function GestorPromociones() {
 
       {/* FORMULARIO DE CREACIÓN */}
       <div style={{ backgroundColor: 'var(--color-secondary)', padding: '20px', marginBottom: '30px' }}>
-        <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Crear nuevo código</h4>
+        <h5 style={{ marginTop: 0, color: 'var(--color-text)' }}>Crear nuevo código</h5>
         
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
@@ -191,7 +191,7 @@ export default function GestorPromociones() {
 
       {/* TABLA DE PROMOCIONES ACTIVAS */}
       <div style={{ backgroundColor: 'var(--color-surface)', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
-        <h4 style={{ marginTop: 0, color: 'var(--color-text)' }}>Códigos activos</h4>
+        <h5 style={{ marginTop: 0, color: 'var(--color-text)' }}>Códigos activos</h5>
         <div tabIndex={0} role="region" aria-label="Promociones y acciones" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>

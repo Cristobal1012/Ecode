@@ -101,8 +101,13 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
   };
 
   const encontrarVariante = (atributos) => {
-    if (variantes.length === 0 || nombresAtributos.length === 0) {
+    if (variantes.length === 0) {
       return null;
+    }
+
+    // Una única opción sin atributos no requiere una selección del comprador.
+    if (nombresAtributos.length === 0) {
+      return variantes.length === 1 ? variantes[0] : null;
     }
 
     const todosSeleccionados = nombresAtributos.every(

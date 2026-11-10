@@ -43,6 +43,36 @@ describe('VariantSelector', () => {
     expect(screen.getByText('Este producto no tiene variantes disponibles.')).toBeInTheDocument();
   });
 
+  it.each([{}, undefined])('permite comprar la única variante sin atributos (%j)', async (atributos) => {
+    const variante = { sku: 'UNICA', precio: 10000, stock: 2, atributos_variables: atributos };
+    const callback = vi.fn().mockResolvedValue({ ok: true, mensaje: 'Agregado.' });
+    renderSelector({ id: 2, variantes: [variante] }, callback);
+    expect(screen.getByText('Stock disponible: 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Agregar al carrito' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Cantidad'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar al carrito' }));
+    await waitFor(() => expect(callback).toHaveBeenCalledWith(variante, 2));
+    expect(await screen.findByRole('status')).toHaveTextContent('Agregado.');
+  });
+
+  it('mantiene agotada la variante sin atributos cuando su stock es cero', () => {
+    const callback = vi.fn();
+    renderSelector({ id: 2, variantes: [{ sku: 'UNICA', precio: 10000, stock: 0 }] }, callback);
+    expect(screen.getByRole('button', { name: 'Agotado', exact: true })).toBeDisabled();
+    expect(screen.queryByLabelText('Cantidad')).not.toBeInTheDocument();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('descuenta el carrito y bloquea al alcanzar el stock de la variante sin atributos', async () => {
+    localStorage.setItem('carrito_local', JSON.stringify([{ sku: 'UNICA', cantidad: 1 }]));
+    renderSelector({ id: 2, variantes: [{ sku: 'UNICA', precio: 10000, stock: 2 }] });
+    expect(screen.getByLabelText('Cantidad')).toHaveAttribute('max', '1');
+    expect(screen.getByRole('button', { name: 'Agregar al carrito' })).toBeEnabled();
+    localStorage.setItem('carrito_local', JSON.stringify([{ sku: 'UNICA', cantidad: 2 }]));
+    window.dispatchEvent(new Event('carritoActualizado'));
+    expect(await screen.findByRole('button', { name: 'Agotado (en tu carrito)' })).toBeDisabled();
+  });
+
   it('muestra los grupos y opciones únicas de atributos', () => {
     renderSelector();
     expect(screen.getByRole('group', { name: 'color' })).toBeInTheDocument();

@@ -36,24 +36,6 @@
   color: var(--color-muted);
 }
 
-.tarjeta-producto-etiqueta {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 5px 10px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.tarjeta-producto-etiqueta--agotado {
-  background: var(--color-text);
-  color: var(--color-background);
-}
-
 .tarjeta-producto-categoria {
   font-size: 0.7rem;
   font-weight: 500;

@@ -40,6 +40,11 @@ const datosIniciales = {
   correo_contacto: 'contacto@mitienda.cl',
   horario_atencion: 'Lunes a viernes, 10:00 a 19:00',
   instagram_usuario: 'mitienda',
+  telefono_comercial: "",
+  facebook_url: "",
+  x_url: "",
+  youtube_url: "",
+  tiktok_url: "",
   mostrar_direccion_pie: true
 };
 

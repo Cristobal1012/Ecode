@@ -89,7 +89,7 @@ describe('GestorResenas', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Publicaste la reseña de Cliente 1');
     expect(clienteAxios.patch).toHaveBeenCalledWith('ventas/admin/resenas/1/', { estado: 'APROBADA' });
     expect(await screen.findByRole('heading', { name: 'Cliente 2 · Pedido #102' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Cliente 1 · Pedido #101' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', {name: 'Cliente 1 · Pedido #101'})).not.toBeInTheDocument();
   });
 
   it('cambia de pestaña y una aprobada solo se puede ocultar', async () => {

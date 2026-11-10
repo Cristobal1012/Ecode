@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import clienteAxios from "../components/auth/axiosConfig";
 import Header from "../components/header/header";
@@ -35,7 +35,7 @@ function LandingPage({ onMarcaTemporal }) {
   // guardarlo pisaría los textos reales de la tienda. La configuración real siempre trae nombre_tienda
   const configuracionCargada = Boolean(configuracion) && "nombre_tienda" in configuracion;
 
-  useEffect(() => {
+  const cargarVitrina = useCallback(() => {
     clienteAxios.get("catalogo/vitrina/")
       .then(({ data }) => setVitrina(data))
       .catch((error) => {
@@ -43,6 +43,20 @@ function LandingPage({ onMarcaTemporal }) {
         setVitrina({ mas_vendidos: [], recientes: [] });
       });
   }, []);
+
+  useEffect(cargarVitrina, [cargarVitrina]);
+
+  // Al guardar en el modo edición se recarga la configuración, no la vitrina: si cambió el modo (Más vendidos o
+  // Destacados), la selección o su título, se vuelve a pedir para que la landing lo muestre sin recargar la página
+  const firmaVitrina = configuracion
+    ? JSON.stringify([configuracion.vitrina_modo, configuracion.destacados, configuracion.destacados_titulo])
+    : null;
+  const firmaAnterior = useRef(null);
+  useEffect(() => {
+    if (firmaVitrina === null) return;
+    if (firmaAnterior.current !== null && firmaAnterior.current !== firmaVitrina) cargarVitrina();
+    firmaAnterior.current = firmaVitrina;
+  }, [firmaVitrina, cargarVitrina]);
 
   // El enlace "Nosotros" del header lleva a /#nosotros. Se baja cuando ya está todo lo de arriba (portada y
   // productos y reseñas); si no, el contenido que llega después corre la sección

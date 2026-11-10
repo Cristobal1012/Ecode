@@ -8,18 +8,26 @@ from ecommerce.domain.catalogo import COLORES_ETIQUETA_PRODUCTO
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
 from .documents import Producto
+from .tests import usar_mongo_de_prueba
 
 
 class EtiquetasProductoTests(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Producto en una base Mongo temporal: el catálogo de la base real nunca se toca (AGENTS.md §11)
+        usar_mongo_de_prueba(cls)
+
     def setUp(self):
-        Producto.drop_collection()
+        # Sin drop_collection(): borra la colección de la base real aunque Producto esté ligado a la temporal
+        Producto._get_collection().delete_many({})
         self.admin = create_user(email='admin198@example.test', rol='ADMIN')
         self.client.force_authenticate(self.admin)
         self.lista = reverse('lista_productos')
         self.contador = 0
 
     def tearDown(self):
-        Producto.drop_collection()
+        Producto._get_collection().delete_many({})
 
     def crear(self, **cambios):
         self.contador += 1

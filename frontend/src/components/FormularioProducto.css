@@ -10,3 +10,7 @@
 @media (max-width: 600px) {
   .formulario-producto .producto-campos { grid-template-columns: minmax(0, 1fr); }
 }
+.formulario-producto .campo-coleccion-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.formulario-producto .campo-coleccion-label { font-weight: bold; }
+.formulario-producto .campo-coleccion-select { border-color: var(--color-border); }
+.formulario-producto .campo-coleccion-ayuda { color: var(--color-muted); display: block; font-size: 0.875em; }

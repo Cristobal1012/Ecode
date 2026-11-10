@@ -846,29 +846,30 @@ export default function FormularioProducto({
         </div>
 
         {/* COLECCIONES */}
-        <div style={{ marginTop: '15px' }}>
-          <label htmlFor={`${idFormulario}-colecciones`} style={{ fontWeight: 'bold' }}>
+        <div className="campo-coleccion-container">
+          <label htmlFor={`${idFormulario}-colecciones`} className="campo-coleccion-label">
             Colecciones (Opcional)
           </label>
-          <div style={{ marginTop: '5px' }}>
-            <CreatableSelect
-              inputId={`${idFormulario}-colecciones`}
-              isMulti
-              isClearable
-              placeholder="Ej: Cyber, Navidad..."
-              options={coleccionesExistentes}
-              value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
-              onChange={handleColeccionesChange}
-              noOptionsMessage={() => "Escribe para crear una nueva colección"}
-              formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
-              styles={{
-                control: (base) => ({ ...base, borderColor: 'var(--color-border)' }),
-              }}
-            />
-            <small style={{ color: 'var(--color-muted)', display: 'block', marginTop: '4px' }}>
-              Agrupa productos en campañas sin cambiar su categoría principal.
-            </small>
-          </div>
+          
+          <CreatableSelect
+            inputId={`${idFormulario}-colecciones`}
+            isMulti
+            isClearable
+            placeholder="Ej: Cyber, Navidad..."
+            options={coleccionesExistentes}
+            value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
+            onChange={handleColeccionesChange}
+            noOptionsMessage={() => "Escribe para crear una nueva colección"}
+            formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
+            className="campo-coleccion-select"
+            styles={{
+              control: (base) => ({ ...base, borderColor: 'var(--color-border)' }),
+            }}
+          />
+          
+          <small className="campo-coleccion-ayuda">
+            Agrupa productos en campañas sin cambiar su categoría principal.
+          </small>
         </div>
 
         {/* DESCRIPCIÓN */}
@@ -1267,7 +1268,7 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  required
+                  
                 />
               </div>
 

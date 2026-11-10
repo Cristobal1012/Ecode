@@ -8,6 +8,7 @@ from ecommerce.domain.catalogo import (
     ColeccionPrivadaInvalida,
     validar_obra_no_es_version_de_otra,
     validar_version_a_la_venta,
+    limpiar_colecciones,
 )
 from .documents import Producto, Variante
 from .image_adapters import actualizar_producto
@@ -174,3 +175,6 @@ class ProductoSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         return actualizar_producto(instance, validated_data)
+
+    def validate_colecciones(self, value):
+        return limpiar_colecciones(value)

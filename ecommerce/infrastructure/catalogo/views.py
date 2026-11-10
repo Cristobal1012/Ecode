@@ -178,6 +178,18 @@ def obtener_filtros_catalogo(orden_categorias=None):
         logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)
         return {'categorias': [], 'atributos': {}, 'colecciones': []}
 
+def obtener_colecciones_vigentes():
+    """Extrae colecciones únicas solo de productos activos y publicados"""
+    productos_vigentes = Producto.objects.filter(activo=True, publicado=True)
+    colecciones_disponibles = set()
+    
+    for prod in productos_vigentes:
+        if hasattr(prod, 'colecciones') and prod.colecciones:
+            for col in prod.colecciones:
+                if col:
+                    colecciones_disponibles.add(col.strip())
+                    
+    return sorted(list(colecciones_disponibles))
 
 class FiltrosCatalogoView(CatalogoAPIView):
     """RF-01.3: entrega las categorías y opciones de atributos disponibles en el catálogo."""
@@ -212,7 +224,7 @@ class ProductoListCreateView(CatalogoAPIView):
 
         coleccion = request.query_params.get('coleccion', '').strip()
         if coleccion:
-            productos = productos.filter(colecciones=coleccion)
+            productos = productos.filter(colecciones__iregex=f"^{coleccion}$")
 
         # 2. Filtros por atributos globales en servidor (SCRUM-179, RF-01.3 / E02)
         param_reservados = {'page', 'page_size', 'limite', 'categoria','coleccion', 'orden', 'todos', 'sin_paginar', 'format'}

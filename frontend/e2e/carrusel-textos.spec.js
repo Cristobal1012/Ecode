@@ -34,6 +34,20 @@ for (const ancho of [390, 1280]) {
     await expect(titulo).toHaveText('Murales');
     await expect(page.getByRole('link', { name: 'Ver catálogo', exact: true })).toHaveAttribute('href', '/catalogo');
 
+    // Las flechas van junto a la pausa y no tapan el botón de la foto
+    const controles = page.getByRole('group', { name: 'Controles del carrusel', exact: true });
+    const [cajaControles, cajaBoton] = await Promise.all([controles.boundingBox(), page.locator('.portada-boton').boundingBox()]);
+    const seCruzan = cajaControles.x < cajaBoton.x + cajaBoton.width && cajaBoton.x < cajaControles.x + cajaControles.width
+      && cajaControles.y < cajaBoton.y + cajaBoton.height && cajaBoton.y < cajaControles.y + cajaControles.height;
+    expect(seCruzan).toBe(false);
+    await controles.getByRole('button', { name: 'Foto siguiente', exact: true }).click();
+    await expect(titulo).toHaveText('Encargos');
+    await controles.getByRole('button', { name: 'Foto anterior', exact: true }).click();
+    await expect(titulo).toHaveText('Murales');
+    await expect(controles.getByRole('status')).toHaveText('Foto 1 de 2.');
+    // Con el foco en la flecha el carrusel se detiene: se saca el foco para que siga solo
+    await page.evaluate(() => document.activeElement.blur());
+
     await page.clock.runFor(5000);
     await expect(titulo).toHaveText('Encargos');
     const cotizar = page.locator('.portada-boton');

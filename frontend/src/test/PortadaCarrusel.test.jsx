@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Portada from '../components/landing/Portada';
 
@@ -87,5 +87,44 @@ describe('Portada con textos y botón por foto', () => {
     pasar(20000);
     expect(titulo()).toBe('Encargos');
     expect(screen.queryByRole('button', { name: /pausar carrusel/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Foto siguiente' })).not.toBeInTheDocument();
+  });
+
+  // Flechas junto a la pausa: navegan en círculo, reinician el reloj y anuncian la posición
+  const tresFotos = [...FOTOS, { ...FOTOS[0], id: 3, titulo: 'Retratos' }];
+
+  it('las flechas recorren las fotos en círculo y anuncian la posición', () => {
+    portada({ banners: tresFotos });
+    const grupo = screen.getByRole('group', { name: 'Controles del carrusel' });
+    fireEvent.click(within(grupo).getByRole('button', { name: 'Foto anterior' }));
+    expect(titulo()).toBe('Retratos');
+    expect(within(grupo).getByRole('status')).toHaveTextContent('Foto 3 de 3.');
+    expect(within(grupo).getByText('3 / 3')).toBeInTheDocument();
+
+    fireEvent.click(within(grupo).getByRole('button', { name: 'Foto siguiente' }));
+    expect(titulo()).toBe('Murales');
+    expect(within(grupo).getByRole('status')).toHaveTextContent('Foto 1 de 3.');
+  });
+
+  it('al usar una flecha, el reloj vuelve a empezar', () => {
+    portada({ banners: tresFotos });
+    pasar(4000);
+    fireEvent.click(screen.getByRole('button', { name: 'Foto siguiente' }));
+    expect(titulo()).toBe('Encargos');
+    pasar(4000);
+    expect(titulo()).toBe('Encargos');
+    pasar(1000);
+    expect(titulo()).toBe('Retratos');
+  });
+
+  it('se detiene mientras el foco está en las flechas', () => {
+    portada({ banners: tresFotos });
+    const siguiente = screen.getByRole('button', { name: 'Foto siguiente' });
+    act(() => { siguiente.focus(); });
+    pasar(15000);
+    expect(titulo()).toBe('Murales');
+    act(() => { siguiente.blur(); });
+    pasar(5000);
+    expect(titulo()).toBe('Encargos');
   });
 });

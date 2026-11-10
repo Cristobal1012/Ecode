@@ -129,6 +129,7 @@ test('edita texto y color con teclado y envía los campos correctos', async ({ p
   await page.getByRole('textbox', { name: 'Etiqueta', exact: true }).fill('x'.repeat(21));
   await expect(page.getByRole('textbox', { name: 'Etiqueta', exact: true })).toHaveValue('x'.repeat(20));
   await page.getByRole('textbox', { name: 'Etiqueta', exact: true }).fill('Único');
+  await expect(page.getByRole('group', { name: 'Vista previa de la etiqueta', exact: true })).toHaveText('Único');
   expect((await new AxeBuilder({ page }).include('.campo-etiqueta-producto').analyze()).violations).toEqual([]);
   await page.locator('.campo-etiqueta-producto').screenshot({ path: test.info().outputPath('etiqueta-panel.png') });
   await page.getByRole('button', { name: 'Guardar cambios del producto', exact: true }).click();

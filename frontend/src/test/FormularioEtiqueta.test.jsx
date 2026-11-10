@@ -42,7 +42,7 @@ describe('Formulario de etiqueta del producto', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Acento' }));
     expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect(container.querySelector('input[type="color"]')).toBeNull();
-    expect(within(screen.getByLabelText('Vista previa de la etiqueta')).getByText('Edición limitada'))
+    expect(within(screen.getByRole('group', { name: 'Vista previa de la etiqueta' })).getByText('Edición limitada'))
       .toHaveClass('tarjeta-producto-etiqueta--accent');
     fireEvent.submit(container.querySelector('form'));
     await waitFor(() => expect(clienteAxios.put).toHaveBeenCalledWith('catalogo/productos/producto-198/',
@@ -54,7 +54,7 @@ describe('Formulario de etiqueta del producto', () => {
     expect(screen.getByRole('textbox', { name: 'Etiqueta' })).toHaveValue('Único');
     expect(screen.getByRole('radio', { name: 'Secundario' })).toBeChecked();
     fireEvent.change(screen.getByRole('textbox', { name: 'Etiqueta' }), { target: { value: '' } });
-    expect(screen.queryByLabelText('Vista previa de la etiqueta')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Vista previa de la etiqueta' })).not.toBeInTheDocument();
     fireEvent.submit(container.querySelector('form'));
     await waitFor(() => expect(clienteAxios.put).toHaveBeenCalledWith('catalogo/productos/producto-198/',
       expect.objectContaining({ etiqueta: '', etiqueta_color: 'secondary' })));

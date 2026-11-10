@@ -30,7 +30,7 @@ export default function CampoEtiquetaProducto({ etiqueta, color, onChange, disab
         </div>
       </fieldset>
       {etiqueta.trim() && (
-        <div className="campo-etiqueta-vista" aria-label="Vista previa de la etiqueta">
+        <div className="campo-etiqueta-vista" role="group" aria-label="Vista previa de la etiqueta">
           <span className={`tarjeta-producto-etiqueta tarjeta-producto-etiqueta--ficha tarjeta-producto-etiqueta--${color}`}>
             {etiqueta.trim()}
           </span>

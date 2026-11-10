@@ -49,6 +49,9 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'ventas/admin/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos QA', contenido: '<p>Texto legal QA.</p>', publicada: true }],
       'ventas/admin/medios-pago/': [],
       'ventas/admin/couriers/': [{ codigo: 'CHILEXPRESS', nombre: 'Chilexpress', ayuda: '', campos: [], datos: {}, faltantes: [], configuradas: false }],
+      // Configuración > Página Sobre mí: las publicaciones del blog para elegir y los proyectos elegidos
+      'ventas/admin/blog/': [],
+      'ventas/admin/sobre-mi/proyectos/': { proyectos: [] },
       'ventas/promociones/': [],
       // Sin descuentos automáticos: el checkout los pide para la vista previa
       'ventas/promociones/automaticas/': [],

@@ -4,6 +4,8 @@ import clienteAxios from "../components/auth/axiosConfig";
 import Header from "../components/header/header";
 import Portada from "../components/landing/Portada";
 import SeccionProductos from "../components/landing/SeccionProductos";
+import SeccionDestacados from "../components/landing/SeccionDestacados";
+import EditorVitrina from "../components/landing/EditorVitrina";
 import SeccionNosotros from "../components/landing/SeccionNosotros";
 import SeccionInstagram from "../components/landing/SeccionInstagram";
 import SeccionResenas from "../components/landing/SeccionResenas";
@@ -17,7 +19,7 @@ import { EsqueletoPortada } from "../components/carga/EsqueletosTienda";
 const NOTA_PRODUCTOS = "Esta sección se llena sola con tus productos publicados.";
 
 // RF-01.1: la raíz del dominio muestra la landing (nunca el catálogo directo). El admin la edita en su mismo
-// lugar (modo edición); los productos salen de la vitrina (más vendidos y últimos agregados).
+// lugar (modo edición); los productos salen de la vitrina (más vendidos o destacados, y últimos agregados).
 function LandingPage({ onMarcaTemporal }) {
   const configuracion = useConfiguracionTienda();
   const edicion = useEdicionLanding(configuracion);
@@ -85,13 +87,17 @@ function LandingPage({ onMarcaTemporal }) {
   }, [edicion.hayCambios]);
 
   const vista = edicion.vista;
+  // Destacados en lugar de "Más vendidos": la vitrina solo los trae si el admin los eligió y queda alguno visible.
+  // Mientras carga se usa el modo guardado, para no mostrar un instante el título equivocado
+  const conDestacados = vitrina ? vitrina.destacados?.length > 0 : configuracion?.vitrina_modo === "DESTACADOS";
   // El footer está fuera de la landing (App.jsx): en modo edición recibe el borrador del nombre y de los logos
   useEffect(() => {
     onMarcaTemporal?.(edicion.editando ? {
       nombre_tienda: vista?.nombre_tienda ?? '', logo: vista?.logo,
       ubicacion_logo_universidad: vista?.ubicacion_logo_universidad,
+      menu_principal: vista?.menu_principal,
     } : null);
-  }, [edicion.editando, vista?.nombre_tienda, vista?.logo, vista?.ubicacion_logo_universidad, onMarcaTemporal]);
+  }, [edicion.editando, vista?.nombre_tienda, vista?.logo, vista?.ubicacion_logo_universidad, vista?.menu_principal, onMarcaTemporal]);
 
   useEffect(() => {
     return () => onMarcaTemporal?.(null);
@@ -101,7 +107,8 @@ function LandingPage({ onMarcaTemporal }) {
     <>
       <Header vistaPrevia={edicion.editando ? {
         nombre_tienda: vista.nombre_tienda, logo: vista.logo, ubicacion_logo_universidad: vista.ubicacion_logo_universidad,
-      } : undefined} />
+        menu_principal: vista.menu_principal,
+      } : undefined} edicion={edicion} />
       <main tabIndex={-1} id="contenido" className={edicion.editando ? "landing--editando" : undefined}>
         {configuracion ? (
           <>
@@ -111,8 +118,15 @@ function LandingPage({ onMarcaTemporal }) {
               </div>
             )}
             <Portada configuracion={vista} edicion={edicion} />
-            <SeccionProductos id="mas-vendidos" antetitulo="Lo más elegido" titulo="Más vendidos"
-              productos={vitrina?.mas_vendidos} cargando={!vitrina} alterna nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />
+            {edicion.editando ? (
+              <EditorVitrina edicion={edicion} vitrina={vitrina} configuracion={configuracion} nota={NOTA_PRODUCTOS} />
+            ) : conDestacados ? (
+              <SeccionDestacados titulo={vitrina?.destacados_titulo || configuracion.destacados_titulo}
+                destacados={vitrina?.destacados} cargando={!vitrina} nombreBlog={configuracion.blog_nombre} />
+            ) : (
+              <SeccionProductos id="mas-vendidos" antetitulo="Lo más elegido" titulo="Más vendidos"
+                productos={vitrina?.mas_vendidos} cargando={!vitrina} alterna />
+            )}
             <SeccionProductos id="recientes" antetitulo="Recién llegados" titulo="Últimos agregados"
               productos={vitrina?.recientes} cargando={!vitrina} etiqueta="Nuevo"
               nota={edicion.editando ? NOTA_PRODUCTOS : undefined} />

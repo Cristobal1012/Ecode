@@ -161,6 +161,25 @@
   color: var(--color-muted);
 }
 
+.detalle-coleccion-privada {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.detalle-boton-version-print {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
 .detalle-separador {
   width: 48px;
   margin: 24px 0;
@@ -253,5 +272,81 @@
 
   .detalle-info {
     position: static;
+  }
+}
+
+/* Fotos completas (opción del admin, pedido de un cliente): la obra se ve entera dentro del mismo marco, sin
+   recortarla; los bordes que sobran quedan con el color de acento del tema */
+:root[data-fotos='completas'] .detalle-imagen-principal img,
+:root[data-fotos='completas'] .detalle-miniatura img {
+  object-fit: contain;
+  background: var(--color-accent);
+}
+
+/* Ficha horizontal (opción del admin, pedido de un cliente): la foto en un marco apaisado (3:2) que ocupa cerca de
+   dos tercios del ancho, siempre entera (en un marco horizontal, una obra vertical se recortaría mucho), y los
+   textos de la derecha un poco más chicos para equilibrarla */
+:root[data-ficha='horizontal'] .detalle-imagen-principal,
+:root[data-ficha='horizontal'] .detalle-sin-imagen {
+  aspect-ratio: 3 / 2;
+}
+
+:root[data-ficha='horizontal'] .detalle-imagen-principal img,
+:root[data-ficha='horizontal'] .detalle-miniatura img {
+  object-fit: contain;
+  background: var(--color-accent);
+}
+
+:root[data-ficha='horizontal'] .detalle-miniatura {
+  width: 96px;
+}
+
+:root[data-ficha='horizontal'] .detalle-miniatura img {
+  aspect-ratio: 3 / 2;
+}
+
+:root[data-ficha='horizontal'] .detalle-nombre {
+  font-size: clamp(1.75rem, 2.6vw, 2.4rem);
+  margin-bottom: 12px;
+}
+
+:root[data-ficha='horizontal'] .detalle-precio {
+  font-size: 1.35rem;
+}
+
+:root[data-ficha='horizontal'] .detalle-precio-anterior {
+  font-size: 1rem;
+}
+
+:root[data-ficha='horizontal'] .detalle-separador {
+  margin: 18px 0;
+}
+
+:root[data-ficha='horizontal'] .detalle-descripcion {
+  font-size: 0.98rem;
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+
+:root[data-ficha='horizontal'] .detalle-ficha {
+  margin-bottom: 22px;
+}
+
+:root[data-ficha='horizontal'] .detalle-compra {
+  padding-top: 22px;
+}
+
+/* Las dos columnas solo desde la tablet: en el celular sigue una sola columna, como siempre */
+@media (min-width: 768px) {
+  :root[data-ficha='horizontal'] .detalle-contenido {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: clamp(28px, 4vw, 56px);
+  }
+}
+
+/* Con el logo grande el header crece: el salto a las reseñas no queda tapado */
+@media (min-width: 1024px) {
+  :root[data-logo='grande'] .detalle-resenas {
+    scroll-margin-top: 112px;
   }
 }

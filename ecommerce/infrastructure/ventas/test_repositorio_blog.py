@@ -22,8 +22,9 @@ DESPUES = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
 FOTO = ImagenProcesada(contenido=b'imagen', extension='png')
 
 
-def datos(titulo='Nuestro taller', estado=EstadoPublicacion.PUBLICADA):
-    return DatosPublicacion(titulo=titulo, resumen='Cómo trabajamos', contenido='<p>Desde 2015.</p>', estado=estado)
+def datos(titulo='Nuestro taller', estado=EstadoPublicacion.PUBLICADA, youtube_id=''):
+    return DatosPublicacion(titulo=titulo, resumen='Cómo trabajamos', contenido='<p>Desde 2015.</p>', estado=estado,
+                            youtube_id=youtube_id)
 
 
 class RepositorioPublicacionesTests(TestCase):
@@ -53,6 +54,19 @@ class RepositorioPublicacionesTests(TestCase):
         self.assertEqual((publicacion.titulo, publicacion.estado), ('Otro título', 'PUBLICADA'))
         self.assertTrue(publicacion.portada.name.startswith('blog/portadas/'))
         self.assertEqual(self.repositorio.obtener(publicacion_id).tiene_portada, True)
+
+    def test_guarda_y_obtiene_youtube_id(self):
+        publicacion_id = self.crear(youtube_id='dQw4w9WgXcQ')
+        publicacion = Publicacion.objects.get(id=publicacion_id)
+        self.assertEqual(publicacion.youtube_id, 'dQw4w9WgXcQ')
+
+        guardada = self.repositorio.obtener(publicacion_id)
+        self.assertEqual(guardada.youtube_id, 'dQw4w9WgXcQ')
+
+        # Actualiza quitando el video
+        self.repositorio.guardar(publicacion_id, datos(youtube_id=''), 'nuestro-taller', AHORA, SIN_CAMBIO)
+        publicacion.refresh_from_db()
+        self.assertEqual(publicacion.youtube_id, '')
 
     def test_obtener_informa_slug_fecha_y_cantidad_de_fotos(self):
         publicacion_id = self.crear()

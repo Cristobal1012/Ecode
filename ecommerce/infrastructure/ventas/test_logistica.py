@@ -253,6 +253,11 @@ class OrdenTransporteTests(APITestCase):
                          return_value={'SANTIAGO': 'STGO'})
         catalogo.start()
         self.addCleanup(catalogo.stop)
+        # El servicio cotizado se consulta antes de la OT; aquí se prueba la OT (ver test_chilexpress)
+        servicio = patch(f'{ADAPTADOR_CHILEXPRESS}.ChilexpressCourier._servicio_elegido',
+                         return_value={'serviceTypeCode': 3, 'serviceDescription': 'EXPRESS'})
+        servicio.start()
+        self.addCleanup(servicio.stop)
 
     @patch(f'{ADAPTADOR_CHILEXPRESS}.requests.post')
     @patch('ecommerce.infrastructure.ventas.adapters.transbank_adapter.TransbankWebpayAdapter.confirmar_transaccion')
@@ -456,4 +461,8 @@ class CredencialesGuardadasTests(APITestCase):
         chilexpress, = DjangoCouriers().activos()
 
         self.assertEqual(chilexpress.credenciales.como_dict(),
-                         {'cotizador': 'llave-cotizador', 'coberturas': '', 'envios': 'llave-envios'})
+                         {'ambiente': '', 'cotizador': 'llave-cotizador', 'coberturas': '', 'envios': 'llave-envios',
+                          'tcc': '', 'rut': '', 'contenido': ''})
+        # Sin ambiente guardado siguen en el de pruebas, como antes de poder elegirlo
+        self.assertEqual(chilexpress.credenciales.valor('ambiente'), 'PRUEBAS')
+        self.assertTrue(chilexpress.credenciales.configuradas)

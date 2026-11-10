@@ -13,6 +13,50 @@ import './Blog.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
 
+// RF-04.4, SCRUM-195: video de YouTube bajo demanda con botón accesible.
+// Hasta el clic no se carga nada de YouTube (ni siquiera miniaturas a img.youtube.com);
+// se muestra la portada de la publicación o un fondo neutro, y al hacer clic se monta el reproductor desde youtube-nocookie.com
+export function VideoYouTube({ youtubeId, titulo, portada }) {
+  const [reproduciendo, setReproduciendo] = useState(false);
+
+  if (!youtubeId) return null;
+
+  return (
+    <div className="blog-video-contenedor">
+      {reproduciendo ? (
+        <iframe
+          className="blog-video-iframe"
+          src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
+          title={`Reproductor de video: ${titulo}`}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <div className="blog-video-facade">
+          {portada ? (
+            <img
+              src={portada}
+              alt=""
+              className="blog-video-miniatura"
+            />
+          ) : (
+            <div className="blog-video-miniatura blog-video-miniatura--neutra" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            className="blog-video-reproducir"
+            onClick={() => setReproduciendo(true)}
+            aria-label={`Reproducir video: ${titulo}`}
+          >
+            <span className="blog-video-icono-play" aria-hidden="true">▶</span>
+            <span className="blog-video-boton-texto">Reproducir video: {titulo}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Una publicación del blog: portada, texto y galería. Un borrador responde igual que una que no existe
 export default function PublicacionBlog() {
   const { slug } = useParams();
@@ -61,6 +105,13 @@ export default function PublicacionBlog() {
               {publicacion.resumen && <p className="blog-resumen texto-secundario">{publicacion.resumen}</p>}
               {publicacion.portada && (
                 <img className="blog-portada" src={publicacion.portada} alt={`Portada de "${publicacion.titulo}"`} />
+              )}
+              {publicacion.youtube_id && (
+                <VideoYouTube
+                  youtubeId={publicacion.youtube_id}
+                  titulo={publicacion.titulo}
+                  portada={publicacion.portada}
+                />
               )}
               {publicacion.contenido && (
                 <div className="legal-contenido ql-snow">

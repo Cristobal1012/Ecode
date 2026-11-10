@@ -8,6 +8,7 @@ import ListaResenas, { PromedioResenas } from '../components/ListaResenas';
 import useResenas from '../hooks/useResenas';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
+import EtiquetaProducto from '../components/EtiquetaProducto';
 import './DetalleProducto.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoDetalle } from '../components/carga/EsqueletosTienda';
@@ -207,6 +208,8 @@ export default function DetalleProducto() {
 
   const imagenes = producto.imagenes || [];
   const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
+  const esColeccionPrivada = Boolean(producto.coleccion_privada);
+  const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
   const fichaTecnica = Object.entries(producto.atributos_globales || {});
 
   return (
@@ -262,6 +265,7 @@ export default function DetalleProducto() {
 
           {/* Información y compra */}
           <div className="detalle-info">
+            <EtiquetaProducto producto={producto} enFicha />
             {producto.categoria && <span className="antetitulo">{producto.categoria}</span>}
             <h1 className="detalle-nombre">{producto.nombre}</h1>
             {resenas?.total > 0 && (
@@ -271,7 +275,9 @@ export default function DetalleProducto() {
             )}
 
             <p className="detalle-precio">
-              {agotado ? (
+              {esColeccionPrivada ? (
+                <span className="detalle-coleccion-privada">Colección privada</span>
+              ) : agotado ? (
                 <span className="texto-secundario">Sin stock</span>
               ) : (
                 <>
@@ -303,7 +309,18 @@ export default function DetalleProducto() {
             )}
 
             <div className="detalle-compra">
-              <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
+              {esColeccionPrivada ? (
+                tieneVersionVenta ? (
+                  <Link
+                    to={`/catalogo/producto/${producto.version_a_la_venta}`}
+                    className="boton boton-primario detalle-boton-version-print"
+                  >
+                    {producto.texto_boton_version || 'Disponible en print'}
+                  </Link>
+                ) : null
+              ) : (
+                <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
+              )}
             </div>
 
             {configuracion?.cotizaciones_activas && (

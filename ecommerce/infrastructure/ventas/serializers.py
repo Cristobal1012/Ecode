@@ -23,6 +23,7 @@ from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.application.vitrina import ValidarDestacados
+from ecommerce.domain.banner import DESTINO_POR_DEFECTO
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.catalogo import OrdenCategoriasInvalido, normalizar_orden_categorias
 from ecommerce.domain.destacados import (
@@ -49,7 +50,7 @@ from ecommerce.infrastructure.catalogo.repositorio_vitrina import MongoCatalogoV
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, DireccionEnvio, Promocion
 from .models import ConfiguracionGlobal, Cotizacion, OrdenCompra, DireccionEnvio, EmpresaComprador, PaginaLegal
-from .models import FotoPublicacion, Publicacion, Resena, ResenaProducto
+from .models import FotoBanner, FotoPublicacion, Publicacion, Resena, ResenaProducto
 from .adapters.correo import CorreoNotificadorPedidos
 from .html_seguro import limpiar_html, tiene_texto
 from .couriers import DjangoCouriers
@@ -87,14 +88,51 @@ CAMPOS_FOTOS_INSTAGRAM = tuple(f'instagram_foto_{numero}' for numero in range(1,
 CAMPOS_DIRECCION_LOCAL = ('calle_origen', 'numero_origen', 'dpto_casa_origen', 'comuna_origen', 'region_origen')
 
 
+class FotoBannerSerializer(serializers.ModelSerializer):
+    imagen = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FotoBanner
+        # Cada foto con sus textos y a qué página lleva su botón (SCRUM-194)
+        fields = ['id', 'imagen', 'orden', 'antetitulo', 'titulo', 'texto', 'destino']
+
+    def get_imagen(self, obj):
+        if not obj.imagen:
+            return None
+        request = self.context.get('request')
+        url = obj.imagen.url
+        return request.build_absolute_uri(url) if request is not None else url
+
+
+def obtener_banners_configuracion(obj, request=None):
+    fotos = list(obj.fotos_banner.all())
+    if fotos:
+        return FotoBannerSerializer(fotos, many=True, context={'request': request}).data
+    # La portada antigua (una sola foto) se muestra con los textos generales y el botón al catálogo
+    textos = {'antetitulo': obj.subtitulo_bienvenida or '', 'titulo': obj.texto_bienvenida or '',
+              'texto': obj.texto_landing or '', 'destino': DESTINO_POR_DEFECTO}
+    if obj.banner:
+        url = obj.banner.url
+        if request is not None:
+            url = request.build_absolute_uri(url)
+        return [{'id': 'legacy', 'imagen': url, 'orden': 0, **textos}]
+    if obj.banner_url and obj.banner_url.strip():
+        return [{'id': 'legacy', 'imagen': obj.banner_url.strip(), 'orden': 0, **textos}]
+    return []
+
+
 class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
     banner_url = serializers.URLField(required=False, allow_blank=True, default='')
+    banners = serializers.SerializerMethodField()
     texto_boton_ingreso = serializers.CharField(max_length=100, required=False)
     pasarelas_activas = serializers.SerializerMethodField()
     # RN-04: el frontend muestra el botón de Google solo si viene informado (es público por diseño)
     google_client_id = serializers.SerializerMethodField()
     # Couriers con sus llaves cargadas: el checkout ofrece despacho y sucursales con ellos (nunca sus llaves)
     couriers = serializers.SerializerMethodField()
+
+    def get_banners(self, obj):
+        return obtener_banners_configuracion(obj, self.context.get('request'))
 
     class Meta:
         model = ConfiguracionGlobal
@@ -144,6 +182,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'logo',
             'favicon',
             'banner',
+            'banners',
             'subtitulo_bienvenida',
             'texto_landing',
             'nosotros_titulo',
@@ -193,6 +232,7 @@ CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
+    banners = serializers.SerializerMethodField()
     # Se suben por multipart; un null (en JSON) quita la imagen
     logo = ImagenNegocioField(required=False, allow_null=True)
     favicon = ImagenNegocioField(required=False, allow_null=True)
@@ -219,6 +259,10 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
 
     sobre_mi_nombre = serializers.CharField(max_length=200,required=False,allow_blank=True)
     sobre_mi_biografia = serializers.CharField(max_length=100_000,required=False,allow_blank=True,trim_whitespace=False)
+
+    def get_banners(self, obj):
+        return obtener_banners_configuracion(obj, self.context.get('request'))
+
     class Meta:
         model = ConfiguracionGlobal
         fields = [
@@ -239,6 +283,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'logo',
             'favicon',
             'banner',
+            'banners',
             'layout_catalogo',
             'google_analytics_id',
             'meta_pixel_id',
@@ -1008,6 +1053,7 @@ class PublicacionEntradaSerializer(serializers.Serializer):
     contenido = serializers.CharField(required=False, allow_blank=True, default='', max_length=100_000,
                                       trim_whitespace=False)
     estado = serializers.CharField(required=False, allow_blank=True, default='')
+    youtube = serializers.CharField(required=False, allow_blank=True, default='', max_length=500)
     # Sin portada ni quitar_portada, la portada queda como estaba
     portada = ArchivoImagenField(required=False)
     quitar_portada = serializers.BooleanField(required=False, default=False)
@@ -1046,7 +1092,7 @@ class PublicacionDetalleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Publicacion
-        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'fecha_publicacion']
+        fields = ['titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'youtube_id', 'fecha_publicacion']
 
 
 class PublicacionAdminSerializer(serializers.ModelSerializer):
@@ -1054,8 +1100,8 @@ class PublicacionAdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Publicacion
-        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'estado', 'fecha_publicacion',
-                  'actualizada']
+        fields = ['id', 'titulo', 'slug', 'resumen', 'contenido', 'portada', 'fotos', 'youtube_id', 'estado',
+                  'fecha_publicacion', 'actualizada']
 
 class MedioPagoAdminSerializer(serializers.Serializer):
     """Entrada del panel: las credenciales pueden volver enmascaradas (se conservan) o vacías (se borran)."""
@@ -1106,8 +1152,19 @@ def courier_para_panel(courier):
         'ayuda': courier.ayuda,
         'configuradas': credenciales.configuradas,
         'faltantes': credenciales.faltantes,
-        'campos': [{'nombre': campo.nombre, 'etiqueta': campo.etiqueta, 'obligatorio': campo.obligatorio}
-                   for campo in credenciales.campos],
+        # Igual que los campos de un medio de pago (medio_pago_para_panel)
+        'campos': [{
+            'nombre': campo.nombre,
+            'etiqueta': campo.etiqueta,
+            # True: llave de API, llega enmascarada
+            'secreto': campo.secreto,
+            'opciones': list(campo.opciones),
+            'obligatorio': campo.obligatorio,
+            # Ej. ['ambiente', 'PRODUCCION']: obligatorio solo con ese valor
+            'obligatorio_si': list(campo.obligatorio_si) if campo.obligatorio_si else None,
+            # 'rut' o 'digitos' (lo valida el servidor); el panel elige el teclado
+            'formato': campo.formato,
+        } for campo in credenciales.campos],
         'datos': credenciales.visibles(),
     }
 

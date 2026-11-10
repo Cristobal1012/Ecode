@@ -1,4 +1,4 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -8,6 +8,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from django.core import signing
 from django.shortcuts import redirect
+from django.db import transaction
 from django.db.models import F, Q, Sum, Count
 from django.db import transaction
 from django.db.models.functions import TruncDate
@@ -45,6 +46,7 @@ from ecommerce.application.ventas import (
     GenerarOrdenTransporte, OrdenNoEncontrada, PedidoModificado, ResolverRevision, ResultadoPago,
     SinRevisionPendiente, RegistrarPagoFueraPlazo, PagoFueraPlazoNoPermitido
 )
+from ecommerce.application.banner import ActualizarBanners
 from ecommerce.application.blog import (
     SIN_CAMBIO, AgregarFotos, BlogDesactivado, EliminarPublicacion, FotoNoEncontrada, GuardarPublicacion,
     PublicacionNoEncontrada, QuitarFoto, VerBlog, VerPublicacion,
@@ -71,6 +73,7 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
+from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
 from ecommerce.domain.sobre_mi import (
     ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
     exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
@@ -80,6 +83,9 @@ from ecommerce.domain.cotizaciones import CotizacionInvalida
 from ecommerce.domain.resenas import (
     ModeracionNoPermitida, PedidoNoEntregado, PlazoResenaVencido, ResenaInvalida, ResenaYaEnviada, puede_resenarse,
 )
+from bson.errors import InvalidId
+from mongoengine.errors import ValidationError as MongoValidationError
+from ecommerce.infrastructure.catalogo.documents import Producto
 from ecommerce.infrastructure.catalogo.repositorio_variantes import (
     MongoInventarioVariantes, MongoNombresProductos, MongoStockCatalogo, fotos_de_variantes,
 )
@@ -87,7 +93,7 @@ from ecommerce.infrastructure.catalogo.upload_handlers import CatalogoImageUploa
 
 from .models import (
     ConfiguracionGlobal, Cotizacion, OrdenCompra, Carrito, DireccionEnvio, EmpresaComprador, FotoCotizacion,
-    PaginaLegal, Promocion, Publicacion, Resena,
+    FotoBanner, PaginaLegal, Promocion, Publicacion, Resena,
 )
 from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
@@ -96,6 +102,7 @@ from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
     ConfiguracionNegocioSerializer,
+    ImagenNegocioField,
     OrdenCompraSerializer,
     RevisionCarritoSerializer,
     DireccionEnvioSerializer,
@@ -135,6 +142,7 @@ from .repositorio_resenas import DjangoPedidosParaResenar, DjangoRepositorioRese
 from .html_seguro import tiene_texto
 from .instrucciones_pago import instrucciones_transferencia
 from .repositorio_blog import DjangoRepositorioPublicaciones
+from .repositorio_banner import DjangoRepositorioBanners
 from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
 from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -404,6 +412,18 @@ class CarritoAPIView(APIView):
     def post(self, request):
         carrito, created = Carrito.objects.get_or_create(usuario=request.user)
         items = request.data.get('items', [])
+        for item in items:
+            p_id = item.get('producto_mongo_id') or item.get('producto_id') or item.get('id')
+            if p_id:
+                try:
+                    p = Producto.objects(id=p_id).only('coleccion_privada').first()
+                except (MongoValidationError, InvalidId):
+                    p = None
+                if p and getattr(p, 'coleccion_privada', False):
+                    return Response(
+                        {"items": ["No se pueden agregar productos de colección privada al carrito."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
         carrito.items = items
         carrito.save()
         return Response({"items": carrito.items})
@@ -752,7 +772,7 @@ class ConfiguracionGlobalAPIView(generics.RetrieveAPIView):
     authentication_classes = []
 
     def get_object(self):
-        configuracion = ConfiguracionGlobal.objects.filter(id=1).first()
+        configuracion = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
         if configuracion is None:
             raise NotFound('No existe una configuración de tienda.')
         return configuracion
@@ -764,7 +784,9 @@ class ConfiguracionNegocioView(APIView):
     permission_classes = [IsEmprendedor]
 
     def get_object(self):
-        obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
+        obj = ConfiguracionGlobal.objects.prefetch_related('fotos_banner').filter(id=1).first()
+        if obj is None:
+            obj, _ = ConfiguracionGlobal.objects.get_or_create(id=1)
         return obj
 
     def get(self, request):
@@ -777,10 +799,28 @@ class ConfiguracionNegocioView(APIView):
         config = self.get_object()
         serializer = ConfiguracionNegocioSerializer(config, data=request.data, partial=True,
                                                     context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                serializer.save()
+                if 'banner_orden' in request.data:
+                    ActualizarBanners(DjangoRepositorioBanners()).ejecutar(
+                        config.id,
+                        request.data.get('banner_orden'),
+                        request.FILES.getlist('banner_fotos')
+                    )
+        except (EstructuraBannerInvalida, TextosFotoInvalidos) as exc:
+            return Response({'banner_orden': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except LimiteFotosBannerExcedido as exc:
+            return Response({'banner_fotos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        config = self.get_object()
+        respuesta = ConfiguracionNegocioSerializer(config, context={'request': request})
+        return Response(respuesta.data, status=status.HTTP_200_OK)
 
     def patch(self, request):
         return self.put(request)

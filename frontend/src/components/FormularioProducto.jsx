@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
+import CampoEtiquetaProducto from './CampoEtiquetaProducto';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -25,7 +26,12 @@ const leerProductoAEditar = (productoAEditar) => {
         nombre: '',
         descripcion: '',
         categoria: '',
+        etiqueta: '',
+        etiqueta_color: 'primary',
         publicado: false,
+        coleccion_privada: false,
+        version_a_la_venta: '',
+        texto_boton_version: 'Disponible en print',
         meta_titulo: '',
         meta_descripcion: ''
       },
@@ -71,7 +77,12 @@ const leerProductoAEditar = (productoAEditar) => {
       nombre: productoAEditar.nombre || '',
       descripcion: productoAEditar.descripcion || '',
       categoria: productoAEditar.categoria || '',
+      etiqueta: productoAEditar.etiqueta || '',
+      etiqueta_color: productoAEditar.etiqueta_color || 'primary',
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
+      coleccion_privada: Boolean(productoAEditar.coleccion_privada),
+      version_a_la_venta: productoAEditar.version_a_la_venta || '',
+      texto_boton_version: productoAEditar.texto_boton_version || 'Disponible en print',
       meta_titulo: productoAEditar.meta_titulo || '',
       meta_descripcion: productoAEditar.meta_descripcion || ''
     },
@@ -112,6 +123,7 @@ export default function FormularioProducto({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
+  const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
 
   // ============================================================
@@ -127,6 +139,7 @@ export default function FormularioProducto({
         const lista = Array.isArray(data) ? data : (data?.results || []);
 
         if (Array.isArray(lista)) {
+          setProductosCatalogo(lista);
           const categoriasUnicas = [
             ...new Set(
               lista
@@ -417,11 +430,16 @@ export default function FormularioProducto({
         nombre: producto.nombre.trim(),
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
+        etiqueta: producto.etiqueta.trim(),
+        etiqueta_color: producto.etiqueta_color,
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
 
         activo: true,
         publicado: producto.publicado,
+        coleccion_privada: Boolean(producto.coleccion_privada),
+        version_a_la_venta: producto.coleccion_privada && producto.version_a_la_venta ? producto.version_a_la_venta : null,
+        texto_boton_version: (producto.texto_boton_version || '').trim() || 'Disponible en print',
 
         atributos_globales:
           objAtributosGlobales,
@@ -435,10 +453,11 @@ export default function FormularioProducto({
       // EDITAR PRODUCTO
       // ========================================================
 
-      if (productoAEditar) {
+      if (productoAEditar || productoGuardadoId) {
         idProducto =
-          productoAEditar.id ||
-          productoAEditar._id;
+          productoGuardadoId ||
+          productoAEditar?.id ||
+          productoAEditar?._id;
 
         if (!idProducto) {
           throw new Error(
@@ -910,6 +929,9 @@ export default function FormularioProducto({
           }
         />
       </div>
+
+      <CampoEtiquetaProducto etiqueta={producto.etiqueta} color={producto.etiqueta_color}
+        onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
 
       {/* ======================================================
           ATRIBUTOS GLOBALES
@@ -1626,6 +1648,210 @@ export default function FormularioProducto({
             }}
           />
         </label>
+      </div>
+
+      {/* ======================================================
+          COLECCIÓN PRIVADA (SCRUM-197)
+      ======================================================= */}
+      <div
+        className="bloque-coleccion-privada"
+        style={{
+          padding: '15px',
+          backgroundColor: producto.coleccion_privada
+            ? '#f8fafc'
+            : 'var(--color-secondary)',
+          borderRadius: '8px',
+          border: `1px solid ${
+            producto.coleccion_privada
+              ? '#64748b'
+              : 'var(--color-border)'
+          }`,
+          marginTop: '20px'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <label
+              htmlFor={`${idFormulario}-coleccion-privada`}
+              style={{
+                display: 'block',
+                cursor: 'pointer'
+              }}
+            >
+              <strong
+                id={`${idFormulario}-coleccion-privada-titulo`}
+                style={{
+                  display: 'block',
+                  fontSize: '1.1em',
+                  color: 'var(--color-text)'
+                }}
+              >
+                No está a la venta (colección privada)
+              </strong>
+              <span
+                style={{
+                  fontSize: '0.85em',
+                  color: 'var(--color-muted)'
+                }}
+              >
+                Esta obra no se puede comprar ni agregar al carrito. Se exhibe como pieza única o de colección.
+              </span>
+            </label>
+          </div>
+
+          <label
+            htmlFor={`${idFormulario}-coleccion-privada`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              gap: '10px'
+            }}
+          >
+            <span
+              style={{
+                fontWeight: 'bold',
+                color: producto.coleccion_privada
+                  ? '#0f172a'
+                  : 'var(--color-muted)'
+              }}
+            >
+              {producto.coleccion_privada ? 'COLECCIÓN PRIVADA' : 'A LA VENTA'}
+            </span>
+            <input
+              id={`${idFormulario}-coleccion-privada`}
+              name="coleccion_privada"
+              type="checkbox"
+              aria-labelledby={`${idFormulario}-coleccion-privada-titulo`}
+              checked={Boolean(producto.coleccion_privada)}
+              onChange={(e) =>
+                setProducto((prev) => ({
+                  ...prev,
+                  coleccion_privada: e.target.checked
+                }))
+              }
+              style={{
+                width: '20px',
+                height: '20px',
+                cursor: 'pointer'
+              }}
+            />
+          </label>
+        </div>
+
+        {producto.coleccion_privada && (
+          <div
+            style={{
+              marginTop: '15px',
+              paddingTop: '15px',
+              borderTop: '1px solid var(--color-border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}
+          >
+            <div>
+              <label
+                htmlFor={`${idFormulario}-version-venta`}
+                style={{
+                  display: 'block',
+                  fontWeight: '600',
+                  marginBottom: '5px'
+                }}
+              >
+                Versión a la venta (opcional)
+              </label>
+              <select
+                id={`${idFormulario}-version-venta`}
+                name="version_a_la_venta"
+                value={producto.version_a_la_venta || ''}
+                onChange={(e) =>
+                  setProducto((prev) => ({
+                    ...prev,
+                    version_a_la_venta: e.target.value
+                  }))
+                }
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-input-bg, #fff)'
+                }}
+              >
+                <option value="">-- Ninguna --</option>
+                {productosCatalogo
+                  .filter((p) => (p.id || p._id) !== productoGuardadoId && !p.coleccion_privada)
+                  .map((p) => (
+                    <option key={p.id || p._id} value={p.id || p._id}>
+                      {p.nombre} {p.publicado ? '' : '(Borrador)'}
+                    </option>
+                  ))}
+              </select>
+              <span
+                style={{
+                  fontSize: '0.8em',
+                  color: 'var(--color-muted)',
+                  marginTop: '4px',
+                  display: 'block'
+                }}
+              >
+                Enlaza a otra obra disponible para comprar (por ejemplo una lámina o print).
+              </span>
+            </div>
+
+            {producto.version_a_la_venta && (
+              <div>
+                <label
+                  htmlFor={`${idFormulario}-texto-boton-version`}
+                  style={{
+                    display: 'block',
+                    fontWeight: '600',
+                    marginBottom: '5px'
+                  }}
+                >
+                  Texto del botón
+                </label>
+                <input
+                  id={`${idFormulario}-texto-boton-version`}
+                  name="texto_boton_version"
+                  type="text"
+                  value={producto.texto_boton_version ?? 'Disponible en print'}
+                  onChange={(e) =>
+                    setProducto((prev) => ({
+                      ...prev,
+                      texto_boton_version: e.target.value
+                    }))
+                  }
+                  placeholder="Disponible en print"
+                  maxLength={100}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border)'
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '0.8em',
+                    color: 'var(--color-muted)',
+                    marginTop: '4px',
+                    display: 'block'
+                  }}
+                >
+                  Texto que verán los clientes en la ficha y en la tarjeta (por defecto: &quot;Disponible en print&quot;).
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ======================================================

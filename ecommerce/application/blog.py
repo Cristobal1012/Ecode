@@ -32,6 +32,7 @@ class PublicacionGuardada:
     fecha_publicacion: datetime | None
     tiene_portada: bool
     cantidad_fotos: int
+    youtube_id: str = ''
 
 
 @dataclass(frozen=True)

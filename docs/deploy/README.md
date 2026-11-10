@@ -21,13 +21,15 @@ Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambia
 
 - **Servidor:** una VPS con Ubuntu y Docker, de 4 GB de RAM (ver la [memoria](#publicar-con-docker)): unos US$15
   a US$20 al mes según el proveedor. Lo paga quien publica la tienda.
-- **Dominio** (ej. `mitienda.cl`): unos $9.940 + IVA al año en NIC Chile. Lo compra el cliente, a su nombre.
+- **Dominio** (ej. `mitienda.cl`): unos $9.940 + IVA al año en NIC Chile; un `.com`, unos US$10 a US$15 al año
+  según el registrador. Lo compra el cliente, a su nombre.
 
 **Lo que cobra por venta o por envío**, sin mensualidad. Lo contrata y lo paga el cliente con cada proveedor:
 
 - **Transbank Webpay Plus:** una comisión por venta, que fija su contrato con Transbank.
 - **Mercado Pago:** una comisión por venta, que depende del plazo en que libera el dinero.
-- **Chilexpress:** la tarifa de cada envío, que el checkout le cobra al comprador. Pide una cuenta de empresa.
+- **Chilexpress:** la tarifa de cada envío, que el checkout le cobra al comprador y Chilexpress le cobra a la
+  tienda en su TCC (Tarjeta Cliente Chilexpress). Ver [6. Envíos](#6-envíos).
 - **Linkify** (opcional, verifica las transferencias solo): según el plan que contrate.
 
 **Lo que es gratis:**
@@ -37,6 +39,8 @@ Precios aproximados de noviembre de 2026: revísalos al contratar, porque cambia
 - El correo con Gmail, para pruebas y demos (unos 500 correos al día).
 - El correo con Resend en la tienda real, hasta 3.000 correos al mes y 100 al día. Si la tienda los supera, el
   plan Pro cuesta US$20 al mes.
+- Los registros DNS del dominio en Cloudflare (plan Free), y su reenvío de correos para recibir las respuestas de
+  los compradores si el cliente no tiene un buzón en el dominio: ver [Dominio y DNS](#1-dominio-dns-y-servidor).
 - El inicio de sesión con Google.
 - La transferencia bancaria (solo lo que cobre el banco del cliente), el retiro en local y la entrega
   coordinada.
@@ -100,6 +104,11 @@ docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/
 
 Los demás comandos usan la misma forma (`docker compose -p ... exec backend python manage.py <comando>`). Los
 registros se ven con `docker compose -p ... logs -f backend`.
+
+**No corras las pruebas (`python manage.py test`) en el servidor de una tienda.** Usan las mismas bases de datos
+del servidor: crean y borran bases de prueba junto a las de la tienda, y una prueba mal aislada puede borrar
+datos reales (en noviembre de 2026, dos pruebas borraban el catálogo al correr; ya están corregidas). Las pruebas
+se corren en el computador de desarrollo o en el CI, nunca donde hay una tienda con datos.
 
 ### Actualizar a una versión nueva
 
@@ -203,7 +212,7 @@ se publican en `MEDIA_URL` (por defecto `/media/`):
 
 | Carpeta | Qué guarda |
 |---|---|
-| `negocio/` | Logo, favicon, portada y fotos de la página de inicio (Nosotros e Instagram) |
+| `negocio/` | Logo, favicon, portada, fotos del carrusel de la portada (`negocio/banners/`) y fotos de la página de inicio (Nosotros e Instagram) |
 | `catalogo/productos/` | Fotos de los productos |
 | `blog/portadas/` y `blog/fotos/` | Portada y galería de cada publicación del blog (si el emprendedor lo activa) |
 
@@ -273,6 +282,26 @@ Una orden cancelada no se puede volver a marcar como pagada desde el panel. Si u
 de la cancelación, el emprendedor lo verá en su cuenta bancaria y decide si devuelve el dinero o le arma un
 pedido nuevo.
 
+### Fotos del catálogo que quedaron sin borrar (una vez al día)
+
+Cuando el emprendedor quita una foto de un producto (o borra el producto), el archivo se borra del disco. Si ese
+borrado falla, por ejemplo porque el disco no respondió, la foto queda anotada como pendiente y sigue ocupando
+espacio. Este comando reintenta borrar las pendientes, hasta 100 por vez (`--limite` para cambiarlo), y nunca
+borra una foto que algún producto todavía use:
+
+```bash
+python manage.py limpiar_imagenes_catalogo
+```
+
+Se programa igual que el anterior, una vez al día y antes de los respaldos, para que el respaldo no las incluya.
+Con Docker, en el cron del servidor:
+
+```cron
+30 3 * * * docker compose -p mitienda -f /ruta/al/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/mitienda-imagenes.log 2>&1
+```
+
+Si no se programa, la tienda funciona igual: solo se acumulan en el disco las fotos que no se pudieron borrar.
+
 ## Enlaces de los correos, reseñas y contraseñas
 
 - **`FRONTEND_URL` tiene que ser la dirección pública de la tienda.** Los correos llevan enlaces a ella: el
@@ -295,6 +324,17 @@ pedido nuevo.
 El backend elige cómo enviar según las variables de entorno: la API HTTPS de **Resend** si hay
 `RESEND_API_KEY`; si no, **SMTP** si hay `EMAIL_HOST`; y si no hay ninguna, los correos solo se imprimen en la
 consola. El remitente que ve el comprador es `DEFAULT_FROM_EMAIL`.
+
+**Si el comprador responde un correo del pedido**, la respuesta va al **correo de contacto** de la tienda
+(Configuración > Contacto y Redes), no al remitente. Resend solo envía: una dirección como `ventas@mitienda.cl` no
+recibe nada salvo que el dominio tenga un buzón. Por eso, en la tienda real:
+
+- el emprendedor carga un correo de contacto que sí lea (puede ser su Gmail), y
+- si quiere que `ventas@mitienda.cl` también reciba (por si alguien escribe directo), le crea un buzón (Google
+  Workspace, Zoho u otro) o lo reenvía a su correo con el reenvío gratuito de Cloudflare
+  (**Email > Email Routing**, que agrega sus propios registros MX en el subdominio raíz).
+
+Sin correo de contacto, las respuestas van al remitente, como antes.
 
 Para probar que llegan, sin hacer una compra:
 
@@ -328,8 +368,10 @@ Cuando el cliente tenga su dominio (lo compra y lo paga él), los correos salen 
 1. Crear la cuenta en resend.com con un correo del cliente, para que la cuenta quede a su nombre.
 2. En **Domains > Add Domain**, ingresar el dominio (por ejemplo `mitienda.cl`) y elegir la región
    **South America (São Paulo)**, la más cercana a Chile.
-3. Copiar en el DNS del dominio (NIC Chile, Cloudflare u otro) los registros que muestra Resend, con los
-   nombres y valores exactos:
+3. Copiar en el DNS del dominio los registros que muestra Resend, con los nombres y valores exactos. Con un
+   dominio `.cl`, el DNS se administra en Cloudflare (NIC Chile no guarda registros: ver
+   [Dominio, DNS y servidor](#1-dominio-dns-y-servidor)), y en Cloudflare estos registros van con la nube gris
+   ("Solo DNS"):
    - **DKIM:** un TXT en `resend._domainkey`.
    - **SPF:** un MX y un TXT en el subdominio `send`. No reemplazan los registros del correo que el
      cliente ya use.
@@ -338,13 +380,15 @@ Cuando el cliente tenga su dominio (lo compra y lo paga él), los correos salen 
    aunque los cambios de DNS pueden demorar hasta 48 horas.
 5. En **API Keys**, crear una clave con permiso **Sending access** limitada a ese dominio.
 6. Configurar `RESEND_API_KEY` con esa clave y `DEFAULT_FROM_EMAIL` con un remitente del dominio, por ejemplo
-   `Mi Tienda <ventas@mitienda.cl>`. Las variables `EMAIL_*` pueden quedar vacías.
+   `Mi Tienda <ventas@mitienda.cl>`. Las variables `EMAIL_*` pueden quedar vacías. En el panel, el emprendedor
+   carga su correo de contacto, que es donde le llegan las respuestas de los compradores (ver [Correo](#correo)).
 7. Reiniciar el backend y verificar:
    - `python manage.py sendtestemail` a una dirección que **no** sea la dueña de la cuenta de Resend.
    - Una compra completa con un correo de comprador distinto, que debe recibir el pedido recibido, el pago y
      el despacho, sin caer en spam. En **Emails**, Resend muestra el estado de cada envío.
 
-El plan gratuito de Resend permite 3 dominios y 3.000 correos al mes (100 al día). Un pedido envía unos 4 o 5
+El plan gratuito de Resend permite 1 dominio por cuenta y 3.000 correos al mes (100 al día); por eso cada
+cliente tiene su propia cuenta. Un pedido envía unos 4 o 5
 correos, así que alcanza para unos 20 pedidos al día; pasado el límite diario, los correos siguientes no salen
 hasta el día siguiente.
 
@@ -353,7 +397,7 @@ hasta el día siguiente.
 Lista en orden para pasar de la tienda de prueba a la real. Los costos de cada paso están en
 [Qué se paga y qué no](#qué-se-paga-y-qué-no).
 
-### 1. Dominio y servidor
+### 1. Dominio, DNS y servidor
 
 1. El cliente compra el dominio a su nombre (NIC Chile u otro registrador).
 2. Un servidor con Ubuntu y Docker, de 4 GB de RAM (con 2 GB no queda margen para los picos: ver la
@@ -361,21 +405,61 @@ Lista en orden para pasar de la tienda de prueba a la real. Los costos de cada p
    proveedor deja abiertos los puertos 22, 80 y 443, y prefiere uno que cobre por hora o tenga devolución: así,
    si la red falla, se cancela sin perder el dinero. Un servidor en Chile o Brasil responde más rápido que uno
    en Estados Unidos o Europa. La preparación del servidor es la misma de [la guía](prueba-servidor.md#2-preparar-el-servidor).
-3. En el DNS del dominio, un registro **A** de `mitienda.cl` hacia la IP del servidor.
+3. **El DNS del dominio.** NIC Chile solo registra el dominio: en su panel se indican los *servidores de nombre*,
+   no los registros (A, TXT, MX). Los registros van en un proveedor de DNS; Cloudflare es gratis:
+   1. Crear una cuenta en cloudflare.com **con un correo del cliente**, agregar el dominio (**Add a domain**) y
+      elegir el plan **Free**.
+   2. Cloudflare muestra dos servidores de nombre (ej. `ana.ns.cloudflare.com` y `bob.ns.cloudflare.com`). En
+      clientes.nic.cl, en el dominio, sección **Servidores de nombre (DNS)**, reemplazar los que haya por esos dos
+      y presionar **Actualizar datos de dominio**. El cambio puede tardar hasta 24 horas; Cloudflare avisa por
+      correo cuando el dominio queda activo.
+   3. En **DNS > Records**, dos registros hacia la IP del servidor, **con la nube gris ("Solo DNS")**:
+
+      | Tipo | Nombre | Contenido |
+      |---|---|---|
+      | A | `@` (es `mitienda.cl`) | la IP del servidor |
+      | A | `www` | la IP del servidor |
+
+      Con la nube naranja, el tráfico pasa por Cloudflare antes de llegar al servidor y el Caddy de la tienda
+      puede no obtener su certificado HTTPS. La tienda ya tiene HTTPS propio: no hace falta el proxy de Cloudflare.
+   4. Comprobar desde el servidor que el dominio ya apunta a su IP antes de levantar la tienda:
+      `dig +short mitienda.cl` y `dig +short www.mitienda.cl` deben devolver esa IP.
+
+   **Con un `.com` u otro dominio que no es `.cl`**, normalmente no hace falta Cloudflare: los registradores
+   (Namecheap, Porkbun, GoDaddy, Hostinger, Cloudflare Registrar, entre otros) incluyen un panel de DNS gratis, y
+   ahí se crean los mismos dos registros `@` y `www`, y después los de Resend. En ese panel, revisa además:
+
+   - que no esté activo el **"parking" o la redirección del registrador** (su página con publicidad): si lo
+     está, desactívalo antes de apuntar el dominio al servidor;
+   - que cualquier opción de **proxy o CDN** del registrador esté apagada, igual que la nube gris de Cloudflare.
+
+   Algunos registradores también reenvían correos gratis (ver [Correo](#correo)). Si se compra en Cloudflare
+   Registrar, el DNS y el reenvío quedan en el mismo lugar desde el inicio. Un `.com` cuesta unos US$10 a US$15
+   al año; varios registradores cobran barato el primer año y más caro la renovación, así que conviene mirar el
+   precio de renovación al elegir.
+
+   Lo importante, con cualquier dominio, es que `@` y `www` apunten al servidor.
 
 ### 2. La tienda con su dominio
 
 Con una sola tienda en el servidor no hace falta el Caddy de borde: el Caddy de la tienda atiende el HTTPS. En su
 archivo de variables:
 
-- `DIRECCION_SITIO=mitienda.cl`, `IP_WEB=0.0.0.0`, `PUERTO_WEB=80` y `PUERTO_WEB_HTTPS=443`.
+- `DIRECCION_SITIO="mitienda.cl, www.mitienda.cl"`, `IP_WEB=0.0.0.0`, `PUERTO_WEB=80` y `PUERTO_WEB_HTTPS=443`.
+  Caddy obtiene un certificado para cada una, y quien entra por `www.mitienda.cl` llega a `mitienda.cl` con la
+  misma ruta: la tienda queda en una sola dirección, porque la sesión y el carrito del navegador se guardan por
+  dirección. Las comillas van porque el valor tiene un espacio.
 - `ALLOWED_HOSTS=mitienda.cl`, y `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` con
-  `https://mitienda.cl`.
+  `https://mitienda.cl`. No hace falta agregar `www`: Caddy redirige antes de que la visita llegue a Django.
 - `SECRET_KEY`, `CLAVE_CIFRADO_CREDENCIALES` y las contraseñas de las bases **nuevas**, nunca las de la tienda de
   prueba.
 
-Levántala como en [Primer arranque](#primer-arranque) y comprueba `https://mitienda.cl/api/salud/`. Cuando todo
-funcione, sube `SECURE_HSTS_SECONDS` a `31536000` y vuelve a levantar la tienda.
+Levántala como en [Primer arranque](#primer-arranque) y comprueba:
+
+- `https://mitienda.cl/api/salud/` responde.
+- `curl -sI https://www.mitienda.cl/catalogo` responde `301` con `Location: https://mitienda.cl/catalogo`.
+
+Cuando todo funcione, sube `SECURE_HSTS_SECONDS` a `31536000` y vuelve a levantar la tienda.
 
 Si la tienda de prueba ya tiene productos y pedidos que el cliente quiere conservar, en vez de partir de cero
 respáldala y restaura ese respaldo sobre la tienda vacía, como en los pasos 4 y 5 de
@@ -411,12 +495,40 @@ Haz una compra real de monto bajo con cada medio y anúlala o devuélvela desde 
 ### 6. Envíos
 
 - **Retiro en local y entrega coordinada:** funcionan sin nada más; se activan en Configuración.
-- **Chilexpress:** `[PENDIENTE]` el adaptador (`ecommerce/infrastructure/ventas/couriers/chilexpress.py`) está
-  conectado al ambiente de pruebas de Chilexpress: la dirección del API (`URL_BASE`) y el RUT con que se generan
-  las órdenes de transporte (`RUT_MARKETPLACE`) son los del sandbox. Para envíos reales falta pasar a la
-  dirección de producción y usar el RUT de la tienda, su TCC y su remitente, con las llaves de producción que
-  Chilexpress entrega después de revisar la documentación de la empresa. Hasta entonces, en la tienda real **no
-  cargues llaves de Chilexpress**: cotizaría con tarifas de prueba y no generaría envíos de verdad.
+- **Chilexpress:** el cliente pide las credenciales de producción a `soporteintegraciones@chilexpress.cl`
+  (lunes a viernes, de 9:00 a 18:00), como lo indica la página "¿Cómo me integro?" del
+  [portal de desarrolladores](https://developers.wschilexpress.com/como-integrarse). Chilexpress responde en menos
+  de 24 horas con:
+  - las llaves de producción de sus APIs (cotizador, coberturas y envíos; si falta la de coberturas o la de envíos,
+    la tienda usa la del cotizador);
+  - su **TCC** (Tarjeta Cliente Chilexpress), la cuenta a la que se cobran los envíos. Sin TCC no entrega las
+    llaves de producción. Si el cliente no tiene cuenta de empresa, en el mismo trámite le dan una TCC de alta
+    automática, limitada a 15 envíos y $50.000 al mes, que puede ampliar después del primer mes pagado.
+
+  En Configuración > Envíos por courier, el cliente elige el ambiente **Producción** y carga las llaves, el número
+  de TCC, el RUT de la empresa del contrato con Chilexpress y qué vende la tienda (es el contenido que se declara en
+  cada envío). Las llaves se guardan cifradas; el ambiente, la TCC y el RUT se ven completos. Con el ambiente
+  **Pruebas** (el que viene por defecto) se usan el sandbox, su TCC y su RUT, aunque el cliente cargue los suyos.
+
+  Chilexpress usa como remitente y dirección de devolución los datos de la tienda, que deben estar completos
+  (en producción, sin ellos no se genera la orden de transporte: el pedido muestra qué falta y, una vez
+  completados, se genera con "Reintentar OT"):
+  - el nombre de la tienda (Página de Inicio e Identidad);
+  - el teléfono comercial y el correo de contacto (Contacto y Redes);
+  - la calle y el número del local (Dirección del Local y Retiro en Tienda). Revisa que no siga la dirección de
+    ejemplo `Av. Principal 123`, que trae una tienda nueva. La comuna del local es además el origen de las
+    cotizaciones.
+
+  Chilexpress devuelve los envíos no entregados a la sucursal donde los recibió o a la dirección donde los retiró,
+  aunque la orden traiga otra dirección de devolución; para cambiarlo, el cliente se lo pide a su ejecutivo.
+
+  Antes de abrir la tienda, haz una compra con despacho a una comuna conocida y revisa que el pedido tenga su orden
+  de transporte y su etiqueta. Según las preguntas frecuentes del portal, Chilexpress solo cobra las piezas que
+  recibe: si no entregas el paquete, esa orden no se cobra. Aun así, pregúntale al ejecutivo cómo anularla.
+
+  La dirección de producción del API (`https://services.wschilexpress.com`) sale del plugin oficial de Chilexpress
+  para WooCommerce: el portal de desarrolladores solo documenta la de pruebas. Si Chilexpress entrega otra, se
+  cambia en `URLS` de `ecommerce/infrastructure/ventas/couriers/chilexpress.py`.
 
 ### 7. Contenido y datos de la tienda
 
@@ -429,8 +541,10 @@ Haz una compra real de monto bajo con cada medio y anúlala o devuélvela desde 
 
 ### 8. Operación
 
-- Las [tareas programadas](#tareas-programadas) (cada hora) y los [respaldos](#respaldos) diarios en el cron del
-  servidor, como en [la guía](prueba-servidor.md#7-tareas-programadas-y-respaldos).
+- Las [tareas programadas](#tareas-programadas) (los plazos de las transferencias cada hora y la limpieza de fotos
+  una vez al día) y los [respaldos](#respaldos) diarios en el cron del servidor, como en
+  [la guía](prueba-servidor.md#7-tareas-programadas-y-respaldos).
+- Nunca correr las pruebas en el servidor de la tienda (ver [Primer arranque](#primer-arranque)).
 - Una restauración de prueba completa antes de entregar la tienda.
 - El monitor de `https://mitienda.cl/api/salud/` cada 5 minutos.
 - Una compra completa de punta a punta con un correo que no sea del equipo: pedido recibido, pago, despacho y

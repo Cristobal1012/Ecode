@@ -36,24 +36,6 @@
   color: var(--color-muted);
 }
 
-.tarjeta-producto-etiqueta {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 5px 10px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.tarjeta-producto-etiqueta--agotado {
-  background: var(--color-text);
-  color: var(--color-background);
-}
-
 .tarjeta-producto-categoria {
   font-size: 0.7rem;
   font-weight: 500;
@@ -79,6 +61,59 @@
   align-items: baseline;
   gap: 10px;
   font-weight: 500;
+}
+
+.tarjeta-producto-coleccion-privada {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tarjeta-producto-enlace {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tarjeta-producto-enlace:hover .tarjeta-producto-imagen img {
+  transform: scale(1.04);
+}
+
+.tarjeta-producto-enlace:hover .tarjeta-producto-nombre {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+.tarjeta-producto-enlace:focus-visible {
+  outline-offset: 6px;
+}
+
+.tarjeta-producto-boton-version {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+}
+
+.tarjeta-producto-boton-version:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+  text-decoration: none;
 }
 
 .tarjeta-producto-precio-anterior {

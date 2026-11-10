@@ -65,6 +65,21 @@ class CatalogoAPIView(APIView):
         return super().handle_exception(exc)
 
 
+def obtener_versiones_publicadas(productos) -> set[str]:
+    """Retorna los IDs de las versiones a la venta que están publicadas, activas y no son privadas."""
+    versiones_ids = [str(p.version_a_la_venta) for p in productos if getattr(p, 'version_a_la_venta', None)]
+    if not versiones_ids:
+        return set()
+    try:
+        return {
+            str(p.id) for p in Producto.objects(
+                id__in=versiones_ids, activo=True, publicado=True, coleccion_privada__ne=True
+            ).only('id')
+        }
+    except Exception:
+        return set()
+
+
 def seleccionar_vitrina():
     """Las pruebas lo reemplazan para no depender de las ventas ni del catálogo reales."""
     return SeleccionarVitrina(DjangoVentasPorProducto(), MongoCatalogoVitrina(),
@@ -94,8 +109,10 @@ class VitrinaView(CatalogoAPIView):
                          if id_publicaciones else {})
 
         def serializar(lista):
-            return ProductoSerializer([productos[i] for i in lista if i in productos], many=True,
-                                      context={'request': request}).data
+            prods = [productos[i] for i in lista if i in productos]
+            versiones_publicadas = obtener_versiones_publicadas(prods)
+            return ProductoSerializer(prods, many=True,
+                                      context={'request': request, 'versiones_publicadas': versiones_publicadas}).data
 
         def destacado(elegido):
             if elegido['tipo'] == TipoDestacado.PRODUCTO:
@@ -105,7 +122,9 @@ class VitrinaView(CatalogoAPIView):
                 datos = ProductoSerializer(producto, context={'request': request}).data
                 return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': datos['nombre'],
                         'categoria': datos.get('categoria') or '', 'imagen': (datos.get('imagenes') or [None])[0],
-                        'enlace': f'/catalogo/producto/{elegido["id"]}', 'variantes': datos.get('variantes', [])}
+                        'enlace': f'/catalogo/producto/{elegido["id"]}', 'variantes': datos.get('variantes', []),
+                        'coleccion_privada': datos.get('coleccion_privada', False),
+                        'etiqueta': datos['etiqueta'], 'etiqueta_color': datos['etiqueta_color']}
             publicacion = publicaciones.get(elegido['id'])
             if publicacion is None:
                 return None
@@ -175,7 +194,9 @@ class ProductoListCreateView(CatalogoAPIView):
         # Si se solicita la lista completa sin paginar (ej. TablaInventario o FormularioProducto)
         sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
         if sin_paginar:
-            serializer = ProductoSerializer(productos, many=True, context={'request': request})
+            prods = list(productos)
+            versiones_publicadas = obtener_versiones_publicadas(prods)
+            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
             return Response(serializer.data)
 
         # 1. Filtro por categoría en servidor (SCRUM-179, RF-01.3)
@@ -335,7 +356,8 @@ class ProductoListCreateView(CatalogoAPIView):
             offset = (page - 1) * page_size
             productos_pagina = list(productos[offset:offset + page_size])
 
-        serializer = ProductoSerializer(productos_pagina, many=True, context={'request': request})
+        versiones_publicadas = obtener_versiones_publicadas(productos_pagina)
+        serializer = ProductoSerializer(productos_pagina, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
         return Response({
             'count': total_count,
             'total_pages': total_pages,

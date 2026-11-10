@@ -86,7 +86,7 @@ export default function SelectorProyectosSobreMi({ blogActivo = true }) {
 
   return (
     <section aria-labelledby="sobre-mi-proyectos-titulo">
-      <h4 id="sobre-mi-proyectos-titulo">Proyectos destacados</h4>
+      <h5 id="sobre-mi-proyectos-titulo">Proyectos destacados</h5>
 
       <p className="texto-secundario admin-descripcion">
         Selecciona las publicaciones del blog que quieras destacar

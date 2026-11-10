@@ -250,6 +250,9 @@ entrega por otro canal (nunca en el mismo correo que la dirección de la tienda)
 # Plazo de pago de las transferencias, cada hora
 0 * * * * docker compose -p alan -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/alan-pagos.log 2>&1
 5 * * * * docker compose -p daniela -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/daniela-pagos.log 2>&1
+# Fotos del catálogo que quedaron sin borrar, una vez al día y antes de los respaldos
+30 3 * * * docker compose -p alan -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/alan-imagenes.log 2>&1
+40 3 * * * docker compose -p daniela -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/daniela-imagenes.log 2>&1
 # Respaldos diarios (se guardan 7 días)
 0 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh alan /opt/tiendas/alan.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1
 10 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh daniela /opt/tiendas/daniela.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1

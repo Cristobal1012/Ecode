@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../../utils/precios';
+import EtiquetaProducto from '../EtiquetaProducto';
 import { Cargando } from '../carga/Esqueleto';
 import { EsqueletoTarjetas } from '../carga/EsqueletosTienda';
 // La etiqueta, la categoría y el precio usan los mismos estilos que las tarjetas de "Más vendidos"
@@ -58,8 +59,8 @@ export default function SeccionDestacados({
 function TarjetaDestacado({ destacado, nombreBlog }) {
   const [imagenRota, setImagenRota] = useState(false);
   const esProducto = destacado.tipo === 'PRODUCTO';
-  const precio = esProducto ? obtenerDatosPrecioYStock(destacado.variantes) : null;
-  const etiqueta = precio?.agotado ? 'Agotado' : precio?.tieneOferta ? 'Oferta' : null;
+  const esColeccionPrivada = esProducto && Boolean(destacado.coleccion_privada);
+  const precio = (esProducto && !esColeccionPrivada) ? obtenerDatosPrecioYStock(destacado.variantes) : null;
 
   return (
     <Link to={destacado.enlace} className="tarjeta-destacado">
@@ -72,11 +73,7 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
         ) : (
           <span className="tarjeta-destacado-sin-imagen" aria-hidden="true">{destacado.nombre?.charAt(0)}</span>
         )}
-        {etiqueta && (
-          <span className={`tarjeta-producto-etiqueta${precio.agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
-            {etiqueta}
-          </span>
-        )}
+        {esProducto && <EtiquetaProducto producto={destacado} />}
       </div>
 
       {/* Sobre el nombre: la categoría del producto o el nombre del blog, para que los nombres queden alineados */}
@@ -87,12 +84,14 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
 
       {esProducto && (
         <p className="tarjeta-producto-precio">
-          {precio.agotado ? (
+          {esColeccionPrivada ? (
+            <span className="tarjeta-producto-coleccion-privada">Colección privada</span>
+          ) : precio?.agotado ? (
             <span className="texto-secundario">Sin stock</span>
           ) : (
             <>
-              <span>{precio.textoPrecio}</span>
-              {precio.tieneOferta && (
+              <span>{precio?.textoPrecio}</span>
+              {precio?.tieneOferta && (
                 <del className="tarjeta-producto-precio-anterior">
                   <span className="visualmente-oculto">Precio anterior: </span>{precio.precioTachado}
                 </del>

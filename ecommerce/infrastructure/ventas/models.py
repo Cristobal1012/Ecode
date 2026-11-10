@@ -5,6 +5,10 @@ from django.conf import settings
 from ecommerce.domain.blog import (
     LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
 )
+from ecommerce.domain.banner import (
+    DESTINO_POR_DEFECTO, DESTINOS_BOTON, LARGO_ANTETITULO as LARGO_ANTETITULO_FOTO, LARGO_TEXTO as LARGO_TEXTO_FOTO,
+    LARGO_TITULO as LARGO_TITULO_FOTO,
+)
 from ecommerce.domain.contacto import LOGO_UNIVERSIDAD_HEADER, UBICACIONES_LOGO_UNIVERSIDAD
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.destacados import LARGO_TITULO as LARGO_TITULO_DESTACADOS
@@ -144,6 +148,26 @@ class ConfiguracionGlobal(models.Model):
 
     def __str__(self):
         return self.nombre_tienda
+
+
+class FotoBanner(models.Model):
+    """Foto del carrusel de la portada (RF-01.1, SCRUM-194). Se ordenan con el campo orden."""
+
+    configuracion = models.ForeignKey(ConfiguracionGlobal, on_delete=models.CASCADE, related_name='fotos_banner')
+    imagen = models.ImageField(upload_to='negocio/banners/')
+    orden = models.PositiveSmallIntegerField(default=0)
+    # Textos y botón propios de la foto (domain/banner.py): viajan con ella al reordenar
+    antetitulo = models.CharField(max_length=LARGO_ANTETITULO_FOTO, blank=True, default='')
+    titulo = models.CharField(max_length=LARGO_TITULO_FOTO, blank=True, default='')
+    texto = models.TextField(max_length=LARGO_TEXTO_FOTO, blank=True, default='')
+    destino = models.CharField(max_length=10, choices=[(destino, destino) for destino in DESTINOS_BOTON],
+                               default=DESTINO_POR_DEFECTO)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f'Foto banner {self.orden} de {self.configuracion}'
 
 
 class MedioPago(models.Model):
@@ -408,6 +432,7 @@ class Publicacion(models.Model):
     # HTML del editor, ya limpio (html_seguro.limpiar_html) al guardarse
     contenido = models.TextField(blank=True, default='')
     portada = models.ImageField(upload_to='blog/portadas/', blank=True, null=True)
+    youtube_id = models.CharField(max_length=20, blank=True, default='')
     estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoPublicacion.BORRADOR.value)
     # Se fija la primera vez que se publica y ordena el blog; None si nunca salió de borrador
     fecha_publicacion = models.DateTimeField(null=True, blank=True)

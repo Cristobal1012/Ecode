@@ -21,6 +21,19 @@ export function resolverMenu(config = {}) {
   });
 }
 
+// Botón de cada foto del carrusel (SCRUM-194): lleva a una página del header y toma su nombre del menú.
+// Blog y Cotizar solo se muestran con su módulo activo; si el módulo se apaga, la foto queda sin botón (null)
+const ENLACE_POR_DESTINO = { INICIO: 'inicio', CATALOGO: 'catalogo', BLOG: 'nosotros', COTIZAR: 'cotizar' };
+
+export function botonDeFoto(configuracion, destino = 'CATALOGO') {
+  const id = ENLACE_POR_DESTINO[destino] ?? 'catalogo';
+  // Sin el blog, "nosotros" lleva a la sección de la landing: no es el blog
+  if (destino === 'BLOG' && !configuracion?.blog_activo) return null;
+  const enlace = resolverMenu(configuracion).find(item => item.id === id);
+  if (!enlace?.visible) return null;
+  return { to: enlace.to, texto: `Ver ${enlace.nombre.toLocaleLowerCase('es')}` };
+}
+
 export function textoBotonCatalogo(configuracion) {
   const catalogo = resolverMenu(configuracion).find(enlace => enlace.id === 'catalogo');
   return `Ver ${catalogo.nombre.toLocaleLowerCase('es')}`;

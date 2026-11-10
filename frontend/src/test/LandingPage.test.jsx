@@ -589,7 +589,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await waitFor(() => expect(patchMock).toHaveBeenCalledTimes(2));
     const [, formulario, opciones] = patchMock.mock.calls[0];
     expect(formulario).toBeInstanceOf(FormData);
-    expect(formulario.get('banner')).toBe(archivo);
+    expect(formulario.get('banner_fotos')).toBe(archivo);
     expect(JSON.parse(formulario.get('menu_principal'))).toEqual({ nombres: { catalogo: 'Obras' } });
     // El navegador pone el multipart con su boundary (axios fija JSON por defecto)
     expect(opciones).toEqual({ headers: { 'Content-Type': undefined } });
@@ -637,6 +637,69 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
 
     expect(screen.getByLabelText('Título')).toHaveValue('Objetos con alma');
     expect(screen.getByText('Sin cambios')).toBeInTheDocument();
+  });
+
+  it('con dos o más fotos, el banner tiene carrusel y botón para pausar y reanudar (WCAG 2.2.2)', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        banners: [
+          { id: 1, imagen: 'http://localhost:8000/media/negocio/banners/obra1.webp', orden: 0 },
+          { id: 2, imagen: 'http://localhost:8000/media/negocio/banners/obra2.webp', orden: 1 },
+        ],
+      },
+    });
+    await renderLanding();
+
+    const botonPausa = await screen.findByRole('button', { name: /pausar carrusel/i });
+    expect(botonPausa).toBeInTheDocument();
+
+    fireEvent.click(botonPausa);
+    const botonReanudar = await screen.findByRole('button', { name: /reanudar carrusel/i });
+    expect(botonReanudar).toBeInTheDocument();
+
+    fireEvent.click(botonReanudar);
+    expect(await screen.findByRole('button', { name: /pausar carrusel/i })).toBeInTheDocument();
+  });
+
+  it('con una sola foto o por defecto, el banner queda fijo y no muestra botón de pausa', async () => {
+    responder({
+      configuracion: {
+        ...CONFIGURACION,
+        banner: 'http://localhost:8000/media/negocio/banners/unica.webp',
+      },
+    });
+    await renderLanding();
+
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('button', { name: /pausar carrusel/i })).not.toBeInTheDocument();
+  });
+
+  it('el admin sube varias fotos al banner en modo edición, las reordena, las borra y las guarda', async () => {
+    await entrarComoAdmin();
+    const foto1 = new File(['1'], 'foto1.png', { type: 'image/png' });
+    const foto2 = new File(['2'], 'foto2.png', { type: 'image/png' });
+
+    // Sube dos fotos al banner
+    fireEvent.change(screen.getByLabelText('Subir imagen de portada'), { target: { files: [foto1, foto2] } });
+
+    // Espera que aparezcan en la lista del editor
+    expect(await screen.findByRole('button', { name: /mover foto 2 hacia la izquierda/i })).toBeInTheDocument();
+
+    // Reordena: mueve la segunda foto a la izquierda (primera posición)
+    fireEvent.click(screen.getByRole('button', { name: /mover foto 2 hacia la izquierda/i }));
+
+    // Borra la foto que ahora quedó en la segunda posición
+    fireEvent.click(screen.getByRole('button', { name: /quitar foto 2 del banner/i }));
+
+    // Guarda los cambios
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    const [, formulario] = patchMock.mock.calls[0];
+    expect(formulario).toBeInstanceOf(FormData);
+    expect(formulario.getAll('banner_fotos')).toHaveLength(1);
+    expect(formulario.get('banner_orden')).toBeDefined();
   });
 });
 
@@ -720,6 +783,38 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
       destacados: [{ tipo: 'PRODUCTO', id: 'p1' }, { tipo: 'PUBLICACION', id: '7' }, { tipo: 'PRODUCTO', id: 'p3' },
         { tipo: 'PUBLICACION', id: '9' }],
     }));
+  });
+
+  it('al guardar el cambio de "Más vendidos" a Destacados, la landing los muestra sin recargar la página', async () => {
+    localStorage.setItem('rol', 'ADMIN');
+    // El servidor guarda lo que llega y la vitrina responde según el modo guardado
+    let config = { ...CONFIGURACION, vitrina_modo: 'MAS_VENDIDOS', destacados: [] };
+    const vitrina = () => (config.vitrina_modo === 'DESTACADOS'
+      ? { mas_vendidos: [], recientes: [], destacados_titulo: 'Destacados', destacados: [
+        { tipo: 'PRODUCTO', id: 'p1', nombre: 'Retrato', categoria: 'Arte', imagen: null,
+          enlace: '/catalogo/producto/p1', variantes: [{ sku: 'p1-1', precio: 30000, stock: 1 }] }] }
+      : { mas_vendidos: [producto('a', 'Jarrón')], recientes: [] });
+    getMock.mockImplementation((url) => Promise.resolve({ data: {
+      'configuracion/': config, 'catalogo/vitrina/': vitrina(), 'catalogo/productos/?todos=true': PRODUCTOS_PANEL,
+      'ventas/admin/blog/': PUBLICACIONES_PANEL,
+    }[url] ?? [] }));
+    patchMock.mockImplementation(async (_, datos) => { config = { ...config, ...datos }; return { data: config }; });
+
+    await renderLanding();
+    expect(await screen.findByRole('region', { name: 'Más vendidos' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Destacados/ }));
+    await screen.findByText('Tus destacados (0 de 4)');
+    agregar('Retrato');
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await screen.findByText(/Cambios guardados/);
+    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+
+    const seccion = await screen.findByRole('region', { name: 'Destacados' });
+    expect(within(seccion).getByRole('link', { name: /Retrato/ })).toHaveAttribute('href', '/catalogo/producto/p1');
+    expect(screen.queryByRole('region', { name: 'Más vendidos' })).not.toBeInTheDocument();
+    // Una vez al abrir y otra al guardar: no se pide de nuevo por cada recarga de la configuración
+    expect(getMock.mock.calls.filter(([url]) => url === 'catalogo/vitrina/')).toHaveLength(2);
   });
 
   it('ordena con Subir y Bajar sin perder el foco, quita y guarda el nuevo orden', async () => {

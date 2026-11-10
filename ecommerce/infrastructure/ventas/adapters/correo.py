@@ -66,6 +66,9 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
                 body=render_to_string(f'{plantilla}.txt', contexto),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[destinatario],
+                # Si el comprador responde, le llega a la tienda: el remitente (ej. ventas@ con Resend) puede no
+                # tener buzón. Sin correo de contacto, la respuesta va al remitente, como antes
+                reply_to=[contexto['correo_contacto']] if contexto['correo_contacto'] else None,
             )
             correo.attach_alternative(render_to_string(f'{plantilla}.html', contexto), 'text/html')
             correo.send()
@@ -79,6 +82,8 @@ class CorreoNotificadorPedidos(NotificadorPedidos):
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
         return {
             'tienda': config.nombre_tienda if config and config.nombre_tienda else 'Nuestra tienda',
+            # A dónde llegan las respuestas del comprador (Configuración > Contacto y Redes)
+            'correo_contacto': (config.correo_contacto or '').strip() if config else '',
             'orden': orden,
             'detalles': [{
                 'nombre': detalle.nombre_producto_snapshot,

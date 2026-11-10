@@ -153,17 +153,6 @@ export default function FormularioProducto({
           ];
 
           setCategoriasExistentes(categoriasUnicas);
-          const coleccionesUnicas = [
-            ...new Set(
-              lista
-                .flatMap((p) => p.colecciones || []) // Extrae todos los arrays de colecciones y los aplana
-                .filter(Boolean)
-            )
-          ];
-          // Formatear para react-select: [{ value: 'Cyber', label: 'Cyber' }, ...]
-          setColeccionesExistentes(
-            coleccionesUnicas.map(col => ({ value: col, label: col }))
-          );
 
           if (
             categoriasUnicas.length === 0 &&
@@ -185,6 +174,21 @@ export default function FormularioProducto({
     };
 
     cargarCategorias();
+  }, [productoAEditar]);
+
+  useEffect(() => {
+    let vigente = true;
+    // El servidor aplica las reglas del dominio y excluye borradores e inactivos.
+    clienteAxios.get('catalogo/filtros/')
+      .then(({ data }) => {
+        if (vigente) {
+          setColeccionesExistentes((data?.colecciones || []).map(col => ({ value: col, label: col })));
+        }
+      })
+      .catch(() => {
+        if (vigente) setColeccionesExistentes([]);
+      });
+    return () => { vigente = false; };
   }, [productoAEditar]);
 
   const handleColeccionesChange = (valoresSeleccionados) => {
@@ -857,6 +861,14 @@ export default function FormularioProducto({
             isClearable
             placeholder="Ej: Cyber, Navidad..."
             options={coleccionesExistentes}
+            isOptionSelected={(opcion, seleccionadas) => seleccionadas.some(
+              seleccionada => seleccionada.value.trim().toLowerCase() === opcion.value.trim().toLowerCase()
+            )}
+            isValidNewOption={(inputValue, seleccionadas, opciones) => {
+              const clave = inputValue.trim().toLowerCase();
+              return Boolean(clave) && ![...seleccionadas, ...opciones]
+                .some(opcion => opcion.value.trim().toLowerCase() === clave);
+            }}
             value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
             onChange={handleColeccionesChange}
             noOptionsMessage={() => "Escribe para crear una nueva colección"}

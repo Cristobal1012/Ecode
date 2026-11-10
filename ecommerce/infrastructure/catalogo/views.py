@@ -26,7 +26,7 @@ from ecommerce.infrastructure.ventas.repositorio_blog import DjangoPublicaciones
 from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
 
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
-from ecommerce.domain.catalogo import ordenar_categorias
+from ecommerce.domain.catalogo import limpiar_colecciones, ordenar_categorias
 
 from .documents import ImagenPendienteBorrado, Producto
 from .image_adapters import eliminar_producto, servicio_galeria
@@ -152,13 +152,11 @@ def obtener_filtros_catalogo(orden_categorias=None):
             'categoria', 'atributos_globales', 'colecciones'
         ).as_pymongo()
         atributos = {}
-        colecciones_activas = set()
+        colecciones_activas = []
         for producto in prods:
             cols = producto.get('colecciones', [])
             if isinstance(cols, list):
-                for c in cols:
-                    if c and str(c).strip():
-                        colecciones_activas.add(str(c).strip())
+                colecciones_activas.extend(c.strip() for c in cols if isinstance(c, str))
             cat = producto.get('categoria')
             if not cat:
                 continue
@@ -174,7 +172,10 @@ def obtener_filtros_catalogo(orden_categorias=None):
         categorias = ordenar_categorias(atributos, orden_categorias)
         atributos = {cat: {clave: sorted(valores) for clave, valores in atributos[cat].items()}
                      for cat in categorias}
-        return {'categorias': categorias, 'atributos': atributos, 'colecciones': sorted(list(colecciones_activas))}
+        # Ordenar antes de deduplicar elige una escritura existente de forma
+        # determinista, independientemente del orden de lectura de los productos.
+        colecciones = limpiar_colecciones(sorted(colecciones_activas))
+        return {'categorias': categorias, 'atributos': atributos, 'colecciones': colecciones}
     except Exception as exc:
         logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)
         return {'categorias': [], 'atributos': {}, 'colecciones': []}

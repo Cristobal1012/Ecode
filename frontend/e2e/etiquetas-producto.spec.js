@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { prepararTienda, comprobarVista, producto } from './soporte/tienda';
+// Todas las paletas de la tienda, de su única fuente: si se agrega una, esta prueba también la revisa
+import { PALETTES } from '../src/constants/palettes.js';
 
 const obra = { ...producto, nombre: 'Obra 198', etiqueta: 'Edición limitada', etiqueta_color: 'accent',
   variantes: [{ sku: '198', precio: 10000, precio_oferta: 8000, stock: 2 }] };
@@ -88,8 +90,8 @@ test('agrega una obra sin atributos al carrito y respeta su stock', async ({ pag
   await expect(page.locator('.detalle-info .tarjeta-producto-etiqueta')).toHaveText('Edición limitada');
 });
 
-test('los cuatro colores mantienen contraste AA en los seis temas', async ({ page }) => {
-  for (let tema = 1; tema <= 6; tema += 1) {
+test('los cuatro colores mantienen contraste AA en todos los temas', async ({ page }) => {
+  for (const { id: tema } of PALETTES) {
     const productos = ['primary', 'secondary', 'accent', 'text'].map((color, i) => ({
       ...obra, id: String(i + 1).padStart(24, '0'), etiqueta: color, etiqueta_color: color,
     }));

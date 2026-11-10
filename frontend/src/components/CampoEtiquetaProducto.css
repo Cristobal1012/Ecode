@@ -59,9 +59,24 @@
 }
 
 .campo-etiqueta-opcion input[type='radio'] {
-  width: auto;
+  appearance: none;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   margin: 0;
-  accent-color: var(--color-primary);
+  border: 2px solid var(--color-control-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.campo-etiqueta-opcion input[type='radio']:checked {
+  background: radial-gradient(circle, var(--color-primary) 0 4px, var(--color-surface) 4px);
+}
+
+@media (forced-colors: active) {
+  .campo-etiqueta-opcion input[type='radio'] {
+    appearance: auto;
+  }
 }
 
 .campo-etiqueta-muestra {

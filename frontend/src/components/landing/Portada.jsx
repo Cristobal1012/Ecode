@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { textoBotonCatalogo } from '../../utils/menuPrincipal';
+import { botonDeFoto, textoBotonCatalogo } from '../../utils/menuPrincipal';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
 import { CampoEditable, EditorFotosBanner } from './ControlesEdicion';
+import EditorTextosFoto from './EditorTextosFoto';
 
 // RF-01.1, SCRUM-194: portada de la landing con banner en carrusel de fundido suave y campos fijos que
 // edita el admin (antetítulo, título, texto, botón y fotos del carrusel).
@@ -19,16 +20,28 @@ export default function Portada({ configuracion, edicion }) {
   const editando = Boolean(edicion?.editando);
   const [indiceActivo, setIndiceActivo] = useState(0);
   const [pausado, setPausado] = useState(false);
+  // WCAG 2.2.2: mientras el mouse o el foco están sobre los textos o el botón, la foto no cambia
+  const [enUso, setEnUso] = useState(false);
 
   const totalFotos = listaFotos.length;
-  const indiceSeguro = totalFotos > 0 ? indiceActivo % totalFotos : 0;
+  // En el modo edición se ve la foto que el admin está editando
+  const editandoFotos = editando && edicion.banners?.length > 0;
+  const indiceSeguro = editandoFotos ? edicion.fotoEditada : totalFotos > 0 ? indiceActivo % totalFotos : 0;
   const imagenActual = listaFotos[indiceSeguro]?.imagen || PORTADA_POR_DEFECTO;
+
+  // Textos y botón de la foto que se ve; sin fotos propias, los generales de la portada con el botón al catálogo
+  const fotoActual = listaFotos[indiceSeguro];
+  const textos = fotoActual?.titulo ? fotoActual : {
+    antetitulo: configuracion.subtitulo_bienvenida, titulo: configuracion.texto_bienvenida,
+    texto: configuracion.texto_landing, destino: 'CATALOGO',
+  };
+  const boton = botonDeFoto(configuracion, textos.destino);
 
   // Rendimiento (Point 12): Carga solo la diapositiva activa y precarga la siguiente, evitando descargar todas de golpe
   const [fotosCargadas, setFotosCargadas] = useState(() => new Set([0, 1]));
 
   useEffect(() => {
-    if (totalFotos <= 1 || pausado || editando) return undefined;
+    if (totalFotos <= 1 || pausado || enUso || editando) return undefined;
     const intervalo = setInterval(() => {
       setIndiceActivo((actual) => {
         const siguiente = (actual + 1) % totalFotos;
@@ -44,7 +57,7 @@ export default function Portada({ configuracion, edicion }) {
       });
     }, 5000);
     return () => clearInterval(intervalo);
-  }, [totalFotos, pausado, editando]);
+  }, [totalFotos, pausado, enUso, editando]);
 
   const textoBoton = textoBotonCatalogo(configuracion);
 
@@ -87,8 +100,13 @@ export default function Portada({ configuracion, edicion }) {
         </button>
       )}
 
-      <div className="contenedor portada-contenido">
-        {editando ? (
+      <div className="contenedor portada-contenido"
+        onMouseEnter={() => setEnUso(true)} onMouseLeave={() => setEnUso(false)}
+        onFocus={() => setEnUso(true)}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEnUso(false); }}>
+        {editandoFotos ? (
+          <EditorTextosFoto configuracion={configuracion} edicion={edicion} />
+        ) : editando ? (
           <>
             <CampoEditable campo="subtitulo_bienvenida" edicion={edicion} claro ancho="campo-ancho-medio"
               className="antetitulo portada-antetitulo" />
@@ -101,17 +119,19 @@ export default function Portada({ configuracion, edicion }) {
           </>
         ) : (
           <>
-            {configuracion.subtitulo_bienvenida && (
-              <span className="antetitulo portada-antetitulo">{configuracion.subtitulo_bienvenida}</span>
+            {textos.antetitulo && (
+              <span className="antetitulo portada-antetitulo">{textos.antetitulo}</span>
             )}
             <h1 id="portada-titulo" className="portada-titulo">
-              {configuracion.texto_bienvenida || TEXTOS_POR_DEFECTO.texto_bienvenida}
+              {textos.titulo || TEXTOS_POR_DEFECTO.texto_bienvenida}
             </h1>
-            {configuracion.texto_landing && <p className="portada-texto">{configuracion.texto_landing}</p>}
-            <Link to="/catalogo" className="boton boton-primario portada-boton">
-              {textoBoton}
-              <span aria-hidden="true">→</span>
-            </Link>
+            {textos.texto && <p className="portada-texto">{textos.texto}</p>}
+            {boton && (
+              <Link to={boton.to} className="boton boton-primario portada-boton">
+                {boton.texto}
+                <span aria-hidden="true">→</span>
+              </Link>
+            )}
           </>
         )}
       </div>

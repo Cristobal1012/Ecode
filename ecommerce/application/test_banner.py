@@ -1,15 +1,18 @@
 from unittest import TestCase
 
 from ecommerce.application.banner import ActualizarBanners, RepositorioBanners
-from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido
+from ecommerce.domain.banner import (
+    EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFoto, TextosFotoInvalidos,
+)
 
 
 class FakeRepositorioBanners(RepositorioBanners):
     def __init__(self):
         self.llamadas = []
 
-    def guardar_banners(self, configuracion_id: int, orden_list: list, nuevos_archivos: list) -> None:
+    def guardar_banners(self, configuracion_id: int, orden_list: list, nuevos_archivos: list, textos=None) -> None:
         self.llamadas.append((configuracion_id, orden_list, nuevos_archivos))
+        self.textos = textos
 
 
 class ActualizarBannersApplicationTests(TestCase):
@@ -49,3 +52,27 @@ class ActualizarBannersApplicationTests(TestCase):
         with self.assertRaises(EstructuraBannerInvalida):
             self.caso_de_uso.ejecutar(1, ['id:no-es-numero'], [])
 
+    def test_sin_textos_el_repositorio_recibe_none_por_foto(self):
+        self.caso_de_uso.ejecutar(1, ['id:3', 'nuevo:0'], ['f'])
+        self.assertEqual(self.repo.textos, [None, None])
+
+    def test_separa_la_referencia_de_los_textos_de_cada_foto(self):
+        orden = [{'ref': 'id:3', 'titulo': ' Murales ', 'destino': 'BLOG'}, 'nuevo:0',
+                 {'ref': 'id:legacy', 'antetitulo': 'Nuevo', 'titulo': 'Cyber', 'texto': 'Hasta el lunes'}]
+        self.caso_de_uso.ejecutar(1, orden, ['f'])
+        _, referencias, _ = self.repo.llamadas[0]
+        self.assertEqual(referencias, ['id:3', 'nuevo:0', 'id:legacy'])
+        self.assertEqual(self.repo.textos, [
+            TextosFoto('', 'Murales', '', 'BLOG'), None, TextosFoto('Nuevo', 'Cyber', 'Hasta el lunes', 'CATALOGO'),
+        ])
+
+    def test_rechaza_textos_invalidos_sin_llamar_al_repositorio(self):
+        for item in [{'ref': 'id:3', 'titulo': ''}, {'ref': 'id:3', 'titulo': 'Murales', 'destino': 'SOBRE_MI'}]:
+            with self.subTest(item=item), self.assertRaises(TextosFotoInvalidos):
+                self.caso_de_uso.ejecutar(1, [item], [])
+        self.assertEqual(self.repo.llamadas, [])
+
+    def test_rechaza_un_objeto_sin_referencia_o_con_referencia_invalida(self):
+        for item in [{'titulo': 'Murales'}, {'ref': 'otro', 'titulo': 'Murales'}, {'ref': 'nuevo:4', 'titulo': 'Murales'}]:
+            with self.subTest(item=item), self.assertRaises(EstructuraBannerInvalida):
+                self.caso_de_uso.ejecutar(1, [item], [])

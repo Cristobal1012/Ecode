@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORDEN_MENU, resolverMenu, textoBotonCatalogo } from '../utils/menuPrincipal';
+import { ORDEN_MENU, botonDeFoto, resolverMenu, textoBotonCatalogo } from '../utils/menuPrincipal';
 
 describe('menú principal', () => {
   it('conserva el orden, nombres y visibilidad heredados', () => {
@@ -35,5 +35,16 @@ describe('menú principal', () => {
   });
   it.each([['Catálogo', 'Ver catálogo'], ['Productos', 'Ver productos'], ['Nuestra colección', 'Ver nuestra colección'], ['Artículos', 'Ver artículos'], ['   ', 'Ver catálogo']])('deriva el botón de portada desde %s', (nombre, texto) => {
     expect(textoBotonCatalogo({ texto_boton_ingreso: 'Texto antiguo', menu_principal: { nombres: { catalogo: nombre } } })).toBe(texto);
+  });
+  it('arma el botón de cada foto del carrusel con el nombre y el destino del menú', () => {
+    expect(botonDeFoto({})).toEqual({ to: '/catalogo', texto: 'Ver catálogo' });
+    expect(botonDeFoto({}, 'INICIO')).toEqual({ to: '/', texto: 'Ver inicio' });
+    expect(botonDeFoto({ menu_principal: { nombres: { catalogo: 'Productos' } } }, 'CATALOGO').texto).toBe('Ver productos');
+    expect(botonDeFoto({ blog_activo: true, blog_nombre: 'Proyectos' }, 'BLOG')).toEqual({ to: '/blog', texto: 'Ver proyectos' });
+    expect(botonDeFoto({ cotizaciones_activas: true }, 'COTIZAR')).toEqual({ to: '/cotizar', texto: 'Ver cotizar' });
+  });
+  it('sin el módulo activo, la foto queda sin botón', () => {
+    expect(botonDeFoto({ nosotros_texto: 'Nuestra historia' }, 'BLOG')).toBeNull();
+    expect(botonDeFoto({}, 'COTIZAR')).toBeNull();
   });
 });

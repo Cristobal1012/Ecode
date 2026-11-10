@@ -9,6 +9,8 @@ import json
 from ecommerce.domain.banner import (
     MAX_FOTOS_BANNER,
     EstructuraBannerInvalida,
+    TextosFoto,
+    normalizar_textos_foto,
     validar_cantidad_fotos_banner,
 )
 
@@ -17,8 +19,21 @@ class RepositorioBanners(ABC):
     """Puerto de salida para persistir las fotos del banner y su orden."""
 
     @abstractmethod
-    def guardar_banners(self, configuracion_id: int, orden_list: list, nuevos_archivos: list) -> None:
+    def guardar_banners(self, configuracion_id: int, orden_list: list, nuevos_archivos: list,
+                        textos: list[TextosFoto | None] | None = None) -> None:
+        """textos va alineado con orden_list: los de cada foto, o None si el pedido no los trae (se conservan
+        los que tenía; una foto nueva o la antigua toman los de la portada)."""
         raise NotImplementedError
+
+
+def separar_referencia_y_textos(item):
+    """Un elemento del orden es la referencia sola ('id:3', 'nuevo:0', 'id:legacy') o un objeto con la
+    referencia en 'ref' y los textos de la foto (SCRUM-194)."""
+    if isinstance(item, dict):
+        if 'ref' not in item:
+            raise EstructuraBannerInvalida('Cada foto del banner debe indicar su referencia (ref).')
+        return item['ref'], normalizar_textos_foto(item)
+    return item, None
 
 
 def es_identificador_legacy(item) -> bool:
@@ -50,7 +65,12 @@ class ActualizarBanners:
         # 2. Validar límite de fotos (domain/banner.py)
         validar_cantidad_fotos_banner(len(orden_list))
 
-        # 3. Validar sintaxis y rangos de los elementos del manifiesto
+        # 3. Separar la referencia de cada foto de sus textos; los textos se validan en el dominio
+        separados = [separar_referencia_y_textos(item) for item in orden_list]
+        orden_list = [referencia for referencia, _ in separados]
+        textos = [textos_foto for _, textos_foto in separados]
+
+        # 4. Validar sintaxis y rangos de los elementos del manifiesto
         nuevos_indices = []
         for item in orden_list:
             if isinstance(item, str):
@@ -76,5 +96,5 @@ class ActualizarBanners:
             else:
                 raise EstructuraBannerInvalida(f'Tipo de dato inválido en banner_orden: {type(item)}')
 
-        # 4. Delegar la persistencia atómica y validación de archivos al puerto
-        self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos)
+        # 5. Delegar la persistencia atómica y validación de archivos al puerto
+        self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos, textos)

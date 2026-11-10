@@ -40,15 +40,34 @@ const sinCampo = (objeto, campo) => {
   return copia;
 };
 
+// Textos y botón de una foto del carrusel (domain/banner.py). Una foto que llega sin los suyos (o una nueva)
+// parte con los textos generales de la portada; los textos viajan con su foto al reordenar
+export const DESTINO_POR_DEFECTO = 'CATALOGO';
+export const TEXTOS_FOTO = {
+  antetitulo: { etiqueta: 'Antetítulo', maximo: 200 },
+  titulo: { etiqueta: 'Título', maximo: 300, obligatorio: true },
+  texto: { etiqueta: 'Texto de la foto', maximo: 1000 },
+};
+const textosDePortada = (conf) => ({
+  antetitulo: conf?.subtitulo_bienvenida ?? '', titulo: conf?.texto_bienvenida ?? '', texto: conf?.texto_landing ?? '',
+  destino: DESTINO_POR_DEFECTO,
+});
+const textosDeFoto = (foto, conf) => (foto?.titulo
+  ? { antetitulo: foto.antetitulo ?? '', titulo: foto.titulo, texto: foto.texto ?? '', destino: foto.destino || DESTINO_POR_DEFECTO }
+  : textosDePortada(conf));
+
 export const obtenerBannersIniciales = (conf) => {
   if (conf?.banners && Array.isArray(conf.banners) && conf.banners.length > 0) {
-    return conf.banners.map((b, i) => ({ id: b.id, imagen: b.imagen, orden: b.orden ?? i }));
+    return conf.banners.map((b, i) => ({ id: b.id, imagen: b.imagen, orden: b.orden ?? i, ...textosDeFoto(b, conf) }));
   }
   if (conf?.banner || conf?.banner_url?.trim()) {
-    return [{ id: 'legacy', imagen: conf.banner || conf.banner_url.trim(), orden: 0 }];
+    return [{ id: 'legacy', imagen: conf.banner || conf.banner_url.trim(), orden: 0, ...textosDePortada(conf) }];
   }
   return [];
 };
+
+// Lo que cuenta como cambio en el carrusel: el orden de las fotos y los textos de cada una
+const firmaBanners = (lista) => JSON.stringify(lista.map((b) => [b.id || b.imagen, b.antetitulo, b.titulo, b.texto, b.destino]));
 
 const textosDe = (configuracion) =>
   Object.fromEntries(Object.keys(CAMPOS_TEXTO).map((campo) => [campo, configuracion?.[campo] ?? '']));
@@ -75,6 +94,8 @@ export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
   const [banners, setBanners] = useState(null);
+  // La foto del carrusel que se está viendo y editando
+  const [fotoEditada, setFotoEditada] = useState(0);
   const [destacados, setDestacados] = useState(null);
   const [menu, setMenu] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -88,11 +109,7 @@ export default function useEdicionLanding(configuracion) {
     ? Object.keys(CAMPOS_TEXTO).filter((campo) => textos[campo] !== original[campo])
     : [];
   const bannersIniciales = obtenerBannersIniciales(configuracion);
-  const bannersCambiados = Boolean(
-    banners !== null &&
-    JSON.stringify(banners.map((b) => b.id || b.imagen)) !==
-      JSON.stringify(bannersIniciales.map((b) => b.id || b.imagen))
-  );
+  const bannersCambiados = Boolean(banners !== null && firmaBanners(banners) !== firmaBanners(bannersIniciales));
 
   const destacadosCambiados = editando && destacados !== null && !mismaSeleccion(destacados, destacadosDe(configuracion));
   const menuCambiado = editando && JSON.stringify(menu) !== JSON.stringify(configuracion?.menu_principal || {});
@@ -109,6 +126,7 @@ export default function useEdicionLanding(configuracion) {
   const iniciar = () => {
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setFotoEditada(0);
     setDestacados(destacadosDe(configuracion));
     setMenu(configuracion?.menu_principal || {});
     setErrores({});
@@ -140,10 +158,11 @@ export default function useEdicionLanding(configuracion) {
     if (vistaPrevia) vistasPrevias.current.add(vistaPrevia);
     if (campo === 'banner') {
       if (archivo) {
-        setBanners([{ id: 'nuevo_banner', archivo, vistaPrevia, imagen: vistaPrevia }]);
+        setBanners([{ id: 'nuevo_banner', archivo, vistaPrevia, imagen: vistaPrevia, ...textosDePortada(textos) }]);
       } else {
         setBanners([]);
       }
+      setFotoEditada(0);
       setErrores((actual) => sinCampo(actual, campo));
       setMensaje('');
       return;
@@ -192,6 +211,8 @@ export default function useEdicionLanding(configuracion) {
         archivo,
         vistaPrevia,
         imagen: vistaPrevia,
+        // Una foto nueva parte con los textos de la portada, para que el admin los cambie
+        ...textosDePortada(textos),
       };
     });
 
@@ -204,20 +225,24 @@ export default function useEdicionLanding(configuracion) {
   };
 
   const reordenarFotosBanner = (origen, destino) => {
+    const total = (banners ?? obtenerBannersIniciales(configuracion)).length;
+    if (origen < 0 || origen >= total || destino < 0 || destino >= total) return;
     setBanners((actual) => {
       const base = [...(actual ?? obtenerBannersIniciales(configuracion))];
-      if (origen < 0 || origen >= base.length || destino < 0 || destino >= base.length) return base;
       const [movido] = base.splice(origen, 1);
       base.splice(destino, 0, movido);
       return base;
     });
+    // La foto que se mueve queda a la vista, con sus textos
+    setFotoEditada(destino);
     setMensaje('');
   };
 
   const eliminarFotoBanner = (indice) => {
+    const total = (banners ?? obtenerBannersIniciales(configuracion)).length;
+    if (indice < 0 || indice >= total) return;
     setBanners((actual) => {
       const base = [...(actual ?? obtenerBannersIniciales(configuracion))];
-      if (indice < 0 || indice >= base.length) return base;
       const eliminado = base[indice];
       if (eliminado?.vistaPrevia) {
         URL.revokeObjectURL(eliminado.vistaPrevia);
@@ -226,6 +251,21 @@ export default function useEdicionLanding(configuracion) {
       base.splice(indice, 1);
       return base;
     });
+    setFotoEditada((actual) => Math.max(0, Math.min(actual > indice ? actual - 1 : actual, total - 2)));
+    setMensaje('');
+  };
+
+  // Elegir qué foto del carrusel se ve y se edita
+  const seleccionarFoto = (indice) => {
+    const total = (banners ?? obtenerBannersIniciales(configuracion)).length;
+    if (indice >= 0 && indice < total) setFotoEditada(indice);
+  };
+
+  // Textos y destino del botón de la foto que se está editando
+  const cambiarTextoFoto = (campo, valor) => {
+    setBanners((actual) => (actual ?? obtenerBannersIniciales(configuracion))
+      .map((foto, indice) => (indice === fotoEditada ? { ...foto, [campo]: valor } : foto)));
+    setErrores((actual) => sinCampo(sinCampo(actual, 'banner_titulo'), 'banner_orden'));
     setMensaje('');
   };
 
@@ -256,6 +296,7 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setFotoEditada(0);
     setDestacados(destacadosDe(configuracion));
     setMenu(configuracion?.menu_principal || {});
     setErrores({});
@@ -267,6 +308,7 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(null);
     setBanners(null);
+    setFotoEditada(0);
     setDestacados(null);
     setMenu(null);
     setErrores({});
@@ -274,11 +316,21 @@ export default function useEdicionLanding(configuracion) {
   };
 
   const guardar = async () => {
+    // Con fotos en el carrusel, los textos de la portada se editan en cada foto (los generales siguen a la primera)
+    const fotos = banners ?? obtenerBannersIniciales(configuracion);
+    const camposPortada = fotos.length ? ['subtitulo_bienvenida', 'texto_bienvenida', 'texto_landing'] : [];
     const faltantes = Object.entries(CAMPOS_TEXTO)
-      .filter(([campo, { obligatorio }]) => obligatorio && !textos[campo].trim())
+      .filter(([campo, { obligatorio }]) => obligatorio && !camposPortada.includes(campo) && !textos[campo].trim())
       .map(([campo]) => [campo, 'No puede quedar vacío.']);
     if (faltantes.length) {
       setErrores(Object.fromEntries(faltantes));
+      return;
+    }
+    // Cada foto necesita su título (es el h1 de la portada): se muestra la primera que no lo tiene
+    const sinTitulo = fotos.findIndex((foto) => !foto.titulo?.trim());
+    if (sinTitulo >= 0) {
+      setFotoEditada(sinTitulo);
+      setErrores({ banner_titulo: `La foto ${sinTitulo + 1} necesita un título.` });
       return;
     }
 
@@ -296,13 +348,11 @@ export default function useEdicionLanding(configuracion) {
       const nuevosArchivosBanner = bannersActuales.filter((b) => b.archivo).map((b) => b.archivo);
       let manifestBanners = null;
       if (bannersCambiados) {
-        manifestBanners = bannersActuales.map((b) => {
-          if (b.archivo) {
-            const idx = nuevosArchivosBanner.indexOf(b.archivo);
-            return `nuevo:${idx}`;
-          }
-          return `id:${b.id}`;
-        });
+        // Cada foto viaja con su referencia y sus textos (application/banner.py)
+        manifestBanners = bannersActuales.map((b) => ({
+          ref: b.archivo ? `nuevo:${nuevosArchivosBanner.indexOf(b.archivo)}` : `id:${b.id}`,
+          antetitulo: b.antetitulo, titulo: b.titulo, texto: b.texto, destino: b.destino,
+        }));
       }
 
       const hayArchivos = nuevas.length > 0 || nuevosArchivosBanner.length > 0;
@@ -329,6 +379,7 @@ export default function useEdicionLanding(configuracion) {
       setImagenes({});
       setTextos(textosDe(guardada));
       setBanners(obtenerBannersIniciales(guardada));
+      setFotoEditada((actual) => Math.min(actual, Math.max(0, obtenerBannersIniciales(guardada).length - 1)));
       setDestacados(destacadosDe(guardada));
       setMenu(guardada?.menu_principal || {});
       setMensaje('Cambios guardados: ya están publicados en tu tienda.');
@@ -358,7 +409,9 @@ export default function useEdicionLanding(configuracion) {
   return {
     editando, vista, textos, destacados, menu, hayCambios, guardando, errores, mensaje,
     banners: listaBannersVista,
+    fotoEditada: Math.min(fotoEditada, Math.max(0, listaBannersVista.length - 1)),
     iniciar, cambiarTexto, cambiarImagen, agregarFotosBanner, reordenarFotosBanner, eliminarFotoBanner,
+    seleccionarFoto, cambiarTextoFoto,
     agregarDestacado, moverDestacado, quitarDestacado, cambiarMenu,
     descartar, salir, guardar
   };

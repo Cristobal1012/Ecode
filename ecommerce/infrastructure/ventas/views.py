@@ -73,7 +73,7 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
-from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido
+from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
 from ecommerce.domain.sobre_mi import (
     ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
     exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
@@ -811,7 +811,7 @@ class ConfiguracionNegocioView(APIView):
                         request.data.get('banner_orden'),
                         request.FILES.getlist('banner_fotos')
                     )
-        except EstructuraBannerInvalida as exc:
+        except (EstructuraBannerInvalida, TextosFotoInvalidos) as exc:
             return Response({'banner_orden': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
         except LimiteFotosBannerExcedido as exc:
             return Response({'banner_fotos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)

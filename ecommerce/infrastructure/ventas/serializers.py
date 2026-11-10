@@ -23,6 +23,7 @@ from ecommerce.application.medios_pago import MediosPagoDisponibles
 from ecommerce.application.pagos import ErrorPasarelaPago
 from ecommerce.application.ventas import PaqueteDelPedido, PrepararPedido, RevisarCarrito
 from ecommerce.application.vitrina import ValidarDestacados
+from ecommerce.domain.banner import DESTINO_POR_DEFECTO
 from ecommerce.domain.blog import MAX_FOTOS_PUBLICACION, NombreBlogInvalido, normalizar_nombre_blog
 from ecommerce.domain.catalogo import OrdenCategoriasInvalido, normalizar_orden_categorias
 from ecommerce.domain.destacados import (
@@ -92,7 +93,8 @@ class FotoBannerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FotoBanner
-        fields = ['id', 'imagen', 'orden']
+        # Cada foto con sus textos y a qué página lleva su botón (SCRUM-194)
+        fields = ['id', 'imagen', 'orden', 'antetitulo', 'titulo', 'texto', 'destino']
 
     def get_imagen(self, obj):
         if not obj.imagen:
@@ -106,13 +108,16 @@ def obtener_banners_configuracion(obj, request=None):
     fotos = list(obj.fotos_banner.all())
     if fotos:
         return FotoBannerSerializer(fotos, many=True, context={'request': request}).data
+    # La portada antigua (una sola foto) se muestra con los textos generales y el botón al catálogo
+    textos = {'antetitulo': obj.subtitulo_bienvenida or '', 'titulo': obj.texto_bienvenida or '',
+              'texto': obj.texto_landing or '', 'destino': DESTINO_POR_DEFECTO}
     if obj.banner:
         url = obj.banner.url
         if request is not None:
             url = request.build_absolute_uri(url)
-        return [{'id': 'legacy', 'imagen': url, 'orden': 0}]
+        return [{'id': 'legacy', 'imagen': url, 'orden': 0, **textos}]
     if obj.banner_url and obj.banner_url.strip():
-        return [{'id': 'legacy', 'imagen': obj.banner_url.strip(), 'orden': 0}]
+        return [{'id': 'legacy', 'imagen': obj.banner_url.strip(), 'orden': 0, **textos}]
     return []
 
 

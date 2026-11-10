@@ -294,6 +294,85 @@ class IdentidadTiendaTests(APITestCase):
         # El archivo físico se borró del disco al confirmar la transacción
         self.assertFalse(ruta_archivo.is_file())
 
+    # Textos y botón propios de cada foto (decidido el 2026-11-09: los textos viajan con su foto)
+
+    def subir_con_textos(self):
+        import json
+        orden = [{'ref': 'nuevo:0', 'antetitulo': 'Hecho a mano', 'titulo': 'Murales', 'texto': 'Para tu casa'},
+                 {'ref': 'nuevo:1', 'titulo': 'Cyber', 'destino': 'COTIZAR'}]
+        return self.client.patch(self.url, {'banner_fotos': [imagen_png('a.png'), imagen_png('b.png', color='blue')],
+                                            'banner_orden': json.dumps(orden)}, format='multipart')
+
+    def test_cada_foto_guarda_sus_textos_y_su_destino(self):
+        resp = self.subir_con_textos()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        banners = [{campo: foto[campo] for campo in ('antetitulo', 'titulo', 'texto', 'destino')}
+                   for foto in resp.data['banners']]
+        self.assertEqual(banners, [
+            {'antetitulo': 'Hecho a mano', 'titulo': 'Murales', 'texto': 'Para tu casa', 'destino': 'CATALOGO'},
+            {'antetitulo': '', 'titulo': 'Cyber', 'texto': '', 'destino': 'COTIZAR'},
+        ])
+        # La tienda pública recibe lo mismo
+        publica = self.client.get(reverse('configuracion-global')).data['banners']
+        self.assertEqual([(foto['titulo'], foto['destino']) for foto in publica],
+                         [('Murales', 'CATALOGO'), ('Cyber', 'COTIZAR')])
+
+    def test_los_textos_viajan_con_su_foto_y_los_generales_siguen_a_la_primera(self):
+        import json
+        banners = self.subir_con_textos().data['banners']
+        config = ConfiguracionGlobal.objects.get(pk=1)
+        self.assertEqual((config.subtitulo_bienvenida, config.texto_bienvenida, config.texto_landing),
+                         ('Hecho a mano', 'Murales', 'Para tu casa'))
+
+        # Al invertir el orden sin mandar textos, cada foto conserva los suyos y la portada sigue a la nueva primera
+        resp = self.client.patch(self.url, {'banner_orden': json.dumps([f"id:{banners[1]['id']}",
+                                                                        f"id:{banners[0]['id']}"])}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([foto['titulo'] for foto in resp.data['banners']], ['Cyber', 'Murales'])
+        config.refresh_from_db()
+        self.assertEqual((config.subtitulo_bienvenida, config.texto_bienvenida, config.texto_landing),
+                         ('', 'Cyber', ''))
+
+    def test_una_foto_nueva_sin_textos_parte_con_los_de_la_portada(self):
+        import json
+        ConfiguracionGlobal.objects.filter(pk=1).update(subtitulo_bienvenida='Hola', texto_bienvenida='Bienvenidos',
+                                                        texto_landing='Texto de la portada')
+        resp = self.client.patch(self.url, {'banner_fotos': [imagen_png()], 'banner_orden': json.dumps(['nuevo:0'])},
+                                 format='multipart')
+        self.assertEqual(resp.status_code, 200)
+        foto = resp.data['banners'][0]
+        self.assertEqual((foto['antetitulo'], foto['titulo'], foto['texto'], foto['destino']),
+                         ('Hola', 'Bienvenidos', 'Texto de la portada', 'CATALOGO'))
+
+    def test_la_portada_antigua_se_entrega_con_sus_textos_y_los_conserva_al_pasar_al_carrusel(self):
+        import json
+        ConfiguracionGlobal.objects.filter(pk=1).update(texto_bienvenida='Bienvenidos', texto_landing='Hecho en Chile')
+        self.subir(banner=imagen_png('antigua.png'))
+        antigua = self.client.get(self.url).data['banners'][0]
+        self.assertEqual((antigua['id'], antigua['titulo'], antigua['texto'], antigua['destino']),
+                         ('legacy', 'Bienvenidos', 'Hecho en Chile', 'CATALOGO'))
+
+        resp = self.client.patch(self.url, {'banner_fotos': [imagen_png('nueva.png')], 'banner_orden': json.dumps(
+            ['id:legacy', {'ref': 'nuevo:0', 'titulo': 'Cyber', 'destino': 'BLOG'}])}, format='multipart')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual([(foto['titulo'], foto['texto'], foto['destino']) for foto in resp.data['banners']],
+                         [('Bienvenidos', 'Hecho en Chile', 'CATALOGO'), ('Cyber', '', 'BLOG')])
+
+    def test_textos_invalidos_responden_400_y_no_cambian_nada(self):
+        import json
+        banners = self.subir_con_textos().data['banners']
+        for item in [{'ref': f"id:{banners[0]['id']}", 'titulo': '   '},
+                     {'ref': f"id:{banners[0]['id']}", 'titulo': 'Murales', 'destino': 'SOBRE_MI'},
+                     {'ref': f"id:{banners[0]['id']}", 'titulo': 'x' * 301}]:
+            with self.subTest(item=item):
+                resp = self.client.patch(self.url, {'texto_landing': 'No debe guardarse',
+                                                    'banner_orden': json.dumps([item])}, format='json')
+                self.assertEqual(resp.status_code, 400)
+                self.assertIn('banner_orden', resp.data)
+        config = ConfiguracionGlobal.objects.get(pk=1)
+        self.assertEqual(config.texto_landing, 'Para tu casa')
+        self.assertEqual([foto.titulo for foto in config.fotos_banner.all()], ['Murales', 'Cyber'])
+
 
 class PresentacionTiendaTests(APITestCase):
     """Pedido de un cliente: fotos sin recorte, ficha con la foto horizontal y logo más grande. Apagadas por defecto."""

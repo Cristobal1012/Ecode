@@ -120,7 +120,12 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
               const fotoKey = foto.id ?? idx;
               return (
                 <li key={fotoKey} className="portada-editor-foto-item">
-                  <img src={foto.imagen} alt="" className="portada-editor-miniatura" />
+                  {/* La miniatura elige qué foto se ve y se edita (SCRUM-194) */}
+                  <button type="button" className="portada-editor-elegir"
+                    aria-label={`Editar textos de la foto ${idx + 1}`} aria-pressed={idx === edicion.fotoEditada}
+                    onClick={() => edicion.seleccionarFoto(idx)}>
+                    <img src={foto.imagen} alt="" className="portada-editor-miniatura" />
+                  </button>
                   <span className="visualmente-oculto">Foto {idx + 1} de {total}</span>
                   <div className="portada-editor-acciones">
                     <button

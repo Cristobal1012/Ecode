@@ -450,6 +450,12 @@
   display: flex;
   justify-content: flex-end;
   z-index: 10;
+  /* Ocupa todo el ancho para alinear el panel a la derecha: solo el panel recibe los clics, no lo que tapa */
+  pointer-events: none;
+}
+
+.portada-controles > * {
+  pointer-events: auto;
 }
 
 .portada-editor-fotos-contenedor {
@@ -503,6 +509,47 @@
 .portada-editor-acciones {
   display: flex;
   gap: 0.25rem;
+}
+
+/* La miniatura elegida es la foto cuyos textos se editan */
+.portada-editor-elegir {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.portada-editor-elegir[aria-pressed='true'] {
+  border-color: #FFFFFF;
+}
+
+.portada-editor-elegir:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
+}
+
+/* Textos por foto: pasar de una foto a otra y elegir a qué página lleva su botón */
+.portada-editor-navegacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.portada-editor-posicion {
+  color: #FFFFFF;
+  font-size: 0.9rem;
+}
+
+.portada-editor-destino {
+  max-width: 320px;
+}
+
+.portada-editor-destino select {
+  min-height: 44px;
 }
 
 .portada-editor-boton-flecha {

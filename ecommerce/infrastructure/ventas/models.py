@@ -5,6 +5,10 @@ from django.conf import settings
 from ecommerce.domain.blog import (
     LARGO_NOMBRE_BLOG, LARGO_RESUMEN, LARGO_SLUG, LARGO_TITULO, NOMBRE_BLOG_POR_DEFECTO, EstadoPublicacion,
 )
+from ecommerce.domain.banner import (
+    DESTINO_POR_DEFECTO, DESTINOS_BOTON, LARGO_ANTETITULO as LARGO_ANTETITULO_FOTO, LARGO_TEXTO as LARGO_TEXTO_FOTO,
+    LARGO_TITULO as LARGO_TITULO_FOTO,
+)
 from ecommerce.domain.contacto import LOGO_UNIVERSIDAD_HEADER, UBICACIONES_LOGO_UNIVERSIDAD
 from ecommerce.domain.cotizaciones import ETIQUETAS_ESTADO_COTIZACION, EstadoCotizacion
 from ecommerce.domain.destacados import LARGO_TITULO as LARGO_TITULO_DESTACADOS
@@ -152,6 +156,12 @@ class FotoBanner(models.Model):
     configuracion = models.ForeignKey(ConfiguracionGlobal, on_delete=models.CASCADE, related_name='fotos_banner')
     imagen = models.ImageField(upload_to='negocio/banners/')
     orden = models.PositiveSmallIntegerField(default=0)
+    # Textos y botón propios de la foto (domain/banner.py): viajan con ella al reordenar
+    antetitulo = models.CharField(max_length=LARGO_ANTETITULO_FOTO, blank=True, default='')
+    titulo = models.CharField(max_length=LARGO_TITULO_FOTO, blank=True, default='')
+    texto = models.TextField(max_length=LARGO_TEXTO_FOTO, blank=True, default='')
+    destino = models.CharField(max_length=10, choices=[(destino, destino) for destino in DESTINOS_BOTON],
+                               default=DESTINO_POR_DEFECTO)
 
     class Meta:
         ordering = ['orden', 'id']

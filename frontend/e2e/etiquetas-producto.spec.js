@@ -50,6 +50,7 @@ for (const ancho of [390, 1280]) {
     await comprobarVista(page);
     await page.goto(`/catalogo/producto/${obra.id}`);
     await expect(page.locator('.detalle-info .tarjeta-producto-etiqueta')).toHaveText('Edición limitada');
+    await expect(page.getByRole('button', { name: 'Agregar al carrito', exact: true })).toBeEnabled();
     await comprobarVista(page);
     await page.goto('/catalogo/producto/000000000000000000000002');
     await expect(page.locator('.detalle-info .tarjeta-producto-etiqueta')).toHaveText('Agotado');
@@ -62,6 +63,30 @@ for (const ancho of [390, 1280]) {
     await comprobarVista(page);
   });
 }
+
+test('agrega una obra sin atributos al carrito y respeta su stock', async ({ page }) => {
+  await prepararEtiquetas(page);
+  await page.addInitScript(() => localStorage.removeItem('carrito_local'));
+  const validaciones = [];
+  await page.route('**/api/ventas/carrito/validar/', async route => {
+    validaciones.push(route.request().postDataJSON());
+    return route.fulfill({ json: { items: [{ producto_mongo_id: obra.id, variante_sku: '198',
+      disponible: 2, precio: 8000, problema: null }] } });
+  });
+  await page.goto(`/catalogo/producto/${obra.id}`);
+  const agregar = page.getByRole('button', { name: 'Agregar al carrito', exact: true });
+  await expect(agregar).toBeEnabled();
+  await agregar.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Agregaste' })).toBeVisible();
+  expect(validaciones[0].items).toEqual([{ producto_mongo_id: obra.id, variante_sku: '198', cantidad: 1 }]);
+  await expect(page.getByText('Stock disponible: 1 (1 en tu carrito)', { exact: true })).toBeVisible();
+  await page.locator('.detalle-info').screenshot({ path: test.info().outputPath('compra-sin-atributos.png') });
+  await agregar.click();
+  await expect(page.getByRole('button', { name: 'Agotado (en tu carrito)', exact: true })).toBeDisabled();
+  expect(validaciones).toHaveLength(2);
+  expect(validaciones[1].items[0].cantidad).toBe(2);
+  await expect(page.locator('.detalle-info .tarjeta-producto-etiqueta')).toHaveText('Edición limitada');
+});
 
 test('los cuatro colores mantienen contraste AA en los seis temas', async ({ page }) => {
   for (let tema = 1; tema <= 6; tema += 1) {

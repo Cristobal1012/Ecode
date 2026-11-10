@@ -18,6 +18,50 @@
   border-left: 2px solid #e5e7eb;
 }
 
+/* Índice agrupado: el título de cada grupo sobre la lista de sus secciones */
+.config-indice ul.config-indice-grupos {
+  border-left: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.config-indice-grupo {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* En la página, cada grupo abre con su título y queda separado del siguiente */
+.config-grupo + .config-grupo {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 2px solid var(--color-border);
+}
+
+/* Subtítulos dentro de una sección (h5, bajo el h4 de la sección): el mismo aspecto que tenían como h4 */
+.config-secciones h5 {
+  font-family: var(--fuente-titulos);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--color-text);
+  margin: 0 0 0.5em;
+}
+
+.config-grupo-titulo {
+  margin: 0 0 24px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
 .config-indice button {
   display: block;
   width: 100%;
@@ -562,6 +606,46 @@
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+/* Vista del catálogo (RF-01.4): un esquema de cómo quedan los productos */
+.selector-vista-esquema {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.selector-vista-producto {
+  aspect-ratio: 3 / 4;
+  background: var(--color-muted);
+  opacity: 0.45;
+}
+
+.selector-vista-esquema--lista {
+  grid-template-columns: 1fr;
+}
+
+.selector-vista-esquema--lista .selector-vista-producto {
+  display: flex;
+  gap: 6px;
+  aspect-ratio: auto;
+  height: 18px;
+  background: none;
+  opacity: 1;
+}
+
+.selector-vista-foto {
+  flex: 0 0 18px;
+  background: var(--color-muted);
+  opacity: 0.45;
+}
+
+.selector-vista-texto {
+  flex: 1;
+  background: var(--color-muted);
+  opacity: 0.25;
 }
 
 .selector-paleta-nombre {

@@ -7,7 +7,10 @@ import './auth.css';
 export default function AuthLayout({ children }) {
   // Decorativa: el nombre ya está en el header
   const configuracion = useConfiguracionTienda();
-  const portada = configuracion?.banner || configuracion?.banner_url?.trim() || PORTADA_POR_DEFECTO;
+  // La misma foto que se ve primero en la portada: la primera del carrusel (con el carrusel, la foto antigua
+  // pasa a ser una de sus fotos y "banner" queda vacío); si no hay, la antigua o la de ejemplo
+  const portada = configuracion?.banners?.[0]?.imagen || configuracion?.banner || configuracion?.banner_url?.trim()
+    || PORTADA_POR_DEFECTO;
 
   return (
     <>

@@ -4,6 +4,7 @@ import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
 import CreatableSelect from 'react-select/creatable';
+import CampoEtiquetaProducto from './CampoEtiquetaProducto';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -27,6 +28,8 @@ const leerProductoAEditar = (productoAEditar) => {
         descripcion: '',
         categoria: '',
         colecciones: [],
+        etiqueta: '',
+        etiqueta_color: 'primary',
         publicado: false,
         coleccion_privada: false,
         version_a_la_venta: '',
@@ -77,6 +80,8 @@ const leerProductoAEditar = (productoAEditar) => {
       descripcion: productoAEditar.descripcion || '',
       categoria: productoAEditar.categoria || '',
       colecciones: productoAEditar.colecciones || [],
+      etiqueta: productoAEditar.etiqueta || '',
+      etiqueta_color: productoAEditar.etiqueta_color || 'primary',
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
       coleccion_privada: Boolean(productoAEditar.coleccion_privada),
       version_a_la_venta: productoAEditar.version_a_la_venta || '',
@@ -449,6 +454,8 @@ export default function FormularioProducto({
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
         colecciones: producto.colecciones || [],
+        etiqueta: producto.etiqueta.trim(),
+        etiqueta_color: producto.etiqueta_color,
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
 
@@ -470,10 +477,11 @@ export default function FormularioProducto({
       // EDITAR PRODUCTO
       // ========================================================
 
-      if (productoAEditar) {
+      if (productoAEditar || productoGuardadoId) {
         idProducto =
-          productoAEditar.id ||
-          productoAEditar._id;
+          productoGuardadoId ||
+          productoAEditar?.id ||
+          productoAEditar?._id;
 
         if (!idProducto) {
           throw new Error(
@@ -971,6 +979,9 @@ export default function FormularioProducto({
           }
         />
       </div>
+
+      <CampoEtiquetaProducto etiqueta={producto.etiqueta} color={producto.etiqueta_color}
+        onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
 
       {/* ======================================================
           ATRIBUTOS GLOBALES

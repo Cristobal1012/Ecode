@@ -47,7 +47,7 @@ function FormularioCourier({ inicial }) {
 
   return (
     <section aria-labelledby={`courier-${codigo}-titulo`} style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '640px' }}>
-      <h4 id={`courier-${codigo}-titulo`} style={{ margin: 0, fontSize: '1.1rem' }}>{nombre}</h4>
+      <h5 id={`courier-${codigo}-titulo`} style={{ margin: 0, fontSize: '1.1rem' }}>{nombre}</h5>
       <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.95rem' }}>
         Con estas llaves la tienda cotiza el despacho, muestra las sucursales y genera la orden de transporte.
         {config.ayuda && ` ${config.ayuda}`} Se guardan cifradas y aquí solo se muestran sus últimos caracteres.

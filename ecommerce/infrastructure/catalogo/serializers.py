@@ -3,6 +3,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from ecommerce.domain.catalogo import (
+    COLORES_ETIQUETA_PRODUCTO,
+    LARGO_ETIQUETA_PRODUCTO,
     ColeccionPrivadaInvalida,
     validar_obra_no_es_version_de_otra,
     validar_version_a_la_venta,
@@ -52,6 +54,8 @@ class ProductoSerializer(serializers.Serializer):
     descripcion = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     meta_titulo = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
     meta_descripcion = serializers.CharField(max_length=160, required=False, allow_blank=True, allow_null=True)
+    etiqueta = serializers.CharField(max_length=LARGO_ETIQUETA_PRODUCTO, required=False, allow_blank=True, default='')
+    etiqueta_color = serializers.ChoiceField(choices=COLORES_ETIQUETA_PRODUCTO, required=False, default='primary')
     categoria = serializers.CharField(max_length=100)
     imagenes = serializers.ListField(child=ReferenciaImagenField(), required=False)
     

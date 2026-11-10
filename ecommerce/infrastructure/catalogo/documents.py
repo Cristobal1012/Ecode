@@ -5,6 +5,8 @@ from bson.errors import InvalidId
 from mongoengine import Document, EmbeddedDocument, fields
 
 from ecommerce.domain.catalogo import (
+    COLORES_ETIQUETA_PRODUCTO,
+    LARGO_ETIQUETA_PRODUCTO,
     ColeccionPrivadaInvalida,
     validar_obra_no_es_version_de_otra,
     validar_version_a_la_venta,
@@ -56,6 +58,8 @@ class Producto(Document):
     categoria = fields.StringField(required=True)
     meta_titulo = fields.StringField(max_length=60, null=True, blank=True)
     meta_descripcion = fields.StringField(max_length=160, null=True, blank=True)
+    etiqueta = fields.StringField(default='', max_length=LARGO_ETIQUETA_PRODUCTO)
+    etiqueta_color = fields.StringField(default='primary', choices=COLORES_ETIQUETA_PRODUCTO)
     # Managed images use storage keys internally; serializers expose their URLs.
     # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)

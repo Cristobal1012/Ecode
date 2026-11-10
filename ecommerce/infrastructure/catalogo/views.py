@@ -123,7 +123,8 @@ class VitrinaView(CatalogoAPIView):
                 return {'tipo': elegido['tipo'], 'id': elegido['id'], 'nombre': datos['nombre'],
                         'categoria': datos.get('categoria') or '', 'imagen': (datos.get('imagenes') or [None])[0],
                         'enlace': f'/catalogo/producto/{elegido["id"]}', 'variantes': datos.get('variantes', []),
-                        'coleccion_privada': datos.get('coleccion_privada', False)}
+                        'coleccion_privada': datos.get('coleccion_privada', False),
+                        'etiqueta': datos['etiqueta'], 'etiqueta_color': datos['etiqueta_color']}
             publicacion = publicaciones.get(elegido['id'])
             if publicacion is None:
                 return None

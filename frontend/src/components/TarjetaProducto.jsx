@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
+import EtiquetaProducto from './EtiquetaProducto';
 import './TarjetaProducto.css';
 
 // Tarjeta de producto del estilo editorial: foto vertical, categoría, nombre y precio (con oferta tachada).
@@ -12,8 +13,6 @@ export default function TarjetaProducto({ producto, etiqueta }) {
   const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
   const esColeccionPrivada = Boolean(producto.coleccion_privada);
   const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
-  // Una sola etiqueta: si es colección privada no muestra "Agotado"; si no, "Agotado" manda sobre "Oferta"
-  const textoEtiqueta = esColeccionPrivada ? null : (agotado ? 'Agotado' : tieneOferta ? 'Oferta' : etiqueta);
 
   const contenido = (
     <>
@@ -24,11 +23,7 @@ export default function TarjetaProducto({ producto, etiqueta }) {
         ) : (
           <span className="tarjeta-producto-sin-imagen" aria-hidden="true">{producto.nombre?.charAt(0)}</span>
         )}
-        {textoEtiqueta && (
-          <span className={`tarjeta-producto-etiqueta${agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
-            {textoEtiqueta}
-          </span>
-        )}
+        <EtiquetaProducto producto={producto} etiquetaSeccion={etiqueta} />
       </div>
 
       {producto.categoria && <span className="tarjeta-producto-categoria">{producto.categoria}</span>}

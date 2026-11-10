@@ -22,6 +22,10 @@ export default function Portada({ configuracion, edicion }) {
   const [pausado, setPausado] = useState(false);
   // WCAG 2.2.2: mientras el mouse o el foco están sobre los textos o el botón, la foto no cambia
   const [enUso, setEnUso] = useState(false);
+  // Al cambiar de foto con las flechas, el reloj vuelve a empezar y se anuncia la posición
+  const [reinicio, setReinicio] = useState(0);
+  const [anuncio, setAnuncio] = useState('');
+  const salirDe = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEnUso(false); };
 
   const totalFotos = listaFotos.length;
   // En el modo edición se ve la foto que el admin está editando
@@ -57,7 +61,17 @@ export default function Portada({ configuracion, edicion }) {
       });
     }, 5000);
     return () => clearInterval(intervalo);
-  }, [totalFotos, pausado, enUso, editando]);
+  }, [totalFotos, pausado, enUso, editando, reinicio]);
+
+  // Flechas del carrusel: circulares, cargan la foto elegida y sus vecinas
+  const irA = (paso) => {
+    const destino = (indiceSeguro + paso + totalFotos) % totalFotos;
+    setIndiceActivo(destino);
+    setFotosCargadas((cargadas) => new Set([...cargadas, destino, (destino + 1) % totalFotos,
+      (destino - 1 + totalFotos) % totalFotos]));
+    setReinicio((actual) => actual + 1);
+    setAnuncio(`Foto ${destino + 1} de ${totalFotos}.`);
+  };
 
   const textoBoton = textoBotonCatalogo(configuracion);
 
@@ -87,23 +101,34 @@ export default function Portada({ configuracion, edicion }) {
         </div>
       )}
 
-      {/* Botón visible para pausar y reanudar con 2+ fotos (WCAG 2.2.2) */}
+      {/* Con 2+ fotos: flechas y pausa juntas, abajo a la derecha para no tapar los textos (WCAG 2.2.2).
+          Mientras el foco está en ellas, la foto no cambia sola */}
       {totalFotos >= 2 && !editando && (
-        <button
-          type="button"
-          className="portada-boton-pausa"
-          onClick={() => setPausado((p) => !p)}
-          aria-label={pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}
-        >
-          <span aria-hidden="true">{pausado ? '▶' : '⏸'}</span>
-          <span>{pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}</span>
-        </button>
+        <div className="portada-controles-carrusel" role="group" aria-label="Controles del carrusel"
+          onFocus={() => setEnUso(true)} onBlur={salirDe}>
+          <button type="button" className="portada-control-carrusel" aria-label="Foto anterior" onClick={() => irA(-1)}>
+            <span aria-hidden="true">‹</span>
+          </button>
+          <button
+            type="button"
+            className="portada-boton-pausa"
+            onClick={() => setPausado((p) => !p)}
+            aria-label={pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}
+          >
+            <span aria-hidden="true">{pausado ? '▶' : '⏸'}</span>
+            <span>{pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}</span>
+          </button>
+          <button type="button" className="portada-control-carrusel" aria-label="Foto siguiente" onClick={() => irA(1)}>
+            <span aria-hidden="true">›</span>
+          </button>
+          <span className="portada-posicion-carrusel" aria-hidden="true">{indiceSeguro + 1} / {totalFotos}</span>
+          <span role="status" className="visualmente-oculto">{anuncio}</span>
+        </div>
       )}
 
       <div className="contenedor portada-contenido"
         onMouseEnter={() => setEnUso(true)} onMouseLeave={() => setEnUso(false)}
-        onFocus={() => setEnUso(true)}
-        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEnUso(false); }}>
+        onFocus={() => setEnUso(true)} onBlur={salirDe}>
         {editandoFotos ? (
           <EditorTextosFoto configuracion={configuracion} edicion={edicion} />
         ) : editando ? (

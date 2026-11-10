@@ -21,6 +21,7 @@ import GestorFormularioCotizacion from '../components/GestorFormularioCotizacion
 import GestorOrdenCatalogo from '../components/GestorOrdenCatalogo';
 import GestorBlog from '../components/GestorBlog';
 import GestorPresentacion from '../components/GestorPresentacion';
+import VistaCatalogoSelector from '../components/VistaCatalogoSelector';
 import GestorSobreMi from '../components/GestorSobreMi';
 import GestorPublicaciones from '../components/GestorPublicaciones';
 import GestorAnalitica from '../components/GestorAnalitica';
@@ -40,6 +41,7 @@ const GRUPOS_CONFIGURACION = [
     { id: 'config-paleta', titulo: 'Paleta de Colores de la Tienda' },
     { id: 'config-tipografia', titulo: 'Tipografía de la Tienda' },
     { id: 'config-presentacion', titulo: 'Fotos y logo' },
+    { id: 'config-vista-catalogo', titulo: 'Vista del catálogo' },
   ] },
   { id: 'config-grupo-contenido', titulo: 'Contenido y catálogo', secciones: [
     { id: 'config-orden-catalogo', titulo: 'Orden del catálogo y categorías' },
@@ -274,6 +276,12 @@ export default function Admin() {
           'config-presentacion': (
             <>
               <GestorPresentacion />
+            </>
+          ),
+          // RF-01.4: grilla de 3, grilla de 4 o lista con descripción en el catálogo público
+          'config-vista-catalogo': (
+            <>
+              <VistaCatalogoSelector />
             </>
           ),
           'config-local': (

@@ -608,6 +608,46 @@
   text-transform: uppercase;
 }
 
+/* Vista del catálogo (RF-01.4): un esquema de cómo quedan los productos */
+.selector-vista-esquema {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.selector-vista-producto {
+  aspect-ratio: 3 / 4;
+  background: var(--color-muted);
+  opacity: 0.45;
+}
+
+.selector-vista-esquema--lista {
+  grid-template-columns: 1fr;
+}
+
+.selector-vista-esquema--lista .selector-vista-producto {
+  display: flex;
+  gap: 6px;
+  aspect-ratio: auto;
+  height: 18px;
+  background: none;
+  opacity: 1;
+}
+
+.selector-vista-foto {
+  flex: 0 0 18px;
+  background: var(--color-muted);
+  opacity: 0.45;
+}
+
+.selector-vista-texto {
+  flex: 1;
+  background: var(--color-muted);
+  opacity: 0.25;
+}
+
 .selector-paleta-nombre {
   font-weight: 600;
   font-size: 0.92rem;

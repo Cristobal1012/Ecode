@@ -5,9 +5,9 @@ Entrega de [SCRUM-187](https://emiliosanmartinpez.atlassian.net/browse/SCRUM-187
 - [PDF para entregar al cliente](Manual_de_uso_del_panel_Ecode.pdf).
 - [Fuente editable en Word](Manual_de_uso_del_panel_Ecode.docx), con las capturas incorporadas.
 
-El manual cubre el panel integrado al 2 de noviembre de 2026. Las pantallas pertenecen a una tienda ficticia: no contienen cuentas bancarias ni llaves reales. El despliegue y el mantenimiento se explican por separado en [el manual de despliegue](../deploy/README.md).
+Versión 2, actualizada el 11 de noviembre de 2026. Incluye el Dashboard actual, los grupos de Configuración, etiquetas y colección privada, carrusel y menú editables, destacados, vista y orden del catálogo, fotos y logo, Sobre mí, redes sociales y las nuevas condiciones de las promociones. Las pantallas pertenecen a una tienda ficticia: no contienen cuentas bancarias ni llaves reales. El despliegue y el mantenimiento se explican por separado en [el manual de despliegue](../deploy/README.md).
 
-Para actualizarlo, editar el Word, actualizar su índice y exportarlo nuevamente a PDF. Comprobar también las páginas que cambiaron. Las capturas sueltas, los datos de prueba y los archivos de trabajo no forman parte de esta entrega.
+Para actualizarlo, editar el Word, revisar los números y enlaces de su índice y exportarlo nuevamente a PDF. Comprobar también las páginas que cambiaron. Las capturas sueltas, los datos de prueba y los archivos de trabajo no forman parte de esta entrega.
 
 ## Validación de lectura pendiente
 

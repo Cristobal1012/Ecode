@@ -874,8 +874,20 @@ export default function FormularioProducto({
             noOptionsMessage={() => "Escribe para crear una nueva colección"}
             formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
             className="campo-coleccion-select"
+            classNamePrefix="campo-coleccion"
+            // Como los demás campos (inputStyle): borde de control con contraste 3:1 y texto AA en las 8 paletas.
+            // var(--color-border) es para separadores y no llegaba a 3:1 (WCAG 1.4.11)
             styles={{
-              control: (base) => ({ ...base, borderColor: 'var(--color-border)' }),
+              control: (base, { isFocused }) => {
+                const borde = isFocused ? 'var(--color-primary)' : 'var(--color-control-border)';
+                return {
+                  ...base, backgroundColor: 'var(--color-surface)', borderColor: borde, '&:hover': { borderColor: borde },
+                  boxShadow: isFocused ? '0 0 0 1px var(--color-primary)' : 'none',
+                };
+              },
+              placeholder: (base) => ({ ...base, color: 'var(--color-muted)' }),
+              input: (base) => ({ ...base, color: 'var(--color-text)' }),
+              menu: (base) => ({ ...base, backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }),
             }}
           />
           

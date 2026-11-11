@@ -78,7 +78,8 @@ test('el formulario de producto y el editor no tienen errores automáticos en su
       .map(valor => valor / 255).map(valor => valor <= .04045 ? valor / 12.92 : ((valor + .055) / 1.055) ** 2.4)
       .reduce((total, valor, indice) => total + valor * [.2126, .7152, .0722][indice], 0);
     return campos.filter(campo => !campo.disabled && campo.getClientRects().length).map(campo => {
-      const estilo = getComputedStyle(campo);
+      // En un campo de react-select (ej. Colecciones) el borde lo dibuja su contenedor, no el input donde se escribe
+      const estilo = getComputedStyle(campo.closest('[class*="__control"]') ?? campo);
       const borde = luminancia(estilo.borderColor);
       const fondo = luminancia(estilo.backgroundColor);
       return { etiqueta: campo.labels?.[0]?.textContent.trim(), razon: (Math.max(borde, fondo) + .05) / (Math.min(borde, fondo) + .05) };

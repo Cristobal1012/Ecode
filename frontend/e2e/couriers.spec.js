@@ -25,7 +25,9 @@ test('el comprador elige entre dos couriers y el pedido se envía con el elegido
   let pedido;
   await page.route('**/api/ventas/checkout/', route => {
     pedido = route.request().postDataJSON();
-    return route.fulfill({ json: { orden_id: '148', instrucciones_pago: {} } });
+    return route.fulfill({ json: { orden_id: '148', instrucciones_pago: {
+      monto: 4500, referencia: '148', datos: [],
+    } } });
   });
 
   await page.goto('/checkout');
@@ -54,5 +56,6 @@ test('el comprador elige entre dos couriers y el pedido se envía con el elegido
   await page.getByRole('button', { name: 'Pagar con Transferencia bancaria' }).click();
 
   await expect.poll(() => pedido?.proveedor_logistico).toBe('STARKEN');
+  await expect(page.getByRole('heading', { name: '¡Pedido recibido!' })).toBeVisible();
   expect(inesperadas).toEqual([]);
 });

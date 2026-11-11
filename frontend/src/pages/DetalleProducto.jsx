@@ -9,6 +9,7 @@ import useResenas from '../hooks/useResenas';
 import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import EtiquetaProducto from '../components/EtiquetaProducto';
+import AccesoProductoExclusivo from '../components/AccesoProductoExclusivo';
 import './DetalleProducto.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoDetalle } from '../components/carga/EsqueletosTienda';
@@ -319,7 +320,9 @@ export default function DetalleProducto() {
                   </Link>
                 ) : null
               ) : (
-                <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
+                <AccesoProductoExclusivo producto={producto}>
+                  <VariantSelector producto={producto} onAgregarAlCarrito={handleAgregarAlCarrito} />
+                </AccesoProductoExclusivo>
               )}
             </div>
 

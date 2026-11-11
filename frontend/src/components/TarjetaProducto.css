@@ -155,3 +155,19 @@
 :root[data-fotos='completas'] .tarjeta-producto-imagen img {
   object-fit: contain;
 }
+.producto-exclusivo-aviso {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.producto-exclusivo-aviso a {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.producto-exclusivo-acceso {
+  color: var(--color-text);
+}

@@ -14,6 +14,7 @@ vi.mock('../components/auth/axiosConfig', () => ({
     put: vi.fn(),
   },
 }));
+vi.mock('../hooks/useConfiguracionTienda', () => ({ default: () => ({ suscripciones_activas: false }) }));
 
 describe('Colección privada (SCRUM-197)', () => {
   afterEach(() => {

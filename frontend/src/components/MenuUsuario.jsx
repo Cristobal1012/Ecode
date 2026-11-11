@@ -87,6 +87,7 @@ const MenuUsuario = ({ suscripciones = false }) => {
                             <li><Link to="/mis-suscripciones" onClick={() => setIsOpen(false)}>Mis suscripciones</Link></li>
                         )}
                         <li><Link to="/mis-direcciones" onClick={() => setIsOpen(false)}>Mis direcciones de envío</Link></li>
+                        <li><Link to="/mi-cumpleanos" onClick={() => setIsOpen(false)}>Mi cumpleaños</Link></li>
                         <li><Link to="/cambiar-contrasena" onClick={() => setIsOpen(false)}>Cambiar contraseña</Link></li>
                     </ul>
 

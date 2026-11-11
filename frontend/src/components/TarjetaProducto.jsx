@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import EtiquetaProducto from './EtiquetaProducto';
+import { AvisoProductoExclusivo } from './AccesoProductoExclusivo';
 import './TarjetaProducto.css';
 
 // Tarjeta de producto del estilo editorial: foto vertical, categoría, nombre y precio (con oferta tachada).
@@ -48,18 +49,19 @@ export default function TarjetaProducto({ producto, etiqueta }) {
     </>
   );
 
-  if (tieneVersionVenta) {
+  if (tieneVersionVenta || producto.solo_suscriptores) {
     return (
       <div className="tarjeta-producto tarjeta-producto--con-version">
         <Link to={`/catalogo/producto/${id}`} className="tarjeta-producto-enlace">
           {contenido}
         </Link>
-        <Link
+        {producto.solo_suscriptores && <AvisoProductoExclusivo />}
+        {tieneVersionVenta && <Link
           to={`/catalogo/producto/${producto.version_a_la_venta}`}
           className="tarjeta-producto-boton-version"
         >
           {producto.texto_boton_version || 'Disponible en print'}
-        </Link>
+        </Link>}
       </div>
     );
   }

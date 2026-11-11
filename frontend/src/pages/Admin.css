@@ -1036,3 +1036,31 @@
   font-size: 1.4rem;
   margin-bottom: 8px;
 }
+.cumpleanos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.cumpleanos-lista dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.cumpleanos-lista dt {
+  font-weight: 600;
+}
+
+.cumpleanos-regalo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.cumpleanos-regalo input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}

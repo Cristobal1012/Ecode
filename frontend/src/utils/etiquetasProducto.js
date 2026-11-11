@@ -9,6 +9,7 @@ export const COLORES_ETIQUETA_PRODUCTO = [
 ];
 
 export function obtenerEtiquetaProducto(producto, etiquetaSeccion) {
+  if (producto.solo_suscriptores) return { texto: 'Exclusivo suscriptores', color: 'primary', personalizada: true };
   const privada = Boolean(producto.coleccion_privada);
   const { agotado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
   if (!privada && agotado) return { texto: 'Agotado', color: 'text', agotado: true };

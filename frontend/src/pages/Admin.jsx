@@ -30,6 +30,7 @@ import GestorActivarResenas from '../components/GestorActivarResenas';
 import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import GestorSuscripciones from '../components/GestorSuscripciones';
 import GestorSuscriptores from '../components/GestorSuscriptores';
+import GestorCumpleanos from '../components/GestorCumpleanos';
 import './Admin.css';
 import Spinner from '../components/carga/Spinner';
 
@@ -251,6 +252,8 @@ export default function Admin() {
             <GestorSuscriptores />
           </div>
         );
+      case 'cumpleanos':
+        return <div><h2 className="admin-titulo">Cumpleaños del mes</h2><GestorCumpleanos /></div>;
       case 'blog':
         return <GestorPublicaciones />;
       case 'configuracion': {

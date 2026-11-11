@@ -1,4 +1,5 @@
 import { textoVariante } from '../../utils/suscripciones';
+import { Link } from 'react-router-dom';
 
 // Qué recibe el cliente en cada entrega: uno de los productos del plan y su variante (RN-03: una variante sin stock
 // para una entrega no se puede elegir). `valor`: { producto_mongo_id, variante_sku }
@@ -34,13 +35,17 @@ export default function ElegirProducto({ productos, valor, onCambiar, unidades =
                 <span className="suscripcion-producto-texto">
                   <strong>{p.nombre}</strong>
                   {p.categoria && <span className="checkout-ayuda">{p.categoria}</span>}
-                  {sinStock && <span className="checkout-ayuda">Sin stock por ahora</span>}
+                  {p.requiere_suscripcion
+                    ? <span className="checkout-ayuda">Exclusivo para suscriptores con acceso a este plan.</span>
+                    : sinStock && <span className="checkout-ayuda">Sin stock por ahora</span>}
                 </span>
               </label>
             );
           })}
         </div>
       </fieldset>
+      {productos.some(p => p.requiere_suscripcion) && <p>Para elegir los exclusivos necesitas una suscripción vigente.{' '}
+        <Link to="/suscripcion">Ver planes de Suscripción</Link></p>}
 
       {producto && variantes.length > 1 && (
         <div className="checkout-campo">

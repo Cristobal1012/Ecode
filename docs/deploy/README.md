@@ -1,8 +1,8 @@
 # Manual de despliegue (RNF-04)
 
 Un despliegue es una tienda. Este manual cubre la publicación con Docker (cualquier servidor con Docker), las
-tareas programadas, los respaldos y el correo. La guía paso a paso de las tiendas de prueba en un servidor (Azure for
-Students u Oracle Cloud) está en [`prueba-servidor.md`](prueba-servidor.md), y el resumen de las variables en
+tareas programadas, los respaldos y el correo. La guía paso a paso de las tiendas de prueba (una por servidor, con
+una dirección de DuckDNS) está en [`prueba-servidor.md`](prueba-servidor.md), y el resumen de las variables en
 [`VARIABLES_ENTORNO.md`](VARIABLES_ENTORNO.md).
 
 Toda la configuración va por variables de entorno, documentadas en `.env.example`. Las credenciales de los
@@ -79,7 +79,8 @@ y protégelo con `chmod 600`. Cada tienda tiene su propio archivo, con claves y 
   `secrets.token_hex(24)`, como indica la plantilla. No uses `get_random_secret_key` de Django.
 - `ARCHIVO_TIENDA` es la ruta del mismo archivo: de ahí el backend lee todas sus variables.
 - **Dos formas de atender el HTTPS:**
-  - *Detrás de un proxy* que termina el HTTPS (como la prueba en Oracle): `DIRECCION_SITIO=:80`,
+  - *Detrás de un proxy* que termina el HTTPS (como varias tiendas en un servidor, en el
+    [anexo de la guía](prueba-servidor.md#anexo-varias-tiendas-en-un-servidor)): `DIRECCION_SITIO=:80`,
     `IP_WEB=127.0.0.1` y un `PUERTO_WEB` (y `PUERTO_WEB_HTTPS`) distinto por tienda. El proxy reenvía el dominio a
     `127.0.0.1:<PUERTO_WEB>`.
   - *Con el dominio propio en este Caddy*: `DIRECCION_SITIO=mitienda.cl`, `IP_WEB=0.0.0.0`, `PUERTO_WEB=80` y
@@ -100,7 +101,10 @@ docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/
 - `preparar_tienda_prueba` deja la configuración inicial, Transbank en integración, una transferencia con datos
   ficticios y los borradores de las páginas legales. Se puede correr de nuevo: no pisa lo que el admin cambió.
   Después, el emprendedor completa y publica las páginas legales: sin ellas no se puede comprar.
-- Comprueba que responde: `curl https://mitienda.cl/api/salud/` debe dar `{"estado": "ok", ...}`.
+- Comprueba que responde: `curl https://mitienda.cl/api/salud/` debe dar
+  `{"estado": "ok", "postgres": "ok", "mongo": "ok"}`. Responde 503 si alguna base no contesta; no muestra datos
+  sensibles y no redirige a HTTPS, para que el chequeo interno del contenedor funcione sin pasar por el proxy. Es la
+  misma dirección que revisa el monitor externo.
 
 Los demás comandos usan la misma forma (`docker compose -p ... exec backend python manage.py <comando>`). Los
 registros se ven con `docker compose -p ... logs -f backend`.
@@ -166,7 +170,7 @@ servidor nuevo se prepara igual que en [la guía](prueba-servidor.md#2-preparar-
    enviados. Cambia solo lo que depende del servidor: `ARCHIVO_TIENDA` si cambia la ruta, y la dirección
    (`DIRECCION_SITIO`, `IP_WEB`, los puertos, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y
    `FRONTEND_URL`).
-3. **Clona el código en el servidor nuevo**, como en [la guía](prueba-servidor.md#3-código-y-variables-de-cada-tienda),
+3. **Clona el código en el servidor nuevo**, como en [la guía](prueba-servidor.md#3-código-y-variables-de-la-tienda),
    y copia la carpeta del respaldo. Las imágenes se compilan ahí mismo en el paso siguiente.
 4. **Restaura sobre la tienda vacía.** Con `C` y `D` como en [Restaurar un respaldo](#restaurar-un-respaldo),
    primero solo las bases, y la tienda completa al final:
@@ -190,25 +194,10 @@ servidor nuevo se prepara igual que en [la guía](prueba-servidor.md#2-preparar-
 7. **Apaga la tienda de origen** con `$C down` cuando la nueva funcione. Sus datos se borran con `$C down -v`:
    hazlo solo cuando estés seguro, y conserva el respaldo.
 
-## Pasos después de cada versión nueva (sin Docker)
-
-```bash
-pip install -r requirements.txt   # ej. django-anymail (correo) y argon2-cffi (sin él no se puede iniciar sesión)
-python manage.py migrate
-python manage.py collectstatic --noinput   # estilos del admin de Django en STATIC_ROOT (los sirve whitenoise)
-```
-
-El backend se ejecuta con gunicorn (`gunicorn backend_project.wsgi --bind 0.0.0.0:8000`), no con `runserver`.
-Los registros salen por la consola, con el nivel de `LOG_LEVEL`.
-
-**Salud:** `GET /api/salud/` responde 200 con `{"estado": "ok", "postgres": "ok", "mongo": "ok"}` si las dos bases
-responden, y 503 si alguna no. No muestra datos sensibles y no redirige a HTTPS, para que el chequeo interno
-funcione sin pasar por el proxy. Úsalo en el healthcheck del contenedor y en el monitor externo.
-
 ## Archivos subidos por la tienda
 
-Las imágenes que sube el emprendedor desde el panel se guardan en `MEDIA_ROOT` (por defecto `<proyecto>/media`) y
-se publican en `MEDIA_URL` (por defecto `/media/`):
+Las imágenes que sube el emprendedor desde el panel se guardan en el volumen `media` de la tienda y las publica su
+Caddy en `/media/`:
 
 | Carpeta | Qué guarda |
 |---|---|
@@ -216,28 +205,22 @@ se publican en `MEDIA_URL` (por defecto `/media/`):
 | `catalogo/productos/` | Fotos de los productos |
 | `blog/portadas/` y `blog/fotos/` | Portada y galería de cada publicación del blog (si el emprendedor lo activa) |
 
-- **La carpeta tiene que sobrevivir a cada versión nueva.** En un VPS o con Docker, monta un disco o volumen
-  persistente en `MEDIA_ROOT`. En una plataforma sin disco persistente, las fotos se pierden al reiniciar.
-- **Con `DEBUG=False`, Django no sirve estos archivos.** El servidor web (Nginx, Caddy u otro) tiene que publicar
-  la carpeta `MEDIA_ROOT` en la ruta `MEDIA_URL`. Con `deploy/docker-compose.yml` ya está resuelto: las fotos van
-  en el volumen `media` y las publica el Caddy de la tienda.
-- **Respaldos:** respalda esta carpeta junto con PostgreSQL, porque los registros de la base apuntan a estos
-  archivos.
+- **El volumen sobrevive a cada versión nueva:** `up -d --build` no lo toca. Solo `down -v` lo borra.
+- **Respaldos:** `respaldar.sh` lo guarda en `media.tar.gz`, junto con PostgreSQL, porque los registros de la base
+  apuntan a estos archivos.
 - **Límites de subida:** las variables `CATALOGO_IMAGEN_*` de `.env.example` valen para todas las imágenes, también
   las del blog y las de las cotizaciones (por defecto, 5 MB por foto y 10 fotos por subida). Además, cada
   publicación del blog admite hasta 10 fotos en su galería y cada cotización hasta 3; esos topes son fijos.
 
 ### Archivos privados (fotos de las cotizaciones)
 
-Las fotos que adjunta un cliente al pedir una cotización **no** van en `MEDIA_ROOT`: se guardan en
-`ARCHIVOS_PRIVADOS_ROOT` (por defecto `<proyecto>/privado`, en `cotizaciones/<número>/`) y solo las entrega la API
-al admin con su sesión. Se vuelven a codificar al subirlas, sin los datos de la cámara (ej. la ubicación GPS).
+Las fotos que adjunta un cliente al pedir una cotización **no** van con las demás: se guardan en el volumen
+`privado` (en `cotizaciones/<número>/`), que solo monta el backend, y solo las entrega la API al admin con su
+sesión. Se vuelven a codificar al subirlas, sin los datos de la cámara (ej. la ubicación GPS).
 
-- **Nunca publiques esta carpeta** en el servidor web: si queda dentro de `MEDIA_ROOT` o se sirve en una URL,
-  cualquiera con el enlace vería las fotos de los clientes.
-- Como `MEDIA_ROOT`, tiene que estar en un **disco persistente** y en los **respaldos**. Con
-  `deploy/docker-compose.yml` es el volumen `privado`, que solo monta el backend, y `respaldar.sh` lo guarda en
-  `privado.tar.gz`.
+- **Nunca publiques esta carpeta** en el servidor web: cualquiera con el enlace vería las fotos de los clientes.
+  Por eso el Caddy de la tienda no la monta.
+- `respaldar.sh` la guarda en `privado.tar.gz`.
 
 ## Tareas programadas
 
@@ -259,22 +242,11 @@ Django no lo ejecuta solo: hay que programarlo en el servidor. Se recomienda cad
 cancela, a lo más, una hora después de vencer. Correrlo de más no tiene efectos: solo toca las órdenes por
 transferencia que siguen Pendiente, y cada correo (recordatorio o cancelación) se envía una sola vez por orden.
 
-- **VPS (cron):** con `crontab -e`, usando las rutas reales del proyecto y del entorno virtual, y con las
-  mismas variables de entorno del backend:
+Se ejecuta dentro del contenedor del backend desde el cron del servidor (`crontab -e`), con rutas absolutas:
 
-  ```cron
-  0 * * * * cd /ruta/al/proyecto && /ruta/al/venv/bin/python manage.py cancelar_pagos_vencidos >> /var/log/cancelar_pagos_vencidos.log 2>&1
-  ```
-
-- **Plataformas administradas (Render, Railway u otras):** crear un *Cron Job* con el mismo código y las
-  mismas variables de entorno del backend, con la programación `0 * * * *` y el comando
-  `python manage.py cancelar_pagos_vencidos`.
-- **Docker:** ejecutar el comando dentro del contenedor del backend desde el cron del servidor, una línea por
-  tienda y con rutas absolutas:
-
-  ```cron
-  0 * * * * docker compose -p mitienda -f /ruta/al/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/mitienda-pagos.log 2>&1
-  ```
+```cron
+0 * * * * docker compose -p mitienda -f /ruta/al/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/mitienda-pagos.log 2>&1
+```
 
 En desarrollo no hace falta programarlo: se puede correr a mano cuando se quiera probar.
 
@@ -383,8 +355,8 @@ En desarrollo y en las demos se usa una cuenta de Gmail, que entrega a cualquier
 Limitaciones:
 
 - Gmail permite unos 500 correos al día y algunos pueden llegar a spam: sirve para probar, no para una tienda real.
-- Algunas plataformas bloquean los puertos SMTP en sus planes gratuitos (por ejemplo Render y Railway). Ahí los
-  correos no salen por Gmail y hay que usar Resend.
+- Algunos proveedores de servidores bloquean la salida por los puertos SMTP. Si los correos no salen por Gmail
+  (`sendtestemail` falla), pídele al proveedor que abra el 587 o usa Resend, que envía por HTTPS.
 - Con Resend y su remitente de prueba `onboarding@resend.dev`, solo se entrega a la dirección dueña de la cuenta
   de Resend: los compradores no reciben nada.
 

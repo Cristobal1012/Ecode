@@ -1,99 +1,42 @@
 # Tiendas de prueba en un servidor propio
 
-Guía para publicar las tiendas de prueba que el equipo entrega a cada emprendedor: varias tiendas en una sola
-máquina virtual con Ubuntu, cada una con su dirección `sslip.io` y HTTPS. Usa la publicación con Docker del
+Guía para publicar las tiendas de prueba que el equipo entrega a cada emprendedor: **una tienda por servidor**, con
+Ubuntu, una dirección gratuita de DuckDNS y HTTPS. Usa la publicación con Docker del
 [manual](README.md#publicar-con-docker). El despliegue final en los clientes lo hace otro grupo y puede usar otro
 proveedor.
 
-La prueba usa **Azure for Students**, que no pide tarjeta. Oracle Cloud Always Free es la alternativa gratuita, pero
-su registro rechaza muchas tarjetas. Solo el paso 1 depende del proveedor; desde el paso 2 la guía es la misma.
-
 ```
-Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443, certificados automáticos)
-                     ├─ alan.<ip>.sslip.io    ──> tienda "alan"    (127.0.0.1:8081)
-                     └─ daniela.<ip>.sslip.io ──> tienda "daniela" (127.0.0.1:8082)
+Internet ──HTTPS──> Caddy de la tienda (puertos 80 y 443, certificado automático)
+                     └─ mitienda-prueba.duckdns.org ──> frontend, fotos y backend de la tienda
 ```
 
-Cada tienda usa unos 650 MB de RAM en reposo y hasta 1,5 GB en un pico ([detalle](README.md#publicar-con-docker)):
-dos tiendas de prueba caben en una máquina de 4 GB con el swap del [paso 2](#2-preparar-el-servidor). La tienda
-real de un cliente va sola, en un servidor de 4 GB.
+Así funcionan hoy las dos tiendas de prueba, cada una en su VPS. Si alguna vez conviene juntar varias tiendas en una
+sola máquina, ver [Varias tiendas en un servidor](#anexo-varias-tiendas-en-un-servidor).
 
 ## 1. La máquina
 
-### Azure for Students
+Sirve cualquier proveedor que entregue una máquina con **Ubuntu 24.04**, acceso root por SSH y una IP pública fija.
+Las tiendas de prueba corren en VPS de OpenCloud (Chile).
 
-**Cuenta.** En la página de Azure for Students, verifica que eres estudiante con tu correo de la universidad. No pide
-tarjeta y entrega 100 USD de crédito para usar en 12 meses. Revisa las condiciones vigentes al registrarte.
+**Memoria.** Una tienda de prueba funciona con 1 GB de RAM y el swap de 2 GB del [paso 2](#2-preparar-el-servidor),
+con la caché de MongoDB y los procesos del backend reducidos ([paso 3](#3-código-y-variables-de-la-tienda)): en
+reposo usa unos 485 MB. Compilar las imágenes pide bastante más memoria, así que para compilar en el mismo servidor
+conviene una máquina de 2 GB. La tienda real de un cliente va en un servidor de 4 GB
+([detalle](README.md#publicar-con-docker)).
 
-- **Cuando el crédito llega a cero, Azure no cobra: desactiva la suscripción y las tiendas se caen.** Revisa el saldo
-  una vez por semana en la página de saldo de Microsoft Azure Sponsorships. Una máquina de 4 GB, con su IP y su
-  disco, consume del orden de 40 a 50 USD al mes según la región: el crédito alcanza para unos dos meses.
-- **Nunca aceptes pasar la suscripción a pago por uso** ("Pay-As-You-Go"): desde ahí sí se cobra.
-
-**Regiones permitidas.** Azure for Students limita las regiones donde se pueden crear recursos (suelen ser cinco),
-y en otra la creación falla con `RequestDisallowedByAzure`. Antes de crear la máquina, en el portal busca
-**Directiva** (Policy) > **Asignaciones**, abre "Allowed resource deployment regions" y revisa la lista. Elige la más
-cercana a Chile: Chile Central si aparece; si no, Brazil South; si no, una de Estados Unidos (East US suele ser la
-más barata).
-
-**Máquina virtual.** En el portal, **Máquinas virtuales > Crear > Máquina virtual de Azure**:
-
-- **Conceptos básicos:**
-  - Suscripción "Azure for Students" y un grupo de recursos nuevo, `tiendas-prueba`.
-  - Nombre `tiendas-prueba`, la región elegida y "No se requiere redundancia de la infraestructura".
-  - Imagen **Ubuntu Server 24.04 LTS (x64)**.
-  - Tamaño **Standard_B2s** (2 vCPU, 4 GB). Si no está disponible en la región, otro de 2 vCPU y 4 GB de la serie B
-    (B2s_v2 o B2as_v2).
-  - Autenticación con **clave pública SSH**, usuario `azureuser`, "Generar un nuevo par de claves" (descarga el
-    `.pem` y guárdalo bien: sin él no se entra al servidor) o la clave pública del equipo.
-  - Puertos de entrada públicos: **SSH (22), HTTP (80) y HTTPS (443)**.
-- **Discos:** SSD estándar, de 64 GB.
-- **Redes:** una IP pública nueva (SKU estándar, que es estática: la dirección `sslip.io` depende de ella). Deja
-  desmarcado "Eliminar la IP pública cuando se elimine la máquina virtual".
-- **Administración:** **apagado automático desactivado**: si no, las tiendas se apagan cada noche.
-- **Revisar y crear.** Al terminar, anota la IP pública de la máquina.
-
-**Red.** Las reglas de entrada quedan en el grupo de seguridad de red (NSG) de la máquina: 22, 80 y 443. Si se puede,
-limita el 22 a las IPs del equipo (en la regla de SSH, origen "Mi dirección IP"). Ubuntu en Azure no trae un
-firewall propio que bloquee los puertos, así que no hay que configurar nada más.
-
-**Correo.** Azure bloquea la salida por el puerto 25, pero no por el 587 que usa Gmail.
-
-Entra con `ssh -i <archivo .pem> azureuser@<IP pública>` y sigue en el paso 2.
-
-### Alternativa: Oracle Cloud Always Free
-
-- Cuenta Free Tier con un **correo del equipo**, región de origen **Chile Central (Santiago)** (no se puede cambiar
-  después). Pide una tarjeta solo para verificar la identidad; suele rechazar tarjetas de débito y prepago. **No
-  pases la cuenta a "Pay As You Go".**
-- Forma **VM.Standard.A1.Flex** (ARM Ampere) con el máximo gratuito vigente, imagen **Ubuntu 24.04 (aarch64)**,
-  disco de 100 GB y una **IP pública reservada**. Si aparece "Out of host capacity", prueba otro dominio de
-  disponibilidad o reintenta más tarde.
-- Red en dos lugares: en la Security List de la VCN, entrada TCP 80 y 443 desde `0.0.0.0/0` (y el 22 limitado si se
-  puede); y dentro de Ubuntu, porque las imágenes de Oracle traen `iptables` que rechaza todo salvo SSH:
-
-  ```bash
-  sudo iptables -I INPUT -p tcp -m state --state NEW -m multiport --dports 80,443 -j ACCEPT
-  sudo netfilter-persistent save
-  ```
-
-- Oracle puede detener una máquina gratuita con muy poco uso durante 7 días, y avisa por correo antes. Si pasa, se
-  vuelve a encender desde la consola sin perder datos.
-
-### Alternativa: cualquier VPS con Ubuntu
-
-Sirve cualquier proveedor que entregue una máquina con **Ubuntu 24.04**, acceso root por SSH y una IP pública fija:
-4 GB de RAM para dos tiendas de prueba, o 2 GB para una, siempre con el swap del [paso 2](#2-preparar-el-servidor).
 Antes de pagar:
 
 - **Confirma por escrito que los puertos 22, 80 y 443 llegan abiertos desde internet.** Hay proveedores que
-  responden al ping, pero bloquean todo TCP en su red: la máquina queda inalcanzable aunque esté encendida.
+  responden al ping, pero bloquean todo TCP en su red: la máquina queda inalcanzable aunque esté encendida. El puerto
+  de SSH que indique el proveedor puede no ser el que funciona: prueba también el 22.
 - Prefiere uno que cobre **por hora** o tenga **devolución** (ej. 30 días). Así, si la red falla, se borra la
   máquina sin perder el dinero.
 - Elige una región en **Chile o Brasil**: desde Chile responde en unos 10 a 70 ms, contra 130 ms o más en Estados
   Unidos.
+- Las nubes con plan gratuito para estudiantes (Azure for Students, Oracle Cloud Always Free) se probaron antes:
+  Azure entrega crédito por un tiempo limitado y Oracle rechaza muchas tarjetas al registrarse.
 
-Apenas la entreguen, desde tu computador, comprueba que el SSH responde. Después de levantar Caddy (paso 4),
+Apenas la entreguen, desde tu computador, comprueba que el SSH responde. Después de levantar la tienda (paso 5),
 haz lo mismo con el 80 y el 443:
 
 ```bash
@@ -164,111 +107,96 @@ sudo sshd -t && sudo systemctl reload ssh
 terminal, que entras con la clave. Si algo falla, la consola web del proveedor sigue entrando con la contraseña de
 root, porque no pasa por el SSH.
 
-## 3. Código y variables de cada tienda
+## 3. Código y variables de la tienda
 
 Como `despliegue`:
 
 ```bash
 git clone <url del repositorio> /opt/tiendas/codigo
 cd /opt/tiendas/codigo && git checkout main
-cp deploy/tienda.env.example /opt/tiendas/alan.env
-cp deploy/tienda.env.example /opt/tiendas/daniela.env
-chmod 600 /opt/tiendas/*.env
+cp deploy/tienda.env.example /opt/tiendas/mitienda.env
+chmod 600 /opt/tiendas/mitienda.env
 ```
 
-Con la IP `203.0.113.5` (ejemplo), las direcciones son `alan.203-0-113-5.sslip.io` y
-`daniela.203-0-113-5.sslip.io`: ya apuntan a la IP, sin configurar nada. En cada archivo:
+En el archivo:
 
-- `ARCHIVO_TIENDA` con su propia ruta (`/opt/tiendas/alan.env`).
-- `DIRECCION_SITIO=:80`, `IP_WEB=127.0.0.1` y puertos distintos: Alan `PUERTO_WEB=8081` y `PUERTO_WEB_HTTPS=8441`;
-  Daniela `8082` y `8442`. Deja `IP_WEB` en `127.0.0.1`: Docker publica los puertos sin pasar por el firewall de
-  Ubuntu, y así solo el Caddy de borde llega a las tiendas.
-- `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` con la dirección de esa tienda.
-- `SECRET_KEY`, `CLAVE_CIFRADO_CREDENCIALES`, `POSTGRES_PASSWORD` y `MONGO_CLAVE` **distintas en cada tienda**,
+- `ARCHIVO_TIENDA=/opt/tiendas/mitienda.env`, la ruta del mismo archivo.
+- La dirección de la tienda, que se crea en el [paso 4](#4-dirección-con-duckdns): `DIRECCION_SITIO=mitienda-prueba.duckdns.org`,
+  `IP_WEB=0.0.0.0`, `PUERTO_WEB=80` y `PUERTO_WEB_HTTPS=443`. Así el Caddy de la tienda atiende el HTTPS y obtiene
+  su certificado solo.
+- `ALLOWED_HOSTS=mitienda-prueba.duckdns.org`, y `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL`
+  con `https://mitienda-prueba.duckdns.org`.
+- `SECRET_KEY`, `CLAVE_CIFRADO_CREDENCIALES`, `POSTGRES_PASSWORD` y `MONGO_CLAVE` **propias de esta tienda**,
   generadas con los comandos de la plantilla.
-- `GOOGLE_CLIENT_ID`: el mismo cliente OAuth sirve para las dos tiendas (paso 8).
+- Con 1 GB de RAM: `MONGO_CACHE_GB=0.25` y `GUNICORN_WORKERS=1` (están comentadas en la plantilla).
+- `GOOGLE_CLIENT_ID`: el mismo cliente OAuth sirve para todas las tiendas de prueba (paso 8).
 - Correo: Gmail por SMTP con una contraseña de aplicación, y `DEFAULT_FROM_EMAIL` con el nombre de la tienda
   (ej. `Taller Maché <cuenta@gmail.com>`). Ver [Correo](README.md#correo). Usa una cuenta de Gmail **solo para
   esto**, distinta de la que administra el servidor: la contraseña de aplicación queda en el servidor y da acceso
   completo a esa cuenta.
 - `SECURE_HSTS_SECONDS=3600`. Súbelo solo cuando todo funcione.
 
-## 4. Caddy de borde
+## 4. Dirección con DuckDNS
 
-Instala Caddy con su paquete oficial (queda como servicio de systemd):
+[DuckDNS](https://www.duckdns.org) entrega gratis una dirección `<nombre>.duckdns.org`:
 
-```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update && sudo apt install -y caddy
-```
+1. Entra con una cuenta del equipo (GitHub o Google).
+2. Crea el subdominio (ej. `mitienda-prueba`) y escribe en **current ip** la IP pública del servidor. Presiona
+   **update ip**.
+3. Comprueba desde el servidor que ya apunta a su IP: `dig +short mitienda-prueba.duckdns.org`.
 
-`/etc/caddy/Caddyfile`, una entrada por tienda:
+Como la IP del servidor es fija, no hace falta el programa que DuckDNS ofrece para actualizarla. Si la IP cambia,
+se corrige a mano en la misma página. El token de la cuenta de DuckDNS no se usa en la tienda: no lo guardes en el
+servidor.
 
-```
-alan.203-0-113-5.sslip.io {
-	reverse_proxy 127.0.0.1:8081
-}
+Antes se usaba `sslip.io` (direcciones como `alan.203-0-113-5.sslip.io`), que dejó de responder en noviembre de
+2026.
 
-daniela.203-0-113-5.sslip.io {
-	reverse_proxy 127.0.0.1:8082
-}
-```
-
-`sudo systemctl reload caddy`. Caddy obtiene y renueva los certificados de Let's Encrypt solo, la primera vez que
-alguien entra a cada dirección.
-
-## 5. Levantar las tiendas
+## 5. Levantar la tienda
 
 Como `despliegue`, desde `/opt/tiendas/codigo`. La primera vez la compilación tarda varios minutos:
 
 ```bash
-docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan.env up -d --build
-docker compose -p daniela -f deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env up -d --build
-curl https://alan.203-0-113-5.sslip.io/api/salud/
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env up -d --build
+curl https://mitienda-prueba.duckdns.org/api/salud/
 ```
 
 El último comando debe responder `{"estado": "ok", "postgres": "ok", "mongo": "ok"}`. Revisa también el candado
-del navegador en las dos direcciones.
+del navegador.
 
-## 6. Datos iniciales de cada tienda
+## 6. Datos iniciales de la tienda
 
 ```bash
-docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec backend python manage.py createsuperuser
-docker compose -p alan -f deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec backend python manage.py preparar_tienda_prueba --nombre "<nombre del negocio>"
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec backend python manage.py createsuperuser
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec backend python manage.py preparar_tienda_prueba --nombre "<nombre del negocio>"
 ```
 
 `createsuperuser` con el correo del emprendedor, su nombre y apellidos, y una contraseña temporal fuerte, que se le
-entrega por otro canal (nunca en el mismo correo que la dirección de la tienda). Lo mismo para Daniela.
+entrega por otro canal (nunca en el mismo correo que la dirección de la tienda).
 
 ## 7. Tareas programadas y respaldos
 
-`crontab -e` como `despliegue` (la hora es la de Santiago, paso 2):
+`crontab -e` como `despliegue` (la hora es la de Santiago, paso 2). En cada servidor, solo las líneas de su tienda:
 
 ```cron
 # Plazo de pago de las transferencias, cada hora
-0 * * * * docker compose -p alan -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/alan-pagos.log 2>&1
-5 * * * * docker compose -p daniela -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/daniela-pagos.log 2>&1
-# Fotos del catálogo que quedaron sin borrar, una vez al día y antes de los respaldos
-30 3 * * * docker compose -p alan -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/alan-imagenes.log 2>&1
-40 3 * * * docker compose -p daniela -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/daniela-imagenes.log 2>&1
+0 * * * * docker compose -p mitienda -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py cancelar_pagos_vencidos >> /opt/tiendas/mitienda-pagos.log 2>&1
 # Suscripciones (solo hacen algo si la tienda las activó): aviso de cobro y ciclos vencidos, una vez al día
-15 3 * * * docker compose -p alan -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/alan.env exec -T backend python manage.py procesar_suscripciones >> /opt/tiendas/alan-suscripciones.log 2>&1
-20 3 * * * docker compose -p daniela -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/daniela.env exec -T backend python manage.py procesar_suscripciones >> /opt/tiendas/daniela-suscripciones.log 2>&1
+15 3 * * * docker compose -p mitienda -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py procesar_suscripciones >> /opt/tiendas/mitienda-suscripciones.log 2>&1
+# Fotos del catálogo que quedaron sin borrar, una vez al día y antes de los respaldos
+30 3 * * * docker compose -p mitienda -f /opt/tiendas/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py limpiar_imagenes_catalogo >> /opt/tiendas/mitienda-imagenes.log 2>&1
 # Respaldos diarios (se guardan 7 días)
-0 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh alan /opt/tiendas/alan.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1
-10 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh daniela /opt/tiendas/daniela.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1
+0 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh mitienda /opt/tiendas/mitienda.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1
 ```
 
 Una vez por semana, descarga una copia de `/opt/tiendas/respaldos/` fuera del servidor (ej. con `scp`).
 
 ## 8. Google y correo
 
-- En Google Cloud Console, en el cliente OAuth: agrega `https://alan...` y `https://daniela...` en los orígenes de
+- En Google Cloud Console, en el cliente OAuth: agrega `https://mitienda-prueba.duckdns.org` en los orígenes de
   JavaScript autorizados. La pantalla de consentimiento tiene que estar **"En producción"**; en "Prueba" solo
   entran los usuarios agregados a mano.
-- `docker compose -p alan ... exec backend python manage.py sendtestemail <correo que no sea del equipo>`:
+- `docker compose -p mitienda ... exec backend python manage.py sendtestemail <correo que no sea del equipo>`:
   confirma que el correo sale del servidor.
 
 ## 9. Monitoreo
@@ -278,10 +206,53 @@ equipo. Responde 503 si alguna base no contesta.
 
 ## Mantenimiento
 
-- **Actualizar:** respaldar, `git pull` en `/opt/tiendas/codigo` y el mismo `up -d --build` de cada tienda (las
-  migraciones corren solas). Avisa antes a los emprendedores.
-- **Revisión semanal:** `docker compose -p <tienda> ... ps` (todo `healthy`), `df -h` (disco), errores en
-  `docker compose -p <tienda> ... logs --since 24h backend`, el estado del monitor y, en Azure, el saldo del crédito.
-- **Pasar al dominio del emprendedor:** un registro A del dominio hacia la IP; cambiar la dirección en el Caddyfile
-  de borde y en `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL`; agregar el origen
-  en Google; y volver a levantar la tienda con `up -d`.
+- **Actualizar:** respaldar, `git pull` en `/opt/tiendas/codigo` y el mismo `up -d --build` (las migraciones corren
+  solas). Avisa antes al emprendedor.
+- **Revisión semanal:** `docker compose -p <tienda> ... ps` (todo `healthy`), `free -h` y `df -h` (memoria y
+  disco), y errores en `docker compose -p <tienda> ... logs --since 24h backend`, además del estado del monitor.
+- **Pasar al dominio del emprendedor:** un registro A del dominio hacia la IP; cambiar la dirección en
+  `DIRECCION_SITIO`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL`; agregar el
+  origen en Google; y volver a levantar la tienda con `up -d`. Los pasos completos están en
+  [Poner en producción la tienda del cliente](README.md#poner-en-producción-la-tienda-del-cliente).
+
+## Anexo: varias tiendas en un servidor
+
+Varias tiendas de prueba pueden compartir una máquina (2 GB de RAM por tienda, con el swap del paso 2). En ese caso
+ninguna atiende el HTTPS: lo hace un **Caddy de borde** instalado en el servidor, que reenvía cada dirección a su
+tienda:
+
+```
+Internet ──HTTPS──> Caddy de borde (servidor, puertos 80 y 443)
+                     ├─ alan-prueba.duckdns.org    ──> tienda "alan"    (127.0.0.1:8081)
+                     └─ daniela-prueba.duckdns.org ──> tienda "daniela" (127.0.0.1:8082)
+```
+
+Lo que cambia respecto de la guía:
+
+- **Paso 3:** un archivo por tienda, con `DIRECCION_SITIO=:80`, `IP_WEB=127.0.0.1` y puertos distintos (ej. Alan
+  `PUERTO_WEB=8081` y `PUERTO_WEB_HTTPS=8441`; Daniela `8082` y `8442`). Deja `IP_WEB` en `127.0.0.1`: Docker
+  publica los puertos sin pasar por el firewall de Ubuntu, y así solo el Caddy de borde llega a las tiendas.
+- **Caddy de borde**, con su paquete oficial (queda como servicio de systemd):
+
+  ```bash
+  sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+  sudo apt update && sudo apt install -y caddy
+  ```
+
+  `/etc/caddy/Caddyfile`, una entrada por tienda, y después `sudo systemctl reload caddy`:
+
+  ```
+  alan-prueba.duckdns.org {
+      reverse_proxy 127.0.0.1:8081
+  }
+
+  daniela-prueba.duckdns.org {
+      reverse_proxy 127.0.0.1:8082
+  }
+  ```
+
+- **Paso 7:** en el cron, una línea por tienda en cada tarea, con las horas desfasadas unos minutos (ej. los pagos
+  de la segunda tienda a los :05 y su respaldo a las 4:10) para que no compitan por la memoria.
+- **Pasar al dominio del emprendedor:** además, cambiar la dirección en el Caddyfile de borde.

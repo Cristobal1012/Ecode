@@ -63,6 +63,8 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'catalogo/vitrina/': { recientes: [producto], mas_vendidos: [] },
       'catalogo/productos/': { count: 1, total_pages: 1, current_page: 1, results: [producto], filtros: { categorias: ['Prueba'], atributos: {} } },
       'catalogo/filtros/': { categorias: ['Prueba'], atributos: {} },
+      // Configuración > Renombrar o unir categorías
+      'catalogo/categorias/': { categorias: [{ nombre: 'Prueba', productos: 1, publicados: 1 }] },
       [`catalogo/productos/${producto.id}/`]: producto,
       'usuarios/me/': { id: 1, nombre: 'Visitante QA', email: 'qa@example.test', rol: 'ADMIN' },
       'ventas/empresa/': {},

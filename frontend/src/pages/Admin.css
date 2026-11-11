@@ -1064,3 +1064,68 @@
   height: 20px;
   accent-color: var(--color-primary);
 }
+
+/* ---------- Renombrar o unir categorías (RF-03.2) ---------- */
+
+.categorias-lista {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.categorias-item {
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.categorias-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.categorias-nombre {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.categorias-fila .boton,
+.categorias-formulario .boton {
+  padding: 0.7rem 1.25rem;
+}
+
+.categorias-formulario {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* ---------- Fotos de Sobre mí (pedido de un cliente) ---------- */
+
+.sobre-mi-fotos-panel {
+  min-width: 0;
+}
+
+.sobre-mi-fotos-panel-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 20px;
+}
+
+.sobre-mi-foto-panel {
+  min-width: 0;
+}
+
+.admin-contenido .sobre-mi-foto-vista {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--color-secondary);
+}

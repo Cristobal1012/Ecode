@@ -18,6 +18,7 @@ from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
     ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
 )
+from ecommerce.domain.sobre_mi import LARGO_ALT_FOTO_SOBRE_MI
 from ecommerce.domain.suscripciones import (
     DESCUENTO_MAXIMO, DIAS_AVISO_MAXIMO, DIAS_AVISO_MINIMO, DIAS_AVISO_POR_DEFECTO, ETIQUETAS_ESTADO_SUSCRIPCION,
     FRECUENCIA_MAXIMA_SEMANAS, FRECUENCIA_MINIMA_SEMANAS, LARGO_DESCRIPCION_PLAN, LARGO_NOMBRE_PLAN, PRECIO_MAXIMO,
@@ -94,6 +95,11 @@ class ConfiguracionGlobal(models.Model):
     sobre_mi_activo = models.BooleanField(default=False)
     sobre_mi_nombre = models.CharField(max_length=30, default='Sobre mí')
     sobre_mi_biografia = models.TextField(blank=True, default='')
+    # Hasta 2 fotos junto a la biografía (pedido de un cliente, opcionales), cada una con su texto alternativo
+    sobre_mi_foto_1 = models.ImageField(upload_to='negocio/sobre_mi/', blank=True, null=True)
+    sobre_mi_foto_1_alt = models.CharField(max_length=LARGO_ALT_FOTO_SOBRE_MI, blank=True, default='')
+    sobre_mi_foto_2 = models.ImageField(upload_to='negocio/sobre_mi/', blank=True, null=True)
+    sobre_mi_foto_2_alt = models.CharField(max_length=LARGO_ALT_FOTO_SOBRE_MI, blank=True, default='')
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago

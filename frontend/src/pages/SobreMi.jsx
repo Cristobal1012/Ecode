@@ -5,6 +5,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 import { Cargando } from '../components/carga/Esqueleto';
+import { redesDeLaTienda } from '../utils/redesSociales';
 import './Blog.css';
 import './SobreMi.css';
 
@@ -41,6 +42,9 @@ export default function SobreMi() {
   }, [resultado.datos]);
 
   const { cargando, datos, error } = resultado;
+  // Fotos junto a la biografía (pedido de un cliente, opcionales) y las redes del pie, con su usuario
+  const fotos = datos?.fotos || [];
+  const redes = redesDeLaTienda(configuracion);
 
   return (
     <>
@@ -83,18 +87,29 @@ export default function SobreMi() {
                 </h1>
               </header>
 
-              {datos.biografia && (
+              {(datos.biografia || fotos.length > 0) && (
                 <section
-                  className="sobre-mi-biografia"
+                  className={`sobre-mi-biografia${fotos.length > 0 ? ' sobre-mi-biografia--con-fotos' : ''}`}
                   aria-label="Nuestra historia"
                 >
                   {/* HTML limpiado por el backend antes de guardarse */}
-                  <div
-                    className="sobre-mi-contenido"
-                    dangerouslySetInnerHTML={{
-                      __html: datos.biografia
-                    }}
-                  />
+                  {datos.biografia && (
+                    <div
+                      className="sobre-mi-contenido"
+                      dangerouslySetInnerHTML={{
+                        __html: datos.biografia
+                      }}
+                    />
+                  )}
+                  {fotos.length > 0 && (
+                    <div className={`sobre-mi-fotos sobre-mi-fotos--${fotos.length}`}>
+                      {fotos.map((foto) => (
+                        <figure key={foto.url} className="sobre-mi-foto">
+                          <img src={foto.url} alt={foto.alt} loading="lazy" />
+                        </figure>
+                      ))}
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -145,8 +160,7 @@ export default function SobreMi() {
                 </section>
               )}
 
-              {datos.contacto &&
-                Object.values(datos.contacto).some(Boolean) && (
+              {((datos.contacto && Object.values(datos.contacto).some(Boolean)) || redes.length > 0) && (
                   <section
                     className="sobre-mi-seccion"
                     aria-labelledby="sobre-mi-contacto"
@@ -156,7 +170,7 @@ export default function SobreMi() {
                     </h2>
 
                     <ul className="sobre-mi-contactos">
-                      {datos.contacto.correo && (
+                      {datos.contacto?.correo && (
                         <li>
                           <strong>Correo: </strong>
                           <a href={`mailto:${datos.contacto.correo}`}>
@@ -165,7 +179,7 @@ export default function SobreMi() {
                         </li>
                       )}
 
-                      {datos.contacto.telefono && (
+                      {datos.contacto?.telefono && (
                         <li>
                           <strong>Teléfono: </strong>
                           <a href={`tel:${datos.contacto.telefono.replace(/[^\d+]/g, '')}`}>
@@ -174,7 +188,7 @@ export default function SobreMi() {
                         </li>
                       )}
 
-                      {datos.contacto.instagram && (
+                      {datos.contacto?.instagram && (
                         <li>
                           <strong>Instagram: </strong>
                           <a
@@ -182,10 +196,20 @@ export default function SobreMi() {
                             target="_blank"
                             rel="noopener noreferrer"
                           >
-                            {datos.contacto.instagram}
+                            @{datos.contacto.instagram.replace(/^@/, '')}
                           </a>
                         </li>
                       )}
+
+                      {redes.map((red) => (
+                        <li key={red.campo}>
+                          <strong>{red.nombre}: </strong>
+                          <a href={red.url} target="_blank" rel="noopener noreferrer"
+                            aria-label={`${red.usuario || 'Ver perfil'} en ${red.nombre} (se abre en una pestaña nueva)`}>
+                            {red.usuario || 'Ver perfil'}
+                          </a>
+                        </li>
+                      ))}
                     </ul>
                   </section>
                 )}

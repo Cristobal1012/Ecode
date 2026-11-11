@@ -31,5 +31,8 @@ test('la galería del formulario de producto ocupa todo el ancho de los campos e
     zona.parentElement.getBoundingClientRect().width, zona.closest('.producto-campos').getBoundingClientRect().width,
   ]);
   expect(galeria).toBeCloseTo(grilla, 0);
+  // La categoría comparte su columna con "+ Nueva": con columnas de 160 px el selector quedaba en "Selecc…"
+  const selector = await page.getByLabel('Categoría', { exact: true }).boundingBox();
+  expect(selector.width).toBeGreaterThan(140);
   expect(inesperadas).toEqual([]);
 });

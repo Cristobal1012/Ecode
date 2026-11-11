@@ -3,6 +3,11 @@
 .formulario-producto .producto-campos {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
 }
+/* Datos generales: la categoría comparte su columna con "+ Nueva" y las colecciones son un selector múltiple; con
+   columnas de 160 px el selector de categoría se cortaba ("Selecc…"). Las filas de las variantes siguen en 160 px */
+.formulario-producto .producto-campos--generales {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
 .formulario-producto input,
 .formulario-producto textarea,
 .formulario-producto select,

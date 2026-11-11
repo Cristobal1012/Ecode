@@ -700,7 +700,7 @@ export default function FormularioProducto({
         Datos Generales
       </h4>
 
-      <div className="producto-campos"
+      <div className="producto-campos producto-campos--generales"
         style={{
           display: 'grid',
           gap: '20px',

@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from .views import LinkifyWebhookAPIView
 from . import views_suscripciones as suscripciones
+from . import views_cumpleanos as cumpleanos
 
 # Todo lo que esté aquí, Django le pondrá '/api/configuracion/' antes
 configuracion_urlpatterns = [
@@ -132,6 +133,8 @@ ventas_urlpatterns = [
     path('suscripciones/', suscripciones.SuscribirseView.as_view(), name='suscripciones'),
     path('suscripciones/mias/', suscripciones.MisSuscripcionesView.as_view(), name='suscripciones-mias'),
     path('suscripciones/beneficios/', suscripciones.BeneficiosView.as_view(), name='suscripciones-beneficios'),
+    path('suscripciones/acceso-exclusivos/', suscripciones.AccesoExclusivosView.as_view(),
+         name='suscripciones-acceso-exclusivos'),
     path('suscripciones/<int:pk>/', suscripciones.SuscripcionView.as_view(), name='suscripcion'),
     path('suscripciones/<int:pk>/<str:accion>/', suscripciones.AccionSuscripcionView.as_view(),
          name='suscripcion-accion'),
@@ -143,6 +146,9 @@ ventas_urlpatterns = [
     path('admin/suscripciones/planes/<int:pk>/', suscripciones.AdminPlanView.as_view(),
          name='admin-suscripciones-plan'),
     path('admin/suscripciones/', suscripciones.AdminSuscripcionesView.as_view(), name='admin-suscripciones'),
+    path('admin/suscripciones/cumpleanos/', cumpleanos.AdminCumpleanosView.as_view(), name='admin-cumpleanos'),
+    path('admin/suscripciones/cumpleanos/<int:usuario_id>/regalo/',
+         cumpleanos.AdminRegaloCumpleanosView.as_view(), name='admin-regalo-cumpleanos'),
     # Ruta para las consultas y notificaciones de Linkify
     path('webhooks/linkify/', LinkifyWebhookAPIView.as_view(), name='webhook-linkify'),
 ]

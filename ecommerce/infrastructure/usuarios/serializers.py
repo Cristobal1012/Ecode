@@ -91,6 +91,20 @@ class GoogleAuthSerializer(serializers.Serializer):
     id_token = serializers.CharField(required=True)
 
 
+class CumpleanosSerializer(serializers.Serializer):
+    """Solo la fecha opcional de la propia cuenta, sin año ni identificador de otra persona."""
+    dia = serializers.IntegerField(allow_null=True)
+    mes = serializers.IntegerField(allow_null=True)
+
+    def validate(self, attrs):
+        from ecommerce.domain.cumpleanos import validar_cumpleanos
+        try:
+            validar_cumpleanos(attrs['dia'], attrs['mes'])
+        except ValueError as error:
+            raise serializers.ValidationError({'dia': str(error)}) from error
+        return attrs
+
+
 # Las reglas de la contraseña nueva están en application/cuentas.py: aquí solo se recibe el formulario
 class OlvidoContrasenaSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)

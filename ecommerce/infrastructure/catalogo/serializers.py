@@ -57,6 +57,9 @@ class ProductoSerializer(serializers.Serializer):
     meta_descripcion = serializers.CharField(max_length=160, required=False, allow_blank=True, allow_null=True)
     etiqueta = serializers.CharField(max_length=LARGO_ETIQUETA_PRODUCTO, required=False, allow_blank=True, default='')
     etiqueta_color = serializers.ChoiceField(choices=COLORES_ETIQUETA_PRODUCTO, required=False, default='primary')
+    solo_suscriptores = serializers.BooleanField(required=False)
+    planes_suscripcion = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False,
+                                              max_length=50)
     categoria = serializers.CharField(max_length=100)
     imagenes = serializers.ListField(child=ReferenciaImagenField(), required=False)
     
@@ -75,6 +78,24 @@ class ProductoSerializer(serializers.Serializer):
 
     variantes = VarianteSerializer(many=True, required=False)
 
+    def to_representation(self, instance):
+        datos = super().to_representation(instance)
+        from ecommerce.infrastructure.ventas.repositorio_suscripciones import suscripciones_activas_en_tienda
+        if '_suscripciones_activas' not in self.context:
+            self.context['_suscripciones_activas'] = suscripciones_activas_en_tienda()
+        if not self.context['_suscripciones_activas']:
+            datos['solo_suscriptores'] = False
+            datos['planes_suscripcion'] = []
+        return datos
+
+    def validate_planes_suscripcion(self, valor):
+        from ecommerce.infrastructure.ventas.models import PlanSuscripcion
+        if len(set(valor)) != len(valor):
+            raise serializers.ValidationError('Los planes no pueden repetirse.')
+        if set(valor) != set(PlanSuscripcion.objects.filter(pk__in=valor).values_list('pk', flat=True)):
+            raise serializers.ValidationError('Uno de los planes seleccionados ya no existe.')
+        return valor
+
     def get_version_a_la_venta_disponible(self, obj):
         version_id = getattr(obj, 'version_a_la_venta', None)
         if not version_id:
@@ -92,6 +113,10 @@ class ProductoSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
+        if attrs.get('solo_suscriptores'):
+            from ecommerce.infrastructure.ventas.repositorio_suscripciones import suscripciones_activas_en_tienda
+            if not suscripciones_activas_en_tienda():
+                raise serializers.ValidationError({'solo_suscriptores': 'Activa Suscripciones antes de restringir un producto.'})
         if 'imagenes' in attrs:
             if len(attrs['imagenes']) > settings.CATALOGO_IMAGEN_MAX_GALERIA:
                 raise serializers.ValidationError({'imagenes': 'Se ha superado el límite de imágenes por producto.'})

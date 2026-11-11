@@ -15,6 +15,7 @@ usuarios_urlpatterns = [
     #Endpoint para el login con Google
     path('google/', GoogleLoginView.as_view(), name='google_login'),
     path('me/', views.UsuarioActualAPIView.as_view(), name='usuario_actual'),
+    path('cumpleanos/', views.CumpleanosAPIView.as_view(), name='mi-cumpleanos'),
     # Recuperar la contraseña por correo y cambiarla con la sesión iniciada
     path('contrasena/olvido/', views.OlvidoContrasenaView.as_view(), name='contrasena_olvido'),
     path('contrasena/restablecer/', views.RestablecerContrasenaView.as_view(), name='contrasena_restablecer'),

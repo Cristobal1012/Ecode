@@ -117,6 +117,24 @@ class UsuarioActualAPIView(APIView):
         })
 
 
+class CumpleanosAPIView(APIView):
+    """La fecha de cumpleaños solo se consulta y modifica usando la cuenta autenticada."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'dia': request.user.cumpleanos_dia, 'mes': request.user.cumpleanos_mes})
+
+    def patch(self, request):
+        from .serializers import CumpleanosSerializer
+        serializer = CumpleanosSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        request.user.cumpleanos_dia = datos['dia']
+        request.user.cumpleanos_mes = datos['mes']
+        request.user.save(update_fields=['cumpleanos_dia', 'cumpleanos_mes'])
+        return Response(datos)
+
+
 class OlvidoContrasenaThrottle(SimpleRateThrottle):
     """Pocos pedidos de enlace por hora desde la misma IP (DEFAULT_THROTTLE_RATES['contrasena_olvido'])."""
     scope = 'contrasena_olvido'

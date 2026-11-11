@@ -2,7 +2,7 @@ from unittest import TestCase
 
 from ecommerce.domain.catalogo import (
     ColeccionPrivadaInvalida, OrdenCategoriasInvalido, normalizar_orden_categorias, ordenar_categorias,
-    validar_obra_no_es_version_de_otra, validar_version_a_la_venta,
+    validar_obra_no_es_version_de_otra, validar_version_a_la_venta,limpiar_colecciones,
 )
 
 
@@ -51,3 +51,21 @@ class ColeccionPrivadaDomainTests(TestCase):
 
     def test_obra_no_referenciada_puede_ser_coleccion_privada(self):
         validar_obra_no_es_version_de_otra('obra-1', coleccion_privada=True, nombre_referenciador=None)
+
+class ColeccionesDomainTests(TestCase):
+    def test_limpia_espacios_y_elimina_duplicados_case_insensitive(self):
+        """Verifica que se eliminen espacios extra y duplicados sin distinguir mayúsculas."""
+        brutas = [" Cyber ", "cyber", "VERANO", "Verano  ", ""]
+        limpias = limpiar_colecciones(brutas)
+        
+        
+        self.assertEqual(len(limpias), 2)
+        self.assertIn("Cyber", limpias)
+        self.assertIn("VERANO", limpias)
+
+    def test_retorna_lista_vacia_si_recibe_nulo_o_vacio(self):
+        self.assertEqual(limpiar_colecciones(None), [])
+        self.assertEqual(limpiar_colecciones([]), [])
+
+    def test_ignora_tipos_invalidos(self):
+        self.assertEqual(limpiar_colecciones(["Cyber", 123, None, "Verano"]), ["Cyber", "Verano"])

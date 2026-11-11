@@ -8,6 +8,7 @@ from ecommerce.domain.catalogo import (
     ColeccionPrivadaInvalida,
     validar_obra_no_es_version_de_otra,
     validar_version_a_la_venta,
+    limpiar_colecciones,
 )
 from .documents import Producto, Variante
 from .image_adapters import actualizar_producto
@@ -64,6 +65,7 @@ class ProductoSerializer(serializers.Serializer):
     activo = serializers.BooleanField(default=True)
     publicado = serializers.BooleanField(default=False)
     atributos_globales = serializers.DictField(required=False, default=dict)
+    colecciones = serializers.ListField(child=serializers.CharField(max_length=100), required=False, default=list)
     
     # Colección privada (SCRUM-197)
     coleccion_privada = serializers.BooleanField(default=False, required=False)
@@ -173,3 +175,6 @@ class ProductoSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         return actualizar_producto(instance, validated_data)
+
+    def validate_colecciones(self, value):
+        return limpiar_colecciones(value)

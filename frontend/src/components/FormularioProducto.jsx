@@ -3,6 +3,7 @@ import clienteAxios from './auth/axiosConfig';
 import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
+import CreatableSelect from 'react-select/creatable';
 import CampoEtiquetaProducto from './CampoEtiquetaProducto';
 
 const crearVarianteVacia = () => ({
@@ -26,6 +27,7 @@ const leerProductoAEditar = (productoAEditar) => {
         nombre: '',
         descripcion: '',
         categoria: '',
+        colecciones: [],
         etiqueta: '',
         etiqueta_color: 'primary',
         publicado: false,
@@ -77,6 +79,7 @@ const leerProductoAEditar = (productoAEditar) => {
       nombre: productoAEditar.nombre || '',
       descripcion: productoAEditar.descripcion || '',
       categoria: productoAEditar.categoria || '',
+      colecciones: productoAEditar.colecciones || [],
       etiqueta: productoAEditar.etiqueta || '',
       etiqueta_color: productoAEditar.etiqueta_color || 'primary',
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
@@ -123,6 +126,7 @@ export default function FormularioProducto({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
+  const [coleccionesExistentes, setColeccionesExistentes] = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
 
@@ -171,6 +175,29 @@ export default function FormularioProducto({
 
     cargarCategorias();
   }, [productoAEditar]);
+
+  useEffect(() => {
+    let vigente = true;
+    // El servidor aplica las reglas del dominio y excluye borradores e inactivos.
+    clienteAxios.get('catalogo/filtros/')
+      .then(({ data }) => {
+        if (vigente) {
+          setColeccionesExistentes((data?.colecciones || []).map(col => ({ value: col, label: col })));
+        }
+      })
+      .catch(() => {
+        if (vigente) setColeccionesExistentes([]);
+      });
+    return () => { vigente = false; };
+  }, [productoAEditar]);
+
+  const handleColeccionesChange = (valoresSeleccionados) => {
+    setProducto({
+      ...producto,
+      // extraemos solo los 'value' de los objetos seleccionados
+      colecciones: valoresSeleccionados ? valoresSeleccionados.map(op => op.value) : []
+    });
+  };
 
   // ============================================================
   // CAMBIOS DEL PRODUCTO
@@ -430,6 +457,7 @@ export default function FormularioProducto({
         nombre: producto.nombre.trim(),
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
+        colecciones: producto.colecciones || [],
         etiqueta: producto.etiqueta.trim(),
         etiqueta_color: producto.etiqueta_color,
         meta_titulo: producto.meta_titulo.trim(),
@@ -821,6 +849,41 @@ export default function FormularioProducto({
           </div>
         </div>
 
+        {/* COLECCIONES */}
+        <div className="campo-coleccion-container">
+          <label htmlFor={`${idFormulario}-colecciones`} className="campo-coleccion-label">
+            Colecciones (Opcional)
+          </label>
+          
+          <CreatableSelect
+            inputId={`${idFormulario}-colecciones`}
+            isMulti
+            isClearable
+            placeholder="Ej: Cyber, Navidad..."
+            options={coleccionesExistentes}
+            isOptionSelected={(opcion, seleccionadas) => seleccionadas.some(
+              seleccionada => seleccionada.value.trim().toLowerCase() === opcion.value.trim().toLowerCase()
+            )}
+            isValidNewOption={(inputValue, seleccionadas, opciones) => {
+              const clave = inputValue.trim().toLowerCase();
+              return Boolean(clave) && ![...seleccionadas, ...opciones]
+                .some(opcion => opcion.value.trim().toLowerCase() === clave);
+            }}
+            value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
+            onChange={handleColeccionesChange}
+            noOptionsMessage={() => "Escribe para crear una nueva colección"}
+            formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
+            className="campo-coleccion-select"
+            styles={{
+              control: (base) => ({ ...base, borderColor: 'var(--color-border)' }),
+            }}
+          />
+          
+          <small className="campo-coleccion-ayuda">
+            Agrupa productos en campañas sin cambiar su categoría principal.
+          </small>
+        </div>
+
         {/* DESCRIPCIÓN */}
 
         <div
@@ -1188,8 +1251,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
                   required
                 />
               </div>
@@ -1219,8 +1280,7 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
+                  
                 />
               </div>
 
@@ -1249,7 +1309,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
                   required
                 />
               </div>
@@ -1316,8 +1375,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="0.1"
-                  step="0.1"
                   required
                 />
               </div>
@@ -1352,8 +1409,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1388,8 +1443,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1424,8 +1477,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>

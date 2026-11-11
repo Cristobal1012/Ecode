@@ -30,6 +30,7 @@ import GestorActivarResenas from '../components/GestorActivarResenas';
 import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
 import GestorSuscripciones from '../components/GestorSuscripciones';
 import GestorSuscriptores from '../components/GestorSuscriptores';
+import GestorCategorias from '../components/GestorCategorias';
 import './Admin.css';
 import Spinner from '../components/carga/Spinner';
 
@@ -47,6 +48,7 @@ const GRUPOS_CONFIGURACION = [
   ] },
   { id: 'config-grupo-contenido', titulo: 'Contenido y catálogo', secciones: [
     { id: 'config-orden-catalogo', titulo: 'Orden del catálogo y categorías' },
+    { id: 'config-categorias', titulo: 'Renombrar o unir categorías' },
     { id: 'config-contacto', titulo: 'Contacto y Redes' },
     { id: 'config-blog', titulo: 'Blog o Portafolio' },
     { id: 'config-sobre-mi', titulo: 'Página Sobre mí' },
@@ -88,6 +90,8 @@ export default function Admin() {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
   // Con qué filtro se abre Ventas desde un "Ver" del dashboard (desde el menú se abre sin filtro)
   const [filtroVentas, setFiltroVentas] = useState(null);
+  // Sube al renombrar o unir una categoría: las secciones que listan categorías se vuelven a cargar
+  const [versionCategorias, setVersionCategorias] = useState(0);
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
   
   // NUEVO ESTADO: Almacena el producto seleccionado para edición
@@ -280,7 +284,12 @@ export default function Admin() {
           ),
           'config-orden-catalogo': (
             <>
-              <GestorOrdenCatalogo />
+              <GestorOrdenCatalogo key={versionCategorias} />
+            </>
+          ),
+          'config-categorias': (
+            <>
+              <GestorCategorias alCambiar={() => setVersionCategorias(v => v + 1)} />
             </>
           ),
           'config-presentacion': (
@@ -397,7 +406,7 @@ export default function Admin() {
           ),
           'config-suscripciones': (
             <>
-              <GestorSuscripciones />
+              <GestorSuscripciones key={versionCategorias} />
             </>
           ),
           'config-blog': (

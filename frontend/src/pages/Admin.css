@@ -1076,3 +1076,28 @@
   gap: 14px;
   margin-top: 14px;
 }
+
+/* ---------- Fotos de Sobre mí (pedido de un cliente) ---------- */
+
+.sobre-mi-fotos-panel {
+  min-width: 0;
+}
+
+.sobre-mi-fotos-panel-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 20px;
+}
+
+.sobre-mi-foto-panel {
+  min-width: 0;
+}
+
+.admin-contenido .sobre-mi-foto-vista {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--color-secondary);
+}

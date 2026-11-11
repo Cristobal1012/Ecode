@@ -241,7 +241,8 @@ class ImagenNegocioField(ArchivoImagenField):
         return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
 
 
-CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM)
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM, 'sobre_mi_foto_1',
+                         'sobre_mi_foto_2')
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
@@ -257,6 +258,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     instagram_foto_4 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_5 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_6 = ImagenNegocioField(required=False, allow_null=True)
+    # Fotos de la página Sobre mí (pedido de un cliente, opcionales)
+    sobre_mi_foto_1 = ImagenNegocioField(required=False, allow_null=True)
+    sobre_mi_foto_2 = ImagenNegocioField(required=False, allow_null=True)
     # El título de la portada: el mismo límite que el panel (en el modelo es un TextField sin límite)
     texto_bienvenida = serializers.CharField(max_length=300, required=False)
     texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
@@ -318,6 +322,10 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'sobre_mi_activo',
             'sobre_mi_nombre',
             'sobre_mi_biografia',
+            'sobre_mi_foto_1',
+            'sobre_mi_foto_1_alt',
+            'sobre_mi_foto_2',
+            'sobre_mi_foto_2_alt',
             'resenas_activas',
             'vitrina_modo',
             'destacados_titulo',

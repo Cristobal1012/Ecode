@@ -2,6 +2,9 @@
 
 NOMBRE_SOBRE_MI_POR_DEFECTO = 'Sobre mí'
 LARGO_NOMBRE_SOBRE_MI = 30
+# Hasta 2 fotos junto a la biografía (pedido de un cliente, opcionales); el texto alternativo describe cada una
+MAX_FOTOS_SOBRE_MI = 2
+LARGO_ALT_FOTO_SOBRE_MI = 150
 
 
 class SobreMiNoDisponible(ValueError):
@@ -47,6 +50,11 @@ def construir_contacto_sobre_mi(telefono=None, correo=None, instagram=None) -> d
     if instagram:
         contacto['instagram'] = instagram
     return contacto
+
+
+def fotos_sobre_mi(fotos) -> list[dict]:
+    """Las fotos subidas, en su orden (una sola si falta la otra). `fotos`: pares (url o None, texto alternativo)."""
+    return [{'url': url, 'alt': (alt or '').strip()} for url, alt in fotos if url][:MAX_FOTOS_SOBRE_MI]
 
 
 def validar_ids_proyectos_sobre_mi(ids) -> list:

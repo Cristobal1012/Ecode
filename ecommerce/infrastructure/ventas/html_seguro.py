@@ -4,6 +4,8 @@ El contenido se muestra tal cual en la tienda pública, así que se limpia al gu
 solo queda el formato que produce el editor y se elimina cualquier script o atributo peligroso (XSS).
 """
 
+import re
+
 import nh3
 
 _ALINEACION = {'ql-align-center', 'ql-align-right', 'ql-align-justify', 'ql-direction-rtl'}
@@ -26,9 +28,19 @@ CLASES = {
 }
 ESQUEMAS_URL = {'http', 'https', 'mailto'}
 
+# Un espacio de no separación junto a una letra (no entre etiquetas, como el '<p>&nbsp;</p>' de un párrafo vacío).
+# nh3 escribe así también el carácter U+00A0
+_NBSP_EN_TEXTO = re.compile(r'(?<=[^\s<>;])&nbsp;|&nbsp;(?=[^\s<>&])')
+
+
+def espacios_normales(html: str) -> str:
+    """El texto pegado desde otro programa suele traer '&nbsp;' en vez de espacios: el navegador ve cada párrafo como
+    una sola palabra y la corta en cualquier letra. Se cambian por espacios normales."""
+    return _NBSP_EN_TEXTO.sub(' ', html or '')
+
 
 def limpiar_html(contenido: str) -> str:
-    return nh3.clean(
+    return espacios_normales(nh3.clean(
         contenido or '',
         tags=ETIQUETAS,
         attributes=ATRIBUTOS,
@@ -36,7 +48,7 @@ def limpiar_html(contenido: str) -> str:
         allowed_classes=CLASES,
         url_schemes=ESQUEMAS_URL,
         link_rel='noopener noreferrer',
-    )
+    ))
 
 
 def tiene_texto(contenido: str) -> bool:

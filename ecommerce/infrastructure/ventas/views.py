@@ -76,7 +76,7 @@ from ecommerce.domain.ventas import (
 from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
 from ecommerce.domain.sobre_mi import (
     ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
-    exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
+    exigir_sobre_mi_disponible, fotos_sobre_mi, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
 )
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
@@ -1507,6 +1507,11 @@ class SobreMiPublicoView(APIView):
                 context={'request': request},
             ).data,
             'contacto': contacto,
+            'fotos': fotos_sobre_mi([
+                (request.build_absolute_uri(foto.url) if foto else None, alt)
+                for foto, alt in ((configuracion.sobre_mi_foto_1, configuracion.sobre_mi_foto_1_alt),
+                                  (configuracion.sobre_mi_foto_2, configuracion.sobre_mi_foto_2_alt))
+            ]),
         })
 
 

@@ -1,7 +1,8 @@
 # Caddy de cada tienda: entrega el frontend compilado y las fotos, y pasa la API y el admin de Django al backend.
 # DIRECCION_SITIO:
-#   ":80" (por defecto) detrás de un proxy que termina el HTTPS, como en la prueba en Oracle.
-#   El dominio de la tienda (ej. "mitienda.cl") para que este Caddy obtenga y renueve el certificado HTTPS solo.
+#   ":80" (por defecto) detrás de un proxy que termina el HTTPS (varias tiendas en un servidor).
+#   El dominio de la tienda (ej. "mitienda.cl" o "mitienda-prueba.duckdns.org") para que este Caddy obtenga y
+#   renueve el certificado HTTPS solo.
 #   Con "mitienda.cl, www.mitienda.cl" obtiene también el de www, que lleva al dominio principal (ver abajo).
 {
 	servers {

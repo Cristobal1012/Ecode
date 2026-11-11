@@ -18,15 +18,24 @@ describe('Tipografías (RF-01.2)', () => {
     }
   });
 
+  it('cada combinación usa una fuente de títulos distinta, para que se diferencien a simple vista', () => {
+    const titulos = TIPOGRAFIAS.map(({ titulos }) => titulos.fuente);
+    expect(new Set(titulos).size).toBe(TIPOGRAFIAS.length);
+    expect(TIPOGRAFIAS.map(({ nombre }) => nombre)).toEqual(['Editorial', 'Urbana', 'Moderna', 'Minimalista', 'Cercana']);
+  });
+
   it('un ID desconocido usa la Editorial', () => {
     expect(obtenerTipografia(9).nombre).toBe('Editorial');
     expect(obtenerTipografia('abc').nombre).toBe('Editorial');
   });
 
   it('cambia las fuentes de títulos y texto de toda la página, con fuentes de respaldo', () => {
-    aplicarTipografia(5);
+    aplicarTipografia(1);
+    expect(variable('--fuente-titulos')).toBe('"Tienda Titulos 1", Georgia, \'Times New Roman\', serif');
 
-    expect(variable('--fuente-titulos')).toBe('"Tienda Titulos 5", Georgia, \'Times New Roman\', serif');
+    // Fredoka (Cercana) no tiene serifas: su respaldo es una sans del sistema
+    aplicarTipografia(5);
+    expect(variable('--fuente-titulos')).toMatch(/^"Tienda Titulos 5", system-ui/);
     expect(variable('--fuente-texto')).toMatch(/^"Tienda Texto 5", system-ui/);
   });
 });
@@ -51,7 +60,7 @@ describe('TipografiaSelector', () => {
   it('marca la guardada y solo deja guardar si se elige otra', async () => {
     await renderSelector();
 
-    expect(await screen.findByRole('button', { name: /Clásica/, pressed: true })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Urbana/, pressed: true })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Guardar tipografía' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Cercana/ }));
@@ -63,7 +72,7 @@ describe('TipografiaSelector', () => {
 
   it('guarda la elegida en el servidor y avisa que ya se ve en la tienda', async () => {
     await renderSelector();
-    await screen.findByRole('button', { name: /Clásica/, pressed: true });
+    await screen.findByRole('button', { name: /Urbana/, pressed: true });
     getMock.mockResolvedValue({ data: { tipografia_seleccionada: 4 } });
 
     fireEvent.click(screen.getByRole('button', { name: /Minimalista/ }));
@@ -78,7 +87,7 @@ describe('TipografiaSelector', () => {
   it('si el servidor falla, avisa sin dar por guardado el cambio', async () => {
     patchMock.mockRejectedValue(new Error('sin conexión'));
     await renderSelector();
-    await screen.findByRole('button', { name: /Clásica/, pressed: true });
+    await screen.findByRole('button', { name: /Urbana/, pressed: true });
 
     fireEvent.click(screen.getByRole('button', { name: /Moderna/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar tipografía' }));

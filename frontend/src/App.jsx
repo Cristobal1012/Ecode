@@ -35,6 +35,10 @@ import AuthLayout from './components/auth/AuthLayout';
 import RecuperarContrasena from './pages/RecuperarContrasena';
 import RestablecerContrasena from './pages/RestablecerContrasena';
 import CambiarContrasena from './pages/CambiarContrasena';
+import Suscripcion from './pages/Suscripcion';
+import SuscribirsePlan from './pages/SuscribirsePlan';
+import MisSuscripciones from './pages/MisSuscripciones';
+import PagarEntrega from './pages/PagarEntrega';
 
 const applyPaletteToRoot = aplicarPaleta;
 
@@ -133,6 +137,12 @@ function App() {
             {/* Blog o portafolio (si el admin lo activó; si no, las páginas avisan que no está disponible) */}
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<PublicacionBlog />} />
+            {/* Suscripciones (si el admin las activó; si no, la página avisa que no están disponibles). Las de la cuenta
+                piden iniciar sesión y vuelven a la misma página, para que sirva el enlace del correo */}
+            <Route path="/suscripcion" element={<Suscripcion />} />
+            <Route path="/suscripcion/:planId" element={<SuscribirsePlan />} />
+            <Route path="/mis-suscripciones" element={<MisSuscripciones />} />
+            <Route path="/mis-suscripciones/pagar/:ordenId" element={<PagarEntrega />} />
             {/* Página independiente Sobre mí */}
             <Route path="/sobre-mi" element={<SobreMi />} />
             <Route path="/variantes" element={<main id="contenido" tabIndex={-1} className="contenedor"><h1>Selección de variantes</h1><VariantSelector /></main>} />

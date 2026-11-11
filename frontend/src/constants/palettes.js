@@ -107,6 +107,43 @@ export const PALETTES = [
       border: '#C9E6E8',
       footer: '#0F1E3D'
     }
+  },
+  {
+    // Tema lila: morado con fondos lavanda (agregado el 2026-11-09 para tener temas más variados)
+    id: 7,
+    name: 'Lavanda',
+    colors: {
+      primary: '#5B3E8A',
+      onPrimary: '#FFFFFF',
+      secondary: '#EFEAF7',
+      accent: '#DCD0F0',
+      background: '#FAF8FD',
+      surface: '#FFFFFF',
+      text: '#221A33',
+      muted: '#5A5168',
+      controlBorder: '#75708A',
+      border: '#E1D9EE',
+      footer: '#221A33'
+    }
+  },
+  {
+    // Tema cálido: ámbar oscuro con fondos crema y detalles amarillos (agregado el 2026-11-09). El ámbar es
+    // oscuro para que el texto blanco del botón tenga AA; el amarillo va solo en los detalles (accent)
+    id: 8,
+    name: 'Mostaza',
+    colors: {
+      primary: '#7A5000',
+      onPrimary: '#FFFFFF',
+      secondary: '#FBF1D9',
+      accent: '#F2D27A',
+      background: '#FFFBF0',
+      surface: '#FFFFFF',
+      text: '#2B2410',
+      muted: '#5E5440',
+      controlBorder: '#7A7058',
+      border: '#EEE2C4',
+      footer: '#2B2410'
+    }
   }
 ];
 

@@ -105,7 +105,7 @@ class LinkifyWebhookQATest(APISimpleTestCase):
         self.client.post(self.url, cuerpo_bytes, content_type='application/json',
                          HTTP_X_LINKIFY_CONFIRMATION=firma)
 
-        _, _, orden_transporte, _ = MockConfirmarPago.call_args.args
+        orden_transporte = MockConfirmarPago.call_args.args[2]
         self.assertIsInstance(orden_transporte, GenerarOrdenTransporte)
 
     @patch('ecommerce.infrastructure.ventas.views.ConfirmarPago')

@@ -22,9 +22,8 @@ const OPCIONES = [
   },
   {
     campo: 'logo_grande',
-    titulo: 'Logo más grande en computador',
-    ayuda: 'El logo del menú superior se ve más grande en pantallas de computador. En el celular y la tablet no '
-      + 'cambia.',
+    titulo: 'Logo más grande',
+    ayuda: 'El logo del menú superior se ve más grande en el computador, la tablet y el celular.',
   },
 ];
 

@@ -375,6 +375,19 @@ class ConfirmarPagoTests(SimpleTestCase):
         self.assertEqual(self.orden['motivo_revision'], 'Pago confirmado sin stock para GORRO-U')
         self.assertEqual(self.inventario.stock, {('camisa', 'CAMISA-S'): 2, ('gorro', 'GORRO-U'): 0})
 
+    def test_al_pagar_se_avisa_una_sola_vez_aunque_falte_stock_y_no_sobre_una_cancelada(self):
+        # Ej. una suscripción avanza al ciclo siguiente cuando se paga el pedido del ciclo
+        avisados = []
+        caso = ConfirmarPago(self.ordenes, self.inventario, al_pagar=avisados.append)
+        sin_stock = self.ordenes.agregar(2, 'PENDIENTE', [('gorro', 'GORRO-U', 5)])
+        cancelada = self.ordenes.agregar(3, 'CANCELADO', [('gorro', 'GORRO-U', 1)])
+        self.assertEqual(caso.aprobar(1), ResultadoPago.PAGADO)
+        self.assertEqual(caso.aprobar(1), ResultadoPago.REPETIDO)
+        self.assertEqual(caso.aprobar(2), ResultadoPago.EN_REVISION)
+        self.assertEqual(caso.aprobar(3), ResultadoPago.EN_REVISION)
+        self.assertEqual(avisados, [1, 2])
+        self.assertEqual((sin_stock['estado'], cancelada['estado']), (EstadoPedido.PAGADO, EstadoPedido.CANCELADO))
+
     def test_pago_aprobado_sobre_orden_cancelada_va_a_revision_sin_tocar_stock(self):
         self.orden['estado'] = EstadoPedido.CANCELADO
         self.assertEqual(self.caso.aprobar(1), ResultadoPago.EN_REVISION)

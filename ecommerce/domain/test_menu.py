@@ -26,8 +26,8 @@ class MenuTests(TestCase):
     def test_completa_orden_vacio_o_incompleto_y_conserva_el_completo(self):
         casos = [
             ([], list(ORDEN_MENU)),
-            (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar']),
-            (['cotizar'], ['cotizar', 'inicio', 'catalogo', 'nosotros', 'sobre_mi']),
+            (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion']),
+            (['cotizar'], ['cotizar', 'inicio', 'catalogo', 'nosotros', 'sobre_mi', 'suscripcion']),
             (list(ORDEN_MENU), list(ORDEN_MENU)),
             (list(reversed(ORDEN_MENU)), list(reversed(ORDEN_MENU))),
         ]
@@ -110,7 +110,7 @@ class MenuTests(TestCase):
         copia_valor, copia_anterior = deepcopy(valor), deepcopy(anterior)
         resultado = normalizar_menu_principal(valor, anterior)
         self.assertEqual(resultado, {
-            'orden': ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar'],
+            'orden': ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'],
             'nombres': {'catalogo': 'Productos'}, 'ocultos': ['sobre_mi'],
         })
         self.assertEqual(valor, copia_valor)

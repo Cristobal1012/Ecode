@@ -34,6 +34,8 @@ class Producto(Document):
             'publicado',
             'categoria',
             'fecha_creacion',
+            'colecciones',
+            ('activo', 'publicado', 'colecciones'),
             ('activo', 'publicado', 'categoria'),
             ('activo', 'publicado', '-fecha_creacion'),
             ('activo', 'publicado', 'precio_minimo_vigente'),
@@ -65,6 +67,7 @@ class Producto(Document):
     activo = fields.BooleanField(default=True)
     publicado = fields.BooleanField(default=False)
     atributos_globales = fields.DictField(default=dict)
+    colecciones = fields.ListField(fields.StringField(), default=list)
     
     # Colección privada y enlace a versión disponible en print (SCRUM-197)
     coleccion_privada = fields.BooleanField(default=False)

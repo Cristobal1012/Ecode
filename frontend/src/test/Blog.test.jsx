@@ -47,7 +47,11 @@ async function renderEn(ruta) {
 describe('Página del blog', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    // Los tests del video guardan un consentimiento de cookies: no debe pasar al siguiente
+    localStorage.clear();
+  });
 
   it('lista las publicaciones con el nombre que eligió el admin', async () => {
     responder();
@@ -173,7 +177,7 @@ describe('Página de una publicación', () => {
 
     // Hasta el clic, no se carga ningún iframe de YouTube ni conexión a img.youtube.com (RF-04.4)
     expect(screen.queryByTitle(/Reproductor de video/i)).not.toBeInTheDocument();
-    expect(document.querySelector('img[src*="youtube.com"]')).toBeNull();
+    expect(document.querySelector('img[src*="ytimg.com"], img[src*="youtube.com"]')).toBeNull();
     const botonPlay = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
     expect(botonPlay).toBeInTheDocument();
 
@@ -181,6 +185,30 @@ describe('Página de una publicación', () => {
     fireEvent.click(botonPlay);
     const iframe = screen.getByTitle('Reproductor de video: Nuestro taller');
     expect(iframe).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1');
+  });
+
+  it('sin aceptar las cookies de marketing no pide la miniatura a YouTube: muestra la portada (RF-04.4, SCRUM-195)', async () => {
+    localStorage.setItem('ecode_cookie_consent', JSON.stringify({
+      analitica: true, marketing: false, fecha: new Date().toISOString() }));
+    responder({ publicacion: () => Promise.resolve({ data: { ...PUBLICACION, youtube_id: 'dQw4w9WgXcQ' } }) });
+    await renderEn('/blog/nuestro-taller');
+
+    const boton = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
+    expect(boton.parentElement.querySelector('.blog-video-miniatura')).toHaveAttribute('src', PUBLICACION.portada);
+    expect(document.querySelector('img[src*="ytimg.com"], img[src*="youtube.com"]')).toBeNull();
+  });
+
+  it('con las cookies de marketing aceptadas muestra la miniatura del video (RF-04.4, SCRUM-195)', async () => {
+    localStorage.setItem('ecode_cookie_consent', JSON.stringify({
+      analitica: false, marketing: true, fecha: new Date().toISOString() }));
+    responder({ publicacion: () => Promise.resolve({ data: { ...PUBLICACION, youtube_id: 'dQw4w9WgXcQ' } }) });
+    await renderEn('/blog/nuestro-taller');
+
+    const boton = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
+    expect(boton.parentElement.querySelector('.blog-video-miniatura'))
+      .toHaveAttribute('src', 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+    // El reproductor sigue cargándose solo al hacer clic
+    expect(screen.queryByTitle(/Reproductor de video/i)).not.toBeInTheDocument();
   });
 
   it('con el blog apagado avisa que la página no está disponible', async () => {

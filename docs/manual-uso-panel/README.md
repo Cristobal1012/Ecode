@@ -4,6 +4,7 @@ Entrega de [SCRUM-187](https://emiliosanmartinpez.atlassian.net/browse/SCRUM-187
 
 - [PDF para entregar al cliente](Manual_de_uso_del_panel_Ecode.pdf).
 - [Fuente editable en Word](Manual_de_uso_del_panel_Ecode.docx), con las capturas incorporadas.
+- [Suscripciones](suscripciones.md): sección nueva (opcional, apagada por defecto) que falta incorporar al Word y al PDF.
 
 Versión 2, actualizada el 11 de noviembre de 2026. Incluye el Dashboard actual, los grupos de Configuración, etiquetas y colección privada, carrusel y menú editables, destacados, vista y orden del catálogo, fotos y logo, Sobre mí, redes sociales y las nuevas condiciones de las promociones. Las pantallas pertenecen a una tienda ficticia: no contienen cuentas bancarias ni llaves reales. El despliegue y el mantenimiento se explican por separado en [el manual de despliegue](../deploy/README.md).
 

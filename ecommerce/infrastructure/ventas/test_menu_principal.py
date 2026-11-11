@@ -8,7 +8,7 @@ from .serializers import ConfiguracionNegocioSerializer
 class MenuPrincipalTests(APITestCase):
     def setUp(self):
         self.config = ConfiguracionGlobal.objects.create(pk=1, nombre_tienda='Tienda')
-        self.orden = ['inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar']
+        self.orden = ['inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion']
 
     def test_validacion_y_normalizacion(self):
         invalidos = [None, [], {'ruta': '/'},
@@ -122,8 +122,8 @@ class MenuPrincipalTests(APITestCase):
 
     def test_orden_incompleto_agrega_faltantes_sin_alterar_la_entrada(self):
         for orden, esperado in [
-            (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar']),
-            (['sobre_mi', 'cotizar'], ['sobre_mi', 'cotizar', 'inicio', 'catalogo', 'nosotros']),
+            (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion']),
+            (['sobre_mi', 'cotizar'], ['sobre_mi', 'cotizar', 'inicio', 'catalogo', 'nosotros', 'suscripcion']),
         ]:
             with self.subTest(orden=orden):
                 entrada = list(orden)
@@ -164,7 +164,7 @@ class MenuPrincipalTests(APITestCase):
         self.config.menu_principal = {'nombres': {'catalogo': anterior}}
         self.config.save(update_fields=['menu_principal'])
         self.client.force_authenticate(create_user('completar-menu@example.test', rol='ADMIN'))
-        for orden, esperado in [([], self.orden), (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar'])]:
+        for orden, esperado in [([], self.orden), (['catalogo', 'inicio'], ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'])]:
             with self.subTest(orden=orden):
                 respuesta = self.client.patch(reverse('configuracion-negocio'), {'menu_principal': {
                     'orden': orden, 'nombres': {'catalogo': anterior}, 'ocultos': ['sobre_mi']

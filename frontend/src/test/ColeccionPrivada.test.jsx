@@ -135,6 +135,7 @@ describe('Colección privada (SCRUM-197)', () => {
 
     it('permite activar colección privada, seleccionar versión y personalizar texto', async () => {
       clienteAxios.get.mockResolvedValueOnce({ data: catalogo });
+      clienteAxios.get.mockResolvedValueOnce({ data: { colecciones: [] } });
 
       render(
         <MemoryRouter>

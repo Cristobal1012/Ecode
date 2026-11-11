@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 
 from bson.errors import InvalidId
 from django.conf import settings
@@ -25,7 +26,7 @@ from ecommerce.infrastructure.ventas.repositorio_blog import DjangoPublicaciones
 from ecommerce.infrastructure.ventas.repositorio_ventas import DjangoVentasPorProducto
 
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
-from ecommerce.domain.catalogo import ordenar_categorias
+from ecommerce.domain.catalogo import limpiar_colecciones, ordenar_categorias
 
 from .documents import ImagenPendienteBorrado, Producto
 from .image_adapters import eliminar_producto, servicio_galeria
@@ -148,10 +149,14 @@ def obtener_filtros_catalogo(orden_categorias=None):
         # Una lectura proyectada conserva las opciones de todas las páginas sin
         # consultar e hidratar de nuevo los productos de cada categoría.
         prods = Producto.objects.filter(activo=True, publicado=True).only(
-            'categoria', 'atributos_globales',
+            'categoria', 'atributos_globales', 'colecciones'
         ).as_pymongo()
         atributos = {}
+        colecciones_activas = []
         for producto in prods:
+            cols = producto.get('colecciones', [])
+            if isinstance(cols, list):
+                colecciones_activas.extend(c.strip() for c in cols if isinstance(c, str))
             cat = producto.get('categoria')
             if not cat:
                 continue
@@ -167,11 +172,26 @@ def obtener_filtros_catalogo(orden_categorias=None):
         categorias = ordenar_categorias(atributos, orden_categorias)
         atributos = {cat: {clave: sorted(valores) for clave, valores in atributos[cat].items()}
                      for cat in categorias}
-        return {'categorias': categorias, 'atributos': atributos}
+        # Ordenar antes de deduplicar elige una escritura existente de forma
+        # determinista, independientemente del orden de lectura de los productos.
+        colecciones = limpiar_colecciones(sorted(colecciones_activas))
+        return {'categorias': categorias, 'atributos': atributos, 'colecciones': colecciones}
     except Exception as exc:
         logger.warning('No se pudieron obtener los filtros de catálogo: %s', exc)
-        return {'categorias': [], 'atributos': {}}
+        return {'categorias': [], 'atributos': {}, 'colecciones': []}
 
+def obtener_colecciones_vigentes():
+    """Extrae colecciones únicas solo de productos activos y publicados"""
+    productos_vigentes = Producto.objects.filter(activo=True, publicado=True)
+    colecciones_disponibles = set()
+    
+    for prod in productos_vigentes:
+        if hasattr(prod, 'colecciones') and prod.colecciones:
+            for col in prod.colecciones:
+                if col:
+                    colecciones_disponibles.add(col.strip())
+                    
+    return sorted(list(colecciones_disponibles))
 
 class FiltrosCatalogoView(CatalogoAPIView):
     """RF-01.3: entrega las categorías y opciones de atributos disponibles en el catálogo."""
@@ -191,21 +211,17 @@ class ProductoListCreateView(CatalogoAPIView):
             # El público solo ve lo publicado; el admin también ve los borradores (inventario)
             productos = productos.filter(publicado=True)
 
-        # Si se solicita la lista completa sin paginar (ej. TablaInventario o FormularioProducto)
-        sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
-        if sin_paginar:
-            prods = list(productos)
-            versiones_publicadas = obtener_versiones_publicadas(prods)
-            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
-            return Response(serializer.data)
-
         # 1. Filtro por categoría en servidor (SCRUM-179, RF-01.3)
         categoria = request.query_params.get('categoria', '').strip()
         if categoria:
             productos = productos.filter(categoria=categoria)
 
+        coleccion = request.query_params.get('coleccion', '').strip()
+        if coleccion:
+            productos = productos.filter(colecciones__iregex=f"^{re.escape(coleccion)}$")
+
         # 2. Filtros por atributos globales en servidor (SCRUM-179, RF-01.3 / E02)
-        param_reservados = {'page', 'page_size', 'limite', 'categoria', 'orden', 'todos', 'sin_paginar', 'format'}
+        param_reservados = {'page', 'page_size', 'limite', 'categoria','coleccion', 'orden', 'todos', 'sin_paginar', 'format'}
         for clave, valor in request.query_params.items():
             if clave in param_reservados or not valor:
                 continue
@@ -235,6 +251,14 @@ class ProductoListCreateView(CatalogoAPIView):
                 productos = productos.filter(**{f"atributos_globales__{nombre_atributo}": val_str})
             else:
                 productos = productos.filter(**{f"atributos_globales__{nombre_atributo}__in": valores_posibles})
+
+        # La lista completa conserva su formato y orden, pero respeta los filtros.
+        sin_paginar = request.query_params.get('todos') == 'true' or request.query_params.get('sin_paginar') == 'true'
+        if sin_paginar:
+            prods = list(productos)
+            versiones_publicadas = obtener_versiones_publicadas(prods)
+            serializer = ProductoSerializer(prods, many=True, context={'request': request, 'versiones_publicadas': versiones_publicadas})
+            return Response(serializer.data)
 
         # 3. Paginación y orden en servidor (SCRUM-179)
         config = ConfiguracionGlobal.objects.filter(pk=1).values('orden_catalogo', 'orden_categorias').first() or {}

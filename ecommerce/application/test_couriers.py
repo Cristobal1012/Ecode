@@ -7,8 +7,9 @@ from ecommerce.application.couriers import (
     RepositorioCredencialesCourier, TransportistaSegunProveedor,
 )
 from ecommerce.domain.logistica import (
-    CampoCredencial, CotizacionEnvio, CourierNoDisponible, CredencialesCourier, CredencialesInvalidas,
-    EnvioSolicitado, ErrorOrdenTransporte, Paquete, SinCobertura,
+    AMBIENTE_PRODUCCION, AMBIENTE_PRUEBAS, FORMATO_DIGITOS, FORMATO_RUT, CampoCredencial, CotizacionEnvio,
+    CourierNoDisponible, CredencialesCourier, CredencialesInvalidas, EnvioSolicitado, ErrorOrdenTransporte, Paquete,
+    SinCobertura, rut_sin_digito,
 )
 
 PAQUETE = Paquete(Decimal('1'), Decimal('10'), Decimal('10'), Decimal('10'))
@@ -169,6 +170,78 @@ class CredencialesCourierTests(SimpleTestCase):
         guardadas = CredencialesCourier.con(CAMPOS, {'llave': 'llave-0001-abcd', 'cuenta': '123456'})
         cambios = guardadas.con_cambios({'llave': guardadas.visibles()['llave'], 'cuenta': ''})
         self.assertEqual(cambios.como_dict(), {'llave': 'llave-0001-abcd', 'cuenta': ''})
+
+
+# Como los declara un courier con ambiente de pruebas y de producción (ej. Chilexpress)
+CAMPOS_CON_AMBIENTE = (
+    CampoCredencial('ambiente', 'Ambiente', secreto=False, opciones=(AMBIENTE_PRUEBAS, AMBIENTE_PRODUCCION),
+                    por_defecto=AMBIENTE_PRUEBAS),
+    CampoCredencial('llave', 'API key', obligatorio=True),
+    CampoCredencial('numero_cliente', 'Número de cliente', secreto=False, formato=FORMATO_DIGITOS, obligatorio=True,
+                    obligatorio_si=('ambiente', AMBIENTE_PRODUCCION)),
+    CampoCredencial('rut', 'RUT de la empresa', secreto=False, formato=FORMATO_RUT, obligatorio=True,
+                    obligatorio_si=('ambiente', AMBIENTE_PRODUCCION)),
+)
+
+
+class CredencialesConAmbienteTests(SimpleTestCase):
+    """Las llaves de producción de un courier traen datos del contrato de la tienda, que en pruebas no se piden."""
+
+    def test_sin_cargar_el_ambiente_es_el_de_pruebas_y_no_pide_los_datos_del_contrato(self):
+        credenciales = CredencialesCourier.con(CAMPOS_CON_AMBIENTE, {'llave': 'llave-0001-abcd'})
+        self.assertEqual(credenciales.valor('ambiente'), AMBIENTE_PRUEBAS)
+        self.assertTrue(credenciales.configuradas)
+        # El valor por defecto no se guarda: si cambia, las tiendas que no lo eligieron siguen el nuevo
+        self.assertNotIn(AMBIENTE_PRUEBAS, credenciales.como_dict().values())
+
+    def test_en_produccion_faltan_el_numero_de_cliente_y_el_rut(self):
+        credenciales = CredencialesCourier.con(CAMPOS_CON_AMBIENTE,
+                                               {'ambiente': AMBIENTE_PRODUCCION, 'llave': 'llave-0001-abcd'})
+        self.assertEqual(credenciales.faltantes, ['numero_cliente', 'rut'])
+        completas = credenciales.con_cambios({'numero_cliente': '18578680', 'rut': '76.123.456-0'})
+        self.assertTrue(completas.configuradas)
+
+    def test_el_panel_ve_completos_los_datos_que_no_son_llaves(self):
+        credenciales = CredencialesCourier.con(CAMPOS_CON_AMBIENTE, {
+            'ambiente': AMBIENTE_PRODUCCION, 'llave': 'llave-0001-abcd', 'numero_cliente': '18578680',
+            'rut': '76.123.456-0'})
+        visibles = credenciales.visibles()
+        self.assertEqual((visibles['ambiente'], visibles['numero_cliente'], visibles['rut']),
+                         (AMBIENTE_PRODUCCION, '18578680', '76.123.456-0'))
+        self.assertNotIn('llave-0001', visibles['llave'])
+
+    def test_un_dato_visible_igual_a_la_mascara_no_se_confunde_con_una_llave(self):
+        guardadas = CredencialesCourier.con(CAMPOS_CON_AMBIENTE, {'llave': 'llave-0001-abcd'})
+        cambios = guardadas.con_cambios({'numero_cliente': '12345678', 'ambiente': AMBIENTE_PRODUCCION})
+        self.assertEqual(cambios.valor('numero_cliente'), '12345678')
+        self.assertEqual(cambios.valor('llave'), 'llave-0001-abcd')
+
+    def test_el_rut_se_guarda_con_formato_y_se_rechaza_si_el_digito_no_cuadra(self):
+        guardadas = CredencialesCourier.con(CAMPOS_CON_AMBIENTE)
+        self.assertEqual(guardadas.con_cambios({'rut': '761234560'}).valor('rut'), '76.123.456-0')
+        with self.assertRaises(CredencialesInvalidas) as error:
+            guardadas.con_cambios({'rut': '76.123.456-1'})
+        self.assertIn('rut', error.exception.errores)
+
+    def test_se_rechazan_un_ambiente_desconocido_y_un_numero_con_letras(self):
+        with self.assertRaises(CredencialesInvalidas) as error:
+            CredencialesCourier.con(CAMPOS_CON_AMBIENTE).con_cambios(
+                {'ambiente': 'STAGING', 'numero_cliente': '1857-868A'})
+        self.assertEqual(set(error.exception.errores), {'ambiente', 'numero_cliente'})
+
+    def test_vaciar_el_ambiente_vuelve_al_de_pruebas(self):
+        guardadas = CredencialesCourier.con(CAMPOS_CON_AMBIENTE, {'ambiente': AMBIENTE_PRODUCCION})
+        self.assertEqual(guardadas.con_cambios({'ambiente': ''}).valor('ambiente'), AMBIENTE_PRUEBAS)
+
+    def test_el_valor_por_defecto_que_reenvia_el_panel_no_se_guarda(self):
+        guardadas = CredencialesCourier.con(CAMPOS_CON_AMBIENTE, {'ambiente': AMBIENTE_PRODUCCION})
+        cambios = guardadas.con_cambios({'ambiente': AMBIENTE_PRUEBAS})
+        self.assertEqual((cambios.valor('ambiente'), cambios.como_dict()['ambiente']), (AMBIENTE_PRUEBAS, ''))
+
+    def test_el_rut_va_sin_puntos_ni_digito_verificador(self):
+        self.assertEqual(rut_sin_digito('76.123.456-0'), '76123456')
+        self.assertEqual(rut_sin_digito('9.876.543-K'), '9876543')
+        self.assertEqual(rut_sin_digito(''), '')
 
 
 class TransportistaSegunProveedorTests(SimpleTestCase):

@@ -1,4 +1,4 @@
-export const ORDEN_MENU = ['inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar'];
+export const ORDEN_MENU = ['inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'];
 
 export function resolverMenu(config = {}) {
   config = config || {};
@@ -12,6 +12,8 @@ export function resolverMenu(config = {}) {
       to: config.blog_activo ? '/blog' : '/#nosotros', visible: Boolean(config.blog_activo || config.nosotros_texto) },
     sobre_mi: { base: config.sobre_mi_nombre || 'Sobre mí', to: '/sobre-mi', visible: Boolean(config.sobre_mi_activo) },
     cotizar: { base: 'Cotizar', to: '/cotizar', visible: Boolean(config.cotizaciones_activas) },
+    // Suscripciones (pedido de un cliente, opcional): solo con el módulo activo
+    suscripcion: { base: 'Suscripción', to: '/suscripcion', visible: Boolean(config.suscripciones_activas) },
   };
   return orden.map(id => {
     // Solo se renombra Catálogo: el blog y Sobre mí se nombran en su módulo, y los nombres antiguos de otros botones se ignoran

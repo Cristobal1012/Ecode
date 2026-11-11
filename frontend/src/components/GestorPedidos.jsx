@@ -337,7 +337,15 @@ export default function GestorPedidos({ filtroInicial = {} }) {
               const transiciones = pedido.transiciones_permitidas || [];
               return (
                 <tr key={pedido.id} style={{ borderBottom: '1px solid var(--color-border)', verticalAlign: 'top' }}>
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>#{pedido.id}</td>
+                  <td style={{ padding: '12px', fontWeight: 'bold' }}>
+                    #{pedido.id}
+                    {pedido.suscripcion && (
+                      // Entrega de una suscripción (pedido de un cliente, opcional): se prepara como cualquier pedido
+                      <span className="blog-admin-estado pedido-suscripcion">
+                        Suscripción{pedido.ciclo_fecha ? ` · ${pedido.ciclo_fecha.split('-').reverse().join('-')}` : ''}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px' }}>
                     {pedido.email_cliente || 'Usuario Registrado'}
                     {pedido.nombre_destinatario && (

@@ -147,6 +147,7 @@ from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
 from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
+from .servicio_suscripciones import al_pagar_pedido
 
 
 def inventario_variantes():
@@ -187,8 +188,9 @@ def solicitar_cotizacion():
 
 
 def confirmar_pago():
+    # Si el pedido es el de un ciclo de una suscripción, al pagarse la suscripción avanza (al_pagar_pedido)
     return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
-                         notificador_pedidos())
+                         notificador_pedidos(), al_pagar_pedido)
 
 def pasarela_mercado_pago():
     return pasarela(CodigoMedioPago.MERCADO_PAGO)
@@ -223,7 +225,7 @@ def sincronizar_orden_con_mercadopago(orden):
 
 def cambiar_estado_pedido():
     return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
-                               notificador_pedidos())
+                               notificador_pedidos(), al_pagar_pedido)
 
 
 class PaginacionPedidos(PageNumberPagination):

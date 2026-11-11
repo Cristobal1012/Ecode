@@ -280,19 +280,26 @@ class ConfirmarPago:
       para revisión y la marca se quita al terminar. Si el proceso cae a mitad, el admin la ve.
     - Solo una orden recién pagada con stock genera la orden de transporte (RF-02.3).
     - RF-04.2: avisa al comprador solo quien cambió la orden; una confirmación repetida no reenvía correos.
+    - `al_pagar` (ej. una suscripción que avanza al ciclo siguiente) se llama una sola vez por orden: cuando pasa de
+      Pendiente a Pagado, aunque después quede en revisión por falta de stock (el cliente sí pagó).
     """
 
     def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
                  orden_transporte: GenerarOrdenTransporte | None = None,
-                 notificador: NotificadorPedidos | None = None):
+                 notificador: NotificadorPedidos | None = None, al_pagar=None):
         self.ordenes = ordenes
         self.inventario = inventario
         self.orden_transporte = orden_transporte
         self.notificador = notificador
+        self.al_pagar = al_pagar
 
     def _notificar(self, orden_id, evento: EventoPedido):
         if self.notificador:
             self.notificador.notificar(orden_id, evento)
+
+    def _avisar_pago(self, orden_id):
+        if self.al_pagar:
+            self.al_pagar(orden_id)
 
     def aprobar(
         self,
@@ -348,10 +355,12 @@ class ConfirmarPago:
         if faltante is not None:
             reponer_stock(self.inventario, descontados)
             self.ordenes.marcar_revision(orden.id, MOTIVO_SIN_STOCK.format(sku=faltante.sku))
+            self._avisar_pago(orden.id)
             self._notificar(orden.id, EventoPedido.PAGO_EN_REVISION)
             return ResultadoPago.EN_REVISION
 
         self.ordenes.completar_pago(orden.id)
+        self._avisar_pago(orden.id)
         if self.orden_transporte:
             self.orden_transporte.ejecutar(orden.id)
         self._notificar(orden.id, EventoPedido.PAGO_APROBADO)
@@ -410,11 +419,12 @@ class CambiarEstadoPedido:
 
     def __init__(self, ordenes: RepositorioOrdenes, inventario: InventarioVariantes,
                  orden_transporte: GenerarOrdenTransporte | None = None,
-                 notificador: NotificadorPedidos | None = None):
+                 notificador: NotificadorPedidos | None = None, al_pagar=None):
         self.ordenes = ordenes
         self.inventario = inventario
         self.orden_transporte = orden_transporte
         self.notificador = notificador
+        self.al_pagar = al_pagar
 
     def ejecutar(self, orden_id, nuevo_estado) -> EstadoPedido:
         orden = self.ordenes.obtener(orden_id)
@@ -423,7 +433,8 @@ class CambiarEstadoPedido:
         nuevo = validar_transicion(orden.estado, nuevo_estado)
 
         if nuevo == EstadoPedido.PAGADO:
-            pago = ConfirmarPago(self.ordenes, self.inventario, self.orden_transporte, self.notificador)
+            pago = ConfirmarPago(self.ordenes, self.inventario, self.orden_transporte, self.notificador,
+                                 self.al_pagar)
             if pago.aprobar(orden.id) == ResultadoPago.REPETIDO:
                 raise PedidoModificado()
             return nuevo

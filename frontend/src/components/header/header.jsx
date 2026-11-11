@@ -61,7 +61,7 @@ function Header({ vistaPrevia, edicion }) {
 
           {/* Agrupamos el Menú de Usuario y el Carrito de Compras */}
           <div className="header-actions">
-            <MenuUsuario />
+            <MenuUsuario suscripciones={Boolean(configuracion?.suscripciones_activas)} />
             <CarritoCompras />
           </div>
         </nav>

@@ -302,6 +302,33 @@ Con Docker, en el cron del servidor:
 
 Si no se programa, la tienda funciona igual: solo se acumulan en el disco las fotos que no se pudieron borrar.
 
+### Suscripciones: aviso de cobro y ciclos vencidos (una vez al día)
+
+Solo si la tienda activó las suscripciones (Configuración > Suscripciones; vienen apagadas). Cada ciclo de una
+suscripción es un pedido normal que el cliente paga con los medios de la tienda. Este comando:
+
+- crea el pedido del ciclo los días antes de la entrega que eligió la tienda (3 si no eligió) y le envía al cliente
+  el aviso de cobro con el enlace "Pagar esta entrega" (y los datos para transferir, si paga por transferencia);
+- si al terminar el día de la entrega el ciclo no se pagó, cancela su pedido con el motivo "Ciclo de suscripción
+  no pagado", pasa la suscripción al ciclo siguiente y le avisa al cliente;
+- si nunca se pagó el primer ciclo, cancela la suscripción ("No se recibió el pago del primer ciclo") y avisa.
+
+```bash
+python manage.py procesar_suscripciones
+```
+
+Se programa una vez al día, de madrugada, igual que los anteriores. Correrlo de más no tiene efectos: cada ciclo
+tiene un solo pedido y cada aviso se envía una sola vez. Si un día no corre, al siguiente cierra todos los ciclos que
+quedaron atrás con un solo aviso. Con el módulo apagado no hace nada. Con Docker, en el cron del servidor:
+
+```cron
+15 3 * * * docker compose -p mitienda -f /ruta/al/codigo/deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec -T backend python manage.py procesar_suscripciones >> /opt/tiendas/mitienda-suscripciones.log 2>&1
+```
+
+Los pedidos de las suscripciones no los cancela `cancelar_pagos_vencidos`: su plazo es el día de la entrega del
+ciclo, no el de las transferencias. Si no se programa, los clientes no reciben el aviso de cobro y la suscripción
+no avanza (solo se cobra el primer ciclo).
+
 ## Enlaces de los correos, reseñas y contraseñas
 
 - **`FRONTEND_URL` tiene que ser la dirección pública de la tienda.** Los correos llevan enlaces a ella: el
@@ -541,8 +568,8 @@ Haz una compra real de monto bajo con cada medio y anúlala o devuélvela desde 
 
 ### 8. Operación
 
-- Las [tareas programadas](#tareas-programadas) (los plazos de las transferencias cada hora y la limpieza de fotos
-  una vez al día) y los [respaldos](#respaldos) diarios en el cron del servidor, como en
+- Las [tareas programadas](#tareas-programadas) (los plazos de las transferencias cada hora; la limpieza de fotos y,
+  si la tienda las usa, las suscripciones una vez al día) y los [respaldos](#respaldos) diarios en el cron del servidor, como en
   [la guía](prueba-servidor.md#7-tareas-programadas-y-respaldos).
 - Nunca correr las pruebas en el servidor de la tienda (ver [Primer arranque](#primer-arranque)).
 - Una restauración de prueba completa antes de entregar la tienda.

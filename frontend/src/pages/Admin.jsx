@@ -28,6 +28,8 @@ import GestorAnalitica from '../components/GestorAnalitica';
 import GestorResenas from '../components/GestorResenas';
 import GestorActivarResenas from '../components/GestorActivarResenas';
 import GestorDocumentosTributarios from '../components/GestorDocumentosTributarios';
+import GestorSuscripciones from '../components/GestorSuscripciones';
+import GestorSuscriptores from '../components/GestorSuscriptores';
 import './Admin.css';
 import Spinner from '../components/carga/Spinner';
 
@@ -50,6 +52,7 @@ const GRUPOS_CONFIGURACION = [
     { id: 'config-sobre-mi', titulo: 'Página Sobre mí' },
     { id: 'config-resenas', titulo: 'Reseñas de Clientes' },
     { id: 'config-cotizaciones', titulo: 'Cotizaciones y Encargos' },
+    { id: 'config-suscripciones', titulo: 'Suscripciones' },
     { id: 'config-promociones', titulo: 'Promociones y Descuentos' },
   ] },
   { id: 'config-grupo-pagos', titulo: 'Pagos y entregas', secciones: [
@@ -241,6 +244,13 @@ export default function Admin() {
             <GestorResenas />
           </div>
         );
+      case 'suscriptores':
+        return (
+          <div>
+            <h2 className="admin-titulo">Suscriptores</h2>
+            <GestorSuscriptores />
+          </div>
+        );
       case 'blog':
         return <GestorPublicaciones />;
       case 'configuracion': {
@@ -383,6 +393,11 @@ export default function Admin() {
           'config-cotizaciones': (
             <>
               <GestorFormularioCotizacion />
+            </>
+          ),
+          'config-suscripciones': (
+            <>
+              <GestorSuscripciones />
             </>
           ),
           'config-blog': (

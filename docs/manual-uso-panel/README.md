@@ -4,6 +4,7 @@ Entrega de [SCRUM-187](https://emiliosanmartinpez.atlassian.net/browse/SCRUM-187
 
 - [PDF para entregar al cliente](Manual_de_uso_del_panel_Ecode.pdf).
 - [Fuente editable en Word](Manual_de_uso_del_panel_Ecode.docx), con las capturas incorporadas.
+- [Suscripciones](suscripciones.md): sección nueva (opcional, apagada por defecto) que falta incorporar al Word y al PDF.
 
 El manual cubre el panel integrado al 2 de noviembre de 2026. Las pantallas pertenecen a una tienda ficticia: no contienen cuentas bancarias ni llaves reales. El despliegue y el mantenimiento se explican por separado en [el manual de despliegue](../deploy/README.md).
 

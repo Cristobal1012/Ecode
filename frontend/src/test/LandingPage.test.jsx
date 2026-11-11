@@ -450,7 +450,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledTimes(1);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar'], ocultos: ['sobre_mi']
+      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'], ocultos: ['sobre_mi']
     } });
     expect(config.texto_boton_ingreso).toBe('Ver piezas');
     cleanup();
@@ -510,7 +510,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros'], ocultos: ['nosotros']
+      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros', 'suscripcion'], ocultos: ['nosotros']
     } });
   });
 

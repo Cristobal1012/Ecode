@@ -27,7 +27,7 @@ describe('GestorPresentacion', () => {
     expect(fotos).not.toBeChecked();
     expect(fotos).toHaveAccessibleDescription(/cada foto se ve entera dentro de su marco/);
     expect(await casilla('Ficha del producto con la foto horizontal y más grande')).not.toBeChecked();
-    expect(await casilla('Logo más grande en computador')).toHaveAccessibleDescription(/En el celular y la tablet no cambia/);
+    expect(await casilla('Logo más grande')).toHaveAccessibleDescription(/en el computador, la tablet y el celular/);
   });
 
   it('guarda solo las opciones marcadas y recarga la tienda', async () => {
@@ -35,7 +35,7 @@ describe('GestorPresentacion', () => {
     render(<GestorPresentacion />);
 
     fireEvent.click(await casilla('Mostrar las fotos completas, sin recortar'));
-    fireEvent.click(await casilla('Logo más grande en computador'));
+    fireEvent.click(await casilla('Logo más grande'));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar fotos y logo' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('Opciones guardadas');
@@ -63,7 +63,7 @@ describe('GestorPresentacion', () => {
     clienteAxios.patch.mockRejectedValue(new Error('sin conexión'));
     render(<GestorPresentacion />);
 
-    fireEvent.click(await casilla('Logo más grande en computador'));
+    fireEvent.click(await casilla('Logo más grande'));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar fotos y logo' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron guardar las opciones');

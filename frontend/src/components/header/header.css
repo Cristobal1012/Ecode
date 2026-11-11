@@ -437,9 +437,29 @@
   }
 }
 
-/* Logo grande (opción del admin, pedido de un cliente): solo en el computador; en la tablet y el celular queda
-   igual. RN-01: el logo de la Universidad mantiene la misma altura que el del negocio */
-@media (min-width: 1024px) {
+/* Logo grande (opción del admin, pedido de un cliente): más grande en todas las pantallas, 88 px en el computador,
+   72 en la tablet y 64 en el celular (normal: 52, 52 y 44). RN-01: el logo de la Universidad mantiene la misma
+   altura que el del negocio; mide 2,35 veces su alto de ancho */
+:root[data-logo='grande'] .header-logo-negocio {
+  height: 88px;
+  max-width: 320px;
+}
+
+:root[data-logo='grande'] .header-logo-universidad {
+  height: 88px;
+  max-width: 210px;
+}
+
+:root[data-logo='grande'] .header-separador {
+  height: 68px;
+}
+
+/* Sin logo, el nombre de la tienda crece en la misma medida */
+:root[data-logo='grande'] .header-nombre-tienda {
+  font-size: 2.5rem;
+}
+
+@media (max-width: 1023px) {
   :root[data-logo='grande'] .header-logo-negocio {
     height: 72px;
     max-width: 260px;
@@ -447,16 +467,50 @@
 
   :root[data-logo='grande'] .header-logo-universidad {
     height: 72px;
-    max-width: 220px;
+    max-width: 170px;
   }
 
   :root[data-logo='grande'] .header-separador {
     height: 56px;
   }
 
-  /* Sin logo, el nombre de la tienda crece en la misma medida */
   :root[data-logo='grande'] .header-nombre-tienda {
     font-size: 2.25rem;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Con los dos logos en un celular angosto pasan a dos filas en vez de salirse de la pantalla */
+  :root[data-logo='grande'] .header-marcas {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 12px;
+    max-width: 100%;
+  }
+
+  :root[data-logo='grande'] .header-logo-negocio {
+    height: 64px;
+    max-width: min(240px, 100%);
+  }
+
+  :root[data-logo='grande'] .header-logo-universidad {
+    height: 64px;
+    max-width: 150px;
+  }
+
+  :root[data-logo='grande'] .header-separador {
+    height: 48px;
+  }
+
+  :root[data-logo='grande'] .header-nombre-tienda {
+    font-size: 2rem;
+  }
+}
+
+/* Bajo 380 px los dos logos grandes van en dos filas: la raya entre ellos quedaría sola junto al primero */
+@media (max-width: 379px) {
+  :root[data-logo='grande'] .header-separador {
+    display: none;
   }
 }
 

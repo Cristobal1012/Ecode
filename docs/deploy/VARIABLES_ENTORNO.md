@@ -27,7 +27,7 @@ documento.
 
 ## 3. Correos Electrónicos (Resend o SMTP)
 El sistema prioriza Resend (`RESEND_API_KEY`) sobre SMTP (`EMAIL_HOST`). Si ambas faltan, los correos se imprimen en
-consola. Los pasos para Gmail y Resend están en `README.md` de esta carpeta.
+consola. En la tienda del cliente se usa Resend, con la API key que él entrega: ver `README.md` de esta carpeta.
 
 | Variable | Descripción |
 | :--- | :--- |
@@ -75,10 +75,10 @@ stack: no van en el archivo.
 | Variable | Descripción |
 | :--- | :--- |
 | `ARCHIVO_TIENDA` | Ruta del mismo archivo de la tienda: de ahí el backend lee todas sus variables. |
-| `DIRECCION_SITIO` | `:80` detrás de un proxy que termina el HTTPS, o el dominio de la tienda para que su Caddy obtenga el certificado. Con `"mitienda.cl, www.mitienda.cl"` también atiende `www`, que redirige al dominio principal. |
-| `IP_WEB`, `PUERTO_WEB`, `PUERTO_WEB_HTTPS` | Dónde publica la tienda. Detrás de un proxy: `127.0.0.1` y puertos distintos por tienda. Con dominio propio: `0.0.0.0`, `80` y `443`. |
+| `DIRECCION_SITIO` | El dominio de la tienda, para que su Caddy obtenga el certificado. Con `"mitienda.cl, www.mitienda.cl"` también atiende `www`, que redirige al dominio principal. |
+| `IP_WEB`, `PUERTO_WEB`, `PUERTO_WEB_HTTPS` | Dónde publica la tienda: `0.0.0.0`, `80` y `443`. |
 | `MONGO_USUARIO`, `MONGO_CLAVE`, `MONGO_BASE` | Usuario, contraseña y base de MongoDB del stack. La contraseña, solo con letras y números. |
-| `MONGO_CACHE_GB` | Caché de MongoDB en GB (por defecto `0.5`), para que varias tiendas compartan un servidor. |
+| `MONGO_CACHE_GB` | Caché de MongoDB en GB (por defecto `0.5`). |
 | `GUNICORN_WORKERS`, `GUNICORN_THREADS` | Procesos e hilos del backend (por defecto `2` y `4`). |
 
 ## 9. Proveedores de Logística y Pago

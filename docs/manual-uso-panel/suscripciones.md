@@ -1,6 +1,6 @@
 # Suscripciones (manual de uso del panel)
 
-Esta sección se tiene que agregar al [manual de uso del panel](README.md) cuando se actualice el Word. Las suscripciones las pidió un cliente: son **opcionales y vienen apagadas**. Una tienda que no las active no ve ningún cambio.
+Estos procedimientos están incluidos en el Word y el PDF del [manual de uso del panel](README.md). Las suscripciones son **opcionales y vienen apagadas**. Una tienda que no las active no ve ningún cambio.
 
 ## Qué son
 

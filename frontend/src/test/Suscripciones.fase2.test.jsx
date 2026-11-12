@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
+import { obtenerEtiquetaProducto } from '../utils/etiquetasProducto';
 
 vi.mock('../components/auth/axiosConfig', () => ({ default: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
 vi.mock('../components/auth/AuthLayout', () => ({ default: ({ children }) => <main>{children}</main> }));
+vi.mock('../hooks/useConfiguracionTienda', () => ({ default: vi.fn() }));
 import clienteAxios from '../components/auth/axiosConfig';
 import CampoExclusivoProducto from '../components/CampoExclusivoProducto';
 import AccesoProductoExclusivo from '../components/AccesoProductoExclusivo';
@@ -13,12 +16,12 @@ import MiCumpleanos from '../pages/MiCumpleanos';
 import GestorCumpleanos from '../components/GestorCumpleanos';
 import { ajustarCarrito } from '../components/carrito';
 
-const exclusivo = { id: 'producto', solo_suscriptores: true, planes_suscripcion: [2], variantes: [] };
+const exclusivo = { id: 'producto', solo_suscriptores: true, planes_suscripcion: [2], variantes: [{ stock: 5, precio: 1000 }] };
 const fila = { usuario_id: 7, nombre: 'Ana Prueba', dia: 29, mes: 2, direccion: 'Calle de ejemplo 202',
   direccion_envio: { calle: 'Calle de ejemplo', numero: '202', dpto_casa: 'Depto. 4', comuna: 'Santiago' },
   proxima_entrega: '2026-12-01', plan: 'Mensual', regalo_enviado: false };
 
-beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); });
+beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); useConfiguracionTienda.mockReturnValue({ suscripciones_activas: true }); });
 afterEach(() => cleanup());
 
 function Campo() {
@@ -28,6 +31,10 @@ function Campo() {
 }
 
 describe('Productos exclusivos', () => {
+  it('Agotado tiene prioridad sobre el exclusivo y vuelve a exclusivo al reponer stock', () => {
+    expect(obtenerEtiquetaProducto({ ...exclusivo, variantes: [{ stock: 0, precio: 1000 }] }).texto).toBe('Agotado');
+    expect(obtenerEtiquetaProducto(exclusivo).texto).toBe('Exclusivo suscriptores');
+  });
   it('sin módulo no aparece la casilla ni consulta planes', () => {
     render(<CampoExclusivoProducto activo={false} planes={[]} />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
@@ -88,6 +95,15 @@ describe('Productos exclusivos', () => {
 });
 
 describe('Mi cumpleaños', () => {
+  it('con el módulo apagado vuelve al inicio sin consultar la fecha privada', async () => {
+    useConfiguracionTienda.mockReturnValue({ suscripciones_activas: false });
+    render(<MemoryRouter initialEntries={['/mi-cumpleanos']}><Routes>
+      <Route path="/mi-cumpleanos" element={<MiCumpleanos />} />
+      <Route path="/" element={<h1>Inicio</h1>} />
+    </Routes></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument();
+    expect(clienteAxios.get).not.toHaveBeenCalled();
+  });
   it('guarda día y mes sin año y permite eliminar ambos', async () => {
     clienteAxios.get.mockResolvedValue({ data: { dia: null, mes: null } });
     clienteAxios.patch.mockImplementation((_, datos) => Promise.resolve({ data: datos }));

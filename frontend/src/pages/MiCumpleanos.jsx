@@ -3,8 +3,17 @@ import clienteAxios from '../components/auth/axiosConfig';
 import AuthLayout from '../components/auth/AuthLayout';
 import { MESES } from '../utils/suscripciones';
 import './MiCumpleanos.css';
+import { Navigate } from 'react-router-dom';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 
 export default function MiCumpleanos() {
+  const config = useConfiguracionTienda();
+  if (!config) return <p role="status">Cargando configuración…</p>;
+  if (!config.suscripciones_activas) return <Navigate to="/" replace />;
+  return <FormularioCumpleanos />;
+}
+
+function FormularioCumpleanos() {
   const id = useId();
   const [fecha, setFecha] = useState(null);
   const [errorCarga, setErrorCarga] = useState('');

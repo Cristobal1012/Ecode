@@ -8,6 +8,23 @@ const exclusivo = { ...producto, id: '000000000000000000000202', nombre: 'Café 
   planes_suscripcion: [2], variantes: [{ sku: 'EXC-202', precio: 1000, stock: 5, atributos_variables: {} }] };
 const plan = { id: 2, nombre: 'Mensual', activo: true };
 
+test('sin suscripciones no hay enlace ni página de cumpleaños ni lectura de la fecha', async ({ page }) => {
+  const tienda = await prepararTienda(page, { sesion: true });
+  await page.route('**/api/configuracion/', route => route.fulfill({ json: {
+    nombre_tienda: 'Tienda QA', suscripciones_activas: false,
+  } }));
+  let consultas = 0;
+  await page.route('**/api/usuarios/cumpleanos/', route => { consultas++; return route.fulfill({ status: 404, json: {} }); });
+  await page.goto('/catalogo');
+  await page.getByRole('button', { name: /Menú de usuario/ }).click();
+  await expect(page.getByRole('link', { name: 'Mi cumpleaños', exact: true })).toHaveCount(0);
+  await page.goto('/mi-cumpleanos');
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('heading', { name: 'Mi cumpleaños', exact: true })).toHaveCount(0);
+  expect(consultas).toBe(0);
+  expect(tienda.inesperadas).toEqual([]);
+});
+
 async function preparar(page, { sesion = false, tema = 1 } = {}) {
   const tienda = await prepararTienda(page, { sesion, tema });
   await page.route('**/api/configuracion/', route => route.fulfill({ json: {

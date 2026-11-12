@@ -414,6 +414,10 @@ class CarritoAPIView(APIView):
     def post(self, request):
         carrito, created = Carrito.objects.get_or_create(usuario=request.user)
         items = request.data.get('items', [])
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            return Response({'items': ['Envía una lista de productos.']}, status=status.HTTP_400_BAD_REQUEST)
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(items, request.user)
         for item in items:
             p_id = item.get('producto_mongo_id') or item.get('producto_id') or item.get('id')
             if p_id:
@@ -437,7 +441,7 @@ class ValidarCarritoView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RevisionCarritoSerializer(data=request.data)
+        serializer = RevisionCarritoSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         return Response(serializer.revisar())
 

@@ -556,7 +556,9 @@ class RevisionCarritoSerializer(serializers.Serializer):
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
                  for i in self.validated_data['items']]
         lineas = RevisarCarrito(catalogo_variantes()).ejecutar(items)
-        return {
+        from .acceso_exclusivos import AVISO_EXCLUSIVO, ids_sin_acceso
+        restringidos = ids_sin_acceso(self.validated_data['items'], getattr(self.context.get('request'), 'user', None))
+        resultado = {
             'valido': all(linea.problema is None for linea in lineas),
             'items': [{
                 'producto_mongo_id': linea.producto_id,
@@ -569,6 +571,11 @@ class RevisionCarritoSerializer(serializers.Serializer):
                 'mensaje': linea.mensaje,
             } for linea in lineas],
         }
+        for linea in resultado['items']:
+            if linea['producto_mongo_id'] in restringidos:
+                linea.update(problema='SUSCRIPCION_REQUERIDA', mensaje=AVISO_EXCLUSIVO, disponible=0)
+                resultado['valido'] = False
+        return resultado
 
 class DatosEmpresaSerializer(serializers.Serializer):
     """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""
@@ -791,6 +798,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'direccion_envio_snapshot': error_direccion})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(data['items'], getattr(request, 'user', None))
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
                  for i in data['items']]
         try:
@@ -819,6 +828,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(validated_data['items'], getattr(self.context.get('request'), 'user', None))
         request = self.context.get('request')
         validated_data.pop('acepta_terminos')
         validated_data.pop('items')
@@ -963,6 +974,9 @@ class AgregarItemSerializer(serializers.Serializer):
 
         if not producto:
             raise serializers.ValidationError({"producto_mongo_id": "El producto solicitado no existe en el catalogo."})
+
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos([data], getattr(self.context.get('request'), 'user', None))
 
         variante_encontrada = producto.variantes.filter(sku=sku).first()
         if not variante_encontrada:

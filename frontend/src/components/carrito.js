@@ -63,7 +63,7 @@ export const ajustarCarrito = (items, revision) => {
       ajustado.push(item);
       return;
     }
-    if (linea.problema === 'NO_DISPONIBLE' || linea.problema === 'SIN_STOCK') {
+    if (['NO_DISPONIBLE', 'SIN_STOCK', 'SUSCRIPCION_REQUERIDA'].includes(linea.problema)) {
       avisos.push(`${linea.mensaje} Lo quitamos de tu carrito.`);
       return;
     }

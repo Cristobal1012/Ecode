@@ -16,7 +16,7 @@ export function frecuenciaTexto(semanas) {
 export const formatoPesos = (valor) => `$${Math.round(Number(valor) || 0).toLocaleString('es-CL')}`;
 
 // "11 de noviembre de 2026" a partir de "2026-11-11" (sin pasar por la zona horaria del navegador)
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre',
+export const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre',
   'noviembre', 'diciembre'];
 export function fechaLarga(texto) {
   if (!texto) return '';

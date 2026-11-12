@@ -646,3 +646,15 @@ class Suscripcion(models.Model):
 
     def __str__(self):
         return f'Suscripción #{self.id} de {self.usuario} al plan {self.plan}'
+
+
+class RegaloCumpleanos(models.Model):
+    """Un regalo anual por persona, aunque tenga varias suscripciones o cambie de plan."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='regalos_cumpleanos')
+    anio = models.PositiveSmallIntegerField()
+    fecha_envio = models.DateTimeField(auto_now_add=True)
+    enviado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                    related_name='+')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['usuario', 'anio'], name='regalo_cumpleanos_usuario_anio')]

@@ -2,7 +2,8 @@
 
 El admin ofrece planes (precio por ciclo, cada cuántas semanas, beneficios y qué productos se pueden elegir). El cliente
 se suscribe con su cuenta, elige una variante de un producto elegible y paga ciclo a ciclo con los medios de la tienda:
-cada ciclo es un pedido normal. Sin cobro automático (fase 3) ni productos exclusivos o cumpleaños (fase 2).
+cada ciclo es un pedido normal. Sin cobro automático (fase 3). La fase 2 añade el acceso a productos exclusivos;
+la fecha opcional de cumpleaños se valida en domain/cumpleanos.py.
 
 Independiente de Django: estados y transiciones, fechas de los ciclos y validación de los planes.
 """
@@ -11,6 +12,20 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+
+
+def permite_producto_exclusivo(modulo_activo, exclusivo, planes_permitidos, planes_vigentes, plan_elegido=None):
+    """Un exclusivo exige una suscripción activa; una lista vacía admite cualquier plan vigente.
+
+    Al elegir la entrega de un plan también se respeta la lista de planes del producto.
+    Desactivar el módulo suspende todas las restricciones, incluso las guardadas antes.
+    """
+    if not modulo_activo or not exclusivo:
+        return True
+    vigentes = set(planes_vigentes)
+    permitidos = set(planes_permitidos)
+    return bool(vigentes and (not permitidos or (
+        vigentes & permitidos and (plan_elegido is None or plan_elegido in permitidos))))
 
 LARGO_NOMBRE_PLAN = 60
 LARGO_DESCRIPCION_PLAN = 300

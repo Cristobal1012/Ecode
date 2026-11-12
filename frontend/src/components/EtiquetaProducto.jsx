@@ -3,7 +3,7 @@ import './EtiquetaProducto.css';
 
 export default function EtiquetaProducto({ producto, etiquetaSeccion, enFicha = false }) {
   // La ficha conserva su presentación anterior cuando el producto no tiene etiqueta propia.
-  if (enFicha && !producto.etiqueta?.trim()) return null;
+  if (enFicha && !producto.etiqueta?.trim() && !producto.solo_suscriptores) return null;
   const etiqueta = obtenerEtiquetaProducto(producto, etiquetaSeccion);
   if (!etiqueta) return null;
   const clases = ['tarjeta-producto-etiqueta'];

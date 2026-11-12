@@ -60,6 +60,8 @@ class Producto(Document):
     meta_descripcion = fields.StringField(max_length=160, null=True, blank=True)
     etiqueta = fields.StringField(default='', max_length=LARGO_ETIQUETA_PRODUCTO)
     etiqueta_color = fields.StringField(default='primary', choices=COLORES_ETIQUETA_PRODUCTO)
+    solo_suscriptores = fields.BooleanField(default=False)
+    planes_suscripcion = fields.ListField(fields.IntField(min_value=1), default=list)
     # Managed images use storage keys internally; serializers expose their URLs.
     # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)

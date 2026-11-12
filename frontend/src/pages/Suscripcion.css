@@ -108,7 +108,8 @@
   background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
-  transition: border-color var(--transicion), background-color var(--transicion);
+  /* El fondo cambia junto al texto para conservar su contraste al elegir. */
+  transition: border-color var(--transicion);
 }
 
 .suscripcion-producto:hover {

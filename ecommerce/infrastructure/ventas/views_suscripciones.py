@@ -11,7 +11,7 @@ from bson.errors import InvalidId
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, NotAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -30,6 +30,7 @@ from ecommerce.domain.ventas import (
 )
 
 from ..catalogo.documents import Producto
+from .acceso_exclusivos import AVISO_EXCLUSIVO, exigir_acceso_productos, planes_vigentes_de, productos_sin_acceso
 from ..catalogo.images import url_imagen
 from ..usuarios.permissions import IsAdministrador
 from .instrucciones_pago import instrucciones_transferencia
@@ -179,6 +180,16 @@ class OpcionesPlanView(APIView):
         plan = PlanSuscripcion.objects.filter(pk=pk, activo=True).first()
         if plan is None:
             raise NotFound('Ese plan no está disponible.')
+        propia = None
+        if 'suscripcion_id' in request.query_params:
+            if not request.user.is_authenticated:
+                raise NotAuthenticated()
+            identificador = request.query_params['suscripcion_id']
+            if not identificador.isdigit():
+                raise NotFound()
+            propia = _propia(request, int(identificador))
+            if propia.plan_id != plan.id:
+                raise NotFound()
         ids = []
         for valor in plan.productos or []:
             try:
@@ -195,16 +206,22 @@ class OpcionesPlanView(APIView):
             return Response({'productos': []})
         productos = (Producto.objects(activo=True, publicado=True, coleccion_privada__ne=True)
                      .filter(__raw__=filtro).order_by('nombre')[:LIMITE_OPCIONES])
+        productos = list(productos)
+        restringidos = productos_sin_acceso(productos, request.user, plan.id,
+                                           contratando=propia is None, suscripcion=propia)
         return Response({'productos': [{
             'id': str(producto.id),
             'nombre': producto.nombre,
             'categoria': producto.categoria,
             'descripcion': producto.descripcion or '',
             'imagen': url_imagen(producto.imagenes[0], request) if producto.imagenes else None,
+            'solo_suscriptores': producto.solo_suscriptores,
+            'requiere_suscripcion': str(producto.id) in restringidos,
+            'aviso_exclusivo': AVISO_EXCLUSIVO if str(producto.id) in restringidos else '',
             'variantes': [{
                 'sku': variante.sku,
                 'atributos': variante.atributos_variables or {},
-                'disponible': int(variante.stock) >= plan.unidades,
+                'disponible': int(variante.stock) >= plan.unidades and str(producto.id) not in restringidos,
             } for variante in producto.variantes],
         } for producto in productos]})
 
@@ -233,6 +250,9 @@ class SuscribirseView(APIView):
                 sku=str(datos.get('variante_sku') or ''), entrega=_entrega(datos),
                 metodo_pago=str(datos.get('metodo_pago') or '').strip().upper(),
                 acepta_terminos=datos.get('acepta_terminos') is True)
+            exigir_acceso_productos([datos], request.user,
+                                   int(datos['plan_id']) if str(datos.get('plan_id', '')).isdigit() else None,
+                                   contratando=True)
             with transaction.atomic():
                 iniciada = suscribirse().ejecutar(request.user.id, solicitud, hoy_local(), dias_aviso_tienda())
                 orden = OrdenCompra.objects.get(pk=iniciada.orden_id)
@@ -272,8 +292,11 @@ class SuscripcionView(APIView):
         return Response(suscripcion_json(_propia(request, pk)))
 
     def patch(self, request, pk):
-        _propia(request, pk)
+        propia = _propia(request, pk)
         datos = request.data
+        if 'producto_mongo_id' in datos or 'variante_sku' in datos:
+            exigir_acceso_productos([{'producto_mongo_id': datos.get('producto_mongo_id', propia.producto_mongo_id)}],
+                                   request.user, propia.plan_id, suscripcion=propia)
         try:
             cambios = CambiosSuscripcion(
                 producto_id=str(datos['producto_mongo_id']) if 'producto_mongo_id' in datos else None,
@@ -328,6 +351,15 @@ class BeneficiosView(APIView):
         from .serializers import beneficios_del_comprador
         beneficios = beneficios_del_comprador(request)
         return Response({'descuento': beneficios.descuento, 'envio_gratis': beneficios.envio_gratis})
+
+
+class AccesoExclusivosView(APIView):
+    """Planes vigentes de la propia cuenta para mostrar el acceso, sin cambiar el contrato de beneficios."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'planes_vigentes': sorted(planes_vigentes_de(request.user))
+                         if suscripciones_activas_en_tienda() else []})
 
 
 class PagarPedidoView(APIView):

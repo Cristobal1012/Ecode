@@ -5,6 +5,8 @@ import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
 import CreatableSelect from 'react-select/creatable';
 import CampoEtiquetaProducto from './CampoEtiquetaProducto';
+import CampoExclusivoProducto from './CampoExclusivoProducto';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -30,6 +32,8 @@ const leerProductoAEditar = (productoAEditar) => {
         colecciones: [],
         etiqueta: '',
         etiqueta_color: 'primary',
+        solo_suscriptores: false,
+        planes_suscripcion: [],
         publicado: false,
         coleccion_privada: false,
         version_a_la_venta: '',
@@ -82,6 +86,8 @@ const leerProductoAEditar = (productoAEditar) => {
       colecciones: productoAEditar.colecciones || [],
       etiqueta: productoAEditar.etiqueta || '',
       etiqueta_color: productoAEditar.etiqueta_color || 'primary',
+      solo_suscriptores: Boolean(productoAEditar.solo_suscriptores),
+      planes_suscripcion: productoAEditar.planes_suscripcion || [],
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
       coleccion_privada: Boolean(productoAEditar.coleccion_privada),
       version_a_la_venta: productoAEditar.version_a_la_venta || '',
@@ -104,6 +110,7 @@ export default function FormularioProducto({
   productoAEditar
 }) {
   const [inicial] = useState(() => leerProductoAEditar(productoAEditar));
+  const configuracion = useConfiguracionTienda();
   // Asocia cada etiqueta con su campo (WCAG 1.3.1); en las variantes se suma el índice
   const idFormulario = useId();
   const [producto, setProducto] = useState(inicial.producto);
@@ -460,6 +467,10 @@ export default function FormularioProducto({
         colecciones: producto.colecciones || [],
         etiqueta: producto.etiqueta.trim(),
         etiqueta_color: producto.etiqueta_color,
+        ...(configuracion?.suscripciones_activas ? {
+          solo_suscriptores: producto.solo_suscriptores,
+          planes_suscripcion: producto.planes_suscripcion,
+        } : {}),
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
 
@@ -1006,6 +1017,9 @@ export default function FormularioProducto({
       </div>
 
       <CampoEtiquetaProducto etiqueta={producto.etiqueta} color={producto.etiqueta_color}
+        onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
+      <CampoExclusivoProducto activo={Boolean(configuracion?.suscripciones_activas)}
+        exclusivo={producto.solo_suscriptores} planes={producto.planes_suscripcion}
         onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
 
       {/* ======================================================

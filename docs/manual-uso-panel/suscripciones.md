@@ -1,6 +1,6 @@
 # Suscripciones (manual de uso del panel)
 
-Esta sección se tiene que agregar al [manual de uso del panel](README.md) cuando se actualice el Word. Las suscripciones las pidió un cliente: son **opcionales y vienen apagadas**. Una tienda que no las active no ve ningún cambio.
+Estos procedimientos están incluidos en el Word y el PDF del [manual de uso del panel](README.md). Las suscripciones son **opcionales y vienen apagadas**. Una tienda que no las active no ve ningún cambio.
 
 ## Qué son
 
@@ -36,6 +36,23 @@ Los botones **Subir** y **Bajar** cambian el orden de los planes en la tienda. U
 - En **Ventas**, los pedidos de una suscripción llevan la marca **"Suscripción"** con la fecha de la entrega. Se preparan y despachan como los demás.
 - Si un cliente paga por transferencia, valide el pago en Ventas como siempre (Pendiente → Pagado). Con eso la suscripción avanza a la entrega siguiente.
 
+## Productos exclusivos
+
+Con las suscripciones activadas, en **Inventario > Agregar producto** o **Editar**:
+
+1. Marque **Solo para suscriptores** en «Acceso de suscriptores».
+2. Si quiere limitarlo a ciertos planes, márquelos. Sin seleccionar ninguno, cualquier plan vigente permite comprarlo.
+3. Guarde el producto. En la tienda aparece **Exclusivo suscriptores**, con un enlace a Suscripción.
+
+Para comprar por el carrito normal hace falta una suscripción activa y un plan permitido; una suscripción en espera del primer pago, pausada o cancelada no da ese acceso. Al contratar un plan nuevo sí se puede elegir su producto exclusivo desde el principio: la primera entrega queda pendiente hasta pagar. Un exclusivo reservado a otro plan sigue bloqueado. Los productos conservan sus reglas habituales de stock y publicación.
+
+## Cumpleaños y regalos
+
+- Con las suscripciones activadas en la tienda, el cliente puede registrar, cambiar o eliminar su día y mes desde **Mi cuenta > Mi cumpleaños**. Es opcional y no se pide el año de nacimiento.
+- En **Cumpleaños del mes**, elija el mes. Se muestran los suscriptores activos con fecha registrada, su dirección o forma de entrega y su próxima entrega.
+- Después de enviar el regalo, marque **Regalo enviado**. Queda registrado una vez por persona y año, aunque tenga varios planes; no puede volver a marcarlo durante ese año. El año siguiente tendrá un registro nuevo.
+- Marcar la casilla solo registra el envío: no crea un pedido, un despacho ni un cobro, y no envía un correo automático de cumpleaños.
+
 ## Si las apaga
 
 Al desmarcar **Ofrecer suscripciones en mi tienda**:
@@ -43,3 +60,4 @@ Al desmarcar **Ofrecer suscripciones en mi tienda**:
 - La página de suscripciones deja de mostrarse.
 - No se crean pedidos nuevos.
 - Las suscripciones quedan guardadas, y los clientes todavía pueden verlas y cancelarlas desde su cuenta.
+- Desaparecen la casilla de exclusividad y el listado de cumpleaños del panel. Los productos dejan de exigir una suscripción mientras el módulo esté apagado; al reactivarlo se recuperan sus restricciones guardadas.

@@ -84,7 +84,10 @@ const MenuUsuario = ({ suscripciones = false }) => {
                         <li><Link to="/mis-pedidos" onClick={() => setIsOpen(false)}>Mis pedidos</Link></li>
                         {/* Suscripciones (pedido de un cliente, opcional): solo con el módulo activo */}
                         {suscripciones && (
-                            <li><Link to="/mis-suscripciones" onClick={() => setIsOpen(false)}>Mis suscripciones</Link></li>
+                            <>
+                                <li><Link to="/mis-suscripciones" onClick={() => setIsOpen(false)}>Mis suscripciones</Link></li>
+                                <li><Link to="/mi-cumpleanos" onClick={() => setIsOpen(false)}>Mi cumpleaños</Link></li>
+                            </>
                         )}
                         <li><Link to="/mis-direcciones" onClick={() => setIsOpen(false)}>Mis direcciones de envío</Link></li>
                         <li><Link to="/cambiar-contrasena" onClick={() => setIsOpen(false)}>Cambiar contraseña</Link></li>

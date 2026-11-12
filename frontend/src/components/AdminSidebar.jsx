@@ -27,6 +27,7 @@ const ICONOS = {
       <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </>
   ),
+  cumpleanos: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" /></>,
   blog: (
     <>
       <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
@@ -55,6 +56,7 @@ const VISTAS = [
   { id: 'resenas', nombre: 'Reseñas' },
   // Suscripciones (pedido de un cliente, opcional): solo con el módulo activo
   { id: 'suscriptores', nombre: 'Suscriptores', visible: (configuracion) => Boolean(configuracion?.suscripciones_activas) },
+  { id: 'cumpleanos', nombre: 'Cumpleaños del mes', visible: (configuracion) => Boolean(configuracion?.suscripciones_activas) },
   { id: 'blog', nombre: 'Blog' },
   { id: 'configuracion', nombre: 'Configuración' },
   { id: 'paginas', nombre: 'Páginas legales' }

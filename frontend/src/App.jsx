@@ -39,6 +39,7 @@ import Suscripcion from './pages/Suscripcion';
 import SuscribirsePlan from './pages/SuscribirsePlan';
 import MisSuscripciones from './pages/MisSuscripciones';
 import PagarEntrega from './pages/PagarEntrega';
+import MiCumpleanos from './pages/MiCumpleanos';
 
 const applyPaletteToRoot = aplicarPaleta;
 
@@ -171,6 +172,7 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/mis-pedidos" element={<HistorialPedidos />} />
               <Route path="/cambiar-contrasena" element={<CambiarContrasena />} />
+              <Route path="/mi-cumpleanos" element={<MiCumpleanos />} />
             </Route>
 
             {/* Ruta protegida para usuarios con rol ADMIN */}

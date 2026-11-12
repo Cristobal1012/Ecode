@@ -11,6 +11,7 @@ const TITULOS = {
   '/admin': 'Panel de administración', '/variantes': 'Selección de variantes', '/resena': 'Deja tu reseña',
   '/recuperar-contrasena': 'Recuperar contraseña', '/restablecer-contrasena': 'Nueva contraseña',
   '/cambiar-contrasena': 'Cambiar contraseña',
+  '/mi-cumpleanos': 'Mi cumpleaños',
   '/suscripcion': 'Suscripciones', '/mis-suscripciones': 'Mis suscripciones',
 };
 

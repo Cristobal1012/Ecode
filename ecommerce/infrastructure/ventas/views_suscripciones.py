@@ -197,7 +197,7 @@ class OpcionesPlanView(APIView):
         productos = (Producto.objects(activo=True, publicado=True, coleccion_privada__ne=True)
                      .filter(__raw__=filtro).order_by('nombre')[:LIMITE_OPCIONES])
         productos = list(productos)
-        restringidos = productos_sin_acceso(productos, request.user, plan.id)
+        restringidos = productos_sin_acceso(productos, request.user, plan.id, contratando=True)
         return Response({'productos': [{
             'id': str(producto.id),
             'nombre': producto.nombre,
@@ -240,7 +240,8 @@ class SuscribirseView(APIView):
                 metodo_pago=str(datos.get('metodo_pago') or '').strip().upper(),
                 acepta_terminos=datos.get('acepta_terminos') is True)
             exigir_acceso_productos([datos], request.user,
-                                   int(datos['plan_id']) if str(datos.get('plan_id', '')).isdigit() else None)
+                                   int(datos['plan_id']) if str(datos.get('plan_id', '')).isdigit() else None,
+                                   contratando=True)
             with transaction.atomic():
                 iniciada = suscribirse().ejecutar(request.user.id, solicitud, hoy_local(), dias_aviso_tienda())
                 orden = OrdenCompra.objects.get(pk=iniciada.orden_id)

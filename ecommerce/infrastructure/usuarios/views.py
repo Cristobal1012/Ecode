@@ -121,6 +121,11 @@ class CumpleanosAPIView(APIView):
     """La fecha de cumpleaños solo se consulta y modifica usando la cuenta autenticada."""
     permission_classes = [IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        from ..ventas.views_suscripciones import exigir_modulo_activo
+        exigir_modulo_activo()
+
     def get(self, request):
         return Response({'dia': request.user.cumpleanos_dia, 'mes': request.user.cumpleanos_mes})
 

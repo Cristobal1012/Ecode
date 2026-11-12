@@ -37,6 +37,15 @@ class CumpleanosAPITests(APITestCase):
         self.ana.refresh_from_db()
         self.assertIsNone(self.ana.cumpleanos_mes)
 
+    def test_modulo_apagado_oculta_fecha_y_rechaza_cambios_sin_borrar_datos(self):
+        self.config.suscripciones_activas = False
+        self.config.save()
+        self.client.force_authenticate(self.ana)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.client.patch(self.url, {'dia': 1, 'mes': 1}, format='json').status_code, 404)
+        self.ana.refresh_from_db()
+        self.assertEqual((self.ana.cumpleanos_dia, self.ana.cumpleanos_mes), (29, 2))
+
     def test_no_permite_fecha_invalida_y_no_sobrescribe_la_guardada(self):
         self.client.force_authenticate(self.ana)
         for datos in ({'dia': 31, 'mes': 4}, {'dia': 30, 'mes': 2}, {'dia': None, 'mes': 1},

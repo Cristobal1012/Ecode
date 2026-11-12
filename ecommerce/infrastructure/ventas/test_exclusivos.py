@@ -73,11 +73,25 @@ class ExclusivosAPITests(SuscripcionesAPIBase):
         self.client.force_authenticate(self.beto)
         self.assertFalse(self.revisar().data['valido'])
 
-    def test_no_elige_un_exclusivo_en_el_primer_ciclo_sin_suscripcion_previa(self):
+    def test_nuevo_suscriptor_elige_exclusivo_del_plan_permitido_sin_abrir_carrito_normal(self):
+        self.taza.planes_suscripcion = [self.plan.id]
+        self.taza.save()
         respuesta = self.suscribir(producto_mongo_id=str(self.taza.id), variante_sku='TAZA-1')
-        self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(respuesta.status_code, 201, respuesta.data)
+        self.assertEqual(OrdenCompra.objects.get(pk=respuesta.data['orden_id']).estado, 'PENDIENTE')
+        self.assertFalse(self.revisar().data['valido'])
+        self.assertEqual(self.checkout().status_code, 400)
+        opciones = self.client.get(reverse('suscripciones-plan-opciones', args=[self.plan.id])).data['productos']
+        taza = next(p for p in opciones if p['id'] == str(self.taza.id))
+        self.assertFalse(taza['requiere_suscripcion'])
+        self.assertTrue(taza['variantes'][0]['disponible'])
+
+    def test_nuevo_suscriptor_no_contrata_exclusivo_reservado_a_otro_plan(self):
+        otro = PlanSuscripcion.objects.create(nombre='Otro', precio=1000, frecuencia_semanas=4)
+        self.taza.planes_suscripcion = [otro.id]
+        self.taza.save()
+        self.assertEqual(self.suscribir(producto_mongo_id=str(self.taza.id), variante_sku='TAZA-1').status_code, 400)
         self.assertFalse(Suscripcion.objects.exists())
-        self.assertFalse(OrdenCompra.objects.exists())
         opciones = self.client.get(reverse('suscripciones-plan-opciones', args=[self.plan.id])).data['productos']
         taza = next(p for p in opciones if p['id'] == str(self.taza.id))
         self.assertTrue(taza['requiere_suscripcion'])

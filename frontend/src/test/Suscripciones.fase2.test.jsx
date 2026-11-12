@@ -120,6 +120,20 @@ describe('Cumpleaños del mes en el panel', () => {
     clienteAxios.get.mockResolvedValue({ data: { count: 1, results: [fila], anio: 2026, next: null } });
   });
 
+  it('marcar un regalo no marca a otra persona del listado', async () => {
+    clienteAxios.get.mockResolvedValue({ data: { count: 2, results: [fila,
+      { ...fila, usuario_id: 8, nombre: 'Beto Prueba' }], anio: 2026, next: null } });
+    clienteAxios.post.mockResolvedValue({ data: { regalo_enviado: true, anio: 2026 } });
+    render(<GestorCumpleanos />);
+    const ana = await screen.findByRole('checkbox', { name: 'Regalo enviado a Ana Prueba en 2026' });
+    const beto = screen.getByRole('checkbox', { name: 'Regalo enviado a Beto Prueba en 2026' });
+    fireEvent.click(beto);
+    await waitFor(() => expect(beto).toBeChecked());
+    expect(ana).not.toBeChecked();
+    expect(ana).toBeEnabled();
+    expect(clienteAxios.post).toHaveBeenCalledExactlyOnceWith('ventas/admin/suscripciones/cumpleanos/8/regalo/');
+  });
+
   it('muestra dirección completa y entrega; registra una sola vez y deshabilita la casilla', async () => {
     clienteAxios.post.mockResolvedValue({ data: { regalo_enviado: true, anio: 2026 } });
     render(<GestorCumpleanos />);

@@ -25,8 +25,8 @@ de 2026: revísalos al contratar, porque cambian.
 | Qué | Costo | Quién lo paga |
 |---|---|---|
 | Servidor: VPS de OpenCloud, plan de 4 GB de RAM | US$15 a US$20 al mes | Quien publica la tienda |
-| Dominio `.cl` en NIC Chile | $9.940 + IVA al año | El cliente, a su nombre |
-| Dominio `.com` | US$10 a US$15 al año (revisar el precio de renovación) | El cliente, a su nombre |
+| Dominio `.cl` en NIC Chile | $9.990 al año, exento de IVA | El cliente, a su nombre |
+| Dominio `.com` en Cloudflare Registrar | Unos US$10,46 al año, igual al renovar (en otras empresas, revisar el precio de renovación) | El cliente, a su nombre |
 | Transbank Webpay Plus | Comisión por venta, según su contrato | El cliente |
 | Mercado Pago | Comisión por venta, según el plazo en que libera el dinero | El cliente |
 | Chilexpress | Tarifa de cada envío, cobrada a su TCC (el checkout se la cobra al comprador) | El cliente |
@@ -295,8 +295,8 @@ python manage.py sendtestemail correo@ejemplo.cl
 (Configuración > Contacto y Redes), no al remitente: Resend solo envía, y una dirección como `ventas@mitienda.cl` no
 recibe nada salvo que el dominio tenga un buzón. Por eso el emprendedor carga un correo de contacto que sí lea (puede
 ser su Gmail). Si quiere que `ventas@mitienda.cl` también reciba, le crea un buzón (Google Workspace, Zoho u otro) o
-lo reenvía a su correo con el reenvío gratuito de Cloudflare (**Email > Email Routing**). Sin correo de contacto, las
-respuestas van al remitente.
+lo reenvía a su correo con el reenvío gratuito de Cloudflare (Email Routing, en el paso 6 de
+[6.1](#61-dominio-dns-y-servidor)). Sin correo de contacto, las respuestas van al remitente.
 
 ### Resend con el dominio del cliente
 
@@ -414,35 +414,53 @@ Ocho pasos, en orden, para dejar funcionando la tienda del cliente. Los costos d
 
 ### 6.1 Dominio, DNS y servidor
 
-1. El cliente compra el dominio a su nombre (NIC Chile u otro registrador).
-2. La VPS de OpenCloud de 4 GB, preparada como en [1. Preparar la VPS de OpenCloud](#1-preparar-la-vps-de-opencloud).
-3. **El DNS de un dominio `.cl`.** NIC Chile solo registra el dominio: en su panel se indican los *servidores de
-   nombre*, no los registros (A, TXT, MX). Los registros van en un proveedor de DNS; Cloudflare es gratis:
-   1. Crear una cuenta en cloudflare.com **con un correo del cliente**, agregar el dominio (**Add a domain**) y
-      elegir el plan **Free**.
-   2. Cloudflare muestra dos servidores de nombre (ej. `ana.ns.cloudflare.com` y `bob.ns.cloudflare.com`). En
-      clientes.nic.cl, en el dominio, sección **Servidores de nombre (DNS)**, reemplazar los que haya por esos dos y
-      presionar **Actualizar datos de dominio**. El cambio puede tardar hasta 24 horas; Cloudflare avisa por correo
-      cuando el dominio queda activo.
-   3. En **DNS > Records**, dos registros hacia la IP del servidor, **con la nube gris ("Solo DNS")**:
+El dominio y su DNS quedan en la cuenta de Cloudflare **del cliente**, que la crea él con la guía "Cómo comprar el
+dominio de tu tienda" que se le entrega. Cloudflare se usa para tres cosas:
 
-      | Tipo | Nombre | Contenido |
-      |---|---|---|
-      | A | `@` (es `mitienda.cl`) | la IP del servidor |
-      | A | `www` | la IP del servidor |
+| Uso | ¿Obligatorio? | Para qué |
+|---|---|---|
+| **DNS** | Sí, siempre | Los registros `@` y `www` hacia la VPS, y los de Resend |
+| **Cloudflare Registrar** | Solo si el dominio es `.com` y se compra ahí | Comprar y renovar el dominio, a precio de costo |
+| **Email Routing** | No, opcional | Que una dirección del dominio (ej. `ventas@mitienda.cl`) reciba correos y los reenvíe al correo del cliente |
 
-      Con la nube naranja, el tráfico pasa por Cloudflare antes de llegar al servidor y el Caddy de la tienda puede no
-      obtener su certificado HTTPS. La tienda ya tiene HTTPS propio: no hace falta el proxy de Cloudflare.
-   4. Comprobar desde el servidor que el dominio ya apunta a su IP antes de levantar la tienda:
-      `dig +short mitienda.cl` y `dig +short www.mitienda.cl` deben devolver esa IP.
-4. **Con un `.com` u otro dominio que no es `.cl`**, normalmente no hace falta Cloudflare: los registradores
-   (Namecheap, Porkbun, GoDaddy, Hostinger, Cloudflare Registrar, entre otros) incluyen un panel de DNS gratis, y ahí
-   se crean los mismos dos registros `@` y `www`, y después los de Resend. En ese panel, revisa además que no esté
-   activo el **"parking" o la redirección del registrador** (su página con publicidad) y que cualquier opción de
-   **proxy o CDN** esté apagada, igual que la nube gris de Cloudflare. Varios registradores cobran barato el primer
-   año y más caro la renovación, así que conviene mirar el precio de renovación al elegir.
+El equipo de despliegue no necesita la clave de Cloudflare: le indica al cliente los registros, o el cliente le da
+acceso de forma segura si prefiere que los agregue el equipo.
 
-Lo importante, con cualquier dominio, es que `@` y `www` apunten al servidor.
+1. **La VPS** de OpenCloud de 4 GB, preparada como en
+   [1. Preparar la VPS de OpenCloud](#1-preparar-la-vps-de-opencloud). Anota su IP.
+2. **El dominio y la cuenta de Cloudflare**, según el tipo de dominio:
+   - **Si es `.cl`:** el cliente lo compra a su nombre en NIC Chile ($9.990 al año, exento de IVA). NIC Chile solo
+     registra el dominio: no guarda registros (A, TXT, MX). Por eso el cliente crea su cuenta en Cloudflare, agrega el
+     dominio con el plan **Free** y pega en NIC Chile (**Mis dominios > Configuración Técnica > Servidores DNS**, y
+     luego **Actualizar datos de dominio**) los dos servidores de nombre que le muestra Cloudflare (ej.
+     `ana.ns.cloudflare.com` y `bob.ns.cloudflare.com`). Cloudflare le avisa por correo cuando el dominio queda
+     activo: suele tardar menos de una hora, y puede llegar a 48.
+   - **Si es `.com`:** el cliente lo compra a su nombre en Cloudflare Registrar (unos US$10,46 al año, el mismo
+     precio al renovar). Al comprarlo ya tiene la cuenta y el DNS listos.
+
+   Un `.com` comprado en otra empresa (Namecheap, GoDaddy, Hostinger u otra) también sirve: los registros del paso 3
+   van en el panel de DNS de esa empresa, igual que en Cloudflare. En ese panel hay que desactivar el **"parking"** o
+   la redirección del registrador (su página con publicidad) y cualquier opción de **proxy o CDN**. Ahí no existe el
+   Email Routing de Cloudflare: algunos registradores tienen su propio reenvío.
+3. **Los registros hacia la VPS (igual para `.cl` y `.com`).** En Cloudflare, **DNS > Records**, dos registros **con
+   la nube gris ("Solo DNS")**:
+
+   | Tipo | Nombre | Contenido |
+   |---|---|---|
+   | A | `@` (es `mitienda.cl`) | la IP de la VPS |
+   | A | `www` | la IP de la VPS |
+
+   Con la nube naranja, el tráfico pasa por Cloudflare antes de llegar al servidor y el Caddy de la tienda puede no
+   obtener su certificado HTTPS. La tienda ya tiene HTTPS propio: no hace falta el proxy de Cloudflare.
+4. **Comprueba desde la VPS** que el dominio ya apunta a su IP antes de levantar la tienda: `dig +short mitienda.cl` y
+   `dig +short www.mitienda.cl` deben devolver esa IP.
+5. **Los registros de Resend** los agrega el cliente en el mismo panel, con el instructivo
+   ([Resend con el dominio del cliente](#resend-con-el-dominio-del-cliente)).
+6. **Email Routing (opcional).** Si el cliente quiere que `ventas@mitienda.cl` también reciba correos, en Cloudflare
+   entra a **Email > Email Routing**, crea esa dirección con destino a su correo (ej. su Gmail), confirma el destino
+   con el enlace que le llega y deja que Cloudflare agregue sus registros MX en el dominio raíz. No chocan con los de
+   Resend, que van en el subdominio `send`. Sin esto la tienda funciona igual: las respuestas de los compradores
+   llegan al correo de contacto ([4. Correo](#4-correo)).
 
 ### 6.2 La tienda con su dominio
 

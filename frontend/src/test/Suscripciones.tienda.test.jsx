@@ -269,6 +269,8 @@ describe('Mis suscripciones', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cambiar producto, entrega o pago' }));
     const guardar = screen.getByRole('button', { name: 'Guardar cambios' });
+      expect(clienteAxios.get).toHaveBeenCalledWith('ventas/suscripciones/planes/1/opciones/',
+        { params: { suscripcion_id: 4 } });
     expect(guardar).toBeDisabled();
     fireEvent.click(screen.getByRole('radio', { name: 'Transferencia bancaria' }));
     fireEvent.click(guardar);

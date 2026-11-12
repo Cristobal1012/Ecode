@@ -21,10 +21,11 @@ export default function CambiarSuscripcion({ suscripcion, config, direcciones, c
 
   // Si el plan ya no se ofrece, no se puede cambiar el producto (sí la entrega y el pago)
   useEffect(() => {
-    clienteAxios.get(`ventas/suscripciones/planes/${suscripcion.plan.id}/opciones/`)
+    clienteAxios.get(`ventas/suscripciones/planes/${suscripcion.plan.id}/opciones/`,
+      { params: { suscripcion_id: suscripcion.id } })
       .then(({ data }) => setProductos(data.productos || []))
       .catch(() => setProductos([]));
-  }, [suscripcion.plan.id]);
+  }, [suscripcion.id, suscripcion.plan.id, suscripcion.estado]);
 
   const medios = config?.pasarelas_activas || [];
   const cambioProducto = eleccion.variante_sku && (eleccion.producto_mongo_id !== suscripcion.producto_mongo_id

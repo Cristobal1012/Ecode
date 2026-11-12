@@ -44,11 +44,11 @@ Con las suscripciones activadas, en **Inventario > Agregar producto** o **Editar
 2. Si quiere limitarlo a ciertos planes, márquelos. Sin seleccionar ninguno, cualquier plan vigente permite comprarlo.
 3. Guarde el producto. En la tienda aparece **Exclusivo suscriptores**, con un enlace a Suscripción.
 
-Solo las cuentas con una suscripción activa y un plan permitido pueden comprar ese producto o elegirlo para una entrega. Una suscripción en espera del primer pago, pausada o cancelada no da acceso. Los productos conservan sus reglas habituales de stock y publicación.
+Para comprar por el carrito normal hace falta una suscripción activa y un plan permitido; una suscripción en espera del primer pago, pausada o cancelada no da ese acceso. Al contratar un plan nuevo sí se puede elegir su producto exclusivo desde el principio: la primera entrega queda pendiente hasta pagar. Un exclusivo reservado a otro plan sigue bloqueado. Los productos conservan sus reglas habituales de stock y publicación.
 
 ## Cumpleaños y regalos
 
-- El cliente puede registrar, cambiar o eliminar su día y mes desde **Mi cuenta > Mi cumpleaños**. Es opcional y no se pide el año de nacimiento.
+- Con las suscripciones activadas en la tienda, el cliente puede registrar, cambiar o eliminar su día y mes desde **Mi cuenta > Mi cumpleaños**. Es opcional y no se pide el año de nacimiento.
 - En **Cumpleaños del mes**, elija el mes. Se muestran los suscriptores activos con fecha registrada, su dirección o forma de entrega y su próxima entrega.
 - Después de enviar el regalo, marque **Regalo enviado**. Queda registrado una vez por persona y año, aunque tenga varios planes; no puede volver a marcarlo durante ese año. El año siguiente tendrá un registro nuevo.
 - Marcar la casilla solo registra el envío: no crea un pedido, un despacho ni un cobro, y no envía un correo automático de cumpleaños.

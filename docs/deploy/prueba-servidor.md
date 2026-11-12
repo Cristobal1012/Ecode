@@ -245,11 +245,11 @@ Lo que cambia respecto de la guía:
 
   ```
   alan-prueba.duckdns.org {
-      reverse_proxy 127.0.0.1:8081
+  	reverse_proxy 127.0.0.1:8081
   }
 
   daniela-prueba.duckdns.org {
-      reverse_proxy 127.0.0.1:8082
+  	reverse_proxy 127.0.0.1:8082
   }
   ```
 

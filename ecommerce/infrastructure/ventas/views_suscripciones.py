@@ -11,7 +11,7 @@ from bson.errors import InvalidId
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, NotAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -180,6 +180,16 @@ class OpcionesPlanView(APIView):
         plan = PlanSuscripcion.objects.filter(pk=pk, activo=True).first()
         if plan is None:
             raise NotFound('Ese plan no está disponible.')
+        propia = None
+        if 'suscripcion_id' in request.query_params:
+            if not request.user.is_authenticated:
+                raise NotAuthenticated()
+            identificador = request.query_params['suscripcion_id']
+            if not identificador.isdigit():
+                raise NotFound()
+            propia = _propia(request, int(identificador))
+            if propia.plan_id != plan.id:
+                raise NotFound()
         ids = []
         for valor in plan.productos or []:
             try:
@@ -197,7 +207,8 @@ class OpcionesPlanView(APIView):
         productos = (Producto.objects(activo=True, publicado=True, coleccion_privada__ne=True)
                      .filter(__raw__=filtro).order_by('nombre')[:LIMITE_OPCIONES])
         productos = list(productos)
-        restringidos = productos_sin_acceso(productos, request.user, plan.id, contratando=True)
+        restringidos = productos_sin_acceso(productos, request.user, plan.id,
+                                           contratando=propia is None, suscripcion=propia)
         return Response({'productos': [{
             'id': str(producto.id),
             'nombre': producto.nombre,
@@ -285,7 +296,7 @@ class SuscripcionView(APIView):
         datos = request.data
         if 'producto_mongo_id' in datos or 'variante_sku' in datos:
             exigir_acceso_productos([{'producto_mongo_id': datos.get('producto_mongo_id', propia.producto_mongo_id)}],
-                                   request.user, propia.plan_id)
+                                   request.user, propia.plan_id, suscripcion=propia)
         try:
             cambios = CambiosSuscripcion(
                 producto_id=str(datos['producto_mongo_id']) if 'producto_mongo_id' in datos else None,

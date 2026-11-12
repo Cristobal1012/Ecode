@@ -4,9 +4,51 @@ from django.urls import reverse
 from .models import Carrito, OrdenCompra, PlanSuscripcion, Suscripcion
 from .test_suscripciones import SuscripcionesAPIBase
 from .tests import DESTINATARIO
+from ..catalogo.documents import Variante
 
 
 class ExclusivosAPITests(SuscripcionesAPIBase):
+    def test_pendiente_cambia_variante_exclusiva_y_lista_coherente_sin_habilitar_carrito(self):
+        self.taza.variantes.append(Variante(sku='TAZA-2', precio=5990, stock=5))
+        self.taza.planes_suscripcion = [self.plan.id]
+        self.taza.save()
+        alta = self.suscribir(producto_mongo_id=str(self.taza.id), variante_sku='TAZA-1')
+        self.assertEqual(alta.status_code, 201, alta.data)
+        identificador = alta.data['suscripcion_id']
+        opciones = self.client.get(reverse('suscripciones-plan-opciones', args=[self.plan.id]),
+                                   {'suscripcion_id': identificador}).data['productos']
+        taza = next(p for p in opciones if p['id'] == str(self.taza.id))
+        self.assertTrue(taza['variantes'][1]['disponible'])
+        respuesta = self.client.patch(reverse('suscripcion', args=[identificador]),
+                                     {'variante_sku': 'TAZA-2'}, format='json')
+        self.assertEqual(respuesta.status_code, 200, respuesta.data)
+        self.assertEqual(Suscripcion.objects.get(pk=identificador).variante_sku, 'TAZA-2')
+        self.assertFalse(self.revisar().data['valido'])
+        self.assertEqual(self.checkout().status_code, 400)
+
+    def test_pausada_y_cancelada_bloquean_lista_y_edicion_aunque_exista_otro_plan_activo(self):
+        propia = self.activar()
+        otra = self.suscribir()
+        self.pagar(otra.data['orden_id'])
+        for estado in ('PAUSADA', 'CANCELADA'):
+            propia.estado = estado
+            propia.save()
+            opciones = self.client.get(reverse('suscripciones-plan-opciones', args=[self.plan.id]),
+                                       {'suscripcion_id': propia.id}).data['productos']
+            taza = next(p for p in opciones if p['id'] == str(self.taza.id))
+            self.assertTrue(taza['requiere_suscripcion'])
+            self.assertFalse(taza['variantes'][0]['disponible'])
+            self.assertEqual(self.client.patch(reverse('suscripcion', args=[propia.id]),
+                                              self.item, format='json').status_code, 400)
+
+    def test_opciones_de_cambio_solo_admiten_la_suscripcion_propia_y_su_plan(self):
+        propia = self.activar()
+        url = reverse('suscripciones-plan-opciones', args=[self.plan.id])
+        self.client.force_authenticate(self.beto)
+        self.assertEqual(self.client.get(url, {'suscripcion_id': propia.id}).status_code, 404)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(url, {'suscripcion_id': propia.id}).status_code, 401)
+
     def setUp(self):
         super().setUp()
         self.taza.solo_suscriptores = True

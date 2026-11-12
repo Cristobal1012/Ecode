@@ -13,6 +13,8 @@ El cliente recibe un producto cada cierto tiempo (por ejemplo, un café cada 4 s
 
 ## Activarlas y crear los planes
 
+Antes de activarlas, pide a tu equipo de apoyo que programe y compruebe la tarea diaria de suscripciones. Sin ella solo se genera el pedido inicial: no se crean las siguientes entregas ni se envían sus avisos de cobro. Esta preparación corresponde al equipo técnico; no se realiza desde el panel del emprendedor.
+
 En **Configuración > Suscripciones**:
 
 1. Cree al menos un plan con **+ Nuevo plan**:
@@ -35,6 +37,7 @@ Los botones **Subir** y **Bajar** cambian el orden de los planes en la tienda. U
 - En **Suscriptores** está la lista con su estado, el plan, el producto, la próxima entrega y el pedido por pagar, si tiene uno. Se puede filtrar por estado y por plan, buscar por nombre, correo o producto, o ver solo a quienes tienen un pedido por pagar.
 - En **Ventas**, los pedidos de una suscripción llevan la marca **"Suscripción"** con la fecha de la entrega. Se preparan y despachan como los demás.
 - Si un cliente paga por transferencia, valide el pago en Ventas como siempre (Pendiente → Pagado). Con eso la suscripción avanza a la entrega siguiente.
+- El aviso de cada próxima entrega incluye **Pagar esta entrega**. Si vence sin pago, se cancela ese ciclo y la suscripción continúa con el siguiente. Si nunca se paga la primera entrega, la suscripción no se activa y queda cancelada; el cliente recibe el aviso y puede suscribirse de nuevo.
 
 ## Productos exclusivos
 

@@ -967,7 +967,7 @@ function CheckoutContenido() {
                     <div className="checkout-resumen-lineas">
                         {itemsCarrito.length > 0 ? itemsCarrito.map((item) => (
                             <div className="checkout-resumen-linea" key={`${item.id}|${item.sku}`}>
-                                <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
+                                <span>{`${item.nombre} (x${item.cantidad})`}</span><span>{`$${(item.precio * item.cantidad).toLocaleString('es-CL')}`}</span>
                             </div>
                         )) : <p>No hay productos</p>}
                     </div>
@@ -987,7 +987,7 @@ function CheckoutContenido() {
                     </div>
 
                     <div className="checkout-totales">
-                        <div className="checkout-total-linea"><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
+                        <div className="checkout-total-linea"><span>Subtotal:</span><span>{`$${subtotal.toLocaleString('es-CL')}`}</span></div>
 
                         {montoDescontado > 0 && (
                             <div className="checkout-total-linea checkout-total-linea--descuento">
@@ -1011,7 +1011,7 @@ function CheckoutContenido() {
                                     <>
                                         {costoEnvio > 0 && (
                                             <del className="checkout-precio-anterior">
-                                                ${costoEnvio.toLocaleString('es-CL')}
+                                                {`$${costoEnvio.toLocaleString('es-CL')}`}
                                             </del>
                                         )}
                                         <span className="checkout-envio-gratis">
@@ -1022,7 +1022,7 @@ function CheckoutContenido() {
                             </span>
                         </div>
 
-                        <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+                        <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>{`$${totalFinal.toLocaleString('es-CL')}`}</span></div>
                         {proximoAutomatico && subtotal > 0 && (
                             <p className="checkout-ayuda" role="status">
                                 Agrega ${(Number(proximoAutomatico.monto_minimo) - subtotal).toLocaleString('es-CL')} más y obtén{' '}

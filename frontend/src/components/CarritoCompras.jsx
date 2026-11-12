@@ -153,7 +153,8 @@ const CarritoCompras = () => {
                                     <p className="carrito-item-nombre">{item.nombre}</p>
 
                                     <p className="carrito-item-precio">
-                                        ${(Number(item.precio) * item.cantidad).toLocaleString('es-CL')}
+                                        {/* Un solo texto: con la página traducida, React lo reemplaza entero */}
+                                        {`$${(Number(item.precio) * item.cantidad).toLocaleString('es-CL')}`}
                                     </p>
 
                                     <div className="carrito-item-acciones">
@@ -209,7 +210,7 @@ const CarritoCompras = () => {
                         <div className="carrito-panel-pie">
                             <div className="carrito-total">
                                 <span>Total:</span>
-                                <span>${total.toLocaleString('es-CL')}</span>
+                                <span>{`$${total.toLocaleString('es-CL')}`}</span>
                             </div>
                             <Link to="/checkout" onClick={() => setIsOpen(false)} className="boton boton-primario carrito-pagar">
                                 Ir a Pagar

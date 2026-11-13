@@ -76,3 +76,51 @@ class ActualizarBannersApplicationTests(TestCase):
         for item in [{'titulo': 'Murales'}, {'ref': 'otro', 'titulo': 'Murales'}, {'ref': 'nuevo:4', 'titulo': 'Murales'}]:
             with self.subTest(item=item), self.assertRaises(EstructuraBannerInvalida):
                 self.caso_de_uso.ejecutar(1, [item], [])
+
+class VideoEnManifiestoTests(TestCase):
+    def test_asocia_video_con_imagen_nueva(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        video = object()
+        ActualizarBanners(repo).ejecutar(1, [{'ref': 'nuevo:0', 'titulo': 'Video', 'video_indice': 0}],
+                                         [object()], [video])
+        self.assertEqual(repo.guardar_banners.call_args.kwargs['nuevos_videos'], [video])
+        self.assertEqual(repo.guardar_banners.call_args.kwargs['asociaciones'], {'nuevo:0': 0})
+
+    def test_rechaza_video_sin_imagen_asociada(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        with self.assertRaises(EstructuraBannerInvalida):
+            ActualizarBanners(repo).ejecutar(1, [], [], [object()])
+        repo.guardar_banners.assert_not_called()
+
+    def test_rechaza_video_asociado_a_foto_existente(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        with self.assertRaises(EstructuraBannerInvalida):
+            ActualizarBanners(repo).ejecutar(1, [{'ref': 'id:1', 'titulo': 'Video', 'video_indice': 0}],
+                                             [], [object()])
+        repo.guardar_banners.assert_not_called()
+
+    def test_rechaza_referencias_repetidas(self):
+        casos = [
+            ['nuevo:0', 'nuevo:0'],
+            ['id:3', 'id:3'],
+            ['id:3', 3],
+            ['id:legacy', 'legacy'],
+            ['nuevo:0', 'nuevo:00'],
+        ]
+
+        for orden in casos:
+            with self.subTest(orden=orden):
+                repositorio = FakeRepositorioBanners()
+                caso_uso = ActualizarBanners(repositorio)
+
+                with self.assertRaises(EstructuraBannerInvalida):
+                    caso_uso.ejecutar(
+                        configuracion_id=1,
+                        raw_orden=orden,
+                        nuevos_archivos=['archivo1'],
+                    )
+
+                self.assertEqual(repositorio.llamadas, [])

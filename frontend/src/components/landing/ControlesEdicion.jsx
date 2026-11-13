@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import { CAMPOS_TEXTO } from '../../hooks/useEdicionLanding';
+import { MAX_DIAPOSITIVAS_BANNER } from '../../constants/banner';
 
 // Texto de la landing editable en su lugar: hereda el estilo del elemento que reemplaza (clase) y tiene una
 // etiqueta visible, para que se sepa qué se está editando
@@ -72,6 +73,8 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
   const error = edicion?.errores?.banner;
   const total = banners.length;
   const [estado, setEstado] = useState('');
+  const [videoPendiente, setVideoPendiente] = useState(null);
+  const [portadaPendiente, setPortadaPendiente] = useState(null);
   const botones = useRef({});
 
   const mover = (idx, cambio) => {
@@ -93,7 +96,7 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
         id={id}
         type="file"
         multiple
-        disabled={total >= 10}
+        disabled={total >= MAX_DIAPOSITIVAS_BANNER}
         accept="image/jpeg,image/png,image/webp"
         className="visualmente-oculto"
         aria-describedby={error ? `${id}-error` : undefined}
@@ -107,11 +110,35 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
 
       <div className="portada-editor-fotos">
         <div className="portada-editor-cabecera">
-          <label htmlFor={id} className={`boton-edicion${total >= 10 ? ' boton-edicion--deshabilitado' : ''}`}>
-            {total === 0 ? 'Subir imagen de portada' : total >= 10 ? 'Límite de 10 fotos alcanzado' : 'Subir más fotos al banner'}
+          <label htmlFor={id} className={`boton-edicion${total >= MAX_DIAPOSITIVAS_BANNER ? ' boton-edicion--deshabilitado' : ''}`}>
+            {total === 0 ? 'Subir imagen de portada' : total >= MAX_DIAPOSITIVAS_BANNER ? `Límite de ${MAX_DIAPOSITIVAS_BANNER} diapositivas alcanzado` : 'Subir más fotos al banner'}
           </label>
         </div>
 
+        <div className="portada-editor-video">
+          <label>
+            <input type="checkbox" checked={Boolean(edicion.videoBannerActivo)}
+              onChange={(e) => edicion.cambiarVideoBannerActivo(e.target.checked)} />
+            Activar video en el banner
+          </label>
+          {edicion.videoBannerActivo && !banners.some((b) => b.video || b.videoArchivo) && total < MAX_DIAPOSITIVAS_BANNER && (
+            <div>
+              <label>Video MP4 (máximo 10 MB)
+                <input type="file" accept="video/mp4,.mp4" aria-label="Video MP4 del banner"
+                  onChange={(e) => setVideoPendiente(e.target.files?.[0] || null)} />
+              </label>
+              <label>Imagen de portada del video
+                <input type="file" accept="image/jpeg,image/png,image/webp"
+                  aria-label="Imagen de portada del video"
+                  onChange={(e) => setPortadaPendiente(e.target.files?.[0] || null)} />
+              </label>
+              <button type="button" className="boton-edicion" disabled={!videoPendiente || !portadaPendiente}
+                onClick={() => { edicion.agregarVideoBanner(videoPendiente, portadaPendiente); setVideoPendiente(null); setPortadaPendiente(null); }}>
+                Agregar video al carrusel
+              </button>
+            </div>
+          )}
+        </div>
         <p role="status" aria-live="polite" className="visualmente-oculto">{estado}</p>
 
         {total > 0 && (
@@ -125,6 +152,7 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
                     aria-label={`Editar textos de la foto ${idx + 1}`} aria-pressed={idx === edicion.fotoEditada}
                     onClick={() => edicion.seleccionarFoto(idx)}>
                     <img src={foto.imagen} alt="" className="portada-editor-miniatura" />
+                    {(foto.video || foto.videoArchivo) && <span aria-hidden="true">▶ Video</span>}
                   </button>
                   <span className="visualmente-oculto">Foto {idx + 1} de {total}</span>
                   <div className="portada-editor-acciones">

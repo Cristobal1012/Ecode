@@ -73,7 +73,8 @@ from ecommerce.domain.ventas import (
     ESTADOS_CON_ORDEN_TRANSPORTE, ESTADOS_PAGADOS, ErrorPedido, EstadoPedido, OrdenTransporteNoPermitida,
     TransicionNoPermitida,
 )
-from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
+from ecommerce.domain.banner import (EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos,
+    LimiteVideosBannerExcedido, VideoBannerInvalido)
 from ecommerce.domain.sobre_mi import (
     ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
     exigir_sobre_mi_disponible, fotos_sobre_mi, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
@@ -815,12 +816,15 @@ class ConfiguracionNegocioView(APIView):
                     ActualizarBanners(DjangoRepositorioBanners()).ejecutar(
                         config.id,
                         request.data.get('banner_orden'),
-                        request.FILES.getlist('banner_fotos')
+                        request.FILES.getlist('banner_fotos'),
+                        request.FILES.getlist('banner_videos')
                     )
         except (EstructuraBannerInvalida, TextosFotoInvalidos) as exc:
             return Response({'banner_orden': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
         except LimiteFotosBannerExcedido as exc:
             return Response({'banner_fotos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except (LimiteVideosBannerExcedido, VideoBannerInvalido) as exc:
+            return Response({'banner_videos': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
         except serializers.ValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 

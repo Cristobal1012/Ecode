@@ -88,6 +88,7 @@ class ConfiguracionGlobal(models.Model):
     # - fotos_completas: las fotos de productos se ven enteras dentro de su marco, sin recortarlas
     # - ficha_horizontal: la ficha del producto muestra la foto en un marco apaisado y más grande, con textos más chicos
     # - logo_grande: el logo del header se ve más grande en el computador (en el celular queda igual)
+    video_banner_activo = models.BooleanField(default=False)
     fotos_completas = models.BooleanField(default=False)
     ficha_horizontal = models.BooleanField(default=False)
     logo_grande = models.BooleanField(default=False)
@@ -172,6 +173,7 @@ class FotoBanner(models.Model):
 
     configuracion = models.ForeignKey(ConfiguracionGlobal, on_delete=models.CASCADE, related_name='fotos_banner')
     imagen = models.ImageField(upload_to='negocio/banners/')
+    video = models.FileField(upload_to='negocio/banners/videos/', blank=True, null=True)
     orden = models.PositiveSmallIntegerField(default=0)
     # Textos y botón propios de la foto (domain/banner.py): viajan con ella al reordenar
     antetitulo = models.CharField(max_length=LARGO_ANTETITULO_FOTO, blank=True, default='')

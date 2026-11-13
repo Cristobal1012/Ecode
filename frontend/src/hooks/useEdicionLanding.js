@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
 import { recargarConfiguracion } from './useConfiguracionTienda';
+import { MAX_DIAPOSITIVAS_BANNER } from '../constants/banner';
 
 // Lo que el admin edita en la landing (RF-01.1, RF-01.2). Los máximos son los del backend.
 export const CAMPOS_TEXTO = {
@@ -33,6 +34,7 @@ export const CAMPOS_IMAGEN = {
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
 const MAXIMO_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 10 * 1024 * 1024;
 
 const sinCampo = (objeto, campo) => {
   const copia = { ...objeto };
@@ -58,7 +60,7 @@ const textosDeFoto = (foto, conf) => (foto?.titulo
 
 export const obtenerBannersIniciales = (conf) => {
   if (conf?.banners && Array.isArray(conf.banners) && conf.banners.length > 0) {
-    return conf.banners.map((b, i) => ({ id: b.id, imagen: b.imagen, orden: b.orden ?? i, ...textosDeFoto(b, conf) }));
+    return conf.banners.map((b, i) => ({ id: b.id, imagen: b.imagen, video: b.video || null, orden: b.orden ?? i, ...textosDeFoto(b, conf) }));
   }
   if (conf?.banner || conf?.banner_url?.trim()) {
     return [{ id: 'legacy', imagen: conf.banner || conf.banner_url.trim(), orden: 0, ...textosDePortada(conf) }];
@@ -67,7 +69,7 @@ export const obtenerBannersIniciales = (conf) => {
 };
 
 // Lo que cuenta como cambio en el carrusel: el orden de las fotos y los textos de cada una
-const firmaBanners = (lista) => JSON.stringify(lista.map((b) => [b.id || b.imagen, b.antetitulo, b.titulo, b.texto, b.destino]));
+const firmaBanners = (lista) => JSON.stringify(lista.map((b) => [b.id || b.imagen, b.antetitulo, b.titulo, b.texto, b.destino, b.video || Boolean(b.videoArchivo)]));
 
 const textosDe = (configuracion) =>
   Object.fromEntries(Object.keys(CAMPOS_TEXTO).map((campo) => [campo, configuracion?.[campo] ?? '']));
@@ -81,7 +83,10 @@ const mismaSeleccion = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const erroresDe = (error) => {
   const datos = error?.response?.data;
   if (!datos || typeof datos !== 'object') return { general: 'No se pudieron guardar los cambios. Inténtalo de nuevo.' };
-  return Object.fromEntries(Object.entries(datos).map(([campo, mensajes]) => [campo, [].concat(mensajes).join(' ')]));
+  return Object.fromEntries(Object.entries(datos).map(([campo, mensajes]) => [
+    ['banner_orden', 'banner_fotos', 'banner_videos'].includes(campo) ? 'banner' : campo,
+    [].concat(mensajes).join(' '),
+  ]));
 };
 
 /**
@@ -94,6 +99,7 @@ export default function useEdicionLanding(configuracion) {
   const [textos, setTextos] = useState(null);
   const [imagenes, setImagenes] = useState({});
   const [banners, setBanners] = useState(null);
+  const [videoBannerActivo, setVideoBannerActivo] = useState(null);
   // La foto del carrusel que se está viendo y editando
   const [fotoEditada, setFotoEditada] = useState(0);
   const [destacados, setDestacados] = useState(null);
@@ -113,7 +119,8 @@ export default function useEdicionLanding(configuracion) {
 
   const destacadosCambiados = editando && destacados !== null && !mismaSeleccion(destacados, destacadosDe(configuracion));
   const menuCambiado = editando && JSON.stringify(menu) !== JSON.stringify(configuracion?.menu_principal || {});
-  const hayCambios = textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || bannersCambiados || destacadosCambiados || menuCambiado;
+  const videoCambiado = videoBannerActivo !== null && videoBannerActivo !== Boolean(configuracion?.video_banner_activo);
+  const hayCambios = videoCambiado || textosCambiados.length > 0 || Object.keys(imagenes).length > 0 || bannersCambiados || destacadosCambiados || menuCambiado;
 
   const liberarVistasPrevias = () => {
     vistasPrevias.current.forEach((url) => URL.revokeObjectURL(url));
@@ -126,6 +133,7 @@ export default function useEdicionLanding(configuracion) {
   const iniciar = () => {
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setVideoBannerActivo(Boolean(configuracion?.video_banner_activo));
     setFotoEditada(0);
     setDestacados(destacadosDe(configuracion));
     setMenu(configuracion?.menu_principal || {});
@@ -173,7 +181,8 @@ export default function useEdicionLanding(configuracion) {
     setMensaje('');
   };
 
-  const MAX_FOTOS_BANNER = 10;
+  // Las fotos y el video comparten el máximo de diapositivas (domain/banner.py)
+  const MAX_FOTOS_BANNER = MAX_DIAPOSITIVAS_BANNER;
 
   const agregarFotosBanner = (nuevosArchivos) => {
     const lista = Array.from(nuevosArchivos || []);
@@ -220,6 +229,39 @@ export default function useEdicionLanding(configuracion) {
       const baseActual = actual ?? obtenerBannersIniciales(configuracion);
       return [...baseActual, ...agregados];
     });
+    setErrores((actual) => sinCampo(actual, 'banner'));
+    setMensaje('');
+  };
+
+  const agregarVideoBanner = (videoArchivo, portadaArchivo) => {
+    const base = banners ?? obtenerBannersIniciales(configuracion);
+    if (base.length >= MAX_DIAPOSITIVAS_BANNER) {
+      setErrores((actual) => ({ ...actual, banner: `El carrusel admite como máximo ${MAX_DIAPOSITIVAS_BANNER} diapositivas.` }));
+      return;
+    }
+    if (base.some((foto) => foto.video || foto.videoArchivo)) {
+      setErrores((actual) => ({ ...actual, banner: 'El carrusel admite como máximo un video.' }));
+      return;
+    }
+    if (!videoArchivo || videoArchivo.type !== 'video/mp4' || !/\.mp4$/i.test(videoArchivo.name)) {
+      setErrores((actual) => ({ ...actual, banner: 'El video debe ser MP4 (.mp4).' }));
+      return;
+    }
+    if (!videoArchivo.size || videoArchivo.size > MAX_VIDEO_BYTES) {
+      setErrores((actual) => ({ ...actual, banner: 'El video debe pesar entre 1 byte y 10 MB.' }));
+      return;
+    }
+    if (!portadaArchivo || !TIPOS_IMAGEN.includes(portadaArchivo.type) || !portadaArchivo.size || portadaArchivo.size > MAXIMO_BYTES) {
+      setErrores((actual) => ({ ...actual, banner: 'El video necesita una imagen de portada JPEG, PNG o WebP de hasta 5 MB.' }));
+      return;
+    }
+    const vistaPrevia = URL.createObjectURL(portadaArchivo);
+    vistasPrevias.current.add(vistaPrevia);
+    setBanners([...base, {
+      id: `nuevo_video_${Date.now()}`, archivo: portadaArchivo, videoArchivo,
+      imagen: vistaPrevia, vistaPrevia, video: null, ...textosDePortada(textos),
+    }]);
+    setFotoEditada(base.length);
     setErrores((actual) => sinCampo(actual, 'banner'));
     setMensaje('');
   };
@@ -296,6 +338,7 @@ export default function useEdicionLanding(configuracion) {
     setImagenes({});
     setTextos(textosDe(configuracion));
     setBanners(obtenerBannersIniciales(configuracion));
+    setVideoBannerActivo(Boolean(configuracion?.video_banner_activo));
     setFotoEditada(0);
     setDestacados(destacadosDe(configuracion));
     setMenu(configuracion?.menu_principal || {});
@@ -342,26 +385,30 @@ export default function useEdicionLanding(configuracion) {
         Object.entries(imagenes).filter(([campo, { archivo }]) => campo !== 'banner' && !archivo).map(([campo]) => [campo, null]));
       const textosNuevos = Object.fromEntries(textosCambiados.map((campo) => [campo, textos[campo]]));
       if (menuCambiado) textosNuevos.menu_principal = menu;
+      if (videoCambiado) textosNuevos.video_banner_activo = videoBannerActivo;
 
       // Banners
       const bannersActuales = banners ?? obtenerBannersIniciales(configuracion);
       const nuevosArchivosBanner = bannersActuales.filter((b) => b.archivo).map((b) => b.archivo);
+      const nuevosVideosBanner = bannersActuales.filter((b) => b.videoArchivo).map((b) => b.videoArchivo);
       let manifestBanners = null;
       if (bannersCambiados) {
         // Cada foto viaja con su referencia y sus textos (application/banner.py)
         manifestBanners = bannersActuales.map((b) => ({
+          ...(b.videoArchivo ? { video_indice: nuevosVideosBanner.indexOf(b.videoArchivo) } : {}),
           ref: b.archivo ? `nuevo:${nuevosArchivosBanner.indexOf(b.archivo)}` : `id:${b.id}`,
           antetitulo: b.antetitulo, titulo: b.titulo, texto: b.texto, destino: b.destino,
         }));
       }
 
-      const hayArchivos = nuevas.length > 0 || nuevosArchivosBanner.length > 0;
+      const hayArchivos = nuevas.length > 0 || nuevosArchivosBanner.length > 0 || nuevosVideosBanner.length > 0;
       if (hayArchivos) {
         const formulario = new FormData();
         Object.entries(textosNuevos).forEach(([campo, valor]) => formulario.append(campo, typeof valor === 'object' ? JSON.stringify(valor) : valor));
         nuevas.forEach(([campo, { archivo }]) => formulario.append(campo, archivo));
         if (destacadosCambiados) formulario.append('destacados', JSON.stringify(destacados));
         nuevosArchivosBanner.forEach((arch) => formulario.append('banner_fotos', arch));
+        nuevosVideosBanner.forEach((arch) => formulario.append('banner_videos', arch));
         if (manifestBanners !== null) {
           formulario.append('banner_orden', JSON.stringify(manifestBanners));
         }
@@ -379,6 +426,7 @@ export default function useEdicionLanding(configuracion) {
       setImagenes({});
       setTextos(textosDe(guardada));
       setBanners(obtenerBannersIniciales(guardada));
+      setVideoBannerActivo(Boolean(guardada.video_banner_activo));
       setFotoEditada((actual) => Math.min(actual, Math.max(0, obtenerBannersIniciales(guardada).length - 1)));
       setDestacados(destacadosDe(guardada));
       setMenu(guardada?.menu_principal || {});
@@ -403,11 +451,13 @@ export default function useEdicionLanding(configuracion) {
         menu_principal: menu,
         ...Object.fromEntries(Object.entries(imagenes).map(([campo, { vistaPrevia }]) => [campo, vistaPrevia])),
         banners: listaBannersVista,
+        video_banner_activo: videoBannerActivo,
       }
     : configuracion;
 
   return {
     editando, vista, textos, destacados, menu, hayCambios, guardando, errores, mensaje,
+    videoBannerActivo, cambiarVideoBannerActivo: setVideoBannerActivo, agregarVideoBanner,
     banners: listaBannersVista,
     fotoEditada: Math.min(fotoEditada, Math.max(0, listaBannersVista.length - 1)),
     iniciar, cambiarTexto, cambiarImagen, agregarFotosBanner, reordenarFotosBanner, eliminarFotoBanner,

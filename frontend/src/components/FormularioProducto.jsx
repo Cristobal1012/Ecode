@@ -3,6 +3,10 @@ import clienteAxios from './auth/axiosConfig';
 import './FormularioProducto.css';
 import GaleriaImagenes from './GaleriaImagenes';
 import Spinner from './carga/Spinner';
+import CreatableSelect from 'react-select/creatable';
+import CampoEtiquetaProducto from './CampoEtiquetaProducto';
+import CampoExclusivoProducto from './CampoExclusivoProducto';
+import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
 
 const crearVarianteVacia = () => ({
   sku: '',
@@ -25,6 +29,11 @@ const leerProductoAEditar = (productoAEditar) => {
         nombre: '',
         descripcion: '',
         categoria: '',
+        colecciones: [],
+        etiqueta: '',
+        etiqueta_color: 'primary',
+        solo_suscriptores: false,
+        planes_suscripcion: [],
         publicado: false,
         coleccion_privada: false,
         version_a_la_venta: '',
@@ -74,6 +83,11 @@ const leerProductoAEditar = (productoAEditar) => {
       nombre: productoAEditar.nombre || '',
       descripcion: productoAEditar.descripcion || '',
       categoria: productoAEditar.categoria || '',
+      colecciones: productoAEditar.colecciones || [],
+      etiqueta: productoAEditar.etiqueta || '',
+      etiqueta_color: productoAEditar.etiqueta_color || 'primary',
+      solo_suscriptores: Boolean(productoAEditar.solo_suscriptores),
+      planes_suscripcion: productoAEditar.planes_suscripcion || [],
       publicado: productoAEditar.publicado !== undefined ? productoAEditar.publicado : false,
       coleccion_privada: Boolean(productoAEditar.coleccion_privada),
       version_a_la_venta: productoAEditar.version_a_la_venta || '',
@@ -96,6 +110,7 @@ export default function FormularioProducto({
   productoAEditar
 }) {
   const [inicial] = useState(() => leerProductoAEditar(productoAEditar));
+  const configuracion = useConfiguracionTienda();
   // Asocia cada etiqueta con su campo (WCAG 1.3.1); en las variantes se suma el índice
   const idFormulario = useId();
   const [producto, setProducto] = useState(inicial.producto);
@@ -118,6 +133,7 @@ export default function FormularioProducto({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
+  const [coleccionesExistentes, setColeccionesExistentes] = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [modoNuevaCategoria, setModoNuevaCategoria] = useState(false);
 
@@ -166,6 +182,29 @@ export default function FormularioProducto({
 
     cargarCategorias();
   }, [productoAEditar]);
+
+  useEffect(() => {
+    let vigente = true;
+    // El servidor aplica las reglas del dominio y excluye borradores e inactivos.
+    clienteAxios.get('catalogo/filtros/')
+      .then(({ data }) => {
+        if (vigente) {
+          setColeccionesExistentes((data?.colecciones || []).map(col => ({ value: col, label: col })));
+        }
+      })
+      .catch(() => {
+        if (vigente) setColeccionesExistentes([]);
+      });
+    return () => { vigente = false; };
+  }, [productoAEditar]);
+
+  const handleColeccionesChange = (valoresSeleccionados) => {
+    setProducto({
+      ...producto,
+      // extraemos solo los 'value' de los objetos seleccionados
+      colecciones: valoresSeleccionados ? valoresSeleccionados.map(op => op.value) : []
+    });
+  };
 
   // ============================================================
   // CAMBIOS DEL PRODUCTO
@@ -425,6 +464,13 @@ export default function FormularioProducto({
         nombre: producto.nombre.trim(),
         descripcion: producto.descripcion.trim(),
         categoria: producto.categoria.trim(),
+        colecciones: producto.colecciones || [],
+        etiqueta: producto.etiqueta.trim(),
+        etiqueta_color: producto.etiqueta_color,
+        ...(configuracion?.suscripciones_activas ? {
+          solo_suscriptores: producto.solo_suscriptores,
+          planes_suscripcion: producto.planes_suscripcion,
+        } : {}),
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
 
@@ -446,10 +492,11 @@ export default function FormularioProducto({
       // EDITAR PRODUCTO
       // ========================================================
 
-      if (productoAEditar) {
+      if (productoAEditar || productoGuardadoId) {
         idProducto =
-          productoAEditar.id ||
-          productoAEditar._id;
+          productoGuardadoId ||
+          productoAEditar?.id ||
+          productoAEditar?._id;
 
         if (!idProducto) {
           throw new Error(
@@ -664,7 +711,7 @@ export default function FormularioProducto({
         Datos Generales
       </h4>
 
-      <div className="producto-campos"
+      <div className="producto-campos producto-campos--generales"
         style={{
           display: 'grid',
           gap: '20px',
@@ -813,6 +860,53 @@ export default function FormularioProducto({
           </div>
         </div>
 
+        {/* COLECCIONES */}
+        <div className="campo-coleccion-container">
+          <label htmlFor={`${idFormulario}-colecciones`} className="campo-coleccion-label">
+            Colecciones (Opcional)
+          </label>
+          
+          <CreatableSelect
+            inputId={`${idFormulario}-colecciones`}
+            isMulti
+            isClearable
+            placeholder="Ej: Cyber, Navidad..."
+            options={coleccionesExistentes}
+            isOptionSelected={(opcion, seleccionadas) => seleccionadas.some(
+              seleccionada => seleccionada.value.trim().toLowerCase() === opcion.value.trim().toLowerCase()
+            )}
+            isValidNewOption={(inputValue, seleccionadas, opciones) => {
+              const clave = inputValue.trim().toLowerCase();
+              return Boolean(clave) && ![...seleccionadas, ...opciones]
+                .some(opcion => opcion.value.trim().toLowerCase() === clave);
+            }}
+            value={(producto.colecciones || []).map(col => ({ value: col, label: col }))}
+            onChange={handleColeccionesChange}
+            noOptionsMessage={() => "Escribe para crear una nueva colección"}
+            formatCreateLabel={(inputValue) => `Crear colección "${inputValue}"`}
+            className="campo-coleccion-select"
+            classNamePrefix="campo-coleccion"
+            // Como los demás campos (inputStyle): borde de control con contraste 3:1 y texto AA en las 8 paletas.
+            // var(--color-border) es para separadores y no llegaba a 3:1 (WCAG 1.4.11)
+            styles={{
+              control: (base, { isFocused }) => {
+                const borde = isFocused ? 'var(--color-primary)' : 'var(--color-control-border)';
+                return {
+                  ...base, backgroundColor: 'var(--color-surface)', borderColor: borde, '&:hover': { borderColor: borde },
+                  boxShadow: isFocused ? '0 0 0 1px var(--color-primary)' : 'none',
+                };
+              },
+              placeholder: (base) => ({ ...base, color: 'var(--color-muted)' }),
+              input: (base) => ({ ...base, color: 'var(--color-text)' }),
+              menu: (base) => ({ ...base, backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }),
+            }}
+          />
+          
+          <small className="campo-coleccion-ayuda">
+            Agrupa productos en campañas sin cambiar su categoría principal.
+          </small>
+        </div>
+
         {/* DESCRIPCIÓN */}
 
         <div
@@ -921,6 +1015,12 @@ export default function FormularioProducto({
           }
         />
       </div>
+
+      <CampoEtiquetaProducto etiqueta={producto.etiqueta} color={producto.etiqueta_color}
+        onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
+      <CampoExclusivoProducto activo={Boolean(configuracion?.suscripciones_activas)}
+        exclusivo={producto.solo_suscriptores} planes={producto.planes_suscripcion}
+        onChange={cambios => setProducto(actual => ({ ...actual, ...cambios }))} disabled={cargando} />
 
       {/* ======================================================
           ATRIBUTOS GLOBALES
@@ -1177,8 +1277,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
                   required
                 />
               </div>
@@ -1208,8 +1306,7 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
-                  step="0.01"
+                  
                 />
               </div>
 
@@ -1238,7 +1335,6 @@ export default function FormularioProducto({
                     )
                   }
                   style={inputStyle}
-                  min="0"
                   required
                 />
               </div>
@@ -1305,8 +1401,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="0.1"
-                  step="0.1"
                   required
                 />
               </div>
@@ -1341,8 +1435,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1377,8 +1469,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>
@@ -1413,8 +1503,6 @@ export default function FormularioProducto({
                     marginTop: '2px',
                     padding: '6px'
                   }}
-                  min="1"
-                  step="1"
                   required
                 />
               </div>

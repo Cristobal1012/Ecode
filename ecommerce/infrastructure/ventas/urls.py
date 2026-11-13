@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from .views import LinkifyWebhookAPIView
+from . import views_suscripciones as suscripciones
+from . import views_cumpleanos as cumpleanos
 
 # Todo lo que esté aquí, Django le pondrá '/api/configuracion/' antes
 configuracion_urlpatterns = [
@@ -123,6 +125,30 @@ ventas_urlpatterns = [
     # Llaves de cada courier (RNF-03): GET enmascaradas y PUT para cargarlas o reemplazarlas
     path('admin/couriers/', views.AdminCouriersView.as_view(), name='admin-couriers'),
     path('admin/couriers/<str:codigo>/', views.AdminCourierView.as_view(), name='admin-courier'),
+    # Suscripciones (pedido de un cliente, opcional): planes públicos y sus opciones, suscribirse, Mis suscripciones
+    # (acciones y cambios) y pagar un pedido pendiente propio (el aviso de cobro de cada ciclo)
+    path('suscripciones/planes/', suscripciones.PlanesPublicosView.as_view(), name='suscripciones-planes'),
+    path('suscripciones/planes/<int:pk>/opciones/', suscripciones.OpcionesPlanView.as_view(),
+         name='suscripciones-plan-opciones'),
+    path('suscripciones/', suscripciones.SuscribirseView.as_view(), name='suscripciones'),
+    path('suscripciones/mias/', suscripciones.MisSuscripcionesView.as_view(), name='suscripciones-mias'),
+    path('suscripciones/beneficios/', suscripciones.BeneficiosView.as_view(), name='suscripciones-beneficios'),
+    path('suscripciones/acceso-exclusivos/', suscripciones.AccesoExclusivosView.as_view(),
+         name='suscripciones-acceso-exclusivos'),
+    path('suscripciones/<int:pk>/', suscripciones.SuscripcionView.as_view(), name='suscripcion'),
+    path('suscripciones/<int:pk>/<str:accion>/', suscripciones.AccionSuscripcionView.as_view(),
+         name='suscripcion-accion'),
+    path('mis-pedidos/<int:pk>/pagar/', suscripciones.PagarPedidoView.as_view(), name='pagar-pedido'),
+    # Panel: planes (GET/POST, PUT/DELETE uno, PUT el orden) y suscriptores con filtros
+    path('admin/suscripciones/planes/', suscripciones.AdminPlanesView.as_view(), name='admin-suscripciones-planes'),
+    path('admin/suscripciones/planes/orden/', suscripciones.AdminOrdenPlanesView.as_view(),
+         name='admin-suscripciones-planes-orden'),
+    path('admin/suscripciones/planes/<int:pk>/', suscripciones.AdminPlanView.as_view(),
+         name='admin-suscripciones-plan'),
+    path('admin/suscripciones/', suscripciones.AdminSuscripcionesView.as_view(), name='admin-suscripciones'),
+    path('admin/suscripciones/cumpleanos/', cumpleanos.AdminCumpleanosView.as_view(), name='admin-cumpleanos'),
+    path('admin/suscripciones/cumpleanos/<int:usuario_id>/regalo/',
+         cumpleanos.AdminRegaloCumpleanosView.as_view(), name='admin-regalo-cumpleanos'),
     # Ruta para las consultas y notificaciones de Linkify
     path('webhooks/linkify/', LinkifyWebhookAPIView.as_view(), name='webhook-linkify'),
 ]

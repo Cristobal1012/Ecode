@@ -101,8 +101,13 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
   };
 
   const encontrarVariante = (atributos) => {
-    if (variantes.length === 0 || nombresAtributos.length === 0) {
+    if (variantes.length === 0) {
       return null;
+    }
+
+    // Una única opción sin atributos no requiere una selección del comprador.
+    if (nombresAtributos.length === 0) {
+      return variantes.length === 1 ? variantes[0] : null;
     }
 
     const todosSeleccionados = nombresAtributos.every(
@@ -301,13 +306,16 @@ function VariantSelector({ producto, onAgregarAlCarrito }) {
         className="boton boton-primario selector-variantes-agregar"
       >
         {agregando && <Spinner />}
-        {agregando
-          ? 'Verificando stock...'
-          : stockTotal === 0
-            ? 'Agotado'
-            : stockDisponibleParaAgregar === 0
-              ? 'Agotado (en tu carrito)'
-              : 'Agregar al carrito'}
+        {/* En su propio elemento: con la página traducida por el navegador, React cambia el texto entero */}
+        <span>
+          {agregando
+            ? 'Verificando stock...'
+            : stockTotal === 0
+              ? 'Agotado'
+              : stockDisponibleParaAgregar === 0
+                ? 'Agotado (en tu carrito)'
+                : 'Agregar al carrito'}
+        </span>
       </button>
 
       {mensaje && (

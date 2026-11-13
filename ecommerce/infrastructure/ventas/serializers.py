@@ -39,6 +39,8 @@ from ecommerce.domain.promociones import (
 )
 from ecommerce.domain.menu import MenuInvalido, normalizar_menu_principal
 from ecommerce.domain.sobre_mi import NombreSobreMiInvalido, normalizar_nombre_sobre_mi
+from ecommerce.domain.suscripciones import descuento_suscriptor, validar_dias_aviso
+from ecommerce.application.suscripciones import BeneficiosCompra, beneficios_de
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoNoDisponible, plazo_pago_transferencia
 from ecommerce.domain.ventas import (
     ErrorPedido, EventoPedido, ItemSolicitado, OrdenTransporteNoPermitida, SubtotalDesactualizado,
@@ -70,6 +72,15 @@ def precio_envio(proveedor, origen, destino, paquete):
 def medios_pago():
     """RN-02: medios habilitados y configurados por el admin (las pruebas pueden reemplazarlo)."""
     return MediosPagoDisponibles(DjangoRepositorioMediosPago())
+
+
+def beneficios_del_comprador(request) -> BeneficiosCompra:
+    """Lo que da en el checkout la suscripción activa del comprador; nada sin sesión o con el módulo apagado."""
+    from .repositorio_suscripciones import DjangoRepositorioSuscripciones, suscripciones_activas_en_tienda
+    usuario = getattr(request, 'user', None)
+    if not (usuario and usuario.is_authenticated and suscripciones_activas_en_tienda()):
+        return BeneficiosCompra()
+    return beneficios_de(DjangoRepositorioSuscripciones(), usuario.id)
 
 
 def entregas_de_la_tienda():
@@ -159,6 +170,8 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'instrucciones_entrega_coordinada',
             'couriers',
             'cotizaciones_activas',
+            # Suscripciones (pedido de un cliente): activas, el menú muestra "Suscripción"
+            'suscripciones_activas',
             # Blog o portafolio: activo, el enlace del menú lleva a /blog con este nombre
             'blog_activo',
             'blog_nombre',
@@ -228,7 +241,8 @@ class ImagenNegocioField(ArchivoImagenField):
         return ContentFile(imagen.contenido, name=f'{uuid.uuid4().hex}.{imagen.extension}')
 
 
-CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM)
+CAMPOS_IMAGEN_NEGOCIO = ('logo', 'favicon', 'banner', 'nosotros_imagen', *CAMPOS_FOTOS_INSTAGRAM, 'sobre_mi_foto_1',
+                         'sobre_mi_foto_2')
 
 
 class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
@@ -244,6 +258,9 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
     instagram_foto_4 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_5 = ImagenNegocioField(required=False, allow_null=True)
     instagram_foto_6 = ImagenNegocioField(required=False, allow_null=True)
+    # Fotos de la página Sobre mí (pedido de un cliente, opcionales)
+    sobre_mi_foto_1 = ImagenNegocioField(required=False, allow_null=True)
+    sobre_mi_foto_2 = ImagenNegocioField(required=False, allow_null=True)
     # El título de la portada: el mismo límite que el panel (en el modelo es un TextField sin límite)
     texto_bienvenida = serializers.CharField(max_length=300, required=False)
     texto_landing = serializers.CharField(max_length=1000, required=False, allow_blank=True)
@@ -298,11 +315,17 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'costo_entrega_coordinada',
             'instrucciones_entrega_coordinada',
             'cotizaciones_activas',
+            'suscripciones_activas',
+            'suscripciones_dias_aviso',
             'blog_activo',
             'blog_nombre',
             'sobre_mi_activo',
             'sobre_mi_nombre',
             'sobre_mi_biografia',
+            'sobre_mi_foto_1',
+            'sobre_mi_foto_1_alt',
+            'sobre_mi_foto_2',
+            'sobre_mi_foto_2_alt',
             'resenas_activas',
             'vitrina_modo',
             'destacados_titulo',
@@ -330,6 +353,13 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
         try:
             return normalizar_orden_categorias(valor)
         except OrdenCategoriasInvalido as error:
+            raise serializers.ValidationError(str(error)) from error
+
+    def validate_suscripciones_dias_aviso(self, valor):
+        # Las reglas viven en domain/suscripciones.py
+        try:
+            return validar_dias_aviso(valor)
+        except ValueError as error:
             raise serializers.ValidationError(str(error)) from error
 
     def validate_menu_principal(self, valor):
@@ -526,7 +556,9 @@ class RevisionCarritoSerializer(serializers.Serializer):
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
                  for i in self.validated_data['items']]
         lineas = RevisarCarrito(catalogo_variantes()).ejecutar(items)
-        return {
+        from .acceso_exclusivos import AVISO_EXCLUSIVO, ids_sin_acceso
+        restringidos = ids_sin_acceso(self.validated_data['items'], getattr(self.context.get('request'), 'user', None))
+        resultado = {
             'valido': all(linea.problema is None for linea in lineas),
             'items': [{
                 'producto_mongo_id': linea.producto_id,
@@ -539,6 +571,11 @@ class RevisionCarritoSerializer(serializers.Serializer):
                 'mensaje': linea.mensaje,
             } for linea in lineas],
         }
+        for linea in resultado['items']:
+            if linea['producto_mongo_id'] in restringidos:
+                linea.update(problema='SUSCRIPCION_REQUERIDA', mensaje=AVISO_EXCLUSIVO, disponible=0)
+                resultado['valido'] = False
+        return resultado
 
 class DatosEmpresaSerializer(serializers.Serializer):
     """Compra como empresa: los obligatorios y el RUT los valida el dominio (domain/empresa.py)."""
@@ -761,6 +798,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'direccion_envio_snapshot': error_direccion})
 
         # RN-03: stock por variante y precios del catálogo, no los del navegador
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(data['items'], getattr(request, 'user', None))
         items = [ItemSolicitado(i['producto_mongo_id'], i['variante_sku'], i['cantidad'])
                  for i in data['items']]
         try:
@@ -789,6 +828,8 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(validated_data['items'], getattr(self.context.get('request'), 'user', None))
         request = self.context.get('request')
         validated_data.pop('acepta_terminos')
         validated_data.pop('items')
@@ -844,7 +885,15 @@ class OrdenCompraSerializer(serializers.ModelSerializer):
                 costo_envio = 0.0
         validated_data['promocion'] = promo_aplicada
 
-        # El total siempre lo calcula el servidor: (subtotal - descuento) + envío cotizado
+        # Suscriptor con una suscripción activa (pedido de un cliente, opcional): su descuento sobre lo que queda
+        # después del cupón o la promoción, y envío gratis si su plan lo da en todas sus compras
+        beneficios = beneficios_del_comprador(request)
+        descuento += float(descuento_suscriptor(Decimal(str(max(0.0, subtotal_num - descuento))),
+                                                beneficios.descuento))
+        if beneficios.envio_gratis:
+            costo_envio = 0.0
+
+        # El total siempre lo calcula el servidor: (subtotal - descuentos) + envío cotizado; nunca negativo (RF-04.1)
         validated_data['costo_envio'] = costo_envio
         validated_data['total_final'] = max(0.0, (subtotal_num - descuento) + costo_envio)
         # La orden de transporte se genera con el mismo paquete que se cotizó
@@ -926,6 +975,9 @@ class AgregarItemSerializer(serializers.Serializer):
         if not producto:
             raise serializers.ValidationError({"producto_mongo_id": "El producto solicitado no existe en el catalogo."})
 
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos([data], getattr(self.context.get('request'), 'user', None))
+
         variante_encontrada = producto.variantes.filter(sku=sku).first()
         if not variante_encontrada:
             raise serializers.ValidationError({"variante_sku": "La variante especificada no existe para este producto."})
@@ -968,6 +1020,8 @@ class AdminOrdenCompraSerializer(serializers.ModelSerializer):
             'motivo_cancelacion', 'transiciones_permitidas', 'numero_seguimiento_tracking',
             'error_orden_transporte', 'puede_generar_orden_transporte',
             'documento_requerido', 'documento_por_emitir', 'folio_documento', 'folio_nota_credito',
+            # Pedido de un ciclo de una suscripción: el panel lo marca (vacíos en las compras normales)
+            'suscripcion', 'ciclo_fecha',
         ]
         read_only_fields = fields
 
@@ -1152,8 +1206,19 @@ def courier_para_panel(courier):
         'ayuda': courier.ayuda,
         'configuradas': credenciales.configuradas,
         'faltantes': credenciales.faltantes,
-        'campos': [{'nombre': campo.nombre, 'etiqueta': campo.etiqueta, 'obligatorio': campo.obligatorio}
-                   for campo in credenciales.campos],
+        # Igual que los campos de un medio de pago (medio_pago_para_panel)
+        'campos': [{
+            'nombre': campo.nombre,
+            'etiqueta': campo.etiqueta,
+            # True: llave de API, llega enmascarada
+            'secreto': campo.secreto,
+            'opciones': list(campo.opciones),
+            'obligatorio': campo.obligatorio,
+            # Ej. ['ambiente', 'PRODUCCION']: obligatorio solo con ese valor
+            'obligatorio_si': list(campo.obligatorio_si) if campo.obligatorio_si else None,
+            # 'rut' o 'digitos' (lo valida el servidor); el panel elige el teclado
+            'formato': campo.formato,
+        } for campo in credenciales.campos],
         'datos': credenciales.visibles(),
     }
 

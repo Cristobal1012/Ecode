@@ -1,6 +1,9 @@
 """Reglas de ordenamiento del catálogo, independientes de Django."""
 
 LARGO_NOMBRE_CATEGORIA = 100
+LARGO_ETIQUETA_PRODUCTO = 20
+# Se guardan roles de la paleta, nunca colores libres; al cambiar el tema se conservan.
+COLORES_ETIQUETA_PRODUCTO = ('primary', 'secondary', 'accent', 'text')
 
 
 class OrdenCategoriasInvalido(ValueError):
@@ -64,3 +67,26 @@ def validar_obra_no_es_version_de_otra(
         raise ColeccionPrivadaInvalida(
             f'No se puede marcar como colección privada porque está asignada como versión a la venta de "{nombre_referenciador}".'
         )
+
+def limpiar_colecciones(colecciones_brutas):
+    """
+    Limpia, normaliza y elimina duplicados de la lista de colecciones
+    ingresadas en el formulario o recibidas por la API (sin distinguir mayúsculas/minúsculas).
+    """
+    if not colecciones_brutas:
+        return []
+
+    vistas = set()
+    resultado = []
+
+    for col in colecciones_brutas:
+        if isinstance(col, str):
+            col_limpia = col.strip()
+            if col_limpia:
+                col_key = col_limpia.lower()
+                if col_key not in vistas:
+                    vistas.add(col_key)
+                    resultado.append(col_limpia)
+
+    return resultado
+

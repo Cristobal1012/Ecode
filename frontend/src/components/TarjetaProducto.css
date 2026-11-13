@@ -36,24 +36,6 @@
   color: var(--color-muted);
 }
 
-.tarjeta-producto-etiqueta {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 5px 10px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.tarjeta-producto-etiqueta--agotado {
-  background: var(--color-text);
-  color: var(--color-background);
-}
-
 .tarjeta-producto-categoria {
   font-size: 0.7rem;
   font-weight: 500;
@@ -172,4 +154,20 @@
    recortarla; los bordes que sobran quedan con el color de acento del tema */
 :root[data-fotos='completas'] .tarjeta-producto-imagen img {
   object-fit: contain;
+}
+.producto-exclusivo-aviso {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.producto-exclusivo-aviso a {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.producto-exclusivo-acceso {
+  color: var(--color-text);
 }

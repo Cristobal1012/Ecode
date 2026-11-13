@@ -304,6 +304,36 @@ describe('LandingPage', () => {
     // Nunca desaparece: está en un solo lugar
     expect(screen.getAllByRole('img', { name: 'Logo de la Universidad Autónoma' })).toHaveLength(1);
   });
+
+  it('mientras carga la configuración no muestra el logo de la Universidad en ningún lado, para no ponerlo arriba en una tienda que lo tiene abajo (RN-01)', async () => {
+    let entregar;
+    responder();
+    const respuestaNormal = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => (url === 'configuracion/'
+      ? new Promise((resolver) => { entregar = resolver; })
+      : respuestaNormal(url)));
+    await renderLandingConFooter();
+
+    expect(screen.queryByRole('img', { name: 'Logo de la Universidad Autónoma' })).not.toBeInTheDocument();
+
+    entregar({ data: { ...CONFIGURACION, ubicacion_logo_universidad: 'FOOTER' } });
+    const footer = await screen.findByRole('contentinfo');
+    await waitFor(() => expect(within(footer).getByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .toBeInTheDocument());
+    expect(screen.getAllByRole('img', { name: 'Logo de la Universidad Autónoma' })).toHaveLength(1);
+  });
+
+  it('si la configuración no responde, el logo de la Universidad igual aparece en el header (RN-01)', async () => {
+    responder();
+    const respuestaNormal = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => (url === 'configuracion/'
+      ? Promise.reject(new Error('sin conexión')) : respuestaNormal(url)));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await renderLanding();
+
+    expect(await within(screen.getByRole('banner')).findByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .toBeInTheDocument();
+  });
 });
 
 describe('LandingPage en modo edición (RF-01.1)', () => {
@@ -420,7 +450,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledTimes(1);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar'], ocultos: ['sobre_mi']
+      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'], ocultos: ['sobre_mi']
     } });
     expect(config.texto_boton_ingreso).toBe('Ver piezas');
     cleanup();
@@ -480,7 +510,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros'], ocultos: ['nosotros']
+      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros', 'suscripcion'], ocultos: ['nosotros']
     } });
   });
 
@@ -783,6 +813,38 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
       destacados: [{ tipo: 'PRODUCTO', id: 'p1' }, { tipo: 'PUBLICACION', id: '7' }, { tipo: 'PRODUCTO', id: 'p3' },
         { tipo: 'PUBLICACION', id: '9' }],
     }));
+  });
+
+  it('al guardar el cambio de "Más vendidos" a Destacados, la landing los muestra sin recargar la página', async () => {
+    localStorage.setItem('rol', 'ADMIN');
+    // El servidor guarda lo que llega y la vitrina responde según el modo guardado
+    let config = { ...CONFIGURACION, vitrina_modo: 'MAS_VENDIDOS', destacados: [] };
+    const vitrina = () => (config.vitrina_modo === 'DESTACADOS'
+      ? { mas_vendidos: [], recientes: [], destacados_titulo: 'Destacados', destacados: [
+        { tipo: 'PRODUCTO', id: 'p1', nombre: 'Retrato', categoria: 'Arte', imagen: null,
+          enlace: '/catalogo/producto/p1', variantes: [{ sku: 'p1-1', precio: 30000, stock: 1 }] }] }
+      : { mas_vendidos: [producto('a', 'Jarrón')], recientes: [] });
+    getMock.mockImplementation((url) => Promise.resolve({ data: {
+      'configuracion/': config, 'catalogo/vitrina/': vitrina(), 'catalogo/productos/?todos=true': PRODUCTOS_PANEL,
+      'ventas/admin/blog/': PUBLICACIONES_PANEL,
+    }[url] ?? [] }));
+    patchMock.mockImplementation(async (_, datos) => { config = { ...config, ...datos }; return { data: config }; });
+
+    await renderLanding();
+    expect(await screen.findByRole('region', { name: 'Más vendidos' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Destacados/ }));
+    await screen.findByText('Tus destacados (0 de 4)');
+    agregar('Retrato');
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await screen.findByText(/Cambios guardados/);
+    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+
+    const seccion = await screen.findByRole('region', { name: 'Destacados' });
+    expect(within(seccion).getByRole('link', { name: /Retrato/ })).toHaveAttribute('href', '/catalogo/producto/p1');
+    expect(screen.queryByRole('region', { name: 'Más vendidos' })).not.toBeInTheDocument();
+    // Una vez al abrir y otra al guardar: no se pide de nuevo por cada recarga de la configuración
+    expect(getMock.mock.calls.filter(([url]) => url === 'catalogo/vitrina/')).toHaveLength(2);
   });
 
   it('ordena con Subir y Bajar sin perder el foco, quita y guarda el nuevo orden', async () => {

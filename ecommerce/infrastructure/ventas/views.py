@@ -76,7 +76,7 @@ from ecommerce.domain.ventas import (
 from ecommerce.domain.banner import EstructuraBannerInvalida, LimiteFotosBannerExcedido, TextosFotoInvalidos
 from ecommerce.domain.sobre_mi import (
     ProyectosSobreMiInvalidos, SobreMiNoDisponible, construir_contacto_sobre_mi,
-    exigir_sobre_mi_disponible, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
+    exigir_sobre_mi_disponible, fotos_sobre_mi, muestra_proyectos_sobre_mi, validar_ids_proyectos_sobre_mi,
 )
 from ecommerce.domain.blog import LimiteFotosExcedido, PublicacionInvalida
 from ecommerce.domain.cotizaciones import CotizacionInvalida
@@ -147,6 +147,7 @@ from .couriers import CODIGOS_COURIERS, DjangoRepositorioCredencialesCourier
 from .couriers.chilexpress import ChilexpressCourier
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
 from .repositorio_ordenes import DjangoRepositorioOrdenes
+from .servicio_suscripciones import al_pagar_pedido
 
 
 def inventario_variantes():
@@ -187,8 +188,9 @@ def solicitar_cotizacion():
 
 
 def confirmar_pago():
+    # Si el pedido es el de un ciclo de una suscripción, al pagarse la suscripción avanza (al_pagar_pedido)
     return ConfirmarPago(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
-                         notificador_pedidos())
+                         notificador_pedidos(), al_pagar_pedido)
 
 def pasarela_mercado_pago():
     return pasarela(CodigoMedioPago.MERCADO_PAGO)
@@ -223,7 +225,7 @@ def sincronizar_orden_con_mercadopago(orden):
 
 def cambiar_estado_pedido():
     return CambiarEstadoPedido(DjangoRepositorioOrdenes(), inventario_variantes(), generar_orden_transporte(),
-                               notificador_pedidos())
+                               notificador_pedidos(), al_pagar_pedido)
 
 
 class PaginacionPedidos(PageNumberPagination):
@@ -412,6 +414,10 @@ class CarritoAPIView(APIView):
     def post(self, request):
         carrito, created = Carrito.objects.get_or_create(usuario=request.user)
         items = request.data.get('items', [])
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            return Response({'items': ['Envía una lista de productos.']}, status=status.HTTP_400_BAD_REQUEST)
+        from .acceso_exclusivos import exigir_acceso_productos
+        exigir_acceso_productos(items, request.user)
         for item in items:
             p_id = item.get('producto_mongo_id') or item.get('producto_id') or item.get('id')
             if p_id:
@@ -435,7 +441,7 @@ class ValidarCarritoView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RevisionCarritoSerializer(data=request.data)
+        serializer = RevisionCarritoSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         return Response(serializer.revisar())
 
@@ -1505,6 +1511,11 @@ class SobreMiPublicoView(APIView):
                 context={'request': request},
             ).data,
             'contacto': contacto,
+            'fotos': fotos_sobre_mi([
+                (request.build_absolute_uri(foto.url) if foto else None, alt)
+                for foto, alt in ((configuracion.sobre_mi_foto_1, configuracion.sobre_mi_foto_1_alt),
+                                  (configuracion.sobre_mi_foto_2, configuracion.sobre_mi_foto_2_alt))
+            ]),
         })
 
 

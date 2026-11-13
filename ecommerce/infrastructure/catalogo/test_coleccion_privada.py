@@ -5,14 +5,22 @@ from rest_framework.test import APITestCase
 
 from ecommerce.infrastructure.catalogo.documents import Producto, Variante
 from ecommerce.infrastructure.catalogo.repositorio_variantes import MongoCatalogoVariantes
+from ecommerce.infrastructure.catalogo.tests import usar_mongo_de_prueba
 from ecommerce.infrastructure.usuarios.models import Usuario
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal
 from ecommerce.infrastructure.ventas.tests import habilitar_medios_pago
 
 
 class ColeccionPrivadaTests(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Producto en una base Mongo temporal: el catálogo de la base real nunca se toca (AGENTS.md §11)
+        usar_mongo_de_prueba(cls)
+
     def setUp(self):
-        Producto.drop_collection()
+        # Sin drop_collection(): borra la colección de la base real aunque Producto esté ligado a la temporal
+        Producto._get_collection().delete_many({})
         habilitar_medios_pago('TRANSFERENCIA')
         ConfiguracionGlobal.objects.update_or_create(
             pk=1,
@@ -30,7 +38,7 @@ class ColeccionPrivadaTests(APITestCase):
         )
 
     def tearDown(self):
-        Producto.drop_collection()
+        Producto._get_collection().delete_many({})
 
     def autenticar_admin(self):
         self.client.force_authenticate(user=self.admin)

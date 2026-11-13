@@ -210,6 +210,7 @@ class SobreMiTests(APITestCase):
         self.assertEqual(respuesta.data, {
             'nombre': 'Mi historia', 'biografia': '<p>Diseñamos productos personalizados.</p>',
             'proyectos': [], 'contacto': {'telefono': '+56912345678', 'correo': 'contacto@example.test', 'instagram': 'tiendaqa'},
+            'fotos': [],
         })
         self.como_admin()
         self.assertEqual(self.client.get(reverse('admin-sobre-mi-proyectos')).data, {'proyectos': []})

@@ -940,3 +940,192 @@
 .orden-catalogo-lista li { margin: 16px 0; overflow-wrap: anywhere; }
 .orden-catalogo-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .orden-catalogo-acciones button { min-height: 44px; max-width: 100%; white-space: normal; }
+
+/* ---------- Suscripciones (pedido de un cliente, opcional): planes, formulario y suscriptores ---------- */
+
+.config-secciones .plan-lista-titulo,
+.config-secciones .plan-formulario-titulo {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.plan-formulario {
+  max-width: 760px;
+}
+
+.plan-resumen {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.plan-elegibles,
+.plan-elegibles-grupo {
+  min-width: 0;
+}
+
+.plan-elegibles-grupo legend {
+  font-weight: 500;
+}
+
+.plan-casillas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 20px;
+}
+
+/* La lista de productos puede ser larga: se recorre dentro de su recuadro */
+.plan-casillas--productos {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--color-control-border);
+  border-radius: 4px;
+  grid-template-columns: 1fr;
+}
+
+.plan-casillas .admin-casilla {
+  overflow-wrap: anywhere;
+}
+
+.suscriptores-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.suscriptores-buscar {
+  grid-column: span 2;
+}
+
+.suscriptores-buscar-fila {
+  display: flex;
+  gap: 8px;
+}
+
+.suscriptores-buscar-fila input {
+  flex: 1;
+  min-width: 0;
+}
+
+.suscriptores-pendiente {
+  grid-column: 1 / -1;
+}
+
+.suscriptores-total {
+  min-height: 1.5em;
+  margin: 0 0 12px;
+}
+
+.pedido-suscripcion {
+  display: block;
+  width: max-content;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .suscriptores-buscar {
+    grid-column: 1 / -1;
+  }
+}
+
+.config-secciones .plan-item-titulo {
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+}
+.cumpleanos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.cumpleanos-lista dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.cumpleanos-lista dt {
+  font-weight: 600;
+}
+
+.cumpleanos-regalo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.cumpleanos-regalo input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}
+
+/* ---------- Renombrar o unir categorías (RF-03.2) ---------- */
+
+.categorias-lista {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.categorias-item {
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.categorias-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.categorias-nombre {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.categorias-fila .boton,
+.categorias-formulario .boton {
+  padding: 0.7rem 1.25rem;
+}
+
+.categorias-formulario {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* ---------- Fotos de Sobre mí (pedido de un cliente) ---------- */
+
+.sobre-mi-fotos-panel {
+  min-width: 0;
+}
+
+.sobre-mi-fotos-panel-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 20px;
+}
+
+.sobre-mi-foto-panel {
+  min-width: 0;
+}
+
+.admin-contenido .sobre-mi-foto-vista {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--color-secondary);
+}

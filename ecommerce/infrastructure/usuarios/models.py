@@ -54,6 +54,8 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     rol = models.CharField(max_length=20, choices=ROLES, default='COMPRADOR')
     google_sso_id = models.CharField(max_length=255, blank=True, null=True)
     acepta_cookies = models.BooleanField(default=False)
+    cumpleanos_dia = models.PositiveSmallIntegerField(null=True, blank=True)
+    cumpleanos_mes = models.PositiveSmallIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
@@ -61,6 +63,16 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nombre', 'apellido_paterno', 'apellido_materno']
+
+    class Meta:
+        constraints = [models.CheckConstraint(
+            condition=(models.Q(cumpleanos_dia__isnull=True, cumpleanos_mes__isnull=True) | (
+                models.Q(cumpleanos_dia__isnull=False, cumpleanos_mes__isnull=False,
+                         cumpleanos_dia__gte=1, cumpleanos_dia__lte=31,
+                         cumpleanos_mes__gte=1, cumpleanos_mes__lte=12)
+                & ~models.Q(cumpleanos_mes__in=[4, 6, 9, 11], cumpleanos_dia=31)
+                & ~models.Q(cumpleanos_mes=2, cumpleanos_dia__gte=30))),
+            name='usuario_cumpleanos_valido')]
 
     def __str__(self):
         return f"{self.nombre} {self.apellido_paterno} ({self.rol}) - {self.email}"

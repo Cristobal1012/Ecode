@@ -3,8 +3,10 @@
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 import math
+import re
 import unicodedata
 
+from .empresa import normalizar_rut
 from .medios_pago import enmascarar
 
 
@@ -216,11 +218,55 @@ class Sucursal:
     direccion: str = ''
 
 
+# Ambientes de un courier: con las llaves del sandbox o con las del contrato de la tienda
+AMBIENTE_PRUEBAS = 'PRUEBAS'
+AMBIENTE_PRODUCCION = 'PRODUCCION'
+
+# Cómo se valida un dato del courier; vacío = texto libre
+FORMATO_RUT = 'rut'
+FORMATO_DIGITOS = 'digitos'
+
+
+def rut_sin_digito(rut: str) -> str:
+    """'76.123.456-0' -> '76123456': los couriers piden el RUT sin puntos ni dígito verificador."""
+    return re.sub(r'\D', '', str(rut or '').rsplit('-', 1)[0])
+
+
+def _normalizar(formato: str, valor: str) -> str:
+    """El valor listo para guardar; ValueError con el mensaje para el admin si no tiene el formato."""
+    if formato == FORMATO_RUT:
+        return normalizar_rut(valor)
+    if formato == FORMATO_DIGITOS:
+        if not valor.isdigit():
+            raise ValueError('Usa solo números, sin puntos ni guiones.')
+    return valor
+
+
 @dataclass(frozen=True)
 class CampoCredencial:
     nombre: str
     etiqueta: str
     obligatorio: bool = False
+    # Llave de API: se guarda cifrada y el panel solo ve sus últimos 4 caracteres. False para datos que la tienda
+    # necesita leer, como el ambiente o el número de cliente
+    secreto: bool = True
+    # Valores permitidos (vacío = texto libre)
+    opciones: tuple[str, ...] = ()
+    # Con obligatorio=True, lo es solo si otro campo tiene cierto valor, ej. ('ambiente', AMBIENTE_PRODUCCION),
+    # igual que en los medios de pago (el panel lo calcula del mismo modo)
+    obligatorio_si: tuple[str, str] | None = None
+    # FORMATO_*; vacío = texto libre
+    formato: str = ''
+    # Lo que vale si el admin no lo cargó (ej. el ambiente de pruebas)
+    por_defecto: str = ''
+
+    def es_obligatorio(self, valores: dict[str, str]) -> bool:
+        if not self.obligatorio:
+            return False
+        if self.obligatorio_si is None:
+            return True
+        campo, valor = self.obligatorio_si
+        return valores.get(campo) == valor
 
 
 class CredencialesInvalidas(Exception):
@@ -245,37 +291,62 @@ class CredencialesCourier:
         return cls(tuple(campos), tuple((campo.nombre, str(valores.get(campo.nombre) or '')) for campo in campos))
 
     def valor(self, nombre: str) -> str:
-        return dict(self.valores).get(nombre, '')
+        """Lo cargado o, si está vacío, el valor por defecto del campo."""
+        guardado = dict(self.valores).get(nombre, '')
+        campo = next((c for c in self.campos if c.nombre == nombre), None)
+        return guardado or (campo.por_defecto if campo else '')
 
     def como_dict(self) -> dict[str, str]:
+        """Lo que se guarda: solo lo que cargó el admin, sin los valores por defecto."""
         return dict(self.valores)
+
+    def _efectivos(self) -> dict[str, str]:
+        return {campo.nombre: self.valor(campo.nombre) for campo in self.campos}
 
     @property
     def faltantes(self) -> list[str]:
-        return [campo.nombre for campo in self.campos if campo.obligatorio and not self.valor(campo.nombre)]
+        efectivos = self._efectivos()
+        return [campo.nombre for campo in self.campos
+                if campo.es_obligatorio(efectivos) and not efectivos[campo.nombre]]
 
     @property
     def configuradas(self) -> bool:
         return not self.faltantes
 
     def visibles(self) -> dict[str, str]:
-        """Para el panel del admin: solo los últimos 4 caracteres de cada llave."""
-        return {campo.nombre: enmascarar(self.valor(campo.nombre)) for campo in self.campos}
+        """Para el panel del admin: de las llaves, solo los últimos 4 caracteres; los demás datos, completos."""
+        return {campo.nombre: enmascarar(self.valor(campo.nombre)) if campo.secreto else self.valor(campo.nombre)
+                for campo in self.campos}
 
     def con_cambios(self, datos: dict[str, str]) -> 'CredencialesCourier':
         """Combina lo que envía el panel con lo guardado: una llave que llega enmascarada (tal como el panel la
-        mostró) o que no llega se conserva; un texto vacío la borra.
+        mostró) o que no llega se conserva; un texto vacío la borra. Un valor fuera de las opciones del campo o con
+        otro formato se rechaza.
         """
         nombres = {campo.nombre for campo in self.campos}
         errores = {nombre: 'Campo desconocido.' for nombre in datos if nombre not in nombres}
+        guardados = dict(self.valores)
+        valores = {}
+        for campo in self.campos:
+            actual = guardados.get(campo.nombre, '')
+            if campo.nombre not in datos:
+                valores[campo.nombre] = actual
+                continue
+            valor = str(datos[campo.nombre] or '').strip()
+            if campo.secreto and valor and valor == enmascarar(actual):
+                valores[campo.nombre] = actual
+                continue
+            if valor and campo.opciones and valor not in campo.opciones:
+                errores[campo.nombre] = f"Debe ser una de: {', '.join(campo.opciones)}."
+                continue
+            if valor and campo.formato:
+                try:
+                    valor = _normalizar(campo.formato, valor)
+                except ValueError as error:
+                    errores[campo.nombre] = str(error)
+                    continue
+            # El panel reenvía el valor por defecto que mostró: no se guarda, para que siga al por defecto
+            valores[campo.nombre] = '' if valor == campo.por_defecto else valor
         if errores:
             raise CredencialesInvalidas(errores)
-        valores = {}
-        for nombre in nombres:
-            actual = self.valor(nombre)
-            if nombre not in datos:
-                valores[nombre] = actual
-                continue
-            valor = str(datos[nombre] or '').strip()
-            valores[nombre] = actual if valor and valor == enmascarar(actual) else valor
         return CredencialesCourier.con(self.campos, valores)

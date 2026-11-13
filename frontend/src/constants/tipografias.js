@@ -6,8 +6,8 @@ import cormorantLatin from '@fontsource-variable/cormorant-garamond/files/cormor
 import cormorantLatinExt from '@fontsource-variable/cormorant-garamond/files/cormorant-garamond-latin-ext-wght-normal.woff2?url';
 import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
 import interLatinExt from '@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2?url';
-import playfairLatin from '@fontsource-variable/playfair-display/files/playfair-display-latin-wght-normal.woff2?url';
-import playfairLatinExt from '@fontsource-variable/playfair-display/files/playfair-display-latin-ext-wght-normal.woff2?url';
+import oswaldLatin from '@fontsource-variable/oswald/files/oswald-latin-wght-normal.woff2?url';
+import oswaldLatinExt from '@fontsource-variable/oswald/files/oswald-latin-ext-wght-normal.woff2?url';
 import sourceSansLatin from '@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url';
 import sourceSansLatinExt from '@fontsource-variable/source-sans-3/files/source-sans-3-latin-ext-wght-normal.woff2?url';
 import dmSerifLatin from '@fontsource/dm-serif-display/files/dm-serif-display-latin-400-normal.woff2?url';
@@ -16,8 +16,8 @@ import dmSansLatin from '@fontsource-variable/dm-sans/files/dm-sans-latin-wght-n
 import dmSansLatinExt from '@fontsource-variable/dm-sans/files/dm-sans-latin-ext-wght-normal.woff2?url';
 import manropeLatin from '@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2?url';
 import manropeLatinExt from '@fontsource-variable/manrope/files/manrope-latin-ext-wght-normal.woff2?url';
-import frauncesLatin from '@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2?url';
-import frauncesLatinExt from '@fontsource-variable/fraunces/files/fraunces-latin-ext-wght-normal.woff2?url';
+import fredokaLatin from '@fontsource-variable/fredoka/files/fredoka-latin-wght-normal.woff2?url';
+import fredokaLatinExt from '@fontsource-variable/fredoka/files/fredoka-latin-ext-wght-normal.woff2?url';
 import nunitoLatin from '@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2?url';
 import nunitoLatinExt from '@fontsource-variable/nunito/files/nunito-latin-ext-wght-normal.woff2?url';
 
@@ -33,19 +33,20 @@ const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 const FUENTES = {
   cormorant: { latin: cormorantLatin, latinExt: cormorantLatinExt, pesos: '300 700', respaldo: SERIF },
   inter: { latin: interLatin, latinExt: interLatinExt, pesos: '100 900', respaldo: SANS },
-  playfair: { latin: playfairLatin, latinExt: playfairLatinExt, pesos: '400 900', respaldo: SERIF },
+  oswald: { latin: oswaldLatin, latinExt: oswaldLatinExt, pesos: '200 700', respaldo: SANS },
   sourceSans: { latin: sourceSansLatin, latinExt: sourceSansLatinExt, pesos: '200 900', respaldo: SANS },
   dmSerif: { latin: dmSerifLatin, latinExt: dmSerifLatinExt, pesos: '400', respaldo: SERIF },
   dmSans: { latin: dmSansLatin, latinExt: dmSansLatinExt, pesos: '100 1000', respaldo: SANS },
   manrope: { latin: manropeLatin, latinExt: manropeLatinExt, pesos: '200 800', respaldo: SANS },
-  fraunces: { latin: frauncesLatin, latinExt: frauncesLatinExt, pesos: '100 900', respaldo: SERIF },
+  fredoka: { latin: fredokaLatin, latinExt: fredokaLatinExt, pesos: '300 700', respaldo: SANS },
   nunito: { latin: nunitoLatin, latinExt: nunitoLatinExt, pesos: '200 1000', respaldo: SANS },
 };
 
 // Los tamaños del diseño están calibrados con Cormorant (títulos) e Inter (texto). "ajuste" es el size-adjust de
 // cada fuente (medido el 2026-10-18 en el navegador): en los títulos iguala el ancho de Cormorant, para que la
 // portada y los títulos corten igual; en el texto iguala la altura de la x de Inter, que es lo que hace cómoda la
-// lectura. Así ninguna combinación descuadra el diseño.
+// lectura. Así ninguna combinación descuadra el diseño. Oswald y Fredoka se midieron el 2026-11-09 con el mismo método
+// (reemplazaron a Playfair y Fraunces, que se parecían demasiado a la Editorial).
 export const TIPOGRAFIAS = [
   {
     id: 1,
@@ -56,9 +57,9 @@ export const TIPOGRAFIAS = [
   },
   {
     id: 2,
-    nombre: 'Clásica',
-    descripcion: 'Contraste marcado, estilo revista',
-    titulos: { fuente: 'playfair', nombre: 'Playfair Display', ajuste: 0.87 },
+    nombre: 'Urbana',
+    descripcion: 'Condensada y firme',
+    titulos: { fuente: 'oswald', nombre: 'Oswald', ajuste: 1.03 },
     texto: { fuente: 'sourceSans', nombre: 'Source Sans 3', ajuste: 1.09 },
   },
   {
@@ -78,8 +79,8 @@ export const TIPOGRAFIAS = [
   {
     id: 5,
     nombre: 'Cercana',
-    descripcion: 'Cálida y amable',
-    titulos: { fuente: 'fraunces', nombre: 'Fraunces', ajuste: 0.83 },
+    descripcion: 'Redondeada y amable',
+    titulos: { fuente: 'fredoka', nombre: 'Fredoka', ajuste: 0.87 },
     texto: { fuente: 'nunito', nombre: 'Nunito', ajuste: 1.09 },
   },
 ];

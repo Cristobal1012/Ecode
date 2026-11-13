@@ -144,6 +144,28 @@ describe('DetalleProducto', () => {
       ?.remove();
   });
 
+  it('muestra la etiqueta propia en la ficha', async () => {
+    getMock.mockResolvedValue({ data: { ...productoEjemplo, etiqueta: 'Edición limitada', etiqueta_color: 'accent' } });
+    renderDetalle();
+    expect(await screen.findByText('Edición limitada')).toHaveClass('tarjeta-producto-etiqueta--accent');
+  });
+
+  it('en la ficha sustituye la etiqueta por Agotado cuando no hay stock', async () => {
+    getMock.mockResolvedValue({ data: { ...productoEjemplo, etiqueta: 'Últimas unidades',
+      variantes: [{ sku: 'SIN-STOCK', precio: 10000, stock: 0 }] } });
+    renderDetalle();
+    expect(await screen.findByText('Agotado')).toBeInTheDocument();
+    expect(screen.queryByText('Últimas unidades')).not.toBeInTheDocument();
+  });
+
+  it('la colección privada muestra su etiqueta en la ficha sin Agotado', async () => {
+    getMock.mockResolvedValue({ data: { ...productoEjemplo, etiqueta: 'Obra única', coleccion_privada: true,
+      variantes: [] } });
+    renderDetalle();
+    expect(await screen.findByText('Obra única')).toBeInTheDocument();
+    expect(screen.queryByText('Agotado')).not.toBeInTheDocument();
+  });
+
   it('muestra el estado de carga inicialmente', () => {
     getMock.mockReturnValue(new Promise(() => {}));
 

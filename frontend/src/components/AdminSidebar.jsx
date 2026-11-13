@@ -21,6 +21,13 @@ const ICONOS = {
   resenas: (
     <path d="M12 2.5l2.94 5.96 6.56.95-4.75 4.63 1.12 6.54L12 17.5l-5.87 3.08 1.12-6.54L2.5 9.41l6.56-.95z" />
   ),
+  suscriptores: (
+    <>
+      <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </>
+  ),
+  cumpleanos: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 11h18" /></>,
   blog: (
     <>
       <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
@@ -47,6 +54,9 @@ const VISTAS = [
   { id: 'ventas', nombre: 'Ventas' },
   { id: 'cotizaciones', nombre: 'Cotizaciones' },
   { id: 'resenas', nombre: 'Reseñas' },
+  // Suscripciones (pedido de un cliente, opcional): solo con el módulo activo
+  { id: 'suscriptores', nombre: 'Suscriptores', visible: (configuracion) => Boolean(configuracion?.suscripciones_activas) },
+  { id: 'cumpleanos', nombre: 'Cumpleaños del mes', visible: (configuracion) => Boolean(configuracion?.suscripciones_activas) },
   { id: 'blog', nombre: 'Blog' },
   { id: 'configuracion', nombre: 'Configuración' },
   { id: 'paginas', nombre: 'Páginas legales' }
@@ -78,7 +88,7 @@ export default function AdminSidebar({
       </div>
 
       <nav className="admin-nav" aria-label="Secciones del panel">
-        {VISTAS.map(({ id, nombre }) => (
+        {VISTAS.filter(({ visible }) => !visible || visible(configuracion)).map(({ id, nombre }) => (
           <button
             key={id}
             type="button"

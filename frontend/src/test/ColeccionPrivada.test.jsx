@@ -14,6 +14,7 @@ vi.mock('../components/auth/axiosConfig', () => ({
     put: vi.fn(),
   },
 }));
+vi.mock('../hooks/useConfiguracionTienda', () => ({ default: () => ({ suscripciones_activas: false }) }));
 
 describe('Colección privada (SCRUM-197)', () => {
   afterEach(() => {
@@ -135,6 +136,7 @@ describe('Colección privada (SCRUM-197)', () => {
 
     it('permite activar colección privada, seleccionar versión y personalizar texto', async () => {
       clienteAxios.get.mockResolvedValueOnce({ data: catalogo });
+      clienteAxios.get.mockResolvedValueOnce({ data: { colecciones: [] } });
 
       render(
         <MemoryRouter>

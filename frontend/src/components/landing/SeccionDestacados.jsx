@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { obtenerDatosPrecioYStock } from '../../utils/precios';
+import EtiquetaProducto from '../EtiquetaProducto';
 import { Cargando } from '../carga/Esqueleto';
 import { EsqueletoTarjetas } from '../carga/EsqueletosTienda';
 // La etiqueta, la categoría y el precio usan los mismos estilos que las tarjetas de "Más vendidos"
@@ -60,7 +61,6 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
   const esProducto = destacado.tipo === 'PRODUCTO';
   const esColeccionPrivada = esProducto && Boolean(destacado.coleccion_privada);
   const precio = (esProducto && !esColeccionPrivada) ? obtenerDatosPrecioYStock(destacado.variantes) : null;
-  const etiqueta = esColeccionPrivada ? null : precio?.agotado ? 'Agotado' : precio?.tieneOferta ? 'Oferta' : null;
 
   return (
     <Link to={destacado.enlace} className="tarjeta-destacado">
@@ -73,11 +73,7 @@ function TarjetaDestacado({ destacado, nombreBlog }) {
         ) : (
           <span className="tarjeta-destacado-sin-imagen" aria-hidden="true">{destacado.nombre?.charAt(0)}</span>
         )}
-        {etiqueta && (
-          <span className={`tarjeta-producto-etiqueta${precio?.agotado ? ' tarjeta-producto-etiqueta--agotado' : ''}`}>
-            {etiqueta}
-          </span>
-        )}
+        {esProducto && <EtiquetaProducto producto={destacado} />}
       </div>
 
       {/* Sobre el nombre: la categoría del producto o el nombre del blog, para que los nombres queden alineados */}

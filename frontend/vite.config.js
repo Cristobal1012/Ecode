@@ -5,11 +5,14 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
 
+  //Configuración del entorno de pruebas
   test: {
     include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     clearMocks: true,
+    testTimeout: 10000,
+    hookTimeout: 10000,
 
     coverage: {
       provider: 'v8',

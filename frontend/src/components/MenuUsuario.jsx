@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clienteAxios from './auth/axiosConfig';
 
-const MenuUsuario = () => {
+// `suscripciones`: la tienda ofrece suscripciones (pedido de un cliente, opcional); lo indica el header
+const MenuUsuario = ({ suscripciones = false }) => {
     const botonRef = useRef(null);
     const [isOpen, setIsOpen] = useState(false);
     const [nombreUsuario, setNombreUsuario] = useState('Usuario');
@@ -81,6 +82,13 @@ const MenuUsuario = () => {
 
                     <ul className="menu-usuario-enlaces lista-sin-estilo">
                         <li><Link to="/mis-pedidos" onClick={() => setIsOpen(false)}>Mis pedidos</Link></li>
+                        {/* Suscripciones (pedido de un cliente, opcional): solo con el módulo activo */}
+                        {suscripciones && (
+                            <>
+                                <li><Link to="/mis-suscripciones" onClick={() => setIsOpen(false)}>Mis suscripciones</Link></li>
+                                <li><Link to="/mi-cumpleanos" onClick={() => setIsOpen(false)}>Mi cumpleaños</Link></li>
+                            </>
+                        )}
                         <li><Link to="/mis-direcciones" onClick={() => setIsOpen(false)}>Mis direcciones de envío</Link></li>
                         <li><Link to="/cambiar-contrasena" onClick={() => setIsOpen(false)}>Cambiar contraseña</Link></li>
                     </ul>

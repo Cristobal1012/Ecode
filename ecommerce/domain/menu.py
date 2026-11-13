@@ -1,8 +1,9 @@
 """Reglas de configuración del menú, independientes de Django y de la persistencia."""
 
-ORDEN_MENU = ('inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar')
+# 'suscripcion' (pedido de un cliente, opcional): solo se ve con el módulo de suscripciones activo
+ORDEN_MENU = ('inicio', 'catalogo', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion')
 ENLACES_MENU = frozenset(ORDEN_MENU)
-ENLACES_OCULTABLES = frozenset({'nosotros', 'sobre_mi', 'cotizar'})
+ENLACES_OCULTABLES = frozenset({'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'})
 ENLACES_RENOMBRABLES = frozenset({'catalogo'})
 MAXIMO_NOMBRE_CATALOGO = 20
 

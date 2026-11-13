@@ -816,17 +816,25 @@ a.instagram-foto:hover img {
   text-align: center;
 }
 
-/* Destacados (pedido de un cliente): tarjetas del doble de tamaño que las de "Más vendidos", con la foto apaisada:
-   dos por fila en el computador y la tablet, una en el celular */
+/* Destacados (pedido de un cliente): foto vertical como en el catálogo (pedido de Alan, 2026-11-13). En el computador
+   van todos en una fila (son hasta 4, domain/destacados.py) y centrados si son menos; en la tablet y el celular, dos
+   por fila como el catálogo */
 .grilla-destacados {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(20px, 3vw, 40px);
+  --separacion-destacados: clamp(20px, 3vw, 40px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--separacion-destacados);
 }
 
-@media (max-width: 639px) {
-  .grilla-destacados {
-    grid-template-columns: minmax(0, 1fr);
+.grilla-destacados > * {
+  flex: 0 0 calc((100% - 3 * var(--separacion-destacados)) / 4);
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .grilla-destacados > * {
+    flex-basis: calc((100% - var(--separacion-destacados)) / 2);
   }
 }
 
@@ -839,7 +847,7 @@ a.instagram-foto:hover img {
 
 .tarjeta-destacado-imagen {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--color-accent);
   margin-bottom: 18px;
@@ -879,8 +887,9 @@ a.instagram-foto:hover img {
   color: var(--color-muted);
 }
 
+/* Del tamaño del nombre en las tarjetas del catálogo (TarjetaProducto.css) */
 .tarjeta-destacado-nombre {
-  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-size: 1.3rem;
   margin: 0 0 8px;
 }
 
@@ -963,7 +972,7 @@ a.instagram-foto:hover img {
   align-items: center;
   justify-content: center;
   width: 56px;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--color-accent);
   color: var(--color-muted);

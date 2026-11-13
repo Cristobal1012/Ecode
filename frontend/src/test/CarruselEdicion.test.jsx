@@ -119,4 +119,69 @@ describe('Carrusel en el modo edición', () => {
     expect(screen.queryByLabelText('El botón lleva a')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Foto siguiente →' })).not.toBeInTheDocument();
   });
+
+  it('muestra los campos de video solo cuando está activado', async () => {
+    await editarLanding();
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Activar video en el banner',
+    });
+
+    // Inicialmente está desactivado.
+    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByLabelText('Video MP4 del banner')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Imagen de portada del video')).not.toBeInTheDocument();
+
+    // Al activarlo, aparecen los campos.
+    fireEvent.click(checkbox);
+
+    expect(checkbox).toBeChecked();
+    expect(screen.getByLabelText('Video MP4 del banner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Imagen de portada del video')).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: 'Agregar video al carrusel',
+    })).toBeDisabled();
+
+    // Al desactivarlo, los campos desaparecen.
+    fireEvent.click(checkbox);
+
+    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByLabelText('Video MP4 del banner')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Imagen de portada del video')).not.toBeInTheDocument();
+
+    // El checkbox sigue disponible.
+    expect(checkbox).toBeInTheDocument();
+  });
+
+  it('no permite agregar un segundo video al carrusel', async () => {
+    responder({
+      ...CONFIGURACION,
+      video_banner_activo: true,
+      banners: [
+        {
+          ...FOTOS[0],
+          video: '/media/banner.mp4',
+        },
+        FOTOS[1],
+      ],
+    });
+
+    await editarLanding();
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Activar video en el banner',
+    });
+
+    expect(checkbox).toBeChecked();
+
+    // Ya existe un video, por lo que no se ofrecen campos para otro.
+    expect(screen.queryByLabelText('Video MP4 del banner')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Imagen de portada del video')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: 'Agregar video al carrusel',
+    })).not.toBeInTheDocument();
+
+    // El video existente sigue representado en el editor.
+    expect(screen.getByText(/Video/)).toBeInTheDocument();
+  });
 });

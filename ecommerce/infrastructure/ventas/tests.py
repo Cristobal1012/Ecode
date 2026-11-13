@@ -1,8 +1,12 @@
 from decimal import Decimal
 from unittest.mock import patch
+import json
+import tempfile
 
 from django.test import override_settings
 from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
@@ -12,6 +16,7 @@ from ecommerce.domain.logistica import ErrorOrdenTransporte
 from ecommerce.domain.medios_pago import CodigoMedioPago, MedioPagoConfigurado
 from ecommerce.domain.ventas import VarianteCatalogo
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
+from ecommerce.infrastructure.ventas.models import FotoBanner
 
 from .models import ConfiguracionGlobal, DetalleOrden, OrdenCompra, PaginaLegal, ProveedorEnvio
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -1135,3 +1140,237 @@ class DireccionesEnvioTests(APITestCase):
                                     format='json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['region'], 'Metropolitana')
+
+class BannerVideoAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.configuracion = ConfiguracionGlobal.objects.create(
+            pk=1,
+            nombre_tienda='Tienda QA Video',
+            texto_bienvenida='Bienvenido a Tienda QA',
+        )
+        cls.admin = create_user(
+            'admin-video@example.test',
+            rol='ADMIN',
+        )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.admin)
+
+    def crear_video(self):
+        return SimpleUploadedFile(
+            'banner.mp4',
+            b'\x00\x00\x00\x18ftypisom' + b'\x00' * 100,
+            content_type='video/mp4',
+        )
+
+    def crear_imagen(self):
+        import io
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new('RGB', (100, 100), color='red').save(
+            buffer,
+            format='PNG',
+        )
+
+        return SimpleUploadedFile(
+            'portada.png',
+            buffer.getvalue(),
+            content_type='image/png',
+        )
+
+    def subir_video(self):
+        return self.client.put(
+            reverse('configuracion-negocio'),
+            {
+                'banner_orden': json.dumps([
+                    {
+                        'ref': 'nuevo:0',
+                        'titulo': 'Banner con video',
+                        'video_indice': 0,
+                    }
+                ]),
+                'banner_fotos': [self.crear_imagen()],
+                'banner_videos': [self.crear_video()],
+                'video_banner_activo': 'true',
+            },
+            format='multipart',
+        )
+
+    def test_admin_puede_subir_video_con_portada(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with override_settings(MEDIA_ROOT=carpeta):
+                response = self.client.put(
+                    reverse('configuracion-negocio'),
+                    {
+                        'banner_orden': json.dumps([
+                            {
+                                'ref': 'nuevo:0',
+                                'titulo': 'Banner con video',
+                                'video_indice': 0,
+                            }
+                        ]),
+                        'banner_fotos': [self.crear_imagen()],
+                        'banner_videos': [self.crear_video()],
+                        'video_banner_activo': 'true',
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    200,
+                    response.data,
+                )
+
+                foto = FotoBanner.objects.get(
+                    configuracion=self.configuracion
+                )
+
+                self.assertTrue(bool(foto.imagen))
+                self.assertTrue(bool(foto.video))
+                self.assertTrue(foto.video.name.endswith('.mp4'))
+
+                self.assertEqual(
+                    len(response.data['banners']),
+                    1,
+                )
+                self.assertIsNotNone(
+                    response.data['banners'][0]['video']
+                )
+
+    def test_admin_puede_reordenar_video(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with override_settings(MEDIA_ROOT=carpeta):
+                response = self.subir_video()
+                self.assertEqual(response.status_code, 200, response.data)
+
+                video = FotoBanner.objects.get(
+                    configuracion=self.configuracion
+                )
+                nombre_video = video.video.name
+
+                response = self.client.put(
+                    reverse('configuracion-negocio'),
+                    {
+                        'banner_orden': json.dumps([
+                            {
+                                'ref': 'nuevo:0',
+                                'titulo': 'Banner de imagen',
+                            },
+                            {
+                                'ref': f'id:{video.id}',
+                                'titulo': 'Banner con video',
+                            },
+                        ]),
+                        'banner_fotos': [self.crear_imagen()],
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(response.status_code, 200, response.data)
+
+                video.refresh_from_db()
+                self.assertEqual(video.orden, 1)
+                self.assertEqual(video.video.name, nombre_video)
+                self.assertEqual(
+                    FotoBanner.objects.filter(
+                        configuracion=self.configuracion
+                    ).count(),
+                    2,
+                )
+
+    def test_admin_puede_eliminar_video(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with override_settings(MEDIA_ROOT=carpeta):
+                response = self.subir_video()
+                self.assertEqual(response.status_code, 200, response.data)
+
+                video = FotoBanner.objects.get(
+                    configuracion=self.configuracion
+                )
+                video_id = video.id
+
+                response = self.client.put(
+                    reverse('configuracion-negocio'),
+                    {
+                        'banner_orden': '[]',
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(response.status_code, 200, response.data)
+
+                self.assertFalse(
+                    FotoBanner.objects.filter(
+                        id=video_id
+                    ).exists()
+                )
+                self.assertEqual(response.data['banners'], [])
+
+    def test_rechaza_segundo_video_en_banner(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with override_settings(MEDIA_ROOT=carpeta):
+                response = self.subir_video()
+                self.assertEqual(response.status_code, 200, response.data)
+
+                video_original = FotoBanner.objects.get(
+                    configuracion=self.configuracion
+                )
+                nombre_original = video_original.video.name
+
+                response = self.client.put(
+                    reverse('configuracion-negocio'),
+                    {
+                        'banner_orden': json.dumps([
+                            {'ref': f'id:{video_original.id}'},
+                            {'ref': 'nuevo:0', 'video_indice': 0},
+                        ]),
+                        'banner_fotos': [self.crear_imagen()],
+                        'banner_videos': [self.crear_video()],
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(response.status_code, 400, response.data)
+
+                self.assertEqual(
+                    FotoBanner.objects.filter(
+                        configuracion=self.configuracion
+                    ).count(),
+                    1,
+                )
+
+                video_original.refresh_from_db()
+                self.assertEqual(video_original.video.name, nombre_original)
+
+    def test_rechaza_video_mayor_a_10_mb(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with override_settings(MEDIA_ROOT=carpeta):
+                video_grande = SimpleUploadedFile(
+                    'video_grande.mp4',
+                    b'\x00\x00\x00\x18ftypisom'
+                    + b'\x00' * (10 * 1024 * 1024),
+                    content_type='video/mp4',
+                )
+
+                response = self.client.put(
+                    reverse('configuracion-negocio'),
+                    {
+                        'banner_orden': json.dumps([
+                            {'ref': 'nuevo:0', 'video_indice': 0}
+                        ]),
+                        'banner_fotos': [self.crear_imagen()],
+                        'banner_videos': [video_grande],
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(response.status_code, 400, response.data)
+
+                self.assertFalse(
+                    FotoBanner.objects.filter(
+                        configuracion=self.configuracion
+                    ).exists()
+                )

@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import { CAMPOS_TEXTO } from '../../hooks/useEdicionLanding';
+import { MAX_DIAPOSITIVAS_BANNER } from '../../constants/banner';
 
 // Texto de la landing editable en su lugar: hereda el estilo del elemento que reemplaza (clase) y tiene una
 // etiqueta visible, para que se sepa qué se está editando
@@ -95,7 +96,7 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
         id={id}
         type="file"
         multiple
-        disabled={total >= 10}
+        disabled={total >= MAX_DIAPOSITIVAS_BANNER}
         accept="image/jpeg,image/png,image/webp"
         className="visualmente-oculto"
         aria-describedby={error ? `${id}-error` : undefined}
@@ -109,8 +110,8 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
 
       <div className="portada-editor-fotos">
         <div className="portada-editor-cabecera">
-          <label htmlFor={id} className={`boton-edicion${total >= 10 ? ' boton-edicion--deshabilitado' : ''}`}>
-            {total === 0 ? 'Subir imagen de portada' : total >= 10 ? 'Límite de 10 fotos alcanzado' : 'Subir más fotos al banner'}
+          <label htmlFor={id} className={`boton-edicion${total >= MAX_DIAPOSITIVAS_BANNER ? ' boton-edicion--deshabilitado' : ''}`}>
+            {total === 0 ? 'Subir imagen de portada' : total >= MAX_DIAPOSITIVAS_BANNER ? `Límite de ${MAX_DIAPOSITIVAS_BANNER} diapositivas alcanzado` : 'Subir más fotos al banner'}
           </label>
         </div>
 
@@ -120,7 +121,7 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
               onChange={(e) => edicion.cambiarVideoBannerActivo(e.target.checked)} />
             Activar video en el banner
           </label>
-          {!banners.some((b) => b.video || b.videoArchivo) && total < 10 && (
+          {edicion.videoBannerActivo && !banners.some((b) => b.video || b.videoArchivo) && total < MAX_DIAPOSITIVAS_BANNER && (
             <div>
               <label>Video MP4 (máximo 10 MB)
                 <input type="file" accept="video/mp4,.mp4" aria-label="Video MP4 del banner"

@@ -1,13 +1,17 @@
 from unittest import TestCase
 
 from ecommerce.domain.banner import (
-    DESTINO_POR_DEFECTO, LARGO_ANTETITULO, LARGO_TEXTO, LARGO_TITULO, TextosFoto, TextosFotoInvalidos,
+    DESTINO_POR_DEFECTO,
+    LARGO_ANTETITULO,
+    LARGO_TEXTO,
+    LARGO_TITULO,
+    TextosFoto,
+    TextosFotoInvalidos,
     normalizar_textos_foto,
-)
-
-
-from ecommerce.domain.banner import (
-    MAX_VIDEO_BANNER_BYTES, LimiteVideosBannerExcedido, VideoBannerInvalido, validar_cantidad_videos_banner,
+    MAX_VIDEO_BANNER_BYTES,
+    LimiteVideosBannerExcedido,
+    VideoBannerInvalido,
+    validar_cantidad_videos_banner,
     validar_video_banner,
 )
 

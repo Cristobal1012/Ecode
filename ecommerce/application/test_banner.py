@@ -101,3 +101,26 @@ class VideoEnManifiestoTests(TestCase):
             ActualizarBanners(repo).ejecutar(1, [{'ref': 'id:1', 'titulo': 'Video', 'video_indice': 0}],
                                              [], [object()])
         repo.guardar_banners.assert_not_called()
+
+    def test_rechaza_referencias_repetidas(self):
+        casos = [
+            ['nuevo:0', 'nuevo:0'],
+            ['id:3', 'id:3'],
+            ['id:3', 3],
+            ['id:legacy', 'legacy'],
+            ['nuevo:0', 'nuevo:00'],
+        ]
+
+        for orden in casos:
+            with self.subTest(orden=orden):
+                repositorio = FakeRepositorioBanners()
+                caso_uso = ActualizarBanners(repositorio)
+
+                with self.assertRaises(EstructuraBannerInvalida):
+                    caso_uso.ejecutar(
+                        configuracion_id=1,
+                        raw_orden=orden,
+                        nuevos_archivos=['archivo1'],
+                    )
+
+                self.assertEqual(repositorio.llamadas, [])

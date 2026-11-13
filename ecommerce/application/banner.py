@@ -109,7 +109,31 @@ class ActualizarBanners:
             else:
                 raise EstructuraBannerInvalida(f'Tipo de dato inválido en banner_orden: {type(item)}')
 
-        # 5. Delegar la persistencia atómica y validación de archivos al puerto
+        # 5. Rechazar referencias repetidas en el manifiesto.
+        referencias_vistas = set()
+
+        for referencia in orden_list:
+            if es_identificador_legacy(referencia):
+                clave = 'id:legacy'
+            elif isinstance(referencia, int):
+                clave = f'id:{referencia}'
+            elif referencia.startswith('id:'):
+                clave = f'id:{int(referencia.split(":")[1])}'
+            elif referencia.startswith('nuevo:'):
+                clave = f'nuevo:{int(referencia.split(":")[1])}'
+            else:
+                raise EstructuraBannerInvalida(
+                    f'Referencia inválida: {referencia}'
+                )
+
+            if clave in referencias_vistas:
+                raise EstructuraBannerInvalida(
+                    f'Referencia repetida en banner_orden: {referencia}'
+                )
+
+            referencias_vistas.add(clave)
+
+        # 6. Delegar la persistencia atómica y validación de archivos al puerto
         if nuevos_videos:
             self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos, textos,
                                              nuevos_videos=nuevos_videos, asociaciones=asociaciones)

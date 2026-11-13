@@ -113,7 +113,8 @@ export default function Portada({ configuracion, edicion }) {
               style={debeCargar ? { backgroundImage: `url("${foto.imagen}")` } : undefined}
             >
               {cargarVideo && <video ref={(elemento) => { videosRef.current[index] = elemento; }}
-                src={foto.video} muted loop playsInline preload="metadata" aria-hidden="true" />}
+                src={foto.video} poster={foto.imagen}
+                muted loop playsInline preload="metadata" aria-hidden="true" />}
             </div>
           );
         })}

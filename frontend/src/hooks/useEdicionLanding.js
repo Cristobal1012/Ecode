@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clienteAxios from '../components/auth/axiosConfig';
 import { recargarConfiguracion } from './useConfiguracionTienda';
+import { MAX_DIAPOSITIVAS_BANNER } from '../constants/banner';
 
 // Lo que el admin edita en la landing (RF-01.1, RF-01.2). Los máximos son los del backend.
 export const CAMPOS_TEXTO = {
@@ -233,8 +234,8 @@ export default function useEdicionLanding(configuracion) {
 
   const agregarVideoBanner = (videoArchivo, portadaArchivo) => {
     const base = banners ?? obtenerBannersIniciales(configuracion);
-    if (base.length >= 10) {
-      setErrores((actual) => ({ ...actual, banner: 'El carrusel admite como máximo 10 diapositivas.' }));
+    if (base.length >= MAX_DIAPOSITIVAS_BANNER) {
+      setErrores((actual) => ({ ...actual, banner: `El carrusel admite como máximo ${MAX_DIAPOSITIVAS_BANNER} diapositivas.` }));
       return;
     }
     if (base.some((foto) => foto.video || foto.videoArchivo)) {

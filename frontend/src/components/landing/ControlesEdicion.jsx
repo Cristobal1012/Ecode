@@ -72,6 +72,8 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
   const error = edicion?.errores?.banner;
   const total = banners.length;
   const [estado, setEstado] = useState('');
+  const [videoPendiente, setVideoPendiente] = useState(null);
+  const [portadaPendiente, setPortadaPendiente] = useState(null);
   const botones = useRef({});
 
   const mover = (idx, cambio) => {
@@ -112,6 +114,30 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
           </label>
         </div>
 
+        <div className="portada-editor-video">
+          <label>
+            <input type="checkbox" checked={Boolean(edicion.videoBannerActivo)}
+              onChange={(e) => edicion.cambiarVideoBannerActivo(e.target.checked)} />
+            Activar video en el banner
+          </label>
+          {!banners.some((b) => b.video || b.videoArchivo) && total < 10 && (
+            <div>
+              <label>Video MP4 (máximo 10 MB)
+                <input type="file" accept="video/mp4,.mp4" aria-label="Video MP4 del banner"
+                  onChange={(e) => setVideoPendiente(e.target.files?.[0] || null)} />
+              </label>
+              <label>Imagen de portada del video
+                <input type="file" accept="image/jpeg,image/png,image/webp"
+                  aria-label="Imagen de portada del video"
+                  onChange={(e) => setPortadaPendiente(e.target.files?.[0] || null)} />
+              </label>
+              <button type="button" className="boton-edicion" disabled={!videoPendiente || !portadaPendiente}
+                onClick={() => { edicion.agregarVideoBanner(videoPendiente, portadaPendiente); setVideoPendiente(null); setPortadaPendiente(null); }}>
+                Agregar video al carrusel
+              </button>
+            </div>
+          )}
+        </div>
         <p role="status" aria-live="polite" className="visualmente-oculto">{estado}</p>
 
         {total > 0 && (
@@ -125,6 +151,7 @@ export function EditorFotosBanner({ banners = [], edicion, claro = false }) {
                     aria-label={`Editar textos de la foto ${idx + 1}`} aria-pressed={idx === edicion.fotoEditada}
                     onClick={() => edicion.seleccionarFoto(idx)}>
                     <img src={foto.imagen} alt="" className="portada-editor-miniatura" />
+                    {(foto.video || foto.videoArchivo) && <span aria-hidden="true">▶ Video</span>}
                   </button>
                   <span className="visualmente-oculto">Foto {idx + 1} de {total}</span>
                   <div className="portada-editor-acciones">

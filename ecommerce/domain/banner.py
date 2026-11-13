@@ -1,8 +1,13 @@
 """Reglas de dominio para el carrusel de banner de la portada (RF-01.1, SCRUM-194)."""
 
 from dataclasses import dataclass
+from pathlib import PurePath
 
 MAX_FOTOS_BANNER = 10
+# Gestion de video en banner
+MAX_DIAPOSITIVAS_BANNER = 10
+MAX_VIDEOS_BANNER = 1
+MAX_VIDEO_BANNER_BYTES = 10 * 1024 * 1024
 
 # Textos de cada foto: los mismos límites que los de la portada (CAMPOS_TEXTO del modo edición)
 LARGO_ANTETITULO = 200
@@ -26,6 +31,11 @@ class EstructuraBannerInvalida(Exception):
 class TextosFotoInvalidos(ValueError):
     """Los textos o el destino del botón de una foto no cumplen las reglas."""
 
+class LimiteVideosBannerExcedido(Exception):
+    """El banner admite como máximo un video."""
+
+class VideoBannerInvalido(ValueError):
+    """El archivo de video no cumple las reglas del banner."""
 
 @dataclass(frozen=True)
 class TextosFoto:
@@ -38,9 +48,33 @@ class TextosFoto:
 
 
 def validar_cantidad_fotos_banner(cantidad: int):
-    if cantidad > MAX_FOTOS_BANNER:
-        raise LimiteFotosBannerExcedido(f'El banner admite hasta {MAX_FOTOS_BANNER} fotos.')
+    if cantidad > MAX_DIAPOSITIVAS_BANNER:
+        raise LimiteFotosBannerExcedido(f'El banner admite hasta {MAX_DIAPOSITIVAS_BANNER} fotos.')
 
+def validar_cantidad_videos_banner(cantidad: int):
+    if cantidad > MAX_VIDEOS_BANNER:
+        raise LimiteVideosBannerExcedido(
+            f'El banner admite como máximo {MAX_VIDEOS_BANNER} video.')
+
+def validar_video_banner(nombre: str, tipo_contenido: str, tamano: int, encabezado: bytes):
+    """Valida nombre, MIME, tamaño y firma básica de un archivo MP4.
+
+    encabezado debe contener al menos los primeros 8 bytes del archivo.
+    """
+    if not isinstance(nombre, str) or PurePath(nombre).suffix.lower() != '.mp4':
+        raise VideoBannerInvalido('El video debe tener extensión .mp4.')
+
+    if tipo_contenido != 'video/mp4':
+        raise VideoBannerInvalido('El video debe tener formato MP4 (video/mp4).')
+
+    if not isinstance(tamano, int) or isinstance(tamano, bool) or tamano <= 0:
+        raise VideoBannerInvalido('El archivo de video está vacío o tiene un tamaño inválido.')
+
+    if tamano > MAX_VIDEO_BANNER_BYTES:
+        raise VideoBannerInvalido('El video no puede superar los 10 MB.')
+
+    if not isinstance(encabezado, bytes) or len(encabezado) < 8 or encabezado[4:8] != b'ftyp':
+        raise VideoBannerInvalido('El archivo no parece ser un video MP4 válido.')
 
 def _texto(valor, nombre: str, largo: int) -> str:
     if valor is None:

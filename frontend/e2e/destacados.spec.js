@@ -89,7 +89,7 @@ for (const tema of [1, 2, 3, 4]) {
       await page.getByRole('button', { name: 'Editar página' }).click();
 
       await expect(page.getByRole('radio', { name: /Destacados/ })).toBeChecked();
-      await expect(page.getByText('Tus destacados (3 de 4)')).toBeVisible();
+      await expect(page.getByText('Tus destacados (3 de 8)')).toBeVisible();
 
       // Solo con teclado: "Bajar" mueve y el foco se queda en el mismo botón
       const bajar = page.getByRole('button', { name: 'Bajar Mural en Cerro Alegre' });
@@ -101,8 +101,9 @@ for (const tema of [1, 2, 3, 4]) {
       // Agregar el cuarto desde la lista desplegable
       await page.getByLabel('Agregar un producto o una publicación').selectOption({ label: 'Acuarela' });
       await page.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(page.getByText('Tus destacados (4 de 4)')).toBeVisible();
-      await expect(page.getByLabel('Agregar un producto o una publicación')).toBeDisabled();
+      await expect(page.getByText('Tus destacados (4 de 8)')).toBeVisible();
+      // Quedan cupos: se puede seguir agregando (el límite lleno lo prueba LandingPage.test.jsx)
+      await expect(page.getByLabel('Agregar un producto o una publicación')).toBeEnabled();
 
       await comprobarVista(page);
       await sinViolaciones(page, ['.editor-vitrina', '#destacados']);

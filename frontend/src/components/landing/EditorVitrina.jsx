@@ -30,7 +30,7 @@ function motivoOculto(destacado, blogActivo) {
 }
 
 // Modo edición de la landing (RF-01.1, pedido de un cliente): el admin elige qué muestra la vitrina, "Más vendidos"
-// (se llena sola) o "Destacados" (hasta 4 productos y publicaciones del blog que ordena con Subir y Bajar).
+// (se llena sola) o "Destacados" (hasta 8 productos y publicaciones del blog que ordena con Subir y Bajar).
 // La selección es un borrador de useEdicionLanding: se publica con "Guardar cambios", como el resto de la página.
 export default function EditorVitrina({ edicion, vitrina, configuracion, nota }) {
   const modo = edicion.textos.vitrina_modo === 'DESTACADOS' ? 'DESTACADOS' : 'MAS_VENDIDOS';

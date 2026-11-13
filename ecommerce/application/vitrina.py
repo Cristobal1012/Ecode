@@ -121,7 +121,7 @@ class SeleccionarVitrina:
 
 
 class ValidarDestacados:
-    """La selección que guarda el admin: hasta 4, sin repetir y solo productos y publicaciones que existen.
+    """La selección que guarda el admin: hasta 8, sin repetir y solo productos y publicaciones que existen.
 
     Se aceptan productos sin publicar y publicaciones en borrador: el admin puede elegirlos antes de publicarlos,
     y la landing no los muestra mientras tanto.

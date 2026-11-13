@@ -6,7 +6,7 @@ Independiente de Django. Que cada destacado exista y se vea lo decide la aplicac
 
 from enum import StrEnum
 
-MAX_DESTACADOS = 4
+MAX_DESTACADOS = 8  # 2 filas de 4 en el computador (pedido de Alan, 2026-11-13)
 TITULO_POR_DEFECTO = 'Destacados'
 LARGO_TITULO = 60
 # Un id de MongoDB tiene 24 caracteres y uno de PostgreSQL unos pocos dígitos: 40 sobra para ambos
@@ -43,7 +43,7 @@ def normalizar_titulo_destacados(texto) -> str:
 
 
 def normalizar_destacados(lista) -> list[dict]:
-    """La selección en orden: [{'tipo': 'PRODUCTO' | 'PUBLICACION', 'id': '...'}], hasta 4 y sin repetir."""
+    """La selección en orden: [{'tipo': 'PRODUCTO' | 'PUBLICACION', 'id': '...'}], hasta 8 y sin repetir."""
     if not isinstance(lista, list):
         raise DestacadosInvalidos('Los destacados deben ser una lista.')
     if len(lista) > MAX_DESTACADOS:

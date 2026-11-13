@@ -17,8 +17,8 @@ export const CAMPOS_TEXTO = {
   destacados_titulo: { etiqueta: 'Título de la sección', maximo: 60 }
 };
 
-// Destacados: hasta 4 productos y publicaciones del blog, en el orden que elige el admin (domain/destacados.py)
-export const MAX_DESTACADOS = 4;
+// Destacados: hasta 8 productos y publicaciones del blog, en el orden que elige el admin (domain/destacados.py)
+export const MAX_DESTACADOS = 8;
 
 // Fotos de la sección de Instagram: 6 espacios fijos (el usuario se configura en el panel)
 export const CAMPOS_FOTOS_INSTAGRAM = [1, 2, 3, 4, 5, 6].map((numero) => `instagram_foto_${numero}`);
@@ -269,7 +269,7 @@ export default function useEdicionLanding(configuracion) {
     setMensaje('');
   };
 
-  // Selección de destacados: agregar al final (hasta 4, sin repetir), mover un lugar y quitar
+  // Selección de destacados: agregar al final (hasta 8, sin repetir), mover un lugar y quitar
   const cambiarDestacados = (cambio) => {
     setDestacados((actual) => cambio([...(actual || [])]));
     setErrores((actual) => sinCampo(actual, 'destacados'));

@@ -10,6 +10,28 @@ import EditorTextosFoto from './EditorTextosFoto';
 // Con 2+ fotos cambian solas con fundido y botón de pausa (WCAG 2.2.2). Con 1 foto queda fija.
 // El botón toma el nombre del catálogo (Ver <nombre del catálogo>); la foto prioriza la subida sobre banner_url.
 // Las fotos no son clickeables y el velo garantiza contraste AA sobre todas las fotos.
+
+// Íconos de los controles en SVG: los caracteres ▶ y ⏸ se ven como emoji en iPhone y Android, y ‹ › cambian con la
+// tipografía de la tienda. Así se ven iguales en todos los dispositivos (pedido de Alan, 2026-11-13)
+const ICONOS_CARRUSEL = {
+  anterior: <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+    strokeLinejoin="round" />,
+  siguiente: <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+    strokeLinejoin="round" />,
+  pausar: <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" />,
+  reanudar: <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"
+    fill="currentColor" />,
+};
+
+function IconoCarrusel({ nombre }) {
+  return (
+    <svg className="portada-icono-carrusel" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+      focusable="false">
+      {ICONOS_CARRUSEL[nombre]}
+    </svg>
+  );
+}
+
 export default function Portada({ configuracion, edicion }) {
   const listaFotos = (configuracion.banners && configuracion.banners.length > 0)
     ? configuracion.banners
@@ -107,19 +129,20 @@ export default function Portada({ configuracion, edicion }) {
         <div className="portada-controles-carrusel" role="group" aria-label="Controles del carrusel"
           onFocus={() => setEnUso(true)} onBlur={salirDe}>
           <button type="button" className="portada-control-carrusel" aria-label="Foto anterior" onClick={() => irA(-1)}>
-            <span aria-hidden="true">‹</span>
+            <IconoCarrusel nombre="anterior" />
           </button>
+          {/* Solo el ícono (pedido de Alan): el nombre lo anuncia el lector de pantalla y lo muestra el tooltip */}
           <button
             type="button"
-            className="portada-boton-pausa"
+            className="portada-control-carrusel"
             onClick={() => setPausado((p) => !p)}
             aria-label={pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}
+            title={pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}
           >
-            <span aria-hidden="true">{pausado ? '▶' : '⏸'}</span>
-            <span>{pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}</span>
+            <IconoCarrusel nombre={pausado ? 'reanudar' : 'pausar'} />
           </button>
           <button type="button" className="portada-control-carrusel" aria-label="Foto siguiente" onClick={() => irA(1)}>
-            <span aria-hidden="true">›</span>
+            <IconoCarrusel nombre="siguiente" />
           </button>
           <span className="portada-posicion-carrusel" aria-hidden="true">{indiceSeguro + 1} / {totalFotos}</span>
           <span role="status" className="visualmente-oculto">{anuncio}</span>

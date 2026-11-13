@@ -18,6 +18,12 @@ from ecommerce.domain.medios_pago import MEDIOS_PAGO
 from ecommerce.domain.resenas import (
     ESTRELLAS_MAXIMAS, ESTRELLAS_MINIMAS, ETIQUETAS_ESTADO_RESENA, LARGO_NOMBRE_PUBLICO, EstadoResena,
 )
+from ecommerce.domain.sobre_mi import LARGO_ALT_FOTO_SOBRE_MI
+from ecommerce.domain.suscripciones import (
+    DESCUENTO_MAXIMO, DIAS_AVISO_MAXIMO, DIAS_AVISO_MINIMO, DIAS_AVISO_POR_DEFECTO, ETIQUETAS_ESTADO_SUSCRIPCION,
+    FRECUENCIA_MAXIMA_SEMANAS, FRECUENCIA_MINIMA_SEMANAS, LARGO_DESCRIPCION_PLAN, LARGO_NOMBRE_PLAN, PRECIO_MAXIMO,
+    UNIDADES_MAXIMAS, EstadoSuscripcion,
+)
 
 class ConfiguracionGlobal(models.Model):
     MODOS_AUTENTICACION = [
@@ -61,6 +67,12 @@ class ConfiguracionGlobal(models.Model):
     instrucciones_entrega_coordinada = models.CharField(max_length=300, blank=True, default='')
     # Formulario de cotización y encargos (personalizados, a pedido o en cantidad): el admin lo activa
     cotizaciones_activas = models.BooleanField(default=False)
+    # Suscripciones con entregas recurrentes (domain/suscripciones.py, pedido de un cliente): apagadas por defecto.
+    # Días antes de cada entrega en que se crea el pedido del ciclo y se le pide el pago al cliente
+    suscripciones_activas = models.BooleanField(default=False)
+    suscripciones_dias_aviso = models.PositiveSmallIntegerField(
+        default=DIAS_AVISO_POR_DEFECTO, validators=[MinValueValidator(DIAS_AVISO_MINIMO),
+                                                    MaxValueValidator(DIAS_AVISO_MAXIMO)])
     # Blog o portafolio (domain/blog.py): activo, el enlace del menú lleva a /blog con el nombre que eligió el admin
     blog_activo = models.BooleanField(default=False)
     blog_nombre = models.CharField(max_length=LARGO_NOMBRE_BLOG, default=NOMBRE_BLOG_POR_DEFECTO)
@@ -83,6 +95,11 @@ class ConfiguracionGlobal(models.Model):
     sobre_mi_activo = models.BooleanField(default=False)
     sobre_mi_nombre = models.CharField(max_length=30, default='Sobre mí')
     sobre_mi_biografia = models.TextField(blank=True, default='')
+    # Hasta 2 fotos junto a la biografía (pedido de un cliente, opcionales), cada una con su texto alternativo
+    sobre_mi_foto_1 = models.ImageField(upload_to='negocio/sobre_mi/', blank=True, null=True)
+    sobre_mi_foto_1_alt = models.CharField(max_length=LARGO_ALT_FOTO_SOBRE_MI, blank=True, default='')
+    sobre_mi_foto_2 = models.ImageField(upload_to='negocio/sobre_mi/', blank=True, null=True)
+    sobre_mi_foto_2_alt = models.CharField(max_length=LARGO_ALT_FOTO_SOBRE_MI, blank=True, default='')
     # Reseñas con estrellas (domain/resenas.py): activas, el correo de entrega pide la reseña y la tienda la muestra
     resenas_activas = models.BooleanField(default=False)
     # El modelo de emisión que la tienda declaró en el SII (domain/documentos_tributarios.py): decide si un pago
@@ -385,10 +402,24 @@ class OrdenCompra(models.Model):
     # la boleta o factura del pedido y, si se canceló después, su nota de crédito
     folio_documento = models.CharField(max_length=10, blank=True, default='')
     folio_nota_credito = models.CharField(max_length=10, blank=True, default='')
+    # Pedido de un ciclo de una suscripción (domain/suscripciones.py): la fecha es la de la entrega del ciclo. Un
+    # ciclo tiene un solo pedido. Vacíos en las compras normales
+    suscripcion = models.ForeignKey('Suscripcion', on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name='pedidos')
+    ciclo_fecha = models.DateField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            # Ni un pago repetido ni dos ejecuciones de la tarea diaria crean dos pedidos del mismo ciclo. Un ciclo
+            # cancelado (no pagado o saltado) libera su fecha
+            models.UniqueConstraint(
+                fields=['suscripcion', 'ciclo_fecha'], name='orden_un_pedido_por_ciclo',
+                condition=models.Q(suscripcion__isnull=False) & ~models.Q(estado='CANCELADO')),
+        ]
 
     def __str__(self):
         identificador = self.email_invitado if self.email_invitado else self.usuario
-        return f"Orden #{self.id} - {identificador}" 
+        return f"Orden #{self.id} - {identificador}"
 
 class DetalleOrden(models.Model):
     orden = models.ForeignKey(OrdenCompra, on_delete=models.CASCADE, related_name='detalles')
@@ -552,3 +583,78 @@ class Carrito(models.Model):
 
     def __str__(self):
         return f"Carrito de {self.usuario.email}"
+
+class PlanSuscripcion(models.Model):
+    """Plan de suscripción que ofrece la tienda (domain/suscripciones.py: DatosPlan valida los datos)."""
+
+    nombre = models.CharField(max_length=LARGO_NOMBRE_PLAN)
+    descripcion = models.CharField(max_length=LARGO_DESCRIPCION_PLAN, blank=True, default='')
+    # Pesos enteros por ciclo, por las unidades de la variante que elija el cliente
+    precio = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(PRECIO_MAXIMO)])
+    frecuencia_semanas = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(FRECUENCIA_MINIMA_SEMANAS), MaxValueValidator(FRECUENCIA_MAXIMA_SEMANAS)])
+    unidades = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1),
+                                                                       MaxValueValidator(UNIDADES_MAXIMAS)])
+    beneficios = models.JSONField(default=list, blank=True)
+    # Qué puede elegir el cliente: productos de estas categorías y estos productos (ids de MongoDB)
+    categorias = models.JSONField(default=list, blank=True)
+    productos = models.JSONField(default=list, blank=True)
+    envio_gratis = models.BooleanField(default=False)
+    # Además, el suscriptor no paga despacho en ninguna de sus compras (exige envio_gratis)
+    envio_gratis_compras = models.BooleanField(default=False)
+    # Porcentaje de descuento en las compras del suscriptor mientras su suscripción esté activa
+    descuento = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(DESCUENTO_MAXIMO)])
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return self.nombre
+
+
+class Suscripcion(models.Model):
+    """Suscripción de un cliente a un plan: cada ciclo es un pedido (OrdenCompra.suscripcion)."""
+
+    ESTADOS = [(estado.value, ETIQUETAS_ESTADO_SUSCRIPCION[estado]) for estado in EstadoSuscripcion]
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='suscripciones')
+    # Un plan con suscripciones no se borra: se desactiva
+    plan = models.ForeignKey(PlanSuscripcion, on_delete=models.PROTECT, related_name='suscripciones')
+    estado = models.CharField(max_length=20, choices=ESTADOS, default=EstadoSuscripcion.PENDIENTE.value)
+    # Lo que recibe en cada entrega: una variante de un producto elegible del plan
+    producto_mongo_id = models.CharField(max_length=255)
+    variante_sku = models.CharField(max_length=255)
+    nombre_producto = models.CharField(max_length=255)
+    # Adónde y cómo se entrega, con el mismo formato que el pedido (OrdenCompra.direccion_envio_snapshot)
+    direccion_envio = models.JSONField(default=dict, blank=True)
+    nombre_destinatario = models.CharField(max_length=150, blank=True, default='')
+    telefono_destinatario = models.CharField(max_length=15, blank=True, default='')
+    proveedor_logistico = models.CharField(max_length=50)
+    metodo_pago = models.CharField(max_length=50)
+    # Fecha de entrega del próximo ciclo; vacía hasta el primer pago
+    proxima_entrega = models.DateField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_activacion = models.DateTimeField(null=True, blank=True)
+    fecha_cancelacion = models.DateTimeField(null=True, blank=True)
+    motivo_cancelacion = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+        indexes = [models.Index(fields=['estado', 'proxima_entrega'], name='suscripcion_estado_proxima')]
+
+    def __str__(self):
+        return f'Suscripción #{self.id} de {self.usuario} al plan {self.plan}'
+
+
+class RegaloCumpleanos(models.Model):
+    """Un regalo anual por persona, aunque tenga varias suscripciones o cambie de plan."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='regalos_cumpleanos')
+    anio = models.PositiveSmallIntegerField()
+    fecha_envio = models.DateTimeField(auto_now_add=True)
+    enviado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                    related_name='+')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['usuario', 'anio'], name='regalo_cumpleanos_usuario_anio')]

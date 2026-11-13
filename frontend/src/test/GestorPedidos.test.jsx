@@ -103,6 +103,17 @@ describe('GestorPedidos - Interfaz de Ventas', () => {
     expect(screen.getByText('Los Aromos 1550, Ñuñoa')).toBeInTheDocument();
   });
 
+  it('marca la entrega de una suscripción con su fecha', async () => {
+    clienteAxios.get.mockResolvedValueOnce(pagina(2, [
+      pedidoBase({ id: 1, suscripcion: 7, ciclo_fecha: '2026-11-14' }),
+      pedidoBase({ id: 2, suscripcion: null, ciclo_fecha: null }),
+    ]));
+    render(<GestorPedidos />);
+
+    expect(await screen.findByText('Suscripción · 14-11-2026')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Suscripción/)).toHaveLength(1);
+  });
+
   it('el filtro de boleta o factura pendiente pide solo esos pedidos', async () => {
     clienteAxios.get.mockResolvedValueOnce(pagina(25)).mockResolvedValueOnce(pagina(0, []));
     render(<GestorPedidos />);

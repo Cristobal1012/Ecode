@@ -189,6 +189,9 @@ export default function GaleriaImagenes({
   return (
     <div
       style={{
+        // En el formulario de producto va dentro de la grilla de campos (.producto-campos): ocupa la fila completa,
+        // como la descripción y el SEO, en vez de una sola columna
+        gridColumn: '1 / -1',
         marginTop: '20px',
         padding: '20px',
         backgroundColor: 'var(--color-surface)',

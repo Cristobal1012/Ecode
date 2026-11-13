@@ -11,7 +11,15 @@ const TITULOS = {
   '/admin': 'Panel de administración', '/variantes': 'Selección de variantes', '/resena': 'Deja tu reseña',
   '/recuperar-contrasena': 'Recuperar contraseña', '/restablecer-contrasena': 'Nueva contraseña',
   '/cambiar-contrasena': 'Cambiar contraseña',
+  '/mi-cumpleanos': 'Mi cumpleaños',
+  '/suscripcion': 'Suscripciones', '/mis-suscripciones': 'Mis suscripciones',
 };
+
+// Rutas con un id: el título va por su comienzo
+const TITULOS_POR_PREFIJO = [
+  ['/mis-suscripciones/pagar/', 'Pagar mi entrega'], ['/suscripcion/', 'Suscribirme'],
+];
+const tituloPorPrefijo = (ruta) => TITULOS_POR_PREFIJO.find(([prefijo]) => ruta.startsWith(prefijo))?.[1];
 
 export default function AccesibilidadNavegacion() {
   const { pathname } = useLocation();
@@ -25,7 +33,7 @@ export default function AccesibilidadNavegacion() {
     // posterior de la configuración no debe sustituir esos metadatos específicos.
     const dinamica = pathname.startsWith('/catalogo/producto/') || pathname.startsWith('/legal/');
     if (cambioRuta || !dinamica) {
-      document.title = `${TITULOS[pathname] || (dinamica ? 'Contenido de la tienda' : 'Tienda')} · ${configuracion?.nombre_tienda || 'Tienda'}`;
+      document.title = `${TITULOS[pathname] || tituloPorPrefijo(pathname) || (dinamica ? 'Contenido de la tienda' : 'Tienda')} · ${configuracion?.nombre_tienda || 'Tienda'}`;
     }
     if (cambioRuta && !inicial && !document.activeElement?.closest('.cookie-banner')) {
       document.querySelector('main')?.focus({ preventScroll: true });

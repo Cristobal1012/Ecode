@@ -899,6 +899,30 @@ describe('Checkout', () => {
     expect(screen.getByText(/Agrega \$5\.000 más y obtén \$5\.000 de descuento/)).toBeInTheDocument();
   });
 
+  it('el suscriptor con sesión ve su descuento; sin sesión no se piden beneficios (suscripciones)', async () => {
+    prepararRespuestas();
+    const base = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => {
+      if (url === 'ventas/suscripciones/beneficios/') return Promise.resolve({ data: { descuento: 10, envio_gratis: true } });
+      if (url === 'configuracion/') return base(url).then(({ data }) => ({ data: { ...data, suscripciones_activas: true } }));
+      return base(url);
+    });
+    localStorage.setItem('access_token', 'token-suscriptor');
+    renderCheckoutConRuta();
+
+    expect(await screen.findByText('Descuento de suscriptor (10%):')).toBeInTheDocument();
+    expect(screen.getByText('-$1.500')).toBeInTheDocument();
+    expect(screen.getByText('Total a pagar:').parentElement).toHaveTextContent('$13.500');
+    cleanup();
+
+    localStorage.removeItem('access_token');
+    getMock.mockClear();
+    renderCheckoutConRuta();
+    await screen.findByText('Total a pagar:');
+    expect(screen.queryByText(/Descuento de suscriptor/)).not.toBeInTheDocument();
+    expect(getMock).not.toHaveBeenCalledWith('ventas/suscripciones/beneficios/');
+  });
+
   it('con un código menor que el automático se queda el automático y se avisa', async () => {
     prepararRespuestas({ automaticos: [
       { tipo_descuento: 'PORCENTAJE', valor_descuento: 20, monto_minimo: 10000, umbral_envio_gratis: null },

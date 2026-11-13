@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { comprobarVista, prepararTienda } from './soporte/tienda';
 
 // Fotos y logo (pedido de un cliente): fotos sin recorte, ficha con la foto horizontal y logo más grande en el
-// computador. Apagadas, la tienda se ve como antes. La API está simulada (prepararTienda): no se usa backend.
+// computador, la tablet y el celular. Apagadas, la tienda se ve como antes. La API está simulada (prepararTienda): no se usa backend.
 const svg = (ancho, alto, color) => `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="${ancho}" height="${alto}"><rect width="${ancho}" height="${alto}" fill="${color}"/></svg>`)}`;
 
@@ -77,8 +77,8 @@ for (const tema of [1, 2, 3, 4]) {
         expect(await estilo(tarjetas.nth(indice).locator('img'), 'objectFit')).toBe('contain');
         expect(await proporcion(tarjetas.nth(indice))).toBe(0.8);
       }
-      // RN-01 y logo grande: 72 px solo en el computador; en el celular, 44 px como siempre
-      expect(await estilo(page.locator('.header-logo-negocio'), 'height')).toBe(ancho >= 1024 ? '72px' : '44px');
+      // RN-01 y logo grande: 88 px en el computador y 64 en el celular (normal: 52 y 44)
+      expect(await estilo(page.locator('.header-logo-negocio'), 'height')).toBe(ancho >= 1024 ? '88px' : '64px');
       await comprobarVista(page);
       await sinViolaciones(page);
 
@@ -104,7 +104,15 @@ test('cada opción funciona sola: solo el logo grande no cambia las fotos', asyn
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/catalogo');
 
-  expect(await estilo(page.locator('.header-logo-negocio'), 'height')).toBe('72px');
-  expect(await estilo(page.locator('.header-logo-universidad'), 'height')).toBe('72px');
+  expect(await estilo(page.locator('.header-logo-negocio'), 'height')).toBe('88px');
+  expect(await estilo(page.locator('.header-logo-universidad'), 'height')).toBe('88px');
   expect(await estilo(page.locator('.tarjeta-producto-imagen img').first(), 'objectFit')).toBe('cover');
+
+  // También más grande en la tablet y el celular (pedido de Alan, 2026-11-10), con los dos logos dentro de la pantalla
+  for (const [ancho, alto] of [[820, '72px'], [390, '64px'], [360, '64px']]) {
+    await page.setViewportSize({ width: ancho, height: 900 });
+    expect(await estilo(page.locator('.header-logo-negocio'), 'height')).toBe(alto);
+    expect(await estilo(page.locator('.header-logo-universidad'), 'height')).toBe(alto);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
 });

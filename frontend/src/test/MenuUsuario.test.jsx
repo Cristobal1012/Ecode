@@ -48,6 +48,9 @@ describe('MenuUsuario', () => {
     renderMenu();
 
     await waitFor(() => {expect(clienteAxios.get).toHaveBeenCalledWith('usuarios/me/');});
+    fireEvent.click(await screen.findByRole('button', { name: 'Menú de usuario: Hola, Javier' }));
+    expect(screen.queryByRole('link', { name: 'Mi cumpleaños' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Mis suscripciones' })).not.toBeInTheDocument();
   });
 
   it('muestra el nombre recibido del backend', async () => {

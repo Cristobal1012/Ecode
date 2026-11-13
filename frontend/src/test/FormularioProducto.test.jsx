@@ -50,6 +50,9 @@ async function completarFormularioValido(user) {
   await user.type(largo, '20');
 }
 
+// El de publicar: el formulario también tiene el checkbox de colección privada (SCRUM-197). Su nombre es el estado
+const checkboxPublicado = () => screen.getByRole('checkbox', { name: /^(OCULTO|PUBLICADO)$/ });
+
 afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -69,37 +72,37 @@ describe('FormularioProducto', () => {
     it('el producto no esta publicado', () => {
         renderFormulario();
         expect(screen.getByText('OCULTO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(checkboxPublicado()).not.toBeChecked();
     });
 
     it('marcar prodcuto como publicado', async () => {
         renderFormulario();
         expect(screen.getByText('OCULTO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(checkboxPublicado()).not.toBeChecked();
 
         const user = userEvent.setup();
-        const checkbox = screen.getByRole('checkbox');
+        const checkbox = checkboxPublicado();
         await user.click(checkbox);
 
         expect(screen.getByText('PUBLICADO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).toBeChecked();
+        expect(checkboxPublicado()).toBeChecked();
     });
 
     it('publicar y ocultar un producto', async () => {
         renderFormulario();
         expect(screen.getByText('OCULTO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(checkboxPublicado()).not.toBeChecked();
 
         const user = userEvent.setup();
-        const checkbox = screen.getByRole('checkbox');
+        const checkbox = checkboxPublicado();
         await user.click(checkbox);
 
         expect(screen.getByText('PUBLICADO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).toBeChecked();
+        expect(checkboxPublicado()).toBeChecked();
 
         await user.click(checkbox);
         expect(screen.getByText('OCULTO')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(checkboxPublicado()).not.toBeChecked();
     });
 
     it('cancelar la creación de un producto', async () => {

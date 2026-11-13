@@ -53,6 +53,8 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'ventas/admin/blog/': [],
       'ventas/admin/sobre-mi/proyectos/': { proyectos: [] },
       'ventas/promociones/': [],
+      // Configuración > Suscripciones (pedido de un cliente, opcional): sin planes
+      'ventas/admin/suscripciones/planes/': { planes: [] },
       // Sin descuentos automáticos: el checkout los pide para la vista previa
       'ventas/promociones/automaticas/': [],
       'ventas/paginas-legales/': [{ tipo_pagina: 'TERMINOS', titulo: 'Términos' }, { tipo_pagina: 'PRIVACIDAD', titulo: 'Privacidad' }],
@@ -61,6 +63,8 @@ export async function prepararTienda(page, { sesion = false, tema = 1, tipografi
       'catalogo/vitrina/': { recientes: [producto], mas_vendidos: [] },
       'catalogo/productos/': { count: 1, total_pages: 1, current_page: 1, results: [producto], filtros: { categorias: ['Prueba'], atributos: {} } },
       'catalogo/filtros/': { categorias: ['Prueba'], atributos: {} },
+      // Configuración > Renombrar o unir categorías
+      'catalogo/categorias/': { categorias: [{ nombre: 'Prueba', productos: 1, publicados: 1 }] },
       [`catalogo/productos/${producto.id}/`]: producto,
       'usuarios/me/': { id: 1, nombre: 'Visitante QA', email: 'qa@example.test', rol: 'ADMIN' },
       'ventas/empresa/': {},

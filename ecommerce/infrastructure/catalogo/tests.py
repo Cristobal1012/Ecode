@@ -13,20 +13,23 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, override_settings, TestCase
 from django.urls import reverse
 from PIL import Image, PngImagePlugin
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import status
 
 from ecommerce.domain.imagenes import GaleriaEnConflicto
 from ecommerce.infrastructure.usuarios.tests.factories import create_user
 from .documents import ImagenPendienteBorrado, Producto, Variante
 from .image_adapters import RepositorioGaleriaMongo, servicio_galeria
 from .images import GaleriaUploadSerializer, es_imagen_gestionada
+from .permissions import LecturaPublicaEscrituraAdmin
 from .serializers import ProductoSerializer
+from .views import ProductoListCreateView
 
 
 def imagen_archivo(nombre='foto.png', formato='PNG', mime='image/png', size=(12, 8)):
@@ -770,3 +773,113 @@ class VariantePrecioOfertaTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn('variantes', serializer.errors)
 
+class ColeccionesBackendTestCase(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # 1. Usar BD de prueba (Requisito crítico del feedback)
+        usar_mongo_de_prueba(cls)
+
+    def setUp(self):
+        self.client = APIClient()
+        Producto._get_collection().delete_many({})
+        self.comprobar_permisos_originales()
+        self.addCleanup(self.comprobar_permisos_originales)
+        self.admin = create_user(rol='ADMIN')
+        refresh = RefreshToken.for_user(self.admin)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def comprobar_permisos_originales(self):
+        self.assertEqual(ProductoListCreateView.permission_classes, [LecturaPublicaEscrituraAdmin])
+
+    def test_comprador_no_puede_crear_productos(self):
+        comprador = create_user('colecciones-comprador@example.test', rol='COMPRADOR')
+        refresh = RefreshToken.for_user(comprador)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        response = self.client.post('/api/catalogo/productos/', {
+            'nombre': 'Producto no autorizado', 'categoria': 'Electronica',
+            'colecciones': ['Cyber'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Producto.objects.count(), 0)
+
+    def test_guardar_colecciones_normalizadas(self):
+        """Verifica que se eliminen espacios extra y duplicados case-insensitive al guardar."""
+        payload = {
+            "nombre": "Teclado Mecánico",
+            "precio": 50000,
+            "activo": True,
+            "publicado": True,
+            "categoria": "Electronica",
+            # Enviamos colecciones sucias y repetidas
+            "colecciones": [" Cyber ", "cyber", "VERANO", "Verano  "]
+        }
+        
+        # Ajusta '/api/productos/' a la URL real de creación de productos en tu API
+        response = self.client.post('/api/catalogo/productos/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        producto = Producto.objects.get(id=response.data['id'])
+        
+        # Debe normalizarse conservando el primer formato encontrado y omitiendo duplicados
+        self.assertEqual(len(producto.colecciones), 2)
+        self.assertIn("Cyber", producto.colecciones)
+        self.assertIn("VERANO", producto.colecciones)
+
+    def test_filtro_coleccion_combina_con_categoria_y_paginacion(self):
+        """Verifica que ?coleccion= busque case-insensitive y se combine correctamente."""
+        # Producto que debe coincidir
+        Producto.objects.create(
+            nombre="Producto A", categoria="Electronica",
+            colecciones=["Cyber"], activo=True, publicado=True,
+            fecha_creacion=datetime.now()
+        )
+        # Producto con otra categoría
+        Producto.objects.create(
+            nombre="Producto B", categoria="Ropa",
+            colecciones=["Cyber"], activo=True, publicado=True,
+            fecha_creacion=datetime.now()
+        )
+        # Producto con otra colección
+        Producto.objects.create(
+            nombre="Producto C", categoria="Electronica",
+            colecciones=["Navidad"], activo=True, publicado=True,
+            fecha_creacion=datetime.now()
+        )
+
+        # Filtramos por coleccion 'cyber' (minúscula) y categoria 'Electronica' en la página 1
+        url = '/api/catalogo/productos/?coleccion=cyber&categoria=Electronica&page=1'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Solo "Producto A" cumple ambas condiciones
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['nombre'], "Producto A")
+
+    def test_producto_despublicado_no_cuenta_en_colecciones_disponibles(self):
+        """Garantiza que productos inactivos/despublicados no muestren sus colecciones."""
+        # Producto válido
+        Producto.objects.create(
+            nombre="Teclado", colecciones=["Navidad"],
+            categoria="Electronica",
+            activo=True, publicado=True,
+            fecha_creacion=datetime.now()
+        )
+        # Producto inválido (despublicado)
+        Producto.objects.create(
+            nombre="Mouse", colecciones=["BlackFriday"],
+            categoria="Electronica",
+            activo=True, publicado=False,
+            fecha_creacion=datetime.now()
+        )
+
+        # Ajusta esta URL a la ruta real de tu API que devuelve los filtros disponibles
+        response = self.client.get('/api/catalogo/filtros/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        colecciones_disponibles = response.data.get('colecciones', [])
+        
+        # La colección del producto publicado debe estar
+        self.assertIn("Navidad", colecciones_disponibles)
+        # La colección del producto despublicado NO debe estar
+        self.assertNotIn("BlackFriday", colecciones_disponibles)

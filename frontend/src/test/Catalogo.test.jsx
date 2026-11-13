@@ -445,4 +445,53 @@ describe('Catalogo', () => {
     // La elipsis debe existir como elemento decorativo
     expect(document.querySelector('.catalogo-paginacion__elipsis')).toBeInTheDocument();
   });
+
+  it('el selector de colecciones NO debe aparecer si la lista de colecciones está vacía', async () => {
+    configurarRespuestas({
+      results: [
+        { id: 1, nombre: 'Teclado mecánico', categoria: 'Electronica', activo: true, publicado: true }
+      ],
+      total_pages: 1,
+      count: 1,
+      filtros: {
+        categorias: ['Electronica'],
+        colecciones: []
+      }
+    });
+
+    renderCatalogo();
+
+    await waitFor(() => {
+      const selector = screen.queryByTestId('selector-colecciones');
+      expect(selector).not.toBeInTheDocument();
+    });
+  });
+
+  it('el selector de colecciones SÍ debe aparecer cuando hay colecciones vigentes', async () => {
+    
+    clienteAxios.get.mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('catalogo/productos')) {
+        return Promise.resolve({
+          data: {
+            results: [
+              { id: 1, nombre: 'Teclado mecánico', categoria: 'Electronica', activo: true, publicado: true }
+            ],
+            total_pages: 1,
+            count: 1,
+            filtros: {
+              categorias: ['Electronica'],
+              colecciones: ['Cyber', 'Verano']
+            }
+          }
+        });
+      }
+      
+      return Promise.resolve({ data: {} });
+    });
+
+    renderCatalogo();
+
+    const selector = await screen.findByTestId('selector-colecciones');
+    expect(selector).toBeInTheDocument();
+  });
 });

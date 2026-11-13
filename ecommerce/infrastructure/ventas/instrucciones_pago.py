@@ -1,5 +1,9 @@
 """Instrucciones para pagar una orden por transferencia: van en la respuesta del checkout y en el correo."""
 
+from datetime import datetime, time
+
+from django.utils import timezone
+
 from ecommerce.domain.medios_pago import CodigoMedioPago, PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO
 
 from .repositorio_medios_pago import DjangoRepositorioMediosPago
@@ -28,5 +32,11 @@ def instrucciones_transferencia(orden) -> dict | None:
 
 
 def fecha_limite_pago(orden):
-    """La guardada al crear la orden; las anteriores a guardarla tenían el plazo fijo de 48 horas."""
+    """La guardada al crear la orden; las anteriores a guardarla tenían el plazo fijo de 48 horas.
+
+    El pedido de un ciclo de una suscripción se puede pagar hasta el final del día de su entrega (lo cierra
+    manage.py procesar_suscripciones, no el plazo de las transferencias).
+    """
+    if getattr(orden, 'ciclo_fecha', None):
+        return timezone.make_aware(datetime.combine(orden.ciclo_fecha, time(23, 59)))
     return orden.fecha_limite_pago or orden.fecha_creacion + PLAZO_PAGO_TRANSFERENCIA_POR_DEFECTO

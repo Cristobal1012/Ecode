@@ -344,9 +344,9 @@
   }
 }
 
-/* Con el logo grande el header crece: el salto a las reseñas no queda tapado */
-@media (min-width: 1024px) {
+/* Con el logo grande el header (fijo arriba desde 768 px) crece: el salto a las reseñas no queda tapado */
+@media (min-width: 768px) {
   :root[data-logo='grande'] .detalle-resenas {
-    scroll-margin-top: 112px;
+    scroll-margin-top: 136px;
   }
 }

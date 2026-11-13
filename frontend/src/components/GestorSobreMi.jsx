@@ -7,8 +7,18 @@ import { Cargando } from './carga/Esqueleto';
 import { EsqueletoFormulario } from './carga/EsqueletosPanel';
 import Spinner from './carga/Spinner';
 import SelectorProyectosSobreMi from './SelectorProyectosSobreMi';
+import FotosSobreMi from './FotosSobreMi';
 
-const CAMPOS = ['sobre_mi_activo', 'sobre_mi_nombre', 'sobre_mi_biografia'];
+const CAMPOS = ['sobre_mi_activo', 'sobre_mi_nombre', 'sobre_mi_biografia', 'sobre_mi_foto_1', 'sobre_mi_foto_1_alt',
+  'sobre_mi_foto_2', 'sobre_mi_foto_2_alt'];
+
+// Las fotos guardadas (url) y lo que el admin cambió sin guardar todavía (archivo y su vista previa)
+const fotosDe = (configuracion) => Object.fromEntries([1, 2].map((numero) => {
+  const url = configuracion?.[`sobre_mi_foto_${numero}`] || null;
+  const alt = configuracion?.[`sobre_mi_foto_${numero}_alt`] || '';
+  // guardada y altGuardado: lo que está en el servidor, para enviar solo lo que cambió
+  return [numero, { url, alt, archivo: null, vista: null, guardada: url, altGuardado: alt }];
+}));
 
 const formularioDe = (configuracion) => ({
   sobre_mi_activo: Boolean(configuracion?.sobre_mi_activo),
@@ -34,6 +44,7 @@ const erroresDe = (error) => {
 
 export default function GestorSobreMi() {
   const [formulario, setFormulario] = useState(formularioDe(null));
+  const [fotos, setFotos] = useState(fotosDe(null));
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
@@ -45,6 +56,7 @@ export default function GestorSobreMi() {
     clienteAxios.get('configuracion/negocio/')
       .then(({ data }) => {
         setFormulario(formularioDe(data));
+        setFotos(fotosDe(data));
         setBlogActivo(Boolean(data.blog_activo));
       })
       .catch((error) => {
@@ -79,6 +91,21 @@ export default function GestorSobreMi() {
     setExito('');
   };
 
+  const cambiarFoto = (numero, cambios, error) => {
+    const campo = `sobre_mi_foto_${numero}`;
+    if (error) {
+      setErrores((actual) => ({ ...actual, [campo]: error }));
+      return;
+    }
+    setFotos((actual) => {
+      // La vista previa anterior ya no se usa
+      if ('vista' in cambios && actual[numero].vista) URL.revokeObjectURL(actual[numero].vista);
+      return { ...actual, [numero]: { ...actual[numero], ...cambios } };
+    });
+    setErrores((actual) => ({ ...actual, [campo]: undefined, [`${campo}_alt`]: undefined }));
+    setExito('');
+  };
+
   const guardar = async (e) => {
     e.preventDefault();
     setGuardando(true);
@@ -86,12 +113,23 @@ export default function GestorSobreMi() {
     setExito('');
 
     try {
-      const { data } = await clienteAxios.patch(
-        'configuracion/negocio/',
-        formulario
-      );
+      // Los textos, las descripciones y las fotos quitadas van en JSON (null quita la foto); las nuevas, aparte
+      const datos = { ...formulario };
+      const nuevas = new FormData();
+      for (const numero of [1, 2]) {
+        const foto = fotos[numero];
+        if (foto.alt !== foto.altGuardado) datos[`sobre_mi_foto_${numero}_alt`] = foto.alt;
+        if (foto.archivo) nuevas.append(`sobre_mi_foto_${numero}`, foto.archivo);
+        else if (foto.guardada && !foto.url) datos[`sobre_mi_foto_${numero}`] = null;
+      }
+      let { data } = await clienteAxios.patch('configuracion/negocio/', datos);
+      if ([...nuevas.keys()].length > 0) {
+        ({ data } = await clienteAxios.patch('configuracion/negocio/', nuevas, { headers: { 'Content-Type': undefined } }));
+      }
 
       setFormulario(formularioDe(data));
+      Object.values(fotos).forEach((foto) => foto.vista && URL.revokeObjectURL(foto.vista));
+      setFotos(fotosDe(data));
       await recargarConfiguracion();
 
       setExito(
@@ -190,6 +228,8 @@ export default function GestorSobreMi() {
             para presentar tu emprendimiento.
           </p>
         </div>
+
+        <FotosSobreMi fotos={fotos} onCambiar={cambiarFoto} errores={errores} />
 
         <div>
           <button

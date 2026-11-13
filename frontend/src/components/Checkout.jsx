@@ -5,6 +5,7 @@ import { ajustarCarrito, guardarCarrito, interpretarCarrito, leerSnapshotCarrito
 import useCarrito from '../hooks/useCarrito';
 import { EMPRESA_VACIA, normalizarRut, validarDatosEmpresa } from '../utils/empresa';
 import { cumpleMinimo, daEnvioGratis, elegirDescuento, montoDescuento, siguienteAutomatico } from '../utils/descuentos';
+import { descuentoSuscriptor } from '../utils/suscripciones';
 import { soloCaracteresDeTelefono } from '../utils/telefono';
 import './Checkout.css';
 import DatosEmpresa from './DatosEmpresa';
@@ -35,6 +36,8 @@ const itemsParaElServidor = (items) => items.map(item => ({
 // Nombre que ve el comprador para cada código de medio de pago (RN-02: el backend solo envía los disponibles)
 // Lo mínimo para avisar antes de pagar; el servidor lo valida de verdad (EmailField)
 const CORREO_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Sin suscripción activa (o sin el módulo): ni descuento ni envío gratis
+const SIN_BENEFICIOS = { descuento: 0, envio_gratis: false };
 
 const NOMBRES_MEDIO_PAGO = {
     TRANSBANK: 'Webpay (Transbank)',
@@ -130,6 +133,7 @@ function CheckoutContenido() {
     // No se suman: se muestra el que más ahorra, con el mismo cálculo que hace el servidor al pagar
     const [codigoEscrito, setCodigoEscrito] = useState(null);
     const [automaticos, setAutomaticos] = useState([]);
+    const [beneficios, setBeneficios] = useState(SIN_BENEFICIOS);
     const [codigoInput, setCodigoInput] = useState('');
     // El comprador intentó pagar con datos faltantes: desde ahí se muestra junto a los botones qué le falta
     const [intentoPagar, setIntentoPagar] = useState(false);
@@ -204,6 +208,15 @@ function CheckoutContenido() {
             .then(({ data }) => setAutomaticos(Array.isArray(data) ? data : []))
             .catch(() => setAutomaticos([]));
     }, []);
+
+    // Suscripciones (pedido de un cliente, opcional): el descuento y el envío gratis de su suscripción activa. Solo
+    // para la vista previa: el servidor los vuelve a calcular al comprar
+    useEffect(() => {
+        if (!usuarioAutenticado || !configTienda?.suscripciones_activas) return;
+        clienteAxios.get('ventas/suscripciones/beneficios/')
+            .then(({ data }) => setBeneficios({ descuento: Number(data?.descuento) || 0, envio_gratis: Boolean(data?.envio_gratis) }))
+            .catch(() => setBeneficios(SIN_BENEFICIOS));
+    }, [usuarioAutenticado, configTienda?.suscripciones_activas]);
 
     // Verificación de orden pendiente al cargar la página
     useEffect(() => {
@@ -432,8 +445,13 @@ function CheckoutContenido() {
     const tieneEnvioGratisCupon = Boolean(descuentoElegido && daEnvioGratis(descuentoElegido, subtotal));
     // "Te faltan $X": el automático más cercano que todavía no se alcanza
     const proximoAutomatico = siguienteAutomatico(automaticos, subtotal);
-    const costoEnvioFinal = tieneEnvioGratisCupon ? 0 : costoEnvio;
-    const totalFinal = Math.max(0, subtotal - montoDescontado) + costoEnvioFinal;
+    // Suscriptor: su descuento sobre lo que queda después del cupón, y envío gratis si su plan lo da
+    const baseConCupon = Math.max(0, subtotal - montoDescontado);
+    const montoSuscriptor = usuarioAutenticado ? descuentoSuscriptor(baseConCupon, beneficios.descuento) : 0;
+    const envioGratisSuscriptor = usuarioAutenticado && beneficios.envio_gratis;
+    const tieneEnvioGratis = tieneEnvioGratisCupon || envioGratisSuscriptor;
+    const costoEnvioFinal = tieneEnvioGratis ? 0 : costoEnvio;
+    const totalFinal = Math.max(0, baseConCupon - montoSuscriptor) + costoEnvioFinal;
 
     // El cupón se valida en el servidor (vigencia incluida) y su código viaja en el checkout, donde el
     // servidor vuelve a validarlo y lo descuenta del total: lo que se muestra aquí es solo una vista previa
@@ -949,7 +967,7 @@ function CheckoutContenido() {
                     <div className="checkout-resumen-lineas">
                         {itemsCarrito.length > 0 ? itemsCarrito.map((item) => (
                             <div className="checkout-resumen-linea" key={`${item.id}|${item.sku}`}>
-                                <span>{item.nombre} (x{item.cantidad})</span><span>${(item.precio * item.cantidad).toLocaleString('es-CL')}</span>
+                                <span>{`${item.nombre} (x${item.cantidad})`}</span><span>{`$${(item.precio * item.cantidad).toLocaleString('es-CL')}`}</span>
                             </div>
                         )) : <p>No hay productos</p>}
                     </div>
@@ -969,7 +987,7 @@ function CheckoutContenido() {
                     </div>
 
                     <div className="checkout-totales">
-                        <div className="checkout-total-linea"><span>Subtotal:</span><span>${subtotal.toLocaleString('es-CL')}</span></div>
+                        <div className="checkout-total-linea"><span>Subtotal:</span><span>{`$${subtotal.toLocaleString('es-CL')}`}</span></div>
 
                         {montoDescontado > 0 && (
                             <div className="checkout-total-linea checkout-total-linea--descuento">
@@ -979,23 +997,32 @@ function CheckoutContenido() {
                             </div>
                         )}
 
+                        {montoSuscriptor > 0 && (
+                            <div className="checkout-total-linea checkout-total-linea--descuento">
+                                <span>Descuento de suscriptor ({beneficios.descuento}%):</span>
+                                <span>-${montoSuscriptor.toLocaleString('es-CL')}</span>
+                            </div>
+                        )}
+
                         <div className="checkout-total-linea">
                             <span>Costo de envío:</span>
                             <span>
-                                {cotizando ? 'Calculando...' : tieneEnvioGratisCupon ? (
+                                {cotizando ? 'Calculando...' : tieneEnvioGratis ? (
                                     <>
                                         {costoEnvio > 0 && (
                                             <del className="checkout-precio-anterior">
-                                                ${costoEnvio.toLocaleString('es-CL')}
+                                                {`$${costoEnvio.toLocaleString('es-CL')}`}
                                             </del>
                                         )}
-                                        <span className="checkout-envio-gratis">$0 (Envío gratis)</span>
+                                        <span className="checkout-envio-gratis">
+                                            {envioGratisSuscriptor && !tieneEnvioGratisCupon ? '$0 (Envío gratis por tu suscripción)' : '$0 (Envío gratis)'}
+                                        </span>
                                     </>
                                 ) : `$${costoEnvio.toLocaleString('es-CL')}`}
                             </span>
                         </div>
 
-                        <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>${totalFinal.toLocaleString('es-CL')}</span></div>
+                        <div className="checkout-total-linea checkout-total-linea--final"><span>Total a pagar:</span><span>{`$${totalFinal.toLocaleString('es-CL')}`}</span></div>
                         {proximoAutomatico && subtotal > 0 && (
                             <p className="checkout-ayuda" role="status">
                                 Agrega ${(Number(proximoAutomatico.monto_minimo) - subtotal).toLocaleString('es-CL')} más y obtén{' '}

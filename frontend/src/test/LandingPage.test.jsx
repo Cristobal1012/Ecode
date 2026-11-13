@@ -304,6 +304,36 @@ describe('LandingPage', () => {
     // Nunca desaparece: está en un solo lugar
     expect(screen.getAllByRole('img', { name: 'Logo de la Universidad Autónoma' })).toHaveLength(1);
   });
+
+  it('mientras carga la configuración no muestra el logo de la Universidad en ningún lado, para no ponerlo arriba en una tienda que lo tiene abajo (RN-01)', async () => {
+    let entregar;
+    responder();
+    const respuestaNormal = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => (url === 'configuracion/'
+      ? new Promise((resolver) => { entregar = resolver; })
+      : respuestaNormal(url)));
+    await renderLandingConFooter();
+
+    expect(screen.queryByRole('img', { name: 'Logo de la Universidad Autónoma' })).not.toBeInTheDocument();
+
+    entregar({ data: { ...CONFIGURACION, ubicacion_logo_universidad: 'FOOTER' } });
+    const footer = await screen.findByRole('contentinfo');
+    await waitFor(() => expect(within(footer).getByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .toBeInTheDocument());
+    expect(screen.getAllByRole('img', { name: 'Logo de la Universidad Autónoma' })).toHaveLength(1);
+  });
+
+  it('si la configuración no responde, el logo de la Universidad igual aparece en el header (RN-01)', async () => {
+    responder();
+    const respuestaNormal = getMock.getMockImplementation();
+    getMock.mockImplementation((url) => (url === 'configuracion/'
+      ? Promise.reject(new Error('sin conexión')) : respuestaNormal(url)));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await renderLanding();
+
+    expect(await within(screen.getByRole('banner')).findByRole('img', { name: 'Logo de la Universidad Autónoma' }))
+      .toBeInTheDocument();
+  });
 });
 
 describe('LandingPage en modo edición (RF-01.1)', () => {
@@ -420,7 +450,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledTimes(1);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar'], ocultos: ['sobre_mi']
+      nombres: { catalogo: 'Productos' }, orden: ['catalogo', 'inicio', 'nosotros', 'sobre_mi', 'cotizar', 'suscripcion'], ocultos: ['sobre_mi']
     } });
     expect(config.texto_boton_ingreso).toBe('Ver piezas');
     cleanup();
@@ -480,7 +510,7 @@ describe('LandingPage en modo edición (RF-01.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await screen.findByText(/Cambios guardados/);
     expect(patchMock).toHaveBeenCalledWith('configuracion/negocio/', { menu_principal: {
-      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros'], ocultos: ['nosotros']
+      orden: ['catalogo', 'sobre_mi', 'inicio', 'cotizar', 'nosotros', 'suscripcion'], ocultos: ['nosotros']
     } });
   });
 

@@ -1,4 +1,5 @@
-"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes, NombresProductos y StockCatalogo."""
+"""Adaptadores MongoDB de los puertos CatalogoVariantes, InventarioVariantes, NombresProductos, StockCatalogo y
+CatalogoSuscripciones."""
 
 from decimal import Decimal
 
@@ -8,6 +9,7 @@ from mongoengine.errors import ValidationError as MongoValidationError
 
 from ecommerce.application.cotizaciones import NombresProductos
 from ecommerce.application.dashboard import StockCatalogo, VariantePocoStock
+from ecommerce.application.suscripciones import CatalogoSuscripciones, VarianteElegible
 from ecommerce.application.ventas import CatalogoVariantes, InventarioVariantes
 from ecommerce.domain.logistica import MedidasEnvio
 from ecommerce.domain.ventas import VarianteCatalogo
@@ -46,6 +48,35 @@ class MongoCatalogoVariantes(CatalogoVariantes):
             disponible=bool(producto.activo and producto.publicado and not getattr(producto, 'coleccion_privada', False)),
             medidas=MedidasEnvio(*(Decimal(str(getattr(variante, campo) or 0))
                                    for campo in ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm'))),
+        )
+
+
+def _medidas(variante) -> MedidasEnvio:
+    return MedidasEnvio(*(Decimal(str(getattr(variante, campo) or 0))
+                          for campo in ('peso_kg', 'alto_cm', 'ancho_cm', 'largo_cm')))
+
+
+class MongoCatalogoSuscripciones(CatalogoSuscripciones):
+    """La variante que el cliente recibe en su suscripción, con la categoría del producto (el plan admite productos
+    por categoría o puntuales)."""
+
+    def variante(self, producto_id, sku):
+        try:
+            producto = Producto.objects(id=producto_id).first()
+        except MongoValidationError:
+            return None
+        if producto is None:
+            return None
+        variante = next((v for v in producto.variantes if str(v.sku) == str(sku)), None)
+        if variante is None:
+            return None
+        # "Catuai Amarillo - Grano": los valores de sus atributos; sin atributos, el SKU
+        detalle = ', '.join(str(valor) for valor in (variante.atributos_variables or {}).values() if valor)
+        return VarianteElegible(
+            producto_id=str(producto.id), sku=str(variante.sku), nombre=f'{producto.nombre} - {detalle or variante.sku}',
+            categoria=producto.categoria or '', stock=int(variante.stock),
+            disponible=bool(producto.activo and producto.publicado and not getattr(producto, 'coleccion_privada', False)),
+            medidas=_medidas(variante),
         )
 
 

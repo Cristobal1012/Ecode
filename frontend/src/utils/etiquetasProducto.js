@@ -12,6 +12,7 @@ export function obtenerEtiquetaProducto(producto, etiquetaSeccion) {
   const privada = Boolean(producto.coleccion_privada);
   const { agotado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
   if (!privada && agotado) return { texto: 'Agotado', color: 'text', agotado: true };
+  if (producto.solo_suscriptores) return { texto: 'Exclusivo suscriptores', color: 'primary', personalizada: true };
   const propia = producto.etiqueta?.trim();
   if (propia) {
     const color = COLORES_ETIQUETA_PRODUCTO.some(opcion => opcion.valor === producto.etiqueta_color)

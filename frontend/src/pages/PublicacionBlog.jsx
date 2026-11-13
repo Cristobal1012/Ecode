@@ -6,6 +6,7 @@ import clienteAxios from '../components/auth/axiosConfig';
 import GaleriaPublicacion from '../components/GaleriaPublicacion';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
+import useCookieConsent from '../hooks/useCookieConsent';
 import { formatearFechaLarga } from '../utils/fechas';
 // El texto del editor se muestra con los mismos estilos que las páginas legales (.legal-contenido)
 import './PaginaLegal.css';
@@ -14,12 +15,16 @@ import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
 
 // RF-04.4, SCRUM-195: video de YouTube bajo demanda con botón accesible.
-// Hasta el clic no se carga nada de YouTube (ni siquiera miniaturas a img.youtube.com);
-// se muestra la portada de la publicación o un fondo neutro, y al hacer clic se monta el reproductor desde youtube-nocookie.com
+// La miniatura del video es una petición a YouTube (Google): solo se pide si el visitante aceptó las cookies de
+// marketing, como Meta Pixel. Sin esa aceptación (o sin decidir) no se conecta a YouTube hasta el clic: se muestra la
+// portada de la publicación o un fondo neutro. Al hacer clic se monta el reproductor desde youtube-nocookie.com
 export function VideoYouTube({ youtubeId, titulo, portada }) {
   const [reproduciendo, setReproduciendo] = useState(false);
+  const { preferences } = useCookieConsent();
 
   if (!youtubeId) return null;
+  // hqdefault existe para todo video; sus franjas de 4:3 quedan fuera del recuadro 16:9 (object-fit: cover)
+  const miniatura = preferences.marketing ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : portada;
 
   return (
     <div className="blog-video-contenedor">
@@ -33,11 +38,12 @@ export function VideoYouTube({ youtubeId, titulo, portada }) {
         />
       ) : (
         <div className="blog-video-facade">
-          {portada ? (
+          {miniatura ? (
             <img
-              src={portada}
+              src={miniatura}
               alt=""
               className="blog-video-miniatura"
+              referrerPolicy="no-referrer"
             />
           ) : (
             <div className="blog-video-miniatura blog-video-miniatura--neutra" aria-hidden="true" />

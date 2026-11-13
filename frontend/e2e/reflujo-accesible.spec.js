@@ -11,10 +11,8 @@ for (const ancho of [1440, 390, 768, 320]) {
     await page.route('**/api/ventas/mis-pedidos/', route => route.fulfill({ json: [] }));
     await page.setViewportSize({ width: ancho, height: ancho === 768 ? 1024 : ancho === 1440 ? 900 : 844 });
     for (const ruta of rutas) {
-      await page.goto(ruta, {
-        waitUntil: 'commit',
-        timeout: 10000,
-      });
+      await page.goto(ruta);
+      await medirVista(page);
       if (ruta === '/login') {
         await page.getByRole('button', { name: 'Regístrate aquí' }).click();
         await expect(page.getByRole('heading', { name: 'Crear cuenta', exact: true })).toBeVisible();
@@ -48,62 +46,49 @@ for (const tipografia of [1, 2, 3, 4, 5]) {
 for (const ajuste of ['texto al 200 %', 'espaciado personalizado']) {
   for (const tipografia of [1, 2, 3, 4, 5]) {
     test(`${ajuste}, tipografía ${tipografia}, sin cambiar el viewport`, async ({ page }) => {
-      const { inesperadas } = await prepararTienda(page, {
-        sesion: true,
-        tipografia,
-      });
-
+      const { inesperadas } = await prepararTienda(page, { sesion: true, tipografia });
       await page.setViewportSize({ width: 390, height: 844 });
-
       for (const ruta of ['/', '/catalogo', '/login', '/checkout', '/legal/terminos', '/admin']) {
-        await test.step(`Navegación a ${ruta}`, async () => {
-          await page.goto(ruta);
-        });
-
-        await test.step(`Medición inicial ${ruta}`, async () => {
-          await medirVista(page);
-        });
-
-        await test.step(`Aplicar ${ajuste} en ${ruta}`, async () => {
-          if (ajuste === 'texto al 200 %') {
-            await ampliarTexto(page);
-          } else {
-            await espaciarTexto(page);
-          }
-        });
-
-        await test.step(`Medición después del ajuste ${ruta}`, async () => {
-          await medirVista(page);
-        });
+        await page.goto(ruta);
+        await medirVista(page);
+        if (ajuste === 'texto al 200 %') await ampliarTexto(page);
+        else await espaciarTexto(page);
+        await medirVista(page);
       }
-
       await page.goto('/admin');
-
-      await test.step('Abrir inventario', async () => {
-        await page.getByRole('button', {
-          name: 'Inventario',
-          exact: true,
-        }).click();
-      });
-
-      await test.step('Abrir formulario de producto', async () => {
-        await page.getByRole('button', {
-          name: '+ Agregar producto',
-          exact: true,
-        }).click();
-      });
-
-      await test.step('Aplicar ajuste al formulario', async () => {
-        if (ajuste === 'texto al 200 %') {
-          await ampliarTexto(page);
-        } else {
-          await espaciarTexto(page);
-        }
-      });
-
+      await page.getByRole('button', { name: 'Inventario', exact: true }).click();
+      await page.getByRole('button', { name: '+ Agregar producto', exact: true }).click();
+      if (ajuste === 'texto al 200 %') await ampliarTexto(page);
+      else await espaciarTexto(page);
       await medirVista(page);
-
       expect(inesperadas).toEqual([]);
     });
   }
 }
+
+test('el formulario de producto y el editor no tienen errores automáticos en sus estados dinámicos', async ({ page }) => {
+  const { inesperadas } = await prepararTienda(page, { sesion: true });
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/admin');
+  await page.getByRole('button', { name: 'Inventario', exact: true }).click();
+  await page.getByRole('button', { name: '+ Agregar producto', exact: true }).click();
+  await page.getByRole('button', { name: /Agregar atributo global/i }).click();
+  const contrastes = await page.locator('.formulario-producto input:not([type="checkbox"]):not([type="file"]), .formulario-producto textarea, .formulario-producto select').evaluateAll(campos => {
+    const luminancia = color => color.match(/[\d.]+/g).slice(0, 3).map(Number)
+      .map(valor => valor / 255).map(valor => valor <= .04045 ? valor / 12.92 : ((valor + .055) / 1.055) ** 2.4)
+      .reduce((total, valor, indice) => total + valor * [.2126, .7152, .0722][indice], 0);
+    return campos.filter(campo => !campo.disabled && campo.getClientRects().length).map(campo => {
+      // En un campo de react-select (ej. Colecciones) el borde lo dibuja su contenedor, no el input donde se escribe
+      const estilo = getComputedStyle(campo.closest('[class*="__control"]') ?? campo);
+      const borde = luminancia(estilo.borderColor);
+      const fondo = luminancia(estilo.backgroundColor);
+      return { etiqueta: campo.labels?.[0]?.textContent.trim(), razon: (Math.max(borde, fondo) + .05) / (Math.min(borde, fondo) + .05) };
+    });
+  });
+  expect(contrastes.length).toBeGreaterThan(5);
+  expect(contrastes.filter(campo => campo.razon < 3)).toEqual([]);
+  const analisis = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(analisis.violations).toEqual([]);
+  await medirVista(page);
+  expect(inesperadas).toEqual([]);
+});

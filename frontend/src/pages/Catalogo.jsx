@@ -47,7 +47,7 @@ function mostrarValor(valor) {
 }
 
 // Identifica una consulta al servidor: si la cargada no es la pedida, el catálogo aún está cargando
-const claveConsulta = (pagina, categoria, filtros, orden) => JSON.stringify([pagina, categoria, filtros, orden]);
+const claveConsulta = (pagina, categoria, coleccion, filtros, orden) => JSON.stringify([pagina, categoria, coleccion, filtros, orden]);
 
 function calcularRangoPaginacion(paginaActual, total) {
   if (total <= 7) {
@@ -70,6 +70,7 @@ export default function Catalogo() {
 
   const [productos, setProductos] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
+  const [coleccionSeleccionada, setColeccionSeleccionada] = useState('');
   const [filtrosActivos, setFiltrosActivos] = useState({});
   const [ordenElegido, setOrden] = useState(null);
   const orden = ordenElegido ?? (ORDENES[configuracion?.orden_catalogo] ? configuracion.orden_catalogo : 'destacados');
@@ -82,7 +83,7 @@ export default function Catalogo() {
   const [totalProductos, setTotalProductos] = useState(0);
   const [filtrosServidor, setFiltrosServidor] = useState({ categorias: [], atributos: {} });
   const [consultaCargada, setConsultaCargada] = useState(null);
-  const cargando = consultaCargada !== claveConsulta(pagina, categoriaSeleccionada, filtrosActivos, orden);
+  const cargando = consultaCargada !== claveConsulta(pagina, categoriaSeleccionada, coleccionSeleccionada, filtrosActivos, orden);
 
   // APLICAR COLORES: Paleta del Administrador
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function Catalogo() {
   useEffect(() => {
     if (!configuracionDisponible) return;
     const controller = new AbortController();
-    const clave = claveConsulta(pagina, categoriaSeleccionada, filtrosActivos, orden);
+    const clave = claveConsulta(pagina, categoriaSeleccionada, coleccionSeleccionada, filtrosActivos, orden);
 
     const params = {
       page: pagina,
@@ -103,6 +104,9 @@ export default function Catalogo() {
     };
     if (categoriaSeleccionada) {
       params.categoria = categoriaSeleccionada;
+    }
+    if (coleccionSeleccionada) {
+      params.coleccion = coleccionSeleccionada;
     }
     Object.entries(filtrosActivos).forEach(([k, v]) => {
       if (v) params[`atributo_${k}`] = v;
@@ -140,7 +144,7 @@ export default function Catalogo() {
       });
 
     return () => controller.abort();
-  }, [pagina, categoriaSeleccionada, filtrosActivos, orden, configuracionDisponible]);
+  }, [pagina, categoriaSeleccionada, coleccionSeleccionada, filtrosActivos, orden, configuracionDisponible]);
 
   // LÓGICA DE FILTROS: Opciones que vienen del servidor o fallback local
   const categoriasUnicas = useMemo(() => {
@@ -196,6 +200,11 @@ export default function Catalogo() {
     setPagina(1);
   };
 
+  const cambiarColeccion = (evento) => {
+    setColeccionSeleccionada(evento.target.value);
+    setPagina(1); 
+  };
+
   const cambiarFiltroAtributo = (atributo, valor) => {
     setFiltrosActivos((previos) => ({ ...previos, [atributo]: valor }));
     setPagina(1);
@@ -227,6 +236,7 @@ export default function Catalogo() {
   );
 
   const esLista = layoutCatalogo === 'LISTA';
+  
 
   return (
     <div className="catalogo-page">
@@ -251,6 +261,27 @@ export default function Catalogo() {
                 ))}
               </select>
             </div>
+
+            {(filtrosServidor?.colecciones && filtrosServidor.colecciones.length > 0) && (
+              <div className="catalogo__campo" data-testid="selector-colecciones">
+                <label htmlFor="coleccion">Colección</label>
+                <select
+                  id="coleccion"
+                  value={coleccionSeleccionada}
+                  onChange={cambiarColeccion}
+                >
+                  <option value="">Cualquier colección</option>
+                  
+                  
+                  {filtrosServidor.colecciones.map((coleccion) => (
+                    <option key={coleccion} value={coleccion}>
+                      {coleccion}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
 
             {categoriaSeleccionada && atributosDinamicos.map((atributo) => (
               <div className="catalogo__campo" key={atributo}>

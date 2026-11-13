@@ -1,4 +1,5 @@
-"""Adaptador SMTP (Django) del puerto NotificadorPedidos: correos al comprador (RF-04.2)."""
+"""Adaptadores SMTP (Django) de los puertos NotificadorPedidos, NotificadorCotizaciones y
+NotificadorSuscripciones: correos al comprador (RF-04.2)."""
 
 import logging
 import os
@@ -11,14 +12,16 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from ecommerce.application.cotizaciones import NotificadorCotizaciones
+from ecommerce.application.suscripciones import NotificadorSuscripciones
 from ecommerce.application.ventas import MOTIVO_PAGO_ANULADO, MOTIVO_PAGO_VENCIDO, NotificadorPedidos
 from ecommerce.domain.empresa import DatosEmpresa
+from ecommerce.domain.suscripciones import EventoSuscripcion, frecuencia_legible
 from ecommerce.domain.logistica import DIRECCION_POR_ACORDAR, ENTREGA_COORDINADA, aviso_entrega_coordinada
 from ecommerce.domain.ventas import EstadoPedido, EventoPedido
 
 from ..enlaces_resena import url_resena
 from ..instrucciones_pago import fecha_limite_pago, instrucciones_transferencia
-from ..models import ConfiguracionGlobal, Cotizacion, OrdenCompra, Resena
+from ..models import ConfiguracionGlobal, Cotizacion, OrdenCompra, Resena, Suscripcion
 
 logger = logging.getLogger(__name__)
 
@@ -225,3 +228,79 @@ class CorreoNotificadorCotizaciones(NotificadorCotizaciones):
             filas.append(('Fotos', f"{cantidad_fotos} {'adjunta' if cantidad_fotos == 1 else 'adjuntas'}"))
         filas += [('Nombre', cotizacion.nombre), ('Correo', cotizacion.correo), ('Teléfono', cotizacion.telefono)]
         return filas
+
+
+
+MESES = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre',
+         'noviembre', 'diciembre')
+
+
+def fecha_larga(fecha) -> str:
+    """11 de noviembre de 2026"""
+    return f'{fecha.day} de {MESES[fecha.month - 1]} de {fecha.year}' if fecha else ''
+
+
+ASUNTOS_SUSCRIPCION = {
+    EventoSuscripcion.ACTIVADA: 'Tu suscripción {plan} está activa',
+    EventoSuscripcion.AVISO_COBRO: 'Paga tu próxima entrega de {plan}',
+    EventoSuscripcion.CICLO_NO_PAGADO: 'No recibimos el pago de tu entrega de {plan}',
+    EventoSuscripcion.PAUSADA: 'Pausaste tu suscripción {plan}',
+    EventoSuscripcion.REANUDADA: 'Reanudaste tu suscripción {plan}',
+    EventoSuscripcion.CANCELADA: 'Cancelaste tu suscripción {plan}',
+    EventoSuscripcion.NO_ACTIVADA: 'Tu suscripción {plan} no se activó',
+}
+
+
+class CorreoNotificadorSuscripciones(NotificadorSuscripciones):
+    """Hitos de la suscripción. El pago aprobado o rechazado de cada ciclo lo avisa el correo del pedido."""
+
+    def notificar(self, suscripcion_id, evento, orden_id=None):
+        # Como los pedidos: no se avisa un cambio que luego haga rollback
+        transaction.on_commit(lambda: self._enviar(suscripcion_id, EventoSuscripcion(evento), orden_id))
+
+    def _enviar(self, suscripcion_id, evento, orden_id):
+        try:
+            suscripcion = Suscripcion.objects.select_related('plan', 'usuario').get(id=suscripcion_id)
+            if not suscripcion.usuario.email:
+                return
+            contexto = self._contexto(suscripcion, orden_id)
+            plantilla = f'ventas/correos/suscripcion_{evento.value.lower()}'
+            asunto = ASUNTOS_SUSCRIPCION[evento].format(plan=suscripcion.plan.nombre)
+            correo = EmailMultiAlternatives(
+                subject=f"{asunto} | {contexto['tienda']}",
+                body=render_to_string(f'{plantilla}.txt', contexto),
+                from_email=settings.DEFAULT_FROM_EMAIL, to=[suscripcion.usuario.email],
+                reply_to=[contexto['correo_contacto']] if contexto['correo_contacto'] else None,
+            )
+            correo.attach_alternative(render_to_string(f'{plantilla}.html', contexto), 'text/html')
+            correo.send()
+        except Exception:
+            logger.exception('No se pudo enviar el correo %s de la suscripción %s', evento, suscripcion_id)
+
+    @staticmethod
+    def _contexto(suscripcion, orden_id):
+        config = ConfiguracionGlobal.objects.filter(pk=1).first()
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+        orden = OrdenCompra.objects.prefetch_related('detalles').filter(pk=orden_id).first() if orden_id else None
+        contexto = {
+            'tienda': config.nombre_tienda if config and config.nombre_tienda else 'Nuestra tienda',
+            'correo_contacto': (config.correo_contacto or '').strip() if config else '',
+            'suscripcion': suscripcion,
+            'plan': suscripcion.plan,
+            'frecuencia': frecuencia_legible(suscripcion.plan.frecuencia_semanas).lower(),
+            'producto': suscripcion.nombre_producto,
+            'unidades': suscripcion.plan.unidades,
+            'proxima_entrega': fecha_larga(suscripcion.proxima_entrega),
+            'url_suscripciones': f'{frontend_url}/mis-suscripciones',
+            'orden': orden,
+        }
+        if orden is not None:
+            contexto.update({
+                'total': pesos(orden.total_final),
+                'costo_envio': pesos(orden.costo_envio),
+                'fecha_ciclo': fecha_larga(orden.ciclo_fecha),
+                'url_pagar': f'{frontend_url}/mis-suscripciones/pagar/{orden.id}',
+                'transferencia': CorreoNotificadorPedidos._transferencia(orden),
+                'entrega': CorreoNotificadorPedidos._entrega(orden, config),
+            })
+        return contexto

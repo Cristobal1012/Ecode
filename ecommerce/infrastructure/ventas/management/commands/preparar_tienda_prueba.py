@@ -31,8 +31,8 @@ MEDIOS_DE_PRUEBA = {
 
 # Borradores: sin publicar Términos y Privacidad no se puede comprar (EXIGIR_PAGINAS_LEGALES), así que el
 # admin tiene que completarlos con los datos reales de la tienda y publicarlos
-AVISO_PLANTILLA = ('<p><strong>Plantilla de prueba:</strong> reemplaza cada [completar] con los datos de tu tienda '
-                   'y revisa el texto antes de publicarlo.</p>')
+AVISO_PLANTILLA = ('<p><strong>Plantilla de ejemplo:</strong> reemplaza cada [completar] con los datos de tu tienda. '
+                   'Este texto no reemplaza la asesoría de un abogado: revísalo con uno antes de publicarlo.</p>')
 
 PAGINAS_LEGALES = {
     'TERMINOS': ('Términos y Condiciones', AVISO_PLANTILLA + """

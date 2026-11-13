@@ -76,17 +76,16 @@ curl -sI --max-time 10 http://<IP pública>/ | head -1
 
 ### Sistema y swap
 
-```bash
+\```bash
 sudo apt update && sudo apt upgrade -y
 sudo timedatectl set-timezone America/Santiago
 # Parches de seguridad automáticos (en Ubuntu vienen activos; esto lo confirma)
 sudo dpkg-reconfigure -plow unattended-upgrades
-```
+\```
 
-Un swap de 2 GB hace que un pico de memoria ponga lenta la tienda unos segundos en vez de cerrar MongoDB. Si
-`swapon --show` ya muestra uno, sáltate esto:
+Un swap de 2 GB hace que un pico de memoria ponga lenta la tienda unos segundos en vez de cerrar MongoDB. Si `swapon --show` ya muestra uno, sáltate esto:
 
-```bash
+\```bash
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
@@ -94,12 +93,72 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 # Usar el swap solo cuando falte memoria
 echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swap.conf && sudo sysctl --system
-```
+\```
 
 Compruébalo con `free -h`: la línea `Swap` debe decir `2.0Gi`.
 
-### Docker
+### Configurar el firewall del servidor
 
+Antes de activar UFW, permitir los puertos necesarios para administrar el servidor y recibir conexiones web:
+
+\```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+\```
+
+**Importante:** antes de activar UFW, comprobar que el acceso SSH funciona correctamente y que el puerto 22 está permitido. Así se evita perder el acceso remoto al servidor.
+
+Activar el firewall:
+
+\```bash
+sudo ufw enable
+\```
+
+Comprobar las reglas:
+
+\```bash
+sudo ufw status verbose
+\```
+
+Deben encontrarse permitidos los siguientes puertos:
+
+- `22/tcp`: conexión SSH.
+- `80/tcp`: tráfico HTTP y validación de certificados.
+- `443/tcp`: tráfico HTTPS.
+
+Además del firewall UFW de Ubuntu, algunos proveedores VPS disponen de un firewall propio desde su panel de administración. Se deben permitir también estos puertos en dicho panel cuando corresponda.
+
+### Usuario para administrar el servidor
+
+Durante la preparación inicial del servidor se puede utilizar `root` para realizar tareas administrativas, como instalar paquetes, configurar SSH y crear usuarios.
+
+Una vez creado el usuario `despliegue` y configurados sus permisos, las operaciones habituales de publicación deben realizarse con este usuario.
+
+Para cambiar desde `root` al usuario de despliegue:
+
+\```bash
+su - despliegue
+\```
+
+Para comprobar que se está utilizando el usuario correcto:
+
+\```bash
+whoami
+pwd
+\```
+
+El resultado de `whoami` debe ser `despliegue`.
+
+Si se cierra la conexión SSH, se debe volver a conectar utilizando ese usuario:
+
+\```bash
+ssh despliegue@IP_DEL_SERVIDOR
+\```
+
+Se recomienda reservar el usuario `root` para tareas administrativas que realmente lo requieran.
+
+### Docker
 Docker Engine y el plugin `docker compose`, desde el repositorio oficial de Docker:
 
 ```bash
@@ -138,6 +197,26 @@ sudo sshd -t && sudo systemctl reload ssh
 `sshd -t` revisa la configuración antes de aplicarla. **No cierres la sesión** hasta comprobar, desde otra terminal,
 que entras con la clave. Si algo falla, la consola web de OpenCloud sigue entrando con la contraseña de root, porque
 no pasa por el SSH.
+
+### Aplicar los permisos de Docker
+
+Después de agregar el usuario `despliegue` al grupo `docker`, es necesario iniciar una nueva sesión SSH para que los permisos se apliquen.
+
+Desde otra terminal, ingresar al servidor:
+
+\```bash
+ssh despliegue@IP_DEL_SERVIDOR
+\```
+
+Comprobar que se está utilizando el usuario correcto y que Docker funciona sin `sudo`:
+
+\```bash
+whoami
+docker ps
+docker compose version
+\```
+
+El comando `whoami` debe mostrar `despliegue`. Si Docker funciona correctamente, el usuario ya puede administrar los contenedores sin utilizar `sudo`.
 
 ## 2. Configurar y levantar la tienda
 
@@ -182,6 +261,50 @@ El archivo va **fuera del repositorio**. En él:
 - `GOOGLE_CLIENT_ID`: el Client ID que entrega el cliente ([6.4](#64-inicio-de-sesión-con-google)).
 - Correo: la API key de Resend que entrega el cliente ([4. Correo](#4-correo)).
 - `SECURE_HSTS_SECONDS=3600`. Súbelo a `31536000` solo cuando todo funcione.
+
+### Validar cambios en el archivo de variables
+
+Cuando se modifica el archivo de variables de una tienda, es importante comprobar que Docker Compose puede interpretar correctamente su contenido antes de reiniciar los servicios.
+
+Editar el archivo correspondiente:
+
+\```bash
+nano /opt/tiendas/mitienda.env
+\```
+
+Asegurar que solamente el usuario de despliegue tenga acceso al archivo:
+
+\```bash
+chmod 600 /opt/tiendas/mitienda.env
+\```
+
+Validar la configuración de Docker Compose:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env config --quiet
+\```
+
+Si el comando termina sin mostrar errores, la configuración pudo interpretarse correctamente.
+
+Después de modificar variables que utiliza el backend, reiniciar ese servicio:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env restart backend
+\```
+
+Comprobar que el contenedor esté funcionando:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env ps
+\```
+
+Si el servicio no inicia correctamente, revisar sus registros:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=100 backend
+\```
+
+**Importante:** `config --quiet` valida la configuración de Compose, pero no garantiza que las credenciales externas sean correctas ni que los servicios puedan conectarse entre sí.
 
 ### Primer arranque
 
@@ -283,13 +406,29 @@ que solo está en el mismo servidor se pierde con él.
 
 ## 4. Correo
 
-El backend elige cómo enviar según las variables de entorno: la API HTTPS de **Resend** si hay `RESEND_API_KEY`; si
-no, **SMTP** si hay `EMAIL_HOST`; y si no hay ninguna, los correos solo se imprimen en la consola. El remitente que ve
-el comprador es `DEFAULT_FROM_EMAIL`. Para probar que llegan, sin hacer una compra:
+El backend elige cómo enviar según las variables de entorno: la API HTTPS de **Resend** si hay `RESEND_API_KEY`; si no, **SMTP** si hay `EMAIL_HOST`; y si no hay ninguna, los correos solo se imprimen en la consola. El remitente que ve el comprador es `DEFAULT_FROM_EMAIL`.
 
-```bash
-python manage.py sendtestemail correo@ejemplo.cl
-```
+### Probar el envío de correo desde la VPS
+
+Para comprobar que los correos llegan correctamente, sin necesidad de realizar una compra, ejecutar el siguiente comando desde la carpeta del repositorio:
+
+\```bash
+cd /opt/tiendas/codigo
+
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec backend python manage.py sendtestemail correo@ejemplo.cl
+\```
+
+Reemplazar `correo@ejemplo.cl` por una dirección de correo a la que se tenga acceso.
+
+Si el envío no funciona, revisar los registros del backend:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=100 backend
+\```
+
+También comprobar que `RESEND_API_KEY` y `DEFAULT_FROM_EMAIL` estén correctamente configurados en el archivo de variables de la tienda.
+
+La prueba se considera exitosa cuando el correo llega a la bandeja de entrada del destinatario.
 
 **Si el comprador responde un correo del pedido**, la respuesta va al **correo de contacto** de la tienda
 (Configuración > Contacto y Redes), no al remitente: Resend solo envía, y una dirección como `ventas@mitienda.cl` no
@@ -493,6 +632,35 @@ El cliente crea su proyecto y su cliente OAuth en Google Cloud Console con el mi
 en los orígenes de JavaScript autorizados y la pantalla de consentimiento **"En producción"** (en "Prueba" solo
 entran los usuarios agregados a mano). Entrega el Client ID, que el equipo pone en `GOOGLE_CLIENT_ID` antes de
 levantar la tienda.
+
+### Verificar el inicio de sesión con Google en producción
+
+Una vez configurado el dominio y desplegada la aplicación, se debe comprobar que el inicio de sesión con Google funciona desde la dirección pública de la tienda.
+
+Antes de probar, verificar en Google Cloud Console que los orígenes autorizados incluyan los dominios utilizados por la tienda:
+
+- `https://mitienda.cl`
+- `https://www.mitienda.cl` (si se utiliza este dominio).
+
+Luego realizar las siguientes comprobaciones:
+
+1. Abrir la tienda utilizando su dominio público.
+2. Comprobar que la página carga correctamente mediante HTTPS.
+3. Probar el inicio de sesión tradicional.
+4. Probar el inicio de sesión con Google.
+5. Confirmar que el usuario puede ingresar correctamente a su cuenta.
+
+Si el inicio de sesión tradicional funciona, pero Google devuelve un error, revisar los registros del backend:
+
+\```bash
+docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=150 backend
+\```
+
+También se debe comprobar que `GOOGLE_CLIENT_ID` esté configurado correctamente y que coincida con el identificador utilizado por el frontend y la configuración de Google Cloud.
+
+Si la solicitud al endpoint de autenticación de Google devuelve un error HTTP `403`, se debe revisar la implementación de validación del token en el backend y los registros asociados a la solicitud.
+
+**Importante:** que la tienda tenga HTTPS y que el inicio de sesión tradicional funcione no garantiza que Google OAuth esté correctamente implementado. Se debe probar este flujo de manera independiente.
 
 ### 6.5 Medios de pago reales
 

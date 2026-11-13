@@ -76,3 +76,28 @@ class ActualizarBannersApplicationTests(TestCase):
         for item in [{'titulo': 'Murales'}, {'ref': 'otro', 'titulo': 'Murales'}, {'ref': 'nuevo:4', 'titulo': 'Murales'}]:
             with self.subTest(item=item), self.assertRaises(EstructuraBannerInvalida):
                 self.caso_de_uso.ejecutar(1, [item], [])
+
+class VideoEnManifiestoTests(TestCase):
+    def test_asocia_video_con_imagen_nueva(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        video = object()
+        ActualizarBanners(repo).ejecutar(1, [{'ref': 'nuevo:0', 'titulo': 'Video', 'video_indice': 0}],
+                                         [object()], [video])
+        self.assertEqual(repo.guardar_banners.call_args.kwargs['nuevos_videos'], [video])
+        self.assertEqual(repo.guardar_banners.call_args.kwargs['asociaciones'], {'nuevo:0': 0})
+
+    def test_rechaza_video_sin_imagen_asociada(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        with self.assertRaises(EstructuraBannerInvalida):
+            ActualizarBanners(repo).ejecutar(1, [], [], [object()])
+        repo.guardar_banners.assert_not_called()
+
+    def test_rechaza_video_asociado_a_foto_existente(self):
+        from unittest.mock import Mock
+        repo = Mock()
+        with self.assertRaises(EstructuraBannerInvalida):
+            ActualizarBanners(repo).ejecutar(1, [{'ref': 'id:1', 'titulo': 'Video', 'video_indice': 0}],
+                                             [], [object()])
+        repo.guardar_banners.assert_not_called()

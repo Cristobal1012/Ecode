@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { botonDeFoto, textoBotonCatalogo } from '../../utils/menuPrincipal';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
@@ -20,6 +20,17 @@ export default function Portada({ configuracion, edicion }) {
   const editando = Boolean(edicion?.editando);
   const [indiceActivo, setIndiceActivo] = useState(0);
   const [pausado, setPausado] = useState(false);
+  const videosRef = useRef({});
+  const [movimientoReducido, setMovimientoReducido] = useState(() =>
+    typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
+  const [ahorroDatos] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.connection?.saveData));
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+    const actualizar = () => setMovimientoReducido(media.matches);
+    media.addEventListener?.('change', actualizar);
+    return () => media.removeEventListener?.('change', actualizar);
+  }, []);
   // WCAG 2.2.2: mientras el mouse o el foco están sobre los textos o el botón, la foto no cambia
   const [enUso, setEnUso] = useState(false);
   // Al cambiar de foto con las flechas, el reloj vuelve a empezar y se anuncia la posición
@@ -31,6 +42,16 @@ export default function Portada({ configuracion, edicion }) {
   // En el modo edición se ve la foto que el admin está editando
   const editandoFotos = editando && edicion.banners?.length > 0;
   const indiceSeguro = editandoFotos ? edicion.fotoEditada : totalFotos > 0 ? indiceActivo % totalFotos : 0;
+  const permitirVideo = Boolean(configuracion.video_banner_activo) && !ahorroDatos && !movimientoReducido && !editando;
+  useEffect(() => {
+    Object.entries(videosRef.current).forEach(([indice, video]) => {
+      if (!video) return;
+      if (permitirVideo && Number(indice) === indiceSeguro && !pausado && !enUso) {
+        const resultado = video.play();
+        resultado?.catch?.(() => {});
+      } else video.pause();
+    });
+  }, [indiceSeguro, pausado, enUso, permitirVideo, totalFotos]);
   const imagenActual = listaFotos[indiceSeguro]?.imagen || PORTADA_POR_DEFECTO;
 
   // Textos y botón de la foto que se ve; sin fotos propias, los generales de la portada con el botón al catálogo
@@ -83,12 +104,17 @@ export default function Portada({ configuracion, edicion }) {
       <div className="portada-carrusel" aria-hidden="true">
         {listaFotos.map((foto, index) => {
           const debeCargar = fotosCargadas.has(index) || editando;
+          const cargarVideo = permitirVideo && Boolean(foto.video) &&
+            (index === indiceSeguro || index === (indiceSeguro + 1) % totalFotos);
           return (
             <div
               key={foto.id ?? index}
               className={`portada-diapositiva ${index === indiceSeguro ? 'portada-diapositiva--activa' : ''}`}
               style={debeCargar ? { backgroundImage: `url("${foto.imagen}")` } : undefined}
-            />
+            >
+              {cargarVideo && <video ref={(elemento) => { videosRef.current[index] = elemento; }}
+                src={foto.video} muted loop playsInline preload="metadata" aria-hidden="true" />}
+            </div>
           );
         })}
       </div>
@@ -103,12 +129,12 @@ export default function Portada({ configuracion, edicion }) {
 
       {/* Con 2+ fotos: flechas y pausa juntas, abajo a la derecha para no tapar los textos (WCAG 2.2.2).
           Mientras el foco está en ellas, la foto no cambia sola */}
-      {totalFotos >= 2 && !editando && (
+      {(totalFotos >= 2 || (permitirVideo && Boolean(fotoActual?.video))) && !editando && (
         <div className="portada-controles-carrusel" role="group" aria-label="Controles del carrusel"
           onFocus={() => setEnUso(true)} onBlur={salirDe}>
-          <button type="button" className="portada-control-carrusel" aria-label="Foto anterior" onClick={() => irA(-1)}>
+          {totalFotos >= 2 && <button type="button" className="portada-control-carrusel" aria-label="Foto anterior" onClick={() => irA(-1)}>
             <span aria-hidden="true">‹</span>
-          </button>
+          </button>}
           <button
             type="button"
             className="portada-boton-pausa"
@@ -118,9 +144,9 @@ export default function Portada({ configuracion, edicion }) {
             <span aria-hidden="true">{pausado ? '▶' : '⏸'}</span>
             <span>{pausado ? 'Reanudar carrusel' : 'Pausar carrusel'}</span>
           </button>
-          <button type="button" className="portada-control-carrusel" aria-label="Foto siguiente" onClick={() => irA(1)}>
+          {totalFotos >= 2 && <button type="button" className="portada-control-carrusel" aria-label="Foto siguiente" onClick={() => irA(1)}>
             <span aria-hidden="true">›</span>
-          </button>
+          </button>}
           <span className="portada-posicion-carrusel" aria-hidden="true">{indiceSeguro + 1} / {totalFotos}</span>
           <span role="status" className="visualmente-oculto">{anuncio}</span>
         </div>

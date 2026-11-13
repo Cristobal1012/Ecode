@@ -47,7 +47,8 @@ class ActualizarBanners:
     def __init__(self, repositorio: RepositorioBanners):
         self.repositorio = repositorio
 
-    def ejecutar(self, configuracion_id: int, raw_orden, nuevos_archivos: list) -> None:
+    def ejecutar(self, configuracion_id: int, raw_orden, nuevos_archivos: list, nuevos_videos=None) -> None:
+        nuevos_videos = list(nuevos_videos or [])
         # 1. Parsear y validar formato de banner_orden
         if isinstance(raw_orden, str):
             try:
@@ -66,6 +67,18 @@ class ActualizarBanners:
         validar_cantidad_fotos_banner(len(orden_list))
 
         # 3. Separar la referencia de cada foto de sus textos; los textos se validan en el dominio
+        asociaciones = {}
+        for item in orden_list:
+            if isinstance(item, dict) and 'video_indice' in item:
+                ref = item.get('ref')
+                indice = item['video_indice']
+                if not isinstance(ref, str) or not ref.startswith('nuevo:') or not isinstance(indice, int) or isinstance(indice, bool) or indice < 0 or indice >= len(nuevos_videos):
+                    raise EstructuraBannerInvalida('La referencia del video es inválida.')
+                if indice in asociaciones.values():
+                    raise EstructuraBannerInvalida('Un video no puede asignarse a varias diapositivas.')
+                asociaciones[ref] = indice
+        if len(asociaciones) != len(nuevos_videos):
+            raise EstructuraBannerInvalida('Cada video debe tener una diapositiva con imagen de portada.')
         separados = [separar_referencia_y_textos(item) for item in orden_list]
         orden_list = [referencia for referencia, _ in separados]
         textos = [textos_foto for _, textos_foto in separados]
@@ -97,4 +110,8 @@ class ActualizarBanners:
                 raise EstructuraBannerInvalida(f'Tipo de dato inválido en banner_orden: {type(item)}')
 
         # 5. Delegar la persistencia atómica y validación de archivos al puerto
-        self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos, textos)
+        if nuevos_videos:
+            self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos, textos,
+                                             nuevos_videos=nuevos_videos, asociaciones=asociaciones)
+        else:
+            self.repositorio.guardar_banners(configuracion_id, orden_list, nuevos_archivos, textos)

@@ -66,8 +66,9 @@ A eso se suman 300 a 400 MB de Ubuntu y Docker, más la memoria que pide compila
 memoria, Linux cierra un proceso (casi siempre MongoDB) y la tienda se cae hasta que se reinicia.
 
 Apenas OpenCloud entregue la máquina, comprueba desde tu computador que el SSH responde en el puerto **22** (el que
-indique el panel puede no ser el que funciona). Después de levantar la tienda, comprueba el 80. Si el panel de
-OpenCloud tiene un firewall, abre ahí el 22, el 80 y el 443.
+indique el panel puede no ser el que funciona). Una VPS recién entregada usa el 22; si más adelante cambias el puerto
+de SSH, ver [Puerto SSH personalizado](#puerto-ssh-personalizado). Después de levantar la tienda, comprueba el 80. Si
+el panel de OpenCloud tiene un firewall, abre ahí el 22 (o el puerto SSH personalizado, si lo usas), el 80 y el 443.
 
 ```bash
 ssh -o ConnectTimeout=10 root@<IP pública> true && echo "SSH OK"
@@ -76,16 +77,16 @@ curl -sI --max-time 10 http://<IP pública>/ | head -1
 
 ### Sistema y swap
 
-\```bash
+```bash
 sudo apt update && sudo apt upgrade -y
 sudo timedatectl set-timezone America/Santiago
 # Parches de seguridad automáticos (en Ubuntu vienen activos; esto lo confirma)
 sudo dpkg-reconfigure -plow unattended-upgrades
-\```
+```
 
 Un swap de 2 GB hace que un pico de memoria ponga lenta la tienda unos segundos en vez de cerrar MongoDB. Si `swapon --show` ya muestra uno, sáltate esto:
 
-\```bash
+```bash
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
@@ -93,7 +94,7 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 # Usar el swap solo cuando falte memoria
 echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swap.conf && sudo sysctl --system
-\```
+```
 
 Compruébalo con `free -h`: la línea `Swap` debe decir `2.0Gi`.
 
@@ -101,31 +102,33 @@ Compruébalo con `free -h`: la línea `Swap` debe decir `2.0Gi`.
 
 Antes de activar UFW, permitir los puertos necesarios para administrar el servidor y recibir conexiones web:
 
-\```bash
+```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-\```
+```
 
-**Importante:** antes de activar UFW, comprobar que el acceso SSH funciona correctamente y que el puerto 22 está permitido. Así se evita perder el acceso remoto al servidor.
+**Importante:** antes de activar UFW, comprobar que el acceso SSH funciona correctamente y que el puerto por el que escucha SSH está permitido (el 22 en una instalación estándar; si ya cambiaste el puerto, ver [Puerto SSH personalizado](#puerto-ssh-personalizado)). Así se evita perder el acceso remoto al servidor.
 
 Activar el firewall:
 
-\```bash
+```bash
 sudo ufw enable
-\```
+```
 
 Comprobar las reglas:
 
-\```bash
+```bash
 sudo ufw status verbose
-\```
+```
 
 Deben encontrarse permitidos los siguientes puertos:
 
 - `22/tcp`: conexión SSH.
 - `80/tcp`: tráfico HTTP y validación de certificados.
 - `443/tcp`: tráfico HTTPS.
+
+Si la VPS usa un puerto SSH personalizado (`PUERTO_SSH/tcp`), ese puerto también debe estar permitido; el procedimiento completo está en [Puerto SSH personalizado](#puerto-ssh-personalizado).
 
 Además del firewall UFW de Ubuntu, algunos proveedores VPS disponen de un firewall propio desde su panel de administración. Se deben permitir también estos puertos en dicho panel cuando corresponda.
 
@@ -137,24 +140,27 @@ Una vez creado el usuario `despliegue` y configurados sus permisos, las operacio
 
 Para cambiar desde `root` al usuario de despliegue:
 
-\```bash
+```bash
 su - despliegue
-\```
+```
 
 Para comprobar que se está utilizando el usuario correcto:
 
-\```bash
+```bash
 whoami
 pwd
-\```
+```
 
 El resultado de `whoami` debe ser `despliegue`.
 
-Si se cierra la conexión SSH, se debe volver a conectar utilizando ese usuario:
+Si se cierra la conexión SSH, se debe volver a conectar utilizando ese usuario, con el puerto que use la VPS:
 
-\```bash
+```bash
+# Puerto 22 estándar
 ssh despliegue@IP_DEL_SERVIDOR
-\```
+# Puerto SSH personalizado de la VPS
+ssh -p PUERTO_SSH despliegue@IP_DEL_SERVIDOR
+```
 
 Se recomienda reservar el usuario `root` para tareas administrativas que realmente lo requieran.
 
@@ -198,23 +204,86 @@ sudo sshd -t && sudo systemctl reload ssh
 que entras con la clave. Si algo falla, la consola web de OpenCloud sigue entrando con la contraseña de root, porque
 no pasa por el SSH.
 
+### Puerto SSH personalizado
+
+Por defecto SSH escucha en el puerto 22, y así queda una VPS recién entregada. Cambiarlo es **opcional**: cada tienda
+puede mantener el 22 o usar otro puerto. Si no vas a cambiarlo, sáltate esta sección y usa los comandos con el 22. Si
+lo cambias, reemplaza `PUERTO_SSH` por el puerto que elijas para esa VPS.
+
+**Ejemplo (Taller Maché):** en esa VPS el acceso SSH se configuró por el puerto `5358`, con el usuario `despliegue`.
+Es la decisión de esa implementación, no una regla para las demás tiendas.
+
+Hazlo con el usuario `despliegue` ya creado y con su clave probada
+([Usuario y acceso por SSH](#usuario-y-acceso-por-ssh)).
+
+1. **Permite primero el puerto nuevo**, tanto en el firewall de Ubuntu como en el panel del proveedor VPS (si el panel
+   tiene firewall, abre ahí `PUERTO_SSH/tcp`). Si cambias el puerto sin permitirlo antes, quedas fuera del servidor.
+   Deja por ahora la regla del 22.
+
+   ```bash
+   sudo ufw allow PUERTO_SSH/tcp
+   sudo ufw status verbose
+   ```
+
+2. **Configura el puerto** en un archivo propio, sin editar los del proveedor:
+
+   ```bash
+   echo 'Port PUERTO_SSH' | sudo tee /etc/ssh/sshd_config.d/00-puerto-personalizado.conf > /dev/null
+   ```
+
+   Con una directiva `Port`, SSH deja de escuchar en el 22 cuando se recarga. Por eso la sesión original debe seguir
+   abierta en los pasos siguientes.
+
+3. **Valida la configuración y recarga el servicio SSH:**
+
+   ```bash
+   sudo sshd -t && sudo systemctl reload ssh
+   sudo ss -tlnp | grep PUERTO_SSH
+   ```
+
+   `sshd -t` revisa la configuración antes de aplicarla: si muestra un error, no recargues y corrígelo. El segundo
+   comando debe mostrar SSH escuchando en `PUERTO_SSH`. Si no aparece, en Ubuntu 24.04 SSH puede estar activado por
+   socket (`ssh.socket`), que mantiene su propio puerto: revisa `systemctl status ssh.socket` y, si corresponde,
+   fija el puerto también ahí con `sudo systemctl edit ssh.socket` (las líneas `[Socket]`, `ListenStream=` y
+   `ListenStream=PUERTO_SSH`), seguido de `sudo systemctl daemon-reload && sudo systemctl restart ssh.socket`.
+
+4. **Comprueba la conexión desde otra terminal**, sin cerrar la original:
+
+   ```bash
+   ssh -p PUERTO_SSH despliegue@IP_DEL_SERVIDOR
+   ```
+
+   **No cierres la sesión SSH original** hasta comprobar que el puerto nuevo funciona y que entras con tu clave.
+   Si falla, desde esa sesión abierta borra el archivo y recarga
+   (`sudo rm /etc/ssh/sshd_config.d/00-puerto-personalizado.conf && sudo systemctl reload ssh`), o entra por la
+   consola web de OpenCloud.
+
+5. **Cuando el puerto nuevo funcione**, si SSH ya no escucha en el 22, quita esa regla (`sudo ufw delete allow 22/tcp`)
+   y ciérralo también en el panel del proveedor. Deja el 22 abierto solo si esa instalación todavía lo usa.
+
+Con un puerto personalizado, `scp` lo recibe con `-P` en mayúscula (`scp -P PUERTO_SSH ...`), a diferencia de
+`ssh -p`.
+
 ### Aplicar los permisos de Docker
 
 Después de agregar el usuario `despliegue` al grupo `docker`, es necesario iniciar una nueva sesión SSH para que los permisos se apliquen.
 
-Desde otra terminal, ingresar al servidor:
+Desde otra terminal, ingresar al servidor (con el puerto que use la VPS):
 
-\```bash
+```bash
+# Puerto 22 estándar
 ssh despliegue@IP_DEL_SERVIDOR
-\```
+# Puerto SSH personalizado de la VPS
+ssh -p PUERTO_SSH despliegue@IP_DEL_SERVIDOR
+```
 
 Comprobar que se está utilizando el usuario correcto y que Docker funciona sin `sudo`:
 
-\```bash
+```bash
 whoami
 docker ps
 docker compose version
-\```
+```
 
 El comando `whoami` debe mostrar `despliegue`. Si Docker funciona correctamente, el usuario ya puede administrar los contenedores sin utilizar `sudo`.
 
@@ -268,41 +337,41 @@ Cuando se modifica el archivo de variables de una tienda, es importante comproba
 
 Editar el archivo correspondiente:
 
-\```bash
+```bash
 nano /opt/tiendas/mitienda.env
-\```
+```
 
 Asegurar que solamente el usuario de despliegue tenga acceso al archivo:
 
-\```bash
+```bash
 chmod 600 /opt/tiendas/mitienda.env
-\```
+```
 
 Validar la configuración de Docker Compose:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env config --quiet
-\```
+```
 
 Si el comando termina sin mostrar errores, la configuración pudo interpretarse correctamente.
 
 Después de modificar variables que utiliza el backend, reiniciar ese servicio:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env restart backend
-\```
+```
 
 Comprobar que el contenedor esté funcionando:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env ps
-\```
+```
 
 Si el servicio no inicia correctamente, revisar sus registros:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=100 backend
-\```
+```
 
 **Importante:** `config --quiet` valida la configuración de Compose, pero no garantiza que las credenciales externas sean correctas ni que los servicios puedan conectarse entre sí.
 
@@ -401,8 +470,8 @@ Correrlas de más no tiene efectos, y cada correo que envían sale una sola vez 
 0 4 * * * sh /opt/tiendas/codigo/deploy/respaldar.sh mitienda /opt/tiendas/mitienda.env /opt/tiendas/respaldos >> /opt/tiendas/respaldos.log 2>&1
 ```
 
-Una vez por semana, descarga una copia de `/opt/tiendas/respaldos/` fuera del servidor (ej. con `scp`): un respaldo
-que solo está en el mismo servidor se pierde con él.
+Una vez por semana, descarga una copia de `/opt/tiendas/respaldos/` fuera del servidor (ej. con `scp`; si la VPS usa un
+puerto SSH personalizado, `scp -P PUERTO_SSH ...`): un respaldo que solo está en el mismo servidor se pierde con él.
 
 ## 4. Correo
 
@@ -412,19 +481,19 @@ El backend elige cómo enviar según las variables de entorno: la API HTTPS de *
 
 Para comprobar que los correos llegan correctamente, sin necesidad de realizar una compra, ejecutar el siguiente comando desde la carpeta del repositorio:
 
-\```bash
+```bash
 cd /opt/tiendas/codigo
 
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env exec backend python manage.py sendtestemail correo@ejemplo.cl
-\```
+```
 
 Reemplazar `correo@ejemplo.cl` por una dirección de correo a la que se tenga acceso.
 
 Si el envío no funciona, revisar los registros del backend:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=100 backend
-\```
+```
 
 También comprobar que `RESEND_API_KEY` y `DEFAULT_FROM_EMAIL` estén correctamente configurados en el archivo de variables de la tienda.
 
@@ -518,7 +587,8 @@ La misma tienda, con sus claves, en otra VPS de OpenCloud de 4 GB. El servidor n
 
 1. **Respalda en el servidor de origen** con `respaldar.sh`. Avísale al emprendedor que no haga cambios desde ese
    momento: lo que cambie después del respaldo no pasa al servidor nuevo.
-2. **Copia el archivo de la tienda sin cambiar sus claves** (`scp`, y `chmod 600` en el servidor nuevo). Con otra
+2. **Copia el archivo de la tienda sin cambiar sus claves** (`scp`, y `chmod 600` en el servidor nuevo; si el servidor
+   usa un puerto SSH personalizado, `scp -P <puerto>`). Con otra
    `CLAVE_CIFRADO_CREDENCIALES`, las llaves de pagos y envíos cargadas en el panel quedan ilegibles. Con otra
    `SECRET_KEY`, dejan de funcionar las sesiones abiertas y los enlaces de reseña y de contraseña de los correos ya
    enviados. Cambia solo lo que depende del servidor: `ARCHIVO_TIENDA` si cambia la ruta, y la dirección si cambia.
@@ -542,7 +612,8 @@ La misma tienda, con sus claves, en otra VPS de OpenCloud de 4 GB. El servidor n
 5. **Comprueba** que `/api/salud/` responde `ok`, que el catálogo y las fotos cargan, y que los couriers con llave
    aparecen en `/api/configuracion/` (`couriers`). Si no aparecen, la `CLAVE_CIFRADO_CREDENCIALES` no es la misma.
 6. **Fuera del servidor:** apunta los registros **A** del dominio a la IP nueva. Si cambia la dirección de la tienda,
-   el cliente la agrega en Google (inicio de sesión) y se le avisa.
+   el cliente la agrega en Google (inicio de sesión) y se le avisa. Actualiza también el
+   [registro de datos del cliente](#registro-de-datos-para-entregar-al-cliente).
 7. **Apaga la tienda de origen** con `$C down` cuando la nueva funcione. Sus datos se borran con `$C down -v`: hazlo
    solo cuando estés seguro, y conserva el respaldo.
 
@@ -601,6 +672,42 @@ acceso de forma segura si prefiere que los agregue el equipo.
    Resend, que van en el subdominio `send`. Sin esto la tienda funciona igual: las respuestas de los compradores
    llegan al correo de contacto ([4. Correo](#4-correo)).
 
+#### Cómo deben quedar los registros
+
+Esto vale para cualquier tienda; reemplaza `mitienda.cl` y la IP por los datos de ese cliente.
+
+- `@` representa el dominio principal (`mitienda.cl`) y `www` representa `www.mitienda.cl`.
+- Ambos deben apuntar a la **IPv4 pública** de la VPS, la que entrega OpenCloud. No la confundas con las direcciones
+  internas de Docker (como las `172.x.x.x` que ves dentro de los contenedores) ni con `IP_WEB=0.0.0.0`, que solo
+  indica en qué interfaz escucha el Caddy de la tienda.
+- Si la tienda no usa IPv6, revisa que no existan registros **AAAA** antiguos que apunten a una dirección incorrecta:
+  un AAAA equivocado puede impedir que los visitantes lleguen o que Caddy obtenga el certificado.
+  `dig +short AAAA mitienda.cl` no debería devolver nada.
+- La propagación se verifica con los `dig` del paso 4: ambos deben devolver la IP de la VPS.
+- Caddy usa el dominio configurado en `DIRECCION_SITIO` ([6.2](#62-la-tienda-con-su-dominio)) para obtener y renovar el
+  certificado HTTPS automáticamente. Para eso el DNS ya debe apuntar a la VPS y los puertos 80 y 443 deben estar
+  abiertos.
+
+#### Ejemplo: Taller Maché
+
+Datos de la VPS de Taller Maché, solo como referencia:
+
+- Dominio: `mache.cl`
+- Dominio con www: `www.mache.cl`
+- IPv4 pública de la VPS: `45.7.228.140`
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| A | @ | 45.7.228.140 |
+| A | www | 45.7.228.140 |
+
+```bash
+dig +short mache.cl
+dig +short www.mache.cl
+```
+
+Ambos devuelven `45.7.228.140`, y en el archivo de variables queda `DIRECCION_SITIO="mache.cl, www.mache.cl"`.
+
 ### 6.2 La tienda con su dominio
 
 El Caddy de la tienda atiende el HTTPS: no hace falta otro servidor web. En su archivo de variables:
@@ -652,9 +759,9 @@ Luego realizar las siguientes comprobaciones:
 
 Si el inicio de sesión tradicional funciona, pero Google devuelve un error, revisar los registros del backend:
 
-\```bash
+```bash
 docker compose -p mitienda -f deploy/docker-compose.yml --env-file /opt/tiendas/mitienda.env logs --tail=150 backend
-\```
+```
 
 También se debe comprobar que `GOOGLE_CLIENT_ID` esté configurado correctamente y que coincida con el identificador utilizado por el frontend y la configuración de Google Cloud.
 
@@ -738,4 +845,25 @@ Haz una compra real de monto bajo con cada medio y anúlala o devuélvela desde 
 - El monitor de `https://mitienda.cl/api/salud/` cada 5 minutos.
 - Una compra completa de punta a punta con un correo que no sea del equipo: pedido recibido, pago, despacho y
   entregado, revisando que los correos no lleguen a spam.
+- Los datos del despliegue registrados para el cliente
+  ([Registro de datos para entregar al cliente](#registro-de-datos-para-entregar-al-cliente)).
 - Nunca correr las pruebas en el servidor de la tienda (ver [Primer arranque](#primer-arranque)).
+
+### Registro de datos para entregar al cliente
+
+Al terminar el despliegue, deja registrados estos datos de la tienda (sin claves ni contraseñas):
+
+- **Dominio principal** (ej. `mitienda.cl`).
+- **Dominio alternativo con www** (ej. `www.mitienda.cl`).
+- **Dirección IPv4 pública de la VPS** (la que entregó OpenCloud).
+- **Proveedor DNS utilizado** (ej. Cloudflare, o el panel de DNS del registrador).
+- **Fecha en que se verificó la configuración** (DNS, HTTPS y `/api/salud/`).
+
+Si se cambia la IP de la VPS, hay que:
+
+1. Actualizar los registros DNS (`@` y `www`) con la IP nueva, como en [6.1](#61-dominio-dns-y-servidor).
+2. Revisar la configuración del dominio en Caddy (`DIRECCION_SITIO`, ver [6.2](#62-la-tienda-con-su-dominio)) y los
+   orígenes autorizados de Google OAuth ([6.4](#64-inicio-de-sesión-con-google)). Ambos dependen del dominio y no de la
+   IP: si el dominio sigue siendo el mismo, normalmente no hay nada que cambiar, pero si cambió también el dominio o
+   su dirección, deben actualizarse.
+3. Actualizar el registro con la IP nueva y la fecha de la nueva verificación.

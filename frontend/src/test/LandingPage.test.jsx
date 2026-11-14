@@ -739,6 +739,9 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
       variantes: [{ sku: 'p1-1', precio: 30000, stock: 1 }] },
     { id: 'p2', nombre: 'Boceto', publicado: false, imagenes: [], variantes: [] },
     { id: 'p3', nombre: 'Mural chico', publicado: true, imagenes: [], variantes: [{ sku: 'p3-1', precio: 9000, stock: 2 }] },
+    // Para llenar los 8 destacados
+    ...['Acuarela', 'Grabado', 'Collage', 'Escultura'].map((nombre, i) => ({
+      id: `p${i + 4}`, nombre, publicado: true, imagenes: [], variantes: [{ sku: `p${i + 4}-1`, precio: 5000, stock: 1 }] })),
   ];
   const PUBLICACIONES_PANEL = [
     { id: 7, titulo: 'Mural en Cerro Alegre', slug: 'mural-cerro-alegre', estado: 'PUBLICADA', portada: null },
@@ -784,23 +787,25 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
     expect(getMock).not.toHaveBeenCalledWith('ventas/admin/blog/');
   });
 
-  it('elige "Destacados", agrega hasta 4 productos y publicaciones, cambia el título y lo guarda', async () => {
+  it('elige "Destacados", agrega hasta 8 productos y publicaciones, cambia el título y lo guarda', async () => {
     await editarVitrina();
 
     fireEvent.click(screen.getByRole('radio', { name: /Destacados/ }));
-    expect(await screen.findByText('Tus destacados (0 de 4)')).toBeInTheDocument();
+    expect(await screen.findByText('Tus destacados (0 de 8)')).toBeInTheDocument();
     // Solo se ofrecen los publicados
     expect(screen.queryByRole('option', { name: 'Boceto' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Idea' })).not.toBeInTheDocument();
 
-    ['Retrato', 'Mural en Cerro Alegre', 'Mural chico', 'Taller abierto'].forEach(agregar);
-    expect(nombresElegidos()).toEqual(['Retrato', 'Mural en Cerro Alegre', 'Mural chico', 'Taller abierto']);
+    const ocho = ['Retrato', 'Mural en Cerro Alegre', 'Mural chico', 'Acuarela', 'Grabado', 'Collage', 'Escultura',
+      'Taller abierto'];
+    ocho.forEach(agregar);
+    expect(nombresElegidos()).toEqual(ocho);
     expect(screen.getByLabelText('Agregar un producto o una publicación')).toBeDisabled();
-    expect(screen.getByText(/Ya elegiste 4: quita uno para agregar otro/)).toBeInTheDocument();
-    expect(screen.getByText('Taller abierto agregado a los destacados: 4 de 4.')).toHaveAttribute('role', 'status');
+    expect(screen.getByText(/Ya elegiste 8: quita uno para agregar otro/)).toBeInTheDocument();
+    expect(screen.getByText('Taller abierto agregado a los destacados: 8 de 8.')).toHaveAttribute('role', 'status');
 
     fireEvent.change(screen.getByLabelText('Título de la sección'), { target: { value: 'Obras elegidas' } });
-    // La vista previa ya muestra las 4 tarjetas con el título nuevo
+    // La vista previa ya muestra las 8 tarjetas con el título nuevo
     const seccion = screen.getByRole('region', { name: 'Obras elegidas' });
     expect(within(seccion).getByRole('link', { name: /Mural en Cerro Alegre/ }))
       .toHaveAttribute('href', '/blog/mural-cerro-alegre');
@@ -811,7 +816,7 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
       vitrina_modo: 'DESTACADOS',
       destacados_titulo: 'Obras elegidas',
       destacados: [{ tipo: 'PRODUCTO', id: 'p1' }, { tipo: 'PUBLICACION', id: '7' }, { tipo: 'PRODUCTO', id: 'p3' },
-        { tipo: 'PUBLICACION', id: '9' }],
+        ...['p4', 'p5', 'p6', 'p7'].map((id) => ({ tipo: 'PRODUCTO', id })), { tipo: 'PUBLICACION', id: '9' }],
     }));
   });
 
@@ -834,7 +839,7 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
     expect(await screen.findByRole('region', { name: 'Más vendidos' })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Editar página' }));
     fireEvent.click(screen.getByRole('radio', { name: /Destacados/ }));
-    await screen.findByText('Tus destacados (0 de 4)');
+    await screen.findByText('Tus destacados (0 de 8)');
     agregar('Retrato');
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await screen.findByText(/Cambios guardados/);
@@ -850,7 +855,7 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
   it('ordena con Subir y Bajar sin perder el foco, quita y guarda el nuevo orden', async () => {
     await editarVitrina({ vitrina_modo: 'DESTACADOS', destacados: [
       { tipo: 'PRODUCTO', id: 'p1' }, { tipo: 'PUBLICACION', id: '7' }, { tipo: 'PRODUCTO', id: 'p3' }] });
-    await screen.findByText('Tus destacados (3 de 4)');
+    await screen.findByText('Tus destacados (3 de 8)');
 
     fireEvent.click(screen.getByRole('button', { name: 'Bajar Retrato' }));
     expect(nombresElegidos()).toEqual(['Mural en Cerro Alegre', 'Retrato', 'Mural chico']);
@@ -886,7 +891,7 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
 
   it('descartar vuelve a la selección publicada', async () => {
     await editarVitrina({ vitrina_modo: 'DESTACADOS', destacados: [{ tipo: 'PRODUCTO', id: 'p1' }] });
-    await screen.findByText('Tus destacados (1 de 4)');
+    await screen.findByText('Tus destacados (1 de 8)');
 
     fireEvent.click(screen.getByRole('button', { name: 'Quitar Retrato' }));
     expect(screen.getByText('Tienes cambios sin guardar')).toBeInTheDocument();
@@ -898,7 +903,7 @@ describe('LandingPage: el admin elige los destacados de la vitrina (RF-01.1)', (
 
   it('muestra el error del backend junto a la selección', async () => {
     await editarVitrina({ vitrina_modo: 'DESTACADOS', destacados: [{ tipo: 'PRODUCTO', id: 'p1' }] });
-    await screen.findByText('Tus destacados (1 de 4)');
+    await screen.findByText('Tus destacados (1 de 8)');
     patchMock.mockRejectedValue({ response: { data: { destacados: ['Uno de los destacados ya no existe.'] } } });
 
     agregar('Mural chico');

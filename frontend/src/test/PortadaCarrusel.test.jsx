@@ -106,6 +106,22 @@ describe('Portada con textos y botón por foto', () => {
     expect(within(grupo).getByRole('status')).toHaveTextContent('Foto 1 de 3.');
   });
 
+  // Pedido de Alan: los controles muestran solo íconos SVG, que no cambian a emoji en el celular
+  it('la pausa y las flechas muestran solo un ícono, sin texto ni caracteres que se vuelvan emoji', () => {
+    portada({ banners: tresFotos });
+    const grupo = screen.getByRole('group', { name: 'Controles del carrusel' });
+    const pausa = within(grupo).getByRole('button', { name: 'Pausar carrusel' });
+    for (const boton of within(grupo).getAllByRole('button')) {
+      expect(boton).toHaveTextContent(/^$/);
+      expect(boton.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    }
+    const iconoPausa = pausa.querySelector('svg').innerHTML;
+    fireEvent.click(pausa);
+    const reanudar = within(grupo).getByRole('button', { name: 'Reanudar carrusel' });
+    expect(reanudar).toHaveTextContent(/^$/);
+    expect(reanudar.querySelector('svg').innerHTML).not.toBe(iconoPausa);
+  });
+
   it('al usar una flecha, el reloj vuelve a empezar', () => {
     portada({ banners: tresFotos });
     pasar(4000);

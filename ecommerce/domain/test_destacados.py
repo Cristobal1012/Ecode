@@ -23,9 +23,9 @@ class NormalizarDestacadosTests(SimpleTestCase):
     def test_quita_los_espacios_del_id(self):
         self.assertEqual(normalizar_destacados([{'tipo': 'PUBLICACION', 'id': ' 7 '}]), [PUBLICACION])
 
-    def test_como_maximo_cuatro(self):
+    def test_como_maximo_ocho(self):
         lista = [{'tipo': 'PUBLICACION', 'id': str(numero)} for numero in range(MAX_DESTACADOS + 1)]
-        with self.assertRaisesMessage(DestacadosInvalidos, 'hasta 4'):
+        with self.assertRaisesMessage(DestacadosInvalidos, 'hasta 8'):
             normalizar_destacados(lista)
         self.assertEqual(len(normalizar_destacados(lista[:MAX_DESTACADOS])), MAX_DESTACADOS)
 

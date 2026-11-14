@@ -65,6 +65,9 @@ class Producto(Document):
     # Managed images use storage keys internally; serializers expose their URLs.
     # Existing external HTTP(S) URLs remain supported.
     imagenes = fields.ListField(fields.StringField(), default=list)
+    # Video de YouTube opcional de la ficha (pedido de Alan): solo el ID, validado por domain/youtube.py.
+    # Los productos anteriores no lo tienen y se leen con ''
+    youtube_id = fields.StringField(default='', max_length=11)
     fecha_creacion = fields.DateTimeField(required=True)
     activo = fields.BooleanField(default=True)
     publicado = fields.BooleanField(default=False)

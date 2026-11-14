@@ -39,7 +39,8 @@ const leerProductoAEditar = (productoAEditar) => {
         version_a_la_venta: '',
         texto_boton_version: 'Disponible en print',
         meta_titulo: '',
-        meta_descripcion: ''
+        meta_descripcion: '',
+        youtube: ''
       },
       imagenes: [],
       productoGuardadoId: null,
@@ -93,7 +94,9 @@ const leerProductoAEditar = (productoAEditar) => {
       version_a_la_venta: productoAEditar.version_a_la_venta || '',
       texto_boton_version: productoAEditar.texto_boton_version || 'Disponible en print',
       meta_titulo: productoAEditar.meta_titulo || '',
-      meta_descripcion: productoAEditar.meta_descripcion || ''
+      meta_descripcion: productoAEditar.meta_descripcion || '',
+      // El backend guarda solo el ID: al editar se muestra como enlace, igual que en el blog
+      youtube: productoAEditar.youtube_id ? `https://www.youtube.com/watch?v=${productoAEditar.youtube_id}` : ''
     },
     // Conservamos las imágenes existentes
     imagenes: productoAEditar.imagenes || [],
@@ -132,6 +135,7 @@ export default function FormularioProducto({
 
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [errorYoutube, setErrorYoutube] = useState('');
   const [categoriasExistentes, setCategoriasExistentes] = useState([]);
   const [coleccionesExistentes, setColeccionesExistentes] = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
@@ -379,6 +383,7 @@ export default function FormularioProducto({
 
     setCargando(true);
     setError('');
+    setErrorYoutube('');
 
     try {
       // ========================================================
@@ -473,6 +478,8 @@ export default function FormularioProducto({
         } : {}),
         meta_titulo: producto.meta_titulo.trim(),
         meta_descripcion: producto.meta_descripcion.trim(),
+        // Vacío quita el video (pedido de Alan)
+        youtube: producto.youtube.trim(),
 
         activo: true,
         publicado: producto.publicado,
@@ -560,6 +567,8 @@ export default function FormularioProducto({
       );
 
       const data = err.response?.data;
+      // El error del video también se muestra junto a su campo
+      if (data?.youtube) setErrorYoutube([].concat(data.youtube).join(' '));
 
       let mensaje =
         data?.detail ||
@@ -1014,6 +1023,37 @@ export default function FormularioProducto({
             setArchivosGestionados
           }
         />
+
+        {/* ====================================================
+            VIDEO DE YOUTUBE (pedido de Alan): se ve en la ficha, como un elemento más de la galería
+        ===================================================== */}
+
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label htmlFor={`${idFormulario}-youtube`} style={{ fontWeight: 'bold' }}>
+            Video de YouTube
+          </label>
+          <input
+            type="text"
+            inputMode="url"
+            id={`${idFormulario}-youtube`}
+            name="youtube"
+            value={producto.youtube}
+            onChange={handleChangeProducto}
+            maxLength={500}
+            placeholder="https://www.youtube.com/watch?v=..."
+            aria-describedby={`${idFormulario}-youtube-ayuda${errorYoutube ? ` ${idFormulario}-youtube-error` : ''}`}
+            aria-invalid={errorYoutube ? 'true' : undefined}
+            disabled={cargando}
+            style={inputStyle}
+          />
+          <small id={`${idFormulario}-youtube-ayuda`} style={{ color: 'var(--color-muted)' }}>
+            Opcional. Pega el enlace de un video o Short de YouTube: se verá en la ficha del producto, después de
+            las fotos. Déjalo vacío para quitarlo.
+          </small>
+          {errorYoutube && (
+            <p id={`${idFormulario}-youtube-error`} className="admin-error-campo">{errorYoutube}</p>
+          )}
+        </div>
       </div>
 
       <CampoEtiquetaProducto etiqueta={producto.etiqueta} color={producto.etiqueta_color}

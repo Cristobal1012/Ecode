@@ -10,6 +10,7 @@ from ecommerce.domain.catalogo import (
     validar_version_a_la_venta,
     limpiar_colecciones,
 )
+from ecommerce.domain.youtube import extraer_id_youtube
 from .documents import Producto, Variante
 from .image_adapters import actualizar_producto
 from .images import (
@@ -62,7 +63,12 @@ class ProductoSerializer(serializers.Serializer):
                                               max_length=50)
     categoria = serializers.CharField(max_length=100)
     imagenes = serializers.ListField(child=ReferenciaImagenField(), required=False)
-    
+    # Video de YouTube de la ficha (pedido de Alan): el admin pega el enlace en "youtube" y se guarda el ID.
+    # Vacío quita el video; sin "youtube" en la petición no se cambia
+    youtube = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True,
+                                    max_length=500)
+    youtube_id = serializers.CharField(read_only=True)
+
     fecha_creacion = serializers.DateTimeField(read_only=True)
     
     activo = serializers.BooleanField(default=True)
@@ -113,6 +119,11 @@ class ProductoSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
+        if 'youtube' in attrs:
+            try:
+                attrs['youtube_id'] = extraer_id_youtube(attrs.pop('youtube'))
+            except ValueError as error:
+                raise serializers.ValidationError({'youtube': str(error)}) from error
         if attrs.get('solo_suscriptores'):
             from ecommerce.infrastructure.ventas.repositorio_suscripciones import suscripciones_activas_en_tienda
             if not suscripciones_activas_en_tienda():

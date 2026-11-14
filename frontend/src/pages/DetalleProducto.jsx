@@ -10,6 +10,7 @@ import { guardarCarrito, validarCarrito } from '../components/carrito';
 import { obtenerDatosPrecioYStock } from '../utils/precios';
 import EtiquetaProducto from '../components/EtiquetaProducto';
 import AccesoProductoExclusivo from '../components/AccesoProductoExclusivo';
+import VideoYouTube, { IconoPlay } from '../components/VideoYouTube';
 import './DetalleProducto.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoDetalle } from '../components/carga/EsqueletosTienda';
@@ -157,23 +158,26 @@ export default function DetalleProducto() {
     return { ok: true, mensaje: `¡Agregaste ${cantidadSeleccionada} unidad(es) al carrito!` };
   };
 
-  // Cambiar a la imagen anterior
+  // La galería son las fotos y, al final, el video de YouTube si el producto tiene uno (pedido de Alan)
+  const totalGaleria = (producto?.imagenes?.length || 0) + (producto?.youtube_id ? 1 : 0);
+
+  // Cambiar al elemento anterior de la galería
   const imagenAnterior = () => {
-    if (!producto?.imagenes?.length) return;
+    if (!totalGaleria) return;
 
     setImagenActual((actual) =>
       actual === 0
-        ? producto.imagenes.length - 1
+        ? totalGaleria - 1
         : actual - 1
     );
   };
 
-  // Cambiar a la imagen siguiente
+  // Cambiar al elemento siguiente de la galería
   const imagenSiguiente = () => {
-    if (!producto?.imagenes?.length) return;
+    if (!totalGaleria) return;
 
     setImagenActual((actual) =>
-      actual === producto.imagenes.length - 1
+      actual === totalGaleria - 1
         ? 0
         : actual + 1
     );
@@ -208,6 +212,8 @@ export default function DetalleProducto() {
   }
 
   const imagenes = producto.imagenes || [];
+  // El video va después de las fotos: se ve cuando el índice pasa la última foto
+  const verVideo = Boolean(producto.youtube_id) && imagenActual === imagenes.length;
   const { agotado, textoPrecio, precioTachado, tieneOferta } = obtenerDatosPrecioYStock(producto.variantes);
   const esColeccionPrivada = Boolean(producto.coleccion_privada);
   const tieneVersionVenta = esColeccionPrivada && Boolean(producto.version_a_la_venta) && Boolean(producto.version_a_la_venta_disponible);
@@ -228,21 +234,30 @@ export default function DetalleProducto() {
         <div className="detalle-contenido">
           {/* Galería */}
           <div className="detalle-galeria">
-            {imagenes.length > 0 ? (
+            {totalGaleria > 0 ? (
               <>
                 <div className="detalle-imagen-principal">
-                  <img src={imagenes[imagenActual]} alt={`${producto.nombre}, imagen ${imagenActual + 1} de ${imagenes.length}`} />
-                  {imagenes.length > 1 && (
+                  {verVideo ? (
+                    // Se monta al elegirlo y se desmonta al cambiar de foto: así el video se detiene
+                    <VideoYouTube className="detalle-video" youtubeId={producto.youtube_id} titulo={producto.nombre}
+                      portada={imagenes[0]} />
+                  ) : (
+                    <img src={imagenes[imagenActual]} alt={`${producto.nombre}, imagen ${imagenActual + 1} de ${imagenes.length}`} />
+                  )}
+                  {totalGaleria > 1 && (
                     <>
                       <button type="button" className="detalle-flecha detalle-flecha--anterior"
                         onClick={imagenAnterior} aria-label="Imagen anterior">‹</button>
                       <button type="button" className="detalle-flecha detalle-flecha--siguiente"
                         onClick={imagenSiguiente} aria-label="Imagen siguiente">›</button>
-                      <span className="detalle-contador" aria-hidden="true">{imagenActual + 1} / {imagenes.length}</span>
+                      {/* Sobre el video taparía los controles del reproductor */}
+                      {!verVideo && (
+                        <span className="detalle-contador" aria-hidden="true">{imagenActual + 1} / {totalGaleria}</span>
+                      )}
                     </>
                   )}
                 </div>
-                {imagenes.length > 1 && (
+                {totalGaleria > 1 && (
                   <ul className="detalle-miniaturas lista-sin-estilo">
                     {imagenes.map((imagen, index) => (
                       <li key={imagen || index}>
@@ -253,6 +268,17 @@ export default function DetalleProducto() {
                         </button>
                       </li>
                     ))}
+                    {producto.youtube_id && (
+                      <li>
+                        {/* La miniatura no pide nada a YouTube: muestra la primera foto con el ícono de play */}
+                        <button type="button" onClick={() => seleccionarImagen(imagenes.length)}
+                          aria-label="Ver video" aria-pressed={verVideo}
+                          className="detalle-miniatura detalle-miniatura--video">
+                          {imagenes[0] ? <img src={imagenes[0]} alt="" /> : <span className="detalle-miniatura-neutra" />}
+                          <span className="detalle-miniatura-play" aria-hidden="true"><IconoPlay /></span>
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 )}
               </>

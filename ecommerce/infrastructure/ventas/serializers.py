@@ -101,11 +101,18 @@ CAMPOS_DIRECCION_LOCAL = ('calle_origen', 'numero_origen', 'dpto_casa_origen', '
 
 class FotoBannerSerializer(serializers.ModelSerializer):
     imagen = serializers.SerializerMethodField()
+    video = serializers.SerializerMethodField()
+
+    def get_video(self, obj):
+        if not obj.video:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.video.url) if request else obj.video.url
 
     class Meta:
         model = FotoBanner
         # Cada foto con sus textos y a qué página lleva su botón (SCRUM-194)
-        fields = ['id', 'imagen', 'orden', 'antetitulo', 'titulo', 'texto', 'destino']
+        fields = ['id', 'imagen', 'video', 'orden', 'antetitulo', 'titulo', 'texto', 'destino']
 
     def get_imagen(self, obj):
         if not obj.imagen:
@@ -184,6 +191,7 @@ class ConfiguracionGlobalSerializer(serializers.ModelSerializer):
             'destacados_titulo',
             'destacados',
             # Presentación: fotos sin recorte, ficha con la foto horizontal y logo más grande en el computador
+            'video_banner_activo',
             'fotos_completas',
             'ficha_horizontal',
             'logo_grande',
@@ -330,6 +338,7 @@ class ConfiguracionNegocioSerializer(serializers.ModelSerializer):
             'vitrina_modo',
             'destacados_titulo',
             'destacados',
+            'video_banner_activo',
             'fotos_completas',
             'ficha_horizontal',
             'logo_grande',

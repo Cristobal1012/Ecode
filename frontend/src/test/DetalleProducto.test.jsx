@@ -493,3 +493,77 @@ describe('DetalleProducto', () => {
     });
   });
 });
+
+// Video de YouTube opcional del producto (pedido de Alan): va al final de la galería
+describe('DetalleProducto con video de YouTube', () => {
+  const conVideo = (cambios = {}) => getMock.mockResolvedValue({
+    data: { ...structuredClone(productoEjemplo), youtube_id: 'dQw4w9WgXcQ', ...cambios },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  afterEach(() => { cleanup(); document.title = ''; });
+
+  it('sin video la galería sigue igual', async () => {
+    getMock.mockResolvedValue({ data: structuredClone(productoEjemplo) });
+    renderDetalle();
+    await screen.findByRole('img', { name: 'Polera Ecode, imagen 1 de 3' });
+    expect(screen.queryByRole('button', { name: 'Ver video' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 / 3')).toBeInTheDocument();
+  });
+
+  it('el video es la última miniatura y no se conecta a YouTube hasta reproducirlo', async () => {
+    conVideo();
+    const { container } = renderDetalle();
+    await screen.findByText('1 / 4');
+
+    const miniaturas = screen.getAllByRole('button', { name: /^Ver (imagen|video)/ });
+    expect(miniaturas.map((boton) => boton.getAttribute('aria-label')))
+      .toEqual(['Ver imagen 1', 'Ver imagen 2', 'Ver imagen 3', 'Ver video']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver video' }));
+    expect(screen.getByRole('button', { name: 'Ver video' })).toHaveAttribute('aria-pressed', 'true');
+    // Sin aceptar las cookies de marketing: la portada es la primera foto y no hay nada de YouTube en la página
+    expect(container.querySelector('.video-youtube-miniatura')).toHaveAttribute('src', '/polera-1.jpg');
+    expect(container.innerHTML).not.toMatch(/ytimg\.com|youtube(-nocookie)?\.com/);
+    // Sobre el video, el contador taparía los controles del reproductor
+    expect(screen.queryByText(/\/ 4/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reproducir video: Polera Ecode' }));
+    const reproductor = screen.getByTitle('Reproductor de video: Polera Ecode');
+    expect(reproductor).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1');
+  });
+
+  it('las flechas recorren las fotos y el video en círculo, y al cambiar de foto el video se detiene', async () => {
+    conVideo();
+    renderDetalle();
+    await screen.findByText('1 / 4');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Imagen anterior' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reproducir video: Polera Ecode' }));
+    expect(screen.getByTitle('Reproductor de video: Polera Ecode')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Imagen siguiente' }));
+    expect(screen.getByRole('img', { name: 'Polera Ecode, imagen 1 de 3' })).toBeInTheDocument();
+    expect(screen.queryByTitle('Reproductor de video: Polera Ecode')).not.toBeInTheDocument();
+
+    // Al volver, el video espera otro clic: no parte solo
+    fireEvent.click(screen.getByRole('button', { name: 'Ver video' }));
+    expect(screen.getByRole('button', { name: 'Reproducir video: Polera Ecode' })).toBeInTheDocument();
+  });
+
+  it('un producto sin fotos muestra solo el video', async () => {
+    conVideo({ imagenes: [] });
+    const { container } = renderDetalle();
+    await screen.findByRole('heading', { name: 'Polera Ecode' });
+
+    expect(screen.getByRole('button', { name: 'Reproducir video: Polera Ecode' })).toBeInTheDocument();
+    expect(container.querySelector('.video-youtube-miniatura--neutra')).toBeInTheDocument();
+    expect(screen.queryByText('Sin imagen disponible')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Imagen siguiente' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ver video' })).not.toBeInTheDocument();
+  });
+});

@@ -39,7 +39,14 @@ async function prepararDestacados(page, { tema = 1, sesion = false } = {}) {
   return tienda;
 }
 
-const columnas = (locator) => locator.evaluate((grilla) => getComputedStyle(grilla).gridTemplateColumns.split(' ').length);
+// Cuántas tarjetas hay en la primera fila, y cuánto espacio queda a cada lado de esa fila dentro de la grilla
+const primeraFila = (grilla) => grilla.evaluate((elemento) => {
+  const cajas = [...elemento.children].map((hijo) => hijo.getBoundingClientRect());
+  const fila = cajas.filter((caja) => Math.abs(caja.top - cajas[0].top) < 1);
+  const contenedor = elemento.getBoundingClientRect();
+  return { cantidad: fila.length, izquierda: fila[0].left - contenedor.left,
+    derecha: contenedor.right - fila[fila.length - 1].right };
+});
 
 async function sinViolaciones(page, selectores) {
   let analisis = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
@@ -49,7 +56,8 @@ async function sinViolaciones(page, selectores) {
 }
 
 for (const tema of [1, 2, 3, 4]) {
-  for (const [ancho, porFila] of [[1280, 2], [375, 1]]) {
+  // En el computador, los 3 en una fila y centrados; en el celular, dos por fila como el catálogo
+  for (const [ancho, porFila] of [[1280, 3], [375, 2]]) {
     test(`destacados en la landing con el tema ${tema} a ${ancho} px: ${porFila} por fila y sin violaciones`, async ({ page }) => {
       const { inesperadas } = await prepararDestacados(page, { tema });
       await page.setViewportSize({ width: ancho, height: 900 });
@@ -58,7 +66,12 @@ for (const tema of [1, 2, 3, 4]) {
       const seccion = page.getByRole('region', { name: 'Obras elegidas' });
       await expect(seccion.getByRole('listitem')).toHaveCount(3);
       await expect(page.getByRole('region', { name: 'Más vendidos' })).toHaveCount(0);
-      expect(await columnas(seccion.locator('.grilla-destacados'))).toBe(porFila);
+      const fila = await primeraFila(seccion.locator('.grilla-destacados'));
+      expect(fila.cantidad).toBe(porFila);
+      expect(Math.abs(fila.izquierda - fila.derecha)).toBeLessThan(2);
+      // Foto vertical (4:5), como en el catálogo (pedido de Alan)
+      const marco = await seccion.locator('.tarjeta-destacado-imagen').first().boundingBox();
+      expect(marco.height / marco.width).toBeCloseTo(1.25, 1);
       await expect(seccion.getByRole('link', { name: /Mural en Cerro Alegre/ })).toHaveAttribute('href', '/blog/mural-cerro-alegre');
       await comprobarVista(page);
       await sinViolaciones(page, ['#destacados']);
@@ -76,7 +89,7 @@ for (const tema of [1, 2, 3, 4]) {
       await page.getByRole('button', { name: 'Editar página' }).click();
 
       await expect(page.getByRole('radio', { name: /Destacados/ })).toBeChecked();
-      await expect(page.getByText('Tus destacados (3 de 4)')).toBeVisible();
+      await expect(page.getByText('Tus destacados (3 de 8)')).toBeVisible();
 
       // Solo con teclado: "Bajar" mueve y el foco se queda en el mismo botón
       const bajar = page.getByRole('button', { name: 'Bajar Mural en Cerro Alegre' });
@@ -88,8 +101,9 @@ for (const tema of [1, 2, 3, 4]) {
       // Agregar el cuarto desde la lista desplegable
       await page.getByLabel('Agregar un producto o una publicación').selectOption({ label: 'Acuarela' });
       await page.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(page.getByText('Tus destacados (4 de 4)')).toBeVisible();
-      await expect(page.getByLabel('Agregar un producto o una publicación')).toBeDisabled();
+      await expect(page.getByText('Tus destacados (4 de 8)')).toBeVisible();
+      // Quedan cupos: se puede seguir agregando (el límite lleno lo prueba LandingPage.test.jsx)
+      await expect(page.getByLabel('Agregar un producto o una publicación')).toBeEnabled();
 
       await comprobarVista(page);
       await sinViolaciones(page, ['.editor-vitrina', '#destacados']);

@@ -194,7 +194,7 @@ describe('Página de una publicación', () => {
     await renderEn('/blog/nuestro-taller');
 
     const boton = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
-    expect(boton.parentElement.querySelector('.blog-video-miniatura')).toHaveAttribute('src', PUBLICACION.portada);
+    expect(boton.parentElement.querySelector('.video-youtube-miniatura')).toHaveAttribute('src', PUBLICACION.portada);
     expect(document.querySelector('img[src*="ytimg.com"], img[src*="youtube.com"]')).toBeNull();
   });
 
@@ -205,7 +205,7 @@ describe('Página de una publicación', () => {
     await renderEn('/blog/nuestro-taller');
 
     const boton = await screen.findByRole('button', { name: 'Reproducir video: Nuestro taller' });
-    expect(boton.parentElement.querySelector('.blog-video-miniatura'))
+    expect(boton.parentElement.querySelector('.video-youtube-miniatura'))
       .toHaveAttribute('src', 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
     // El reproductor sigue cargándose solo al hacer clic
     expect(screen.queryByTitle(/Reproductor de video/i)).not.toBeInTheDocument();

@@ -55,35 +55,6 @@
   z-index: 3;
 }
 
-/* Botón accesible para pausar y reanudar el carrusel (WCAG 2.2.2) */
-.portada-boton-pausa {
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #FFFFFF;
-  background: rgb(0 0 0 / 60%);
-  border: 1px solid rgb(255 255 255 / 40%);
-  border-radius: 9999px;
-  backdrop-filter: blur(4px);
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.portada-boton-pausa:hover,
-.portada-boton-pausa:focus-visible {
-  background: rgb(0 0 0 / 85%);
-  border-color: #FFFFFF;
-  outline: 2px solid #FFFFFF;
-  outline-offset: 2px;
-}
-
 /* Flechas y pausa juntas abajo a la derecha (con 2+ fotos): no tapan los textos ni el botón de la foto */
 .portada-controles-carrusel {
   position: absolute;
@@ -97,11 +68,7 @@
   gap: 0.5rem;
 }
 
-.portada-controles-carrusel .portada-boton-pausa {
-  position: static;
-  min-height: 44px;
-}
-
+/* Flechas y pausa (WCAG 2.2.2): círculos de 44 px con un ícono SVG, iguales en todos los dispositivos */
 .portada-control-carrusel {
   display: inline-flex;
   align-items: center;
@@ -109,8 +76,6 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  font-size: 1.6rem;
-  line-height: 1;
   color: #FFFFFF;
   background: rgb(0 0 0 / 60%);
   border: 1px solid rgb(255 255 255 / 40%);
@@ -126,6 +91,11 @@
   border-color: #FFFFFF;
   outline: 2px solid #FFFFFF;
   outline-offset: 2px;
+}
+
+.portada-icono-carrusel {
+  display: block;
+  flex: none;
 }
 
 .portada-posicion-carrusel {
@@ -846,17 +816,25 @@ a.instagram-foto:hover img {
   text-align: center;
 }
 
-/* Destacados (pedido de un cliente): tarjetas del doble de tamaño que las de "Más vendidos", con la foto apaisada:
-   dos por fila en el computador y la tablet, una en el celular */
+/* Destacados (pedido de un cliente): foto vertical como en el catálogo (pedido de Alan, 2026-11-13). En el computador
+   van todos en una fila (son hasta 4, domain/destacados.py) y centrados si son menos; en la tablet y el celular, dos
+   por fila como el catálogo */
 .grilla-destacados {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(20px, 3vw, 40px);
+  --separacion-destacados: clamp(20px, 3vw, 40px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--separacion-destacados);
 }
 
-@media (max-width: 639px) {
-  .grilla-destacados {
-    grid-template-columns: minmax(0, 1fr);
+.grilla-destacados > * {
+  flex: 0 0 calc((100% - 3 * var(--separacion-destacados)) / 4);
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .grilla-destacados > * {
+    flex-basis: calc((100% - var(--separacion-destacados)) / 2);
   }
 }
 
@@ -869,7 +847,7 @@ a.instagram-foto:hover img {
 
 .tarjeta-destacado-imagen {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--color-accent);
   margin-bottom: 18px;
@@ -909,8 +887,9 @@ a.instagram-foto:hover img {
   color: var(--color-muted);
 }
 
+/* Del tamaño del nombre en las tarjetas del catálogo (TarjetaProducto.css) */
 .tarjeta-destacado-nombre {
-  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-size: 1.3rem;
   margin: 0 0 8px;
 }
 
@@ -993,7 +972,7 @@ a.instagram-foto:hover img {
   align-items: center;
   justify-content: center;
   width: 56px;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--color-accent);
   color: var(--color-muted);
@@ -1069,3 +1048,8 @@ a.instagram-foto:hover img {
 :root[data-fotos='completas'] .tarjeta-destacado-imagen img {
   object-fit: contain;
 }
+
+/* El video cubre su diapositiva sin ocultar la imagen de portada mientras carga. */
+.portada-diapositiva video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.portada-editor-video { display: grid; gap: .5rem; margin-block: .75rem; }
+.portada-editor-video label { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }

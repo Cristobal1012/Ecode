@@ -172,8 +172,12 @@ class ValidarDestacadosTests(SimpleTestCase):
     def test_aplica_las_reglas_del_dominio(self):
         with self.assertRaisesMessage(DestacadosInvalidos, 'dos veces'):
             self.validar([producto('a'), producto('a')])
-        with self.assertRaisesMessage(DestacadosInvalidos, 'hasta 4'):
-            self.validar([producto('a'), producto('b'), publicacion('1'), publicacion('2'), producto('sin-publicar')])
+        # 9 que existen: el límite de 8 se aplica antes de buscarlos
+        nueve = [producto(letra) for letra in 'abcdefg'] + [publicacion('1'), publicacion('2')]
+        validar = ValidarDestacados(CatalogoFalso(list('abcdefg')), PublicacionesFalsas(['1', '2'])).ejecutar
+        with self.assertRaisesMessage(DestacadosInvalidos, 'hasta 8'):
+            validar(nueve)
+        self.assertEqual(validar(nueve[:8]), nueve[:8])
 
     def test_una_lista_vacia_es_valida(self):
         self.assertEqual(self.validar([]), [])

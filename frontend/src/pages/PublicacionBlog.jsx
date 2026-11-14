@@ -4,64 +4,15 @@ import { Link, useParams } from 'react-router-dom';
 import 'react-quill-new/dist/quill.snow.css';
 import clienteAxios from '../components/auth/axiosConfig';
 import GaleriaPublicacion from '../components/GaleriaPublicacion';
+import VideoYouTube from '../components/VideoYouTube';
 import Header from '../components/header/header';
 import useConfiguracionTienda from '../hooks/useConfiguracionTienda';
-import useCookieConsent from '../hooks/useCookieConsent';
 import { formatearFechaLarga } from '../utils/fechas';
 // El texto del editor se muestra con los mismos estilos que las páginas legales (.legal-contenido)
 import './PaginaLegal.css';
 import './Blog.css';
 import { Cargando } from '../components/carga/Esqueleto';
 import { EsqueletoTexto } from '../components/carga/EsqueletosTienda';
-
-// RF-04.4, SCRUM-195: video de YouTube bajo demanda con botón accesible.
-// La miniatura del video es una petición a YouTube (Google): solo se pide si el visitante aceptó las cookies de
-// marketing, como Meta Pixel. Sin esa aceptación (o sin decidir) no se conecta a YouTube hasta el clic: se muestra la
-// portada de la publicación o un fondo neutro. Al hacer clic se monta el reproductor desde youtube-nocookie.com
-export function VideoYouTube({ youtubeId, titulo, portada }) {
-  const [reproduciendo, setReproduciendo] = useState(false);
-  const { preferences } = useCookieConsent();
-
-  if (!youtubeId) return null;
-  // hqdefault existe para todo video; sus franjas de 4:3 quedan fuera del recuadro 16:9 (object-fit: cover)
-  const miniatura = preferences.marketing ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : portada;
-
-  return (
-    <div className="blog-video-contenedor">
-      {reproduciendo ? (
-        <iframe
-          className="blog-video-iframe"
-          src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`}
-          title={`Reproductor de video: ${titulo}`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      ) : (
-        <div className="blog-video-facade">
-          {miniatura ? (
-            <img
-              src={miniatura}
-              alt=""
-              className="blog-video-miniatura"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="blog-video-miniatura blog-video-miniatura--neutra" aria-hidden="true" />
-          )}
-          <button
-            type="button"
-            className="blog-video-reproducir"
-            onClick={() => setReproduciendo(true)}
-            aria-label={`Reproducir video: ${titulo}`}
-          >
-            <span className="blog-video-icono-play" aria-hidden="true">▶</span>
-            <span className="blog-video-boton-texto">Reproducir video: {titulo}</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Una publicación del blog: portada, texto y galería. Un borrador responde igual que una que no existe
 export default function PublicacionBlog() {
@@ -114,6 +65,7 @@ export default function PublicacionBlog() {
               )}
               {publicacion.youtube_id && (
                 <VideoYouTube
+                  className="blog-video"
                   youtubeId={publicacion.youtube_id}
                   titulo={publicacion.titulo}
                   portada={publicacion.portada}

@@ -206,8 +206,12 @@ class GuardarDestacadosTests(APITestCase):
 
     def test_rechaza_una_seleccion_invalida_sin_guardarla(self):
         producto = {'tipo': 'PRODUCTO', 'id': self.productos[0]}
+        # 9 que existen: 8 productos y una publicación
+        otros = [str(Producto(nombre=f'Extra {numero}', categoria='Arte', fecha_creacion=datetime.now(timezone.utc),
+                              variantes=[Variante(sku=f'EXTRA-{numero}', precio=1000, stock=1)]).save().id)
+                 for numero in range(4)]
         casos = {
-            'mas de 4': [{'tipo': 'PRODUCTO', 'id': i} for i in self.productos]
+            'mas de 8': [{'tipo': 'PRODUCTO', 'id': i} for i in self.productos + otros]
             + [{'tipo': 'PUBLICACION', 'id': self.borrador}],
             'repetido': [producto, producto],
             'producto que no existe': [{'tipo': 'PRODUCTO', 'id': '6650f0a1b2c3d4e5f6a7b8c9'}],
@@ -220,6 +224,8 @@ class GuardarDestacadosTests(APITestCase):
                 respuesta = self.guardar(destacados=seleccion)
                 self.assertEqual(respuesta.status_code, 400)
                 self.assertIn('destacados', respuesta.data)
+                if caso == 'mas de 8':
+                    self.assertIn('hasta 8', str(respuesta.data['destacados']))
         self.assertEqual(ConfiguracionGlobal.objects.get(pk=1).destacados, [])
 
     def test_rechaza_un_modo_o_un_titulo_invalidos(self):

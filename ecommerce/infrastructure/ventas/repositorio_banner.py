@@ -4,7 +4,8 @@ from django.db import transaction
 from rest_framework import serializers
 
 from ecommerce.application.banner import RepositorioBanners, es_identificador_legacy
-from ecommerce.domain.banner import LARGO_ANTETITULO, LARGO_TEXTO, LARGO_TITULO, TextosFoto
+from ecommerce.domain.banner import (LARGO_ANTETITULO, LARGO_TEXTO, LARGO_TITULO, TextosFoto,
+    validar_cantidad_videos_banner, validar_video_banner, LimiteVideosBannerExcedido, VideoBannerInvalido)
 from ecommerce.infrastructure.ventas.models import ConfiguracionGlobal, FotoBanner
 
 # El título por defecto de la portada (models.ConfiguracionGlobal.texto_bienvenida)
@@ -49,10 +50,23 @@ class DjangoRepositorioBanners(RepositorioBanners):
         self.campo_imagen = campo_imagen or ImagenNegocioField()
 
     def guardar_banners(self, configuracion_id: int, orden_list: list, nuevos_archivos: list,
-                        textos: list | None = None) -> None:
+                        textos: list | None = None, nuevos_videos=None, asociaciones=None) -> None:
         config = ConfiguracionGlobal.objects.get(pk=configuracion_id)
         textos = list(textos) if textos is not None else [None] * len(orden_list)
         portada = textos_de_la_portada(config)
+        nuevos_videos = list(nuevos_videos or [])
+        asociaciones = asociaciones or {}
+        # El archivo se valida antes de tocar la base de datos.
+        for archivo in nuevos_videos:
+            posicion = archivo.tell()
+            try:
+                encabezado = archivo.read(12)
+            finally:
+                archivo.seek(posicion)
+            validar_video_banner(archivo.name, getattr(archivo, 'content_type', ''), archivo.size, encabezado)
+        videos_existentes = sum(bool(foto.video) for foto in config.fotos_banner.all()
+                                if f'id:{foto.id}' in orden_list or foto.id in orden_list)
+        validar_cantidad_videos_banner(videos_existentes + len(nuevos_videos))
 
         # Parsear índices nuevos e IDs pedidos
         nuevos_indices = []
@@ -111,6 +125,8 @@ class DjangoRepositorioBanners(RepositorioBanners):
             for foto_id, foto in list(fotos_actuales.items()):
                 if foto_id not in ids_a_conservar:
                     archivos_a_borrar.append(foto.imagen)
+                    if foto.video:
+                        archivos_a_borrar.append(foto.video)
                     foto.delete()
                     fotos_actuales.pop(foto_id, None)
 
@@ -134,6 +150,7 @@ class DjangoRepositorioBanners(RepositorioBanners):
                     nueva_foto = FotoBanner.objects.create(
                         configuracion=config,
                         imagen=procesado,
+                        video=nuevos_videos[asociaciones[item]] if item in asociaciones else None,
                         orden=nuevo_orden,
                         antetitulo=textos_nueva.antetitulo, titulo=textos_nueva.titulo, texto=textos_nueva.texto,
                         destino=textos_nueva.destino,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { botonDeFoto, textoBotonCatalogo } from '../../utils/menuPrincipal';
 import { PORTADA_POR_DEFECTO, TEXTOS_POR_DEFECTO } from './textosPorDefecto';
@@ -65,15 +65,22 @@ export default function Portada({ configuracion, edicion }) {
   const editandoFotos = editando && edicion.banners?.length > 0;
   const indiceSeguro = editandoFotos ? edicion.fotoEditada : totalFotos > 0 ? indiceActivo % totalFotos : 0;
   const permitirVideo = Boolean(configuracion.video_banner_activo) && !ahorroDatos && !movimientoReducido && !editando;
+  // Si el video no se puede reproducir, el carrusel vuelve a cambiar cada 5 segundos para no quedarse pegado
+  const [videoConError, setVideoConError] = useState(false);
+  // Con el video en pantalla, el carrusel espera a que termine en vez de cambiar a los 5 segundos
+  const esperaVideo = permitirVideo && Boolean(listaFotos[indiceSeguro]?.video) && !videoConError;
+  // El video de la diapositiva activa solo se detiene con el botón de pausa (WCAG 2.2.2). El mouse o el foco sobre
+  // los textos o las flechas (enUso) frenan el cambio de diapositiva, no el video: si no, al llegar con una flecha el
+  // foco queda en ella y el video no partía hasta hacer clic en otro lado
   useEffect(() => {
     Object.entries(videosRef.current).forEach(([indice, video]) => {
       if (!video) return;
-      if (permitirVideo && Number(indice) === indiceSeguro && !pausado && !enUso) {
+      if (permitirVideo && Number(indice) === indiceSeguro && !pausado) {
         const resultado = video.play();
         resultado?.catch?.(() => {});
       } else video.pause();
     });
-  }, [indiceSeguro, pausado, enUso, permitirVideo, totalFotos]);
+  }, [indiceSeguro, pausado, permitirVideo, totalFotos]);
   const imagenActual = listaFotos[indiceSeguro]?.imagen || PORTADA_POR_DEFECTO;
 
   // Textos y botón de la foto que se ve; sin fotos propias, los generales de la portada con el botón al catálogo
@@ -87,24 +94,37 @@ export default function Portada({ configuracion, edicion }) {
   // Rendimiento (Point 12): Carga solo la diapositiva activa y precarga la siguiente, evitando descargar todas de golpe
   const [fotosCargadas, setFotosCargadas] = useState(() => new Set([0, 1]));
 
-  useEffect(() => {
-    if (totalFotos <= 1 || pausado || enUso || editando) return undefined;
-    const intervalo = setInterval(() => {
-      setIndiceActivo((actual) => {
-        const siguiente = (actual + 1) % totalFotos;
-        const subsiguiente = (siguiente + 1) % totalFotos;
-        setFotosCargadas((cargadas) => {
-          if (cargadas.has(siguiente) && cargadas.has(subsiguiente)) return cargadas;
-          const nuevo = new Set(cargadas);
-          nuevo.add(siguiente);
-          nuevo.add(subsiguiente);
-          return nuevo;
-        });
-        return siguiente;
+  // Pasa a la diapositiva siguiente y deja cargadas esa y la que viene después
+  const avanzar = useCallback(() => {
+    setIndiceActivo((actual) => {
+      const siguiente = (actual + 1) % totalFotos;
+      const subsiguiente = (siguiente + 1) % totalFotos;
+      setFotosCargadas((cargadas) => {
+        if (cargadas.has(siguiente) && cargadas.has(subsiguiente)) return cargadas;
+        const nuevo = new Set(cargadas);
+        nuevo.add(siguiente);
+        nuevo.add(subsiguiente);
+        return nuevo;
       });
-    }, 5000);
+      return siguiente;
+    });
+  }, [totalFotos]);
+
+  useEffect(() => {
+    if (totalFotos <= 1 || pausado || enUso || editando || esperaVideo) return undefined;
+    const intervalo = setInterval(avanzar, 5000);
     return () => clearInterval(intervalo);
-  }, [totalFotos, pausado, enUso, editando, reinicio]);
+  }, [totalFotos, pausado, enUso, editando, reinicio, esperaVideo, avanzar]);
+
+  // Al terminar el video se pasa a la siguiente diapositiva. Si en ese momento el mouse o el foco están sobre los
+  // textos o las flechas (WCAG 2.2.2), el video vuelve a empezar y la diapositiva no cambia
+  const alTerminarVideo = (evento) => {
+    if (enUso) {
+      evento.currentTarget.play()?.catch?.(() => {});
+      return;
+    }
+    avanzar();
+  };
 
   // Flechas del carrusel: circulares, cargan la foto elegida y sus vecinas
   const irA = (paso) => {
@@ -134,9 +154,11 @@ export default function Portada({ configuracion, edicion }) {
               className={`portada-diapositiva ${index === indiceSeguro ? 'portada-diapositiva--activa' : ''}`}
               style={debeCargar ? { backgroundImage: `url("${foto.imagen}")` } : undefined}
             >
+              {/* En bucle solo si es la única diapositiva; con más, al terminar pasa a la siguiente */}
               {cargarVideo && <video ref={(elemento) => { videosRef.current[index] = elemento; }}
-                src={foto.video} poster={foto.imagen}
-                muted loop playsInline preload="metadata" aria-hidden="true" />}
+                src={foto.video} poster={foto.imagen} loop={totalFotos <= 1}
+                onEnded={totalFotos > 1 ? alTerminarVideo : undefined} onError={() => setVideoConError(true)}
+                muted playsInline preload="metadata" aria-hidden="true" />}
             </div>
           );
         })}

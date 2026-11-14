@@ -124,6 +124,46 @@
   object-fit: cover;
 }
 
+/* Video de YouTube del producto (pedido de Alan): llena el marco de la foto, que conserva su proporción */
+.detalle-video {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* Miniatura del video: la primera foto (o un fondo oscuro) con el ícono de play encima */
+.detalle-miniatura--video {
+  position: relative;
+}
+
+.detalle-miniatura-neutra {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: #1e293b;
+}
+
+.detalle-miniatura-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 65%);
+  color: #FFFFFF;
+}
+
+.detalle-miniatura-play svg {
+  width: 18px;
+  height: 18px;
+}
+
 .detalle-sin-imagen {
   display: flex;
   align-items: center;
@@ -301,7 +341,8 @@
   width: 96px;
 }
 
-:root[data-ficha='horizontal'] .detalle-miniatura img {
+:root[data-ficha='horizontal'] .detalle-miniatura img,
+:root[data-ficha='horizontal'] .detalle-miniatura-neutra {
   aspect-ratio: 3 / 2;
 }
 

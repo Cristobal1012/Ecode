@@ -462,6 +462,12 @@ git clone https://github.com/Cristobal1012/Ecode.git /opt/tiendas/codigo
 cd /opt/tiendas/codigo
 git checkout main
 ```
+Crea el archivo de variables de entorno a partir de la plantilla y restringe sus permisos:
+
+```bash
+cp deploy/tienda.env.example /opt/tiendas/mitienda.env
+chmod 600 /opt/tiendas/mitienda.env
+```
 
 El archivo va **fuera del repositorio**. En él:
 

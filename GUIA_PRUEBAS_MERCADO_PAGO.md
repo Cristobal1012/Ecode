@@ -26,7 +26,7 @@ Mercado Pago requiere credenciales de prueba para operar en modo Sandbox. Para c
 1. Inicia sesión como administrador en `http://localhost:5173/login` (o en Django Admin `http://localhost:8000/admin`).
 2. Ve a la sección **Configuración > Medios de Pago** en el panel de administración.
 3. Habilita **Mercado Pago** e ingresa las credenciales de prueba de tu cuenta desarrollador de Mercado Pago:
-   * **Access Token:** `APP_USR-2444985799448719-101521-0284dbf9e9d5adbf731da8243a989cfa-3765639673`
+   * **Access Token:** el de la cuenta de prueba del equipo (`MP_PRUEBA_ACCESS_TOKEN`; ver la nota de abajo)
    * **Webhook Secret:** `secreto_prueba_123`
 4. Guarda los cambios. *(Las credenciales se guardan automáticamente cifradas con AES en PostgreSQL).*
 
@@ -37,12 +37,12 @@ Mercado Pago requiere credenciales de prueba para operar en modo Sandbox. Para c
 ## 4. DATOS Y TARJETAS DE PRUEBA OFICIALES (CHILE - CLP)
 
 Mercado Pago Sandbox dispone de tarjetas de prueba diseñadas para simular respuestas predefinidas:
-inia sesion de mercado pago con estas credenciales
-Usuario : [TESTUSER1238589272146838313]
-Contraseña : [V0FSUutQsW]
-Cuando se ponga el numero de targeta y ponga pagar si les pide un numero de verificacion
-ponen el siguiente
-N° de seguridad : 359616
+Para pagar, inicia sesión en Mercado Pago con el comprador de prueba del equipo (`MP_PRUEBA_COMPRADOR_USUARIO` y
+`MP_PRUEBA_COMPRADOR_CLAVE`). Si al pagar pide un número de verificación, es `MP_PRUEBA_COMPRADOR_CODIGO`.
+
+> **Credenciales de prueba:** no van escritas en el repositorio. Pídeselas al equipo y guárdalas en tu `.env` local
+> (que git ignora) con esos cuatro nombres, solo como referencia: la tienda no las lee del `.env`; el Access Token se
+> carga desde el panel (sección 2).
 
 ### 4.1 Tarjeta para Pago APROBADO (Flujo Exitoso)
 | Campo | Valor de Prueba |

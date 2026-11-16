@@ -28,7 +28,8 @@ function Header({ vistaPrevia, edicion }) {
             {configuracion?.logo ? (
               <img className="header-logo-negocio" src={configuracion.logo} alt="" />
             ) : (
-              <span className="header-nombre-tienda">{nombreTienda}</span>
+              // Mientras la configuración carga (null) no se muestra "Tienda": el espacio conserva el alto del header
+              <span className="header-nombre-tienda">{configuracion === null ? "\u00A0" : nombreTienda}</span>
             )}
           </Link>
           {universidadEnHeader && (

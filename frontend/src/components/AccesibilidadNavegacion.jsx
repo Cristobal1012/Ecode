@@ -25,6 +25,7 @@ export default function AccesibilidadNavegacion() {
   const { pathname } = useLocation();
   const configuracion = useConfiguracionTienda();
   const rutaAnterior = useRef(null);
+  const cargando = configuracion === null;
 
   useEffect(() => {
     const cambioRuta = rutaAnterior.current !== pathname;
@@ -33,13 +34,15 @@ export default function AccesibilidadNavegacion() {
     // posterior de la configuración no debe sustituir esos metadatos específicos.
     const dinamica = pathname.startsWith('/catalogo/producto/') || pathname.startsWith('/legal/');
     if (cambioRuta || !dinamica) {
-      document.title = `${TITULOS[pathname] || tituloPorPrefijo(pathname) || (dinamica ? 'Contenido de la tienda' : 'Tienda')} · ${configuracion?.nombre_tienda || 'Tienda'}`;
+      const pagina = TITULOS[pathname] || tituloPorPrefijo(pathname) || (dinamica ? 'Contenido de la tienda' : 'Tienda');
+      // Mientras la configuración carga (null) va solo el título de la página, sin el nombre por defecto "Tienda"
+      document.title = cargando ? pagina : `${pagina} · ${configuracion?.nombre_tienda || 'Tienda'}`;
     }
     if (cambioRuta && !inicial && !document.activeElement?.closest('.cookie-banner')) {
       document.querySelector('main')?.focus({ preventScroll: true });
     }
     rutaAnterior.current = pathname;
-  }, [pathname, configuracion?.nombre_tienda]);
+  }, [pathname, cargando, configuracion?.nombre_tienda]);
 
   return <a className="saltar-contenido" href="#contenido" onClick={() => document.querySelector('main')?.focus()}>Saltar al contenido</a>;
 }

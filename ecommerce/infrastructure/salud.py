@@ -8,7 +8,7 @@ import logging
 from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_http_methods
 from mongoengine.connection import get_db
 from pymongo.errors import PyMongoError
 
@@ -35,7 +35,7 @@ def _mongo_responde() -> bool:
 
 
 @never_cache
-@require_GET
+@require_http_methods(['GET', 'HEAD'])
 def salud(request):
     bases = {'postgres': _postgres_responde(), 'mongo': _mongo_responde()}
     sana = all(bases.values())

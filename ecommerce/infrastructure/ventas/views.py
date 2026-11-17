@@ -58,6 +58,7 @@ from ecommerce.application.documentos_tributarios import (
     PedidoNoEncontrado as PedidoParaDocumentarNoEncontrado, RegistrarFolio, SinDocumentoPorRegistrar,
 )
 from ecommerce.application.dashboard import ETIQUETAS_CAUSA_CANCELACION, ResumenDashboard, TareasPendientes
+from ecommerce.application.exportacion_ventas import ExportarVentas
 from ecommerce.application.medios_pago import ConfigurarMedioPago
 from ecommerce.application.pagos import (
     AplicarResultadoPago, ConciliarPagoOrden, ErrorPasarelaPago, FirmaAvisoInvalida, ProcesarAvisoPago,
@@ -98,7 +99,8 @@ from .models import (
 )
 from .almacen_privado import almacen_privado
 from .permissions import CanCheckout
-from .repositorio_dashboard import DjangoMetricasVentas, DjangoPendientesTienda
+from .planilla_xlsx import TIPO_XLSX, escribir_xlsx
+from .repositorio_dashboard import DjangoMetricasVentas, DjangoPendientesTienda, DjangoVentasPeriodo
 from .pasarelas import pasarela
 from .serializers import (
     ConfiguracionGlobalSerializer,
@@ -1384,6 +1386,27 @@ class DashboardMetricasView(APIView):
                 'calificacion': asdict(dashboard.calificacion) if dashboard.calificacion else None,
             },
         }, status=status.HTTP_200_OK)
+
+
+class DashboardExportarVentasView(APIView):
+    """RF-03.1: GET con el mismo periodo que las métricas. Descarga un Excel con las ventas de ese periodo (los
+    pedidos pagados, por la fecha del pago) y los datos de cada comprador."""
+    permission_classes = [IsEmprendedor]
+
+    def get(self, request):
+        parametros = request.query_params
+        try:
+            periodo = resolver_periodo(parametros.get('periodo'), timezone.localdate(),
+                                       parametros.get('desde'), parametros.get('hasta'))
+        except PeriodoInvalido as error:
+            return Response({'periodo': [str(error)]}, status=status.HTTP_400_BAD_REQUEST)
+        planilla = ExportarVentas(DjangoVentasPeriodo()).ejecutar(periodo)
+
+        response = HttpResponse(escribir_xlsx(planilla), content_type=TIPO_XLSX)
+        response['Content-Disposition'] = f'attachment; filename="{planilla.nombre}.xlsx"'
+        # Trae datos personales de los compradores: que no quede guardado en cachés intermedias
+        response['Cache-Control'] = 'no-store'
+        return response
 
 
 class DashboardPendientesView(APIView):

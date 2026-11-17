@@ -256,6 +256,8 @@ SIMPLE_JWT = {
 # Orígenes del frontend que pueden llamar a la API
 CORS_ALLOWED_ORIGINS = env_lista(
     'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173' if DEBUG else '')
+# El nombre de los archivos que descarga el panel (ej. el Excel de ventas del dashboard)
+CORS_EXPOSE_HEADERS = ['Content-Disposition']
 CSRF_TRUSTED_ORIGINS = env_lista('CSRF_TRUSTED_ORIGINS')
 
 # HTTPS: lo termina el hosting; activos por defecto fuera de desarrollo

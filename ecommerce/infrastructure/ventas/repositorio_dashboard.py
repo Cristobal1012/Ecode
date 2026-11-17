@@ -11,6 +11,7 @@ from ecommerce.application.dashboard import (
     ConteoPendientes, Grupo, MetricasVentas, PendientesTienda, ProductoVendido, PuntoSerie, ResumenClientes,
     ResumenVentas, UsoCupon,
 )
+from ecommerce.application.exportacion_ventas import LineaVendida, VentaPeriodo, VentasPeriodo
 from ecommerce.domain.cotizaciones import EstadoCotizacion
 from ecommerce.domain.dashboard import Agrupacion
 from ecommerce.domain.documentos_tributarios import ModeloEmision
@@ -145,6 +146,62 @@ class DjangoMetricasVentas(MetricasVentas):
 
 def _fecha(valor):
     return valor.date() if isinstance(valor, datetime) else valor
+
+
+def _direccion(orden):
+    """Calle, número y departamento del despacho. Un retiro en el local no tiene dirección del comprador."""
+    if orden.proveedor_logistico == RETIRO_LOCAL:
+        return '', ''
+    direccion = orden.direccion_envio_snapshot or {}
+    texto = ' '.join(str(direccion.get(campo) or '') for campo in ('calle', 'numero')).strip()
+    if direccion.get('dpto_casa'):
+        texto = f"{texto}, {direccion['dpto_casa']}".strip(', ')
+    return texto, str(direccion.get('comuna') or '')
+
+
+class DjangoVentasPeriodo(VentasPeriodo):
+    """Las mismas ventas que cuenta el dashboard (`_ventas`), cada una con su comprador y sus productos."""
+
+    def listar(self, periodo):
+        ordenes = (_ventas(periodo).select_related('usuario', 'promocion').prefetch_related('detalles')
+                   .order_by('fecha_venta', 'id'))
+        return [self._venta(orden) for orden in ordenes]
+
+    @staticmethod
+    def _venta(orden):
+        usuario = orden.usuario
+        empresa = orden.datos_empresa or {}
+        direccion, comuna = _direccion(orden)
+        nombre_cuenta = ' '.join(filter(None, [usuario.nombre, usuario.apellido_paterno,
+                                                usuario.apellido_materno])) if usuario else ''
+        return VentaPeriodo(
+            numero=orden.id,
+            fecha=timezone.localtime(orden.fecha_venta).replace(tzinfo=None),
+            estado=EstadoPedido(orden.estado),
+            # Un invitado no deja más nombre que el de quien recibe
+            cliente=nombre_cuenta or orden.nombre_destinatario,
+            correo=(usuario.email if usuario else orden.email_invitado) or '',
+            telefono=(usuario.telefono if usuario else '') or orden.telefono_destinatario,
+            registrado=usuario is not None,
+            destinatario=orden.nombre_destinatario,
+            telefono_destinatario=orden.telefono_destinatario,
+            entrega=_nombre_entrega(orden.proveedor_logistico),
+            direccion=direccion,
+            comuna=comuna,
+            numero_seguimiento=orden.numero_seguimiento_tracking or '',
+            medio_pago=NOMBRES_MEDIOS_PAGO.get(orden.metodo_pago, orden.metodo_pago),
+            subtotal=_entero(orden.subtotal),
+            costo_envio=_entero(orden.costo_envio),
+            total=_entero(orden.total_final),
+            cupon=orden.promocion.codigo if orden.promocion else '',
+            razon_social=str(empresa.get('razon_social') or ''),
+            rut_empresa=str(empresa.get('rut') or ''),
+            giro=str(empresa.get('giro') or ''),
+            folio_documento=orden.folio_documento,
+            lineas=tuple(LineaVendida(detalle.nombre_producto_snapshot, detalle.variante_sku, detalle.cantidad,
+                                      _entero(detalle.precio_unitario_snapshot))
+                         for detalle in sorted(orden.detalles.all(), key=lambda detalle: detalle.id)),
+        )
 
 
 class DjangoPendientesTienda(PendientesTienda):

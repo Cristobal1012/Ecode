@@ -41,6 +41,8 @@ ventas_urlpatterns = [
     # Ruta resultante: GET /api/ventas/dashboard/metricas/
     path('dashboard/metricas/', views.DashboardMetricasView.as_view(), name='dashboard_metricas'),
     path('dashboard/pendientes/', views.DashboardPendientesView.as_view(), name='dashboard_pendientes'),
+    # Ruta resultante: GET /api/ventas/dashboard/exportar/ (Excel con las ventas del periodo)
+    path('dashboard/exportar/', views.DashboardExportarVentasView.as_view(), name='dashboard_exportar'),
     
     path('checkout/reglas/', views.ReglasCheckoutView.as_view(), name='checkout-reglas'),
 

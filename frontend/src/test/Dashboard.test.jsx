@@ -175,6 +175,79 @@ describe('Dashboard (RF-03.1)', () => {
     expect(await screen.findByText('No fue posible cargar los pendientes.')).toBeInTheDocument();
     expect(await screen.findByText('Polerón negro')).toBeInTheDocument();
   });
+
+  describe('exportar las ventas a Excel', () => {
+    const EXCEL = new Blob(['xlsx']);
+    let descargas;
+
+    // El Excel responde aparte; lo demás, como siempre
+    function responderExcel(excel) {
+      clienteAxios.get.mockImplementation((url) => {
+        if (url === 'ventas/dashboard/exportar/') return excel();
+        if (url === 'ventas/dashboard/pendientes/') return Promise.resolve({ data: PENDIENTES });
+        return Promise.resolve({ data: METRICAS });
+      });
+    }
+
+    beforeEach(() => {
+      descargas = [];
+      // jsdom no trae URL.createObjectURL ni descarga archivos: se anota el nombre con que se habría guardado
+      URL.createObjectURL = vi.fn(() => 'blob:excel');
+      URL.revokeObjectURL = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function anotar() {
+        descargas.push({ nombre: this.download, direccion: this.getAttribute('href') });
+      });
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('descarga el archivo del periodo que muestra el dashboard', async () => {
+      responderExcel(() => Promise.resolve({
+        data: EXCEL, headers: { 'content-disposition': 'attachment; filename="ventas_2026-11-01_a_2026-11-05.xlsx"' },
+      }));
+      await renderDashboard();
+      fireEvent.change(screen.getByLabelText('Periodo'), { target: { value: 'MES_ANTERIOR' } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exportar ventas a Excel' }));
+
+      await waitFor(() => expect(descargas).toEqual(
+        [{ nombre: 'ventas_2026-11-01_a_2026-11-05.xlsx', direccion: 'blob:excel' }]));
+      expect(clienteAxios.get).toHaveBeenCalledWith('ventas/dashboard/exportar/',
+        { params: { periodo: 'MES_ANTERIOR' }, responseType: 'blob' });
+      expect(URL.createObjectURL).toHaveBeenCalledWith(EXCEL);
+      expect(screen.getByRole('button', { name: 'Exportar ventas a Excel' })).toBeEnabled();
+    });
+
+    it('con un rango personalizado exporta el que se aplicó', async () => {
+      responderExcel(() => Promise.resolve({ data: EXCEL, headers: {} }));
+      await renderDashboard();
+      fireEvent.change(screen.getByLabelText('Periodo'), { target: { value: 'PERSONALIZADO' } });
+      fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-03' } });
+      fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-09' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exportar ventas a Excel' }));
+
+      await waitFor(() => expect(clienteAxios.get).toHaveBeenCalledWith('ventas/dashboard/exportar/',
+        { params: { periodo: 'PERSONALIZADO', desde: '2026-10-03', hasta: '2026-10-09' }, responseType: 'blob' }));
+      // Sin el nombre del backend igual se descarga, con uno genérico
+      await waitFor(() => expect(descargas).toEqual([{ nombre: 'ventas.xlsx', direccion: 'blob:excel' }]));
+    });
+
+    it('mientras se prepara no deja pedirlo dos veces, y si falla lo avisa', async () => {
+      let fallar;
+      responderExcel(() => new Promise((_, rechazar) => { fallar = rechazar; }));
+      await renderDashboard();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exportar ventas a Excel' }));
+
+      expect(await screen.findByRole('button', { name: 'Preparando el Excel…' })).toBeDisabled();
+      fallar(new Error('caído'));
+      expect(await screen.findByRole('alert')).toHaveTextContent('No fue posible exportar las ventas.');
+      expect(descargas).toEqual([]);
+      expect(screen.getByRole('button', { name: 'Exportar ventas a Excel' })).toBeEnabled();
+    });
+  });
 });
 
 describe('formato del dashboard', () => {

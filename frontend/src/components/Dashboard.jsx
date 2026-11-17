@@ -4,6 +4,7 @@ import RecentOrders from './RecentOrders';
 import { Cargando } from './carga/Esqueleto';
 import { EsqueletoDashboard } from './carga/EsqueletosPanel';
 import SelectorPeriodo from './dashboard/SelectorPeriodo';
+import ExportarVentas from './dashboard/ExportarVentas';
 import ParaHoy from './dashboard/ParaHoy';
 import TarjetasResumen from './dashboard/TarjetasResumen';
 import GraficoVentas from './dashboard/GraficoVentas';
@@ -64,7 +65,10 @@ export default function Dashboard({ onIrA = () => {} }) {
   return (
     <div className="dashboard">
       <Encabezado />
-      <SelectorPeriodo consulta={consulta} onCambiar={setConsulta} periodo={datos?.periodo} anterior={datos?.anterior} />
+      <div className="dashboard-periodo-fila">
+        <SelectorPeriodo consulta={consulta} onCambiar={setConsulta} periodo={datos?.periodo} anterior={datos?.anterior} />
+        <ExportarVentas consulta={consulta} />
+      </div>
       {/* Mientras llega otro periodo se deja a la vista el anterior, para que la página no salte */}
       <p role="status" className="visualmente-oculto">{actualizando ? 'Actualizando las cifras…' : ''}</p>
       {error && <p role="alert" className="dashboard-error">{error}</p>}

@@ -16,6 +16,28 @@
 
 /* ---------- Periodo ---------- */
 
+/* El selector de periodo a la izquierda y "Exportar ventas a Excel" a la derecha; en pantallas angostas, debajo */
+.dashboard-periodo-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.dashboard-exportar {
+  display: grid;
+  gap: 8px;
+  /* A la altura del selector, que lleva su etiqueta "Periodo" encima */
+  padding-top: 24px;
+}
+
+@media (max-width: 640px) {
+  .dashboard-exportar {
+    padding-top: 0;
+  }
+}
+
 .dashboard-periodo {
   display: grid;
   gap: 8px;
